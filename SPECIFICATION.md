@@ -21,259 +21,194 @@ PredictionDB ist eine lokale Datenbank-Lösung zur Sammlung, Speicherung und Ver
 ### 1.2 Architektur-Überblick
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                     predictiondb (Docker Compose)                   │
-│                                                                     │
+┌────────────────────────────────────────────────────────────────────┐
+│                    predictiondb (Docker Compose)                   │
+│                                                                    │
 │  ┌──────────────────────┐       ┌──────────────────────────────┐   │
 │  │  Worker Container    │       │      MariaDB Container       │   │
 │  │                      │       │                              │   │
 │  │  ┌────────────────┐  │       │  ┌────────────────────────┐  │   │
-│  │  │  Fetcher       │──┼───────┼─►│  Tables:               │  │   │
-│  │  │  (External     │  │       │  │  - grib_messages       │  │   │
-│  │  │   Sources)     │  │       │  │  - weather_observations│  │   │
-│  │  └────────────────┘  │       │  │  - forecasts           │  │   │
-│  │       │              │       │  │  - metadata            │  │   │
-│  │       ▼              │       │  └────────────────────────┘  │   │
+│  │  │  Plugin        │──┼───────┼─►│  Tables:               │  │   │
+│  │  │  (Fetcher +    │  │       │  │  - pdid_registry       │  │   │
+│  │  │   Parser, je   │  │       │  │  - datapoints_int      │  │   │
+│  │  │   Datenquelle, │  │       │  │  - datapoints_float    │  │   │
+│  │  │   YAML-Config) │  │       │  │  - datapoints_varchar  │  │   │
+│  │  └────────────────┘  │       │  └────────────────────────┘  │   │
+│  │       │              │       │                              │   │
+│  │       ▼              │       │  Volume: /var/lib/mysql      │   │
 │  │  ┌────────────────┐  │       │                              │   │
-│  │  │  Parser        │  │       │  Volume: /var/lib/mysql      │   │
-│  │  │  (GRIB/JSON)   │  │       │                              │   │
-│  │  └────────────────┘  │       └──────────────────────────────┘   │
-│  │       │              │                                          │
-│  │       ▼              │                                          │
-│  │  ┌────────────────┐  │                                          │
-│  │  │  Normalizer    │  │                                          │
-│  │  │  & Transformer │  │                                          │
-│  │  └────────────────┘  │                                          │
-│  │       │              │                                          │
-│  │       ▼              │                                          │
-│  │  ┌────────────────┐  │                                          │
-│  │  │  Uploader      │──┼──► INSERT/UPDATE into MariaDB         │   │
-│  │  └────────────────┘  │                                          │
-│  └──────────────────────┘       ┌──────────────────────────────┐   │
-│                                   │   PredictionDB API           │   │
-│                                   │   (optional, v2)             │   │
-│                                   └──────────────────────────────┘   │
-│                                                                     │
-│  ┌──────────────────────────────────────────────────────────────┐   │
-│  │  Datenquellen (extern, über Internet)                        │   │
-│  │                                                              │   │
+│  │  │  Uploader      │──┼───────┼─►INSERT/UPDATE Datenpunkte    │   │
+│  │  └────────────────┘  │       │  (PDID, Timestamp, Offset,   │   │
+│  └──────────────────────┘       │   Value)                     │   │
+│                                 └──────────────────────────────┘   │
+│                                 ┌──────────────────────────────┐   │
+│                                 │   PredictionDB API           │   │
+│                                 │   (optional, v2)             │   │
+│                                 └──────────────────────────────┘   │
+│                                                                    │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │  Datenquellen (extern, über Internet) — je eine als Plugin   │   │
+│  │                                                             │   │
 │  │  ┌──────────────┐  ┌──────────────┐  ┌───────────────────┐  │   │
 │  │  │ NOAA NOMADS  │  │ DWD          │  │ Open-Meteo API    │  │   │
 │  │  │ (GRIB2)      │  │ (GRIB/TXT)   │  │ (JSON)            │  │   │
 │  │  └──────────────┘  └──────────────┘  └───────────────────┘  │   │
-│  │                                                              │   │
+│  │                                                             │   │
 │  │  ┌──────────────┐  ┌──────────────┐                         │   │
 │  │  │ ECMWF        │  │ KML/RWTH     │                         │   │
 │  │  │ (HRES/IFS)   │  │ (JSON)       │                         │   │
 │  │  └──────────────┘  └──────────────┘                         │   │
-│  └──────────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────┘
+│  └─────────────────────────────────────────────────────────────┘   │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## 2. Datenmodell
 
-### 2.1 Tabellen-Entwurf
+### 2.1 Konzept
 
-#### 2.1.1 `sources` — Datenquellen-Metadaten
+Die Fachlogik je Datenquelle (Wettermodell, API, Sensor, ...) steckt vollständig in einem **Plugin**. Ein Plugin bringt seine eigene Konfiguration als YAML-Datei mit (Fetch-Parameter, Intervall, Zuordnung der Rohdaten auf Datenpunkte) und liefert der Datenbank ausschließlich fertige, generische **Datenpunkte**. Die Datenbank selbst kennt keine Quellen, Modelle, Läufe oder Gitterpunkte mehr — sie speichert nur Zeitreihenwerte. Neue Plugins oder Änderungen an bestehenden erfordern damit keine Schema-Änderung.
+
+**Zeitpunkt statt Lauf+Offset:** GRIB-Dateien liefern typischerweise einen Vorhersage-Lauf-Zeitpunkt (`run_time`) und einen Offset dazu (0 = Analyse, +1h, +2h, ...). Beispiel: Lauf `2026-07-21 12:00:00` mit Offsets `0`, `+1h`, `+2h`, ... Damit Abfragen nicht bei jedem Zugriff `run_time + offset` nachrechnen müssen, wird das beim Import bereits aufgelöst: gespeichert wird der **Gültigkeitszeitpunkt** `timestamp = run_time + offset`. Der `offset` bleibt zusätzlich erhalten, damit ersichtlich ist, wie weit im Voraus ein Wert vorhergesagt wurde — dadurch können für denselben `timestamp` mehrere Vorhersagen aus unterschiedlichen Läufen (verschiedene Offsets) koexistieren, z.B. für Genauigkeits-Analysen über die Vorlaufzeit. `run_time` lässt sich bei Bedarf über `timestamp - offset` zurückrechnen und muss daher nicht separat gespeichert werden.
+
+**Negativer Offset = echte Messung:** Ein negativer Offset (z.B. `-1`) markiert keine Vorhersage, sondern einen tatsächlich gemessenen Wert (z.B. Sensor- oder Stationsmessung) für den jeweiligen `timestamp` — im Unterschied zu Offset `0`, der weiterhin die Modell-Analyse (also einen vom Modell berechneten, nicht real gemessenen Wert) bezeichnet. Dadurch können Analyse, Vorhersage und reale Messung für denselben Zeitpunkt nebeneinander gespeichert und verglichen werden (z.B. zur Bewertung der Vorhersagegüte).
+
+**PDID (Plugin-Datapoint-ID):** Jeder Datenpunkt-Typ, den ein Plugin liefert (z.B. "2m-Temperatur von noaa_gdas"), bekommt eine PDID. Sie legt implizit Plugin, Datenpunkt-Name und Einheit fest — die Zuordnung steht im Register ([2.1.1](#211-pdid_registry--register-der-datenpunkte)) und wird beim Start des Plugins aus dessen YAML-Konfiguration synchronisiert.
+
+Ein Datenpunkt besteht damit nur noch aus diesen Werten:
+
+| Feld | Bedeutung |
+|---|---|
+| `pdid` | Verweis auf Plugin + Datenpunkt-Name + Einheit (siehe Register) |
+| `latitude`, `longitude` | Ort, für den der Wert gilt |
+| `timestamp` | Gültigkeitszeitpunkt des Werts |
+| `offset` | Vorlaufzeit der Vorhersage zum `timestamp` (0 = Analyse, negativ = echte Messung) |
+| `value` | Mess-/Vorhersagewert |
+
+Jeder Wert ist also einem Ort zugeordnet — bei gegitterten Modellen (GRIB) liefert ein Plugin je Zeitschritt mehrere Zeilen (eine je Gitterpunkt/Ausschnitt), bei Punkt-APIs (z.B. Open-Meteo) i.d.R. nur eine feste `latitude`/`longitude` je Plugin-Instanz.
+
+Da Plugins Werte unterschiedlichen Typs liefern (Zahlen, Text, ...), gibt es **je Value-Type eine eigene Tabelle** statt einer generischen `value`-Spalte.
+
+#### 2.1.1 `pdid_registry` — Register der Datenpunkte
+
+Ordnet jede PDID einem Plugin, einem Datenpunkt-Namen, einer Einheit und dem Value-Type (und damit der Ziel-Tabelle aus 2.1.2) zu. Wird von jedem Plugin beim Start aus seiner YAML-Konfiguration synchronisiert, nicht manuell gepflegt.
 
 ```sql
-CREATE TABLE sources (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    code VARCHAR(50) NOT NULL UNIQUE,           -- z.B. 'noaa_gdas', 'dwd_icon'
-    name VARCHAR(100) NOT NULL,                 -- Anzeige-Name
-    type ENUM('grib2', 'grib1', 'json', 'csv', 'xml') NOT NULL,
-    base_url TEXT,                               -- API-Endpunkt / Server-URL
-    update_interval_hours INT DEFAULT 6,         -- Wie oft aktualisieren?
+CREATE TABLE pdid_registry (
+    pdid INT AUTO_INCREMENT PRIMARY KEY,
+    plugin_code VARCHAR(50) NOT NULL,                    -- z.B. 'noaa_gdas', 'dwd_icon', 'open_meteo'
+    datapoint_code VARCHAR(100) NOT NULL,                -- z.B. 'temperature_2m', 'wind_speed_10m'
+    unit VARCHAR(20) NOT NULL,                           -- z.B. 'K', 'm/s', 'hPa'
+    value_type ENUM('int', 'float', 'varchar') NOT NULL, -- legt die Ziel-Tabelle fest
+    description VARCHAR(255),
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    UNIQUE KEY uq_pdid (plugin_code, datapoint_code)
 );
 ```
 
-#### 2.1.2 `models` — Wettermodelle
+#### 2.1.2 `datapoints_*` — Werte-Tabellen (eine je Value-Type)
+
+Gleiche Struktur je Typ, nur die `value`-Spalte unterscheidet sich. Weitere Typen (z.B. `datapoints_bool`, `datapoints_text`) lassen sich nach demselben Muster ergänzen.
 
 ```sql
-CREATE TABLE models (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    source_id INT NOT NULL,
-    code VARCHAR(50) NOT NULL,                  -- z.B. 'gdas1', 'icon-eu'
-    name VARCHAR(100) NOT NULL,                 -- z.B. 'GDAS 1 Degree'
-    resolution_degrees DECIMAL(4,2),            -- räumliche Auflösung
-    valid_from TIMESTAMP,                       -- Modell-Gültigkeit beginnt
-    valid_until TIMESTAMP,                      -- Modell-Gültigkeit endet
-    run_time TIMESTAMP,                         -- Modell-Laufzeit (Startzeit)
-    is_current BOOLEAN DEFAULT FALSE,
-    FOREIGN KEY (source_id) REFERENCES sources(id)
+CREATE TABLE datapoints_int (
+    pdid INT NOT NULL,
+    latitude DECIMAL(9,6) NOT NULL,
+    longitude DECIMAL(9,6) NOT NULL,
+    timestamp DATETIME NOT NULL,           -- Gültigkeitszeitpunkt
+    offset_seconds INT NOT NULL DEFAULT 0, -- Vorlaufzeit zum timestamp (0 = Analyse, < 0 = echte Messung)
+    value INT NOT NULL,
+    PRIMARY KEY (pdid, latitude, longitude, timestamp, offset_seconds),
+    FOREIGN KEY (pdid) REFERENCES pdid_registry(pdid),
+    INDEX idx_datapoints_int_timestamp (timestamp)
+);
+
+CREATE TABLE datapoints_float (
+    pdid INT NOT NULL,
+    latitude DECIMAL(9,6) NOT NULL,
+    longitude DECIMAL(9,6) NOT NULL,
+    timestamp DATETIME NOT NULL,
+    offset_seconds INT NOT NULL DEFAULT 0,
+    value DOUBLE NOT NULL,
+    PRIMARY KEY (pdid, latitude, longitude, timestamp, offset_seconds),
+    FOREIGN KEY (pdid) REFERENCES pdid_registry(pdid),
+    INDEX idx_datapoints_float_timestamp (timestamp)
+);
+
+CREATE TABLE datapoints_varchar (
+    pdid INT NOT NULL,
+    latitude DECIMAL(9,6) NOT NULL,
+    longitude DECIMAL(9,6) NOT NULL,
+    timestamp DATETIME NOT NULL,
+    offset_seconds INT NOT NULL DEFAULT 0,
+    value VARCHAR(255) NOT NULL,
+    PRIMARY KEY (pdid, latitude, longitude, timestamp, offset_seconds),
+    FOREIGN KEY (pdid) REFERENCES pdid_registry(pdid),
+    INDEX idx_datapoints_varchar_timestamp (timestamp)
 );
 ```
 
-#### 2.1.3 `parameters` — Meteorologische Parameter
+Die zusammengesetzte Primärschlüssel `(pdid, latitude, longitude, timestamp, offset_seconds)` erlaubt genau eine Zeile je (Datenpunkt, Ort, Gültigkeitszeitpunkt, Vorlaufzeit) — ein `INSERT ... ON DUPLICATE KEY UPDATE` überschreibt also eine erneut gelieferte Vorhersage mit demselben Offset für denselben Ort und Gültigkeitszeitpunkt, behält aber Vorhersagen mit anderem Offset oder an anderem Ort.
 
-```sql
-CREATE TABLE parameters (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    grib_param_id INT,                          -- GRIB-Parameter-Id (falls GRIB)
-    code VARCHAR(50) NOT NULL UNIQUE,           -- z.B. 'temperature', 'wind_u'
-    name VARCHAR(100) NOT NULL,                 -- Anzeige-Name
-    unit VARCHAR(20) NOT NULL,                  -- z.B. 'K', 'm/s', 'hPa'
-    category VARCHAR(50),                       -- z.B. 'temperature', 'wind', 'pressure'
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
+#### 2.1.3 Beispiel
 
-#### 2.1.4 `forecast_runs` — Vorhersage-Läufe
+GRIB-Lauf am `2026-07-21 12:00:00`, Parameter `temperature_2m` von `noaa_gdas` (PDID `1`) für einen Gitterpunkt bei Berlin, Offsets `0`, `+1h`, `+2h`, plus eine echte Messung für `13:00:00` von einem Mess-Plugin (PDID `2`, Offset `-1`) an derselben Stelle:
 
-```sql
-CREATE TABLE forecast_runs (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    model_id INT NOT NULL,
-    run_time TIMESTAMP NOT NULL,                -- Wann wurde das Modell berechnet?
-    valid_from TIMESTAMP NOT NULL,              -- Ab wann sind die Prognosen gültig?
-    valid_until TIMESTAMP NOT NULL,             -- Bis wann?
-    file_path VARCHAR(500),                     -- Lokaler Dateipfad (falls GRIB gespeichert)
-    file_size_bytes BIGINT,                     -- Dateigröße
-    status ENUM('downloading', 'parsing', 'completed', 'failed') DEFAULT 'downloading',
-    error_message TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (model_id) REFERENCES models(id)
-);
-```
+| pdid | latitude | longitude | timestamp | offset_seconds | value |
+|---|---|---|---|---|---|
+| 1 | 52.520000 | 13.410000 | 2026-07-21 12:00:00 | 0 | 21.4 |
+| 1 | 52.520000 | 13.410000 | 2026-07-21 13:00:00 | 3600 | 20.9 |
+| 1 | 52.520000 | 13.410000 | 2026-07-21 14:00:00 | 7200 | 20.1 |
+| 2 | 52.520000 | 13.410000 | 2026-07-21 13:00:00 | -1 | 21.1 |
 
-#### 2.1.5 `grid_points` — Gitterpunkte
-
-```sql
-CREATE TABLE grid_points (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    latitude DECIMAL(9,6) NOT NULL,             -- Breitengrad
-    longitude DECIMAL(9,6) NOT NULL,            -- Längengrad
-    elevation_m DECIMAL(8,2),                   -- Höhe über NN (optional)
-    grid_index INT NOT NULL,                    -- Index im Raster (0..N)
-    is_active BOOLEAN DEFAULT TRUE,
-    UNIQUE KEY unique_grid (latitude, longitude)
-);
-```
-
-#### 2.1.6 `observations` — Beobachtungen/Werte
-
-```sql
-CREATE TABLE observations (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    forecast_run_id INT NOT NULL,               -- Zu welchem Lauf gehört der Wert?
-    parameter_id INT NOT NULL,                  -- Welcher Parameter?
-    grid_point_id INT NOT NULL,                 -- An welchem Ort?
-    valid_time TIMESTAMP NOT NULL,              -- Wann ist der Wert gültig?
-    value DECIMAL(10,4),                        -- Messwert / Prognosewert
-    quality_flag TINYINT DEFAULT 0,             -- 0=ok, 1=approximiert, 2=fehlerhaft
-    forecast_hour INT,                          -- Stunden-Vorhersage (0=start, 24=+1Tag)
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (forecast_run_id) REFERENCES forecast_runs(id),
-    FOREIGN KEY (parameter_id) REFERENCES parameters(id),
-    FOREIGN KEY (grid_point_id) REFERENCES grid_points(id),
-    UNIQUE KEY unique_observation (forecast_run_id, parameter_id, grid_point_id, valid_time)
-);
-```
-
-#### 2.1.7 `observations_summary` — Aggregierte Daten (optional, Performance)
-
-```sql
-CREATE TABLE observations_summary (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    forecast_run_id INT NOT NULL,
-    parameter_id INT NOT NULL,
-    valid_date DATE NOT NULL,                   -- Datum (kein Zeitstempel)
-    hour_of_day INT NOT NULL,                   -- Stunde (0-23)
-    mean_value DECIMAL(10,4),                   -- Mittelwert über alle Grid-Points
-    min_value DECIMAL(10,4),                    -- Minimum
-    max_value DECIMAL(10,4),                    -- Maximum
-    std_dev DECIMAL(10,4),                      -- Standardabweichung
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (forecast_run_id) REFERENCES forecast_runs(id),
-    FOREIGN KEY (parameter_id) REFERENCES parameters(id),
-    UNIQUE KEY unique_summary (forecast_run_id, parameter_id, valid_date, hour_of_day)
-);
-```
-
-#### 2.1.8 `data_retention_rules` — Aufbewahrungsregeln
-
-```sql
-CREATE TABLE data_retention_rules (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    category VARCHAR(50) NOT NULL,              -- z.B. 'high_resolution', 'global'
-    max_age_days INT NOT NULL DEFAULT 365,      -- Wie lange speichern?
-    aggregation_level ENUM('raw', 'hourly', 'daily') DEFAULT 'raw',
-    is_active BOOLEAN DEFAULT TRUE
-);
-```
+Abfrage "aktuellste Vorhersage je Ort und Gültigkeitszeitpunkt" (kleinster nicht-negativer Offset zuerst): `... WHERE pdid = 1 AND latitude = 52.52 AND longitude = 13.41 AND offset_seconds >= 0 ORDER BY timestamp, offset_seconds`. Abfrage "nur Analysen": `... WHERE pdid = 1 AND offset_seconds = 0`. Abfrage "nur echte Messungen": `... WHERE pdid = 2 AND offset_seconds < 0`.
 
 ### 2.2 ER-Diagramm
 
 ```
-┌──────────┐     1      ┌──────────┐     1      ┌──────────────┐
-│ sources  │──────┐     │ models   │──────┐     │ forecast_    │
-│          │      │     │          │      │     │ runs         │
-│ id       │      │     │ id       │      │     │ id           │
-│ code     │      └────►│ source_  │      └────►│ model_id     │
-│ name     │          │ id       │           │ run_time       │
-│ type     │          │ code     │           │ valid_from     │
-└──────────┘          │ name     │           │ status         │
-                      └──────────┘           └──────┬───────┘
-                                                    │
-                                                    │ 1
-                    ┌───────────────────────────────┘
-                    │
-                    ▼ n
-┌──────────┐     ┌──────────────┐     ┌──────────────────────┐
-│ params   │     │ observations │     │ observations_summary │
-│          │     │              │     │                      │
-│ id       │◄────│ forecast_    │     │ id                   │
-│ code     │     │ run_id       │     │ forecast_run_id      │
-│ name     │     │ parameter_   │     │ parameter_id         │
-│ unit     │     │ id           │     │ valid_date           │
-└──────────┘     │ grid_point_  │     │ hour_of_day          │
-                 │ id           │     │ mean_value           │
-                 │ valid_time   │     └──────────────────────┘
-                 │ value        │
-┌──────────┐     │ quality_     │
-│grid_     │     │ flag         │
-│points    │     └──────────────┘
-│          │
-│ id       │
-│ latitude │
-│ longitude│
-│ elevation│
-└──────────┘
+┌────────────────────┐        ┌───────────────────────┐
+│  pdid_registry      │  1   n │  datapoints_int        │
+│                     │───────►│  pdid (PK, FK)         │
+│  pdid (PK)          │        │  latitude (PK)         │
+│  plugin_code        │        │  longitude (PK)        │
+│  datapoint_code     │        │  timestamp (PK)        │
+│  unit               │        │  offset_seconds (PK)   │
+│  value_type         │        │  value                 │
+│                     │        └───────────────────────┘
+│                     │  1   n ┌───────────────────────┐
+│                     │───────►│  datapoints_float      │
+│                     │        │  pdid (PK, FK)         │
+│                     │        │  latitude (PK)         │
+│                     │        │  longitude (PK)        │
+│                     │        │  timestamp (PK)        │
+│                     │        │  offset_seconds (PK)   │
+│                     │        │  value                 │
+│                     │        └───────────────────────┘
+│                     │
+│                     │  1   n ┌───────────────────────┐
+│                     │───────►│  datapoints_varchar    │
+└────────────────────┘        │  pdid (PK, FK)         │
+                               │  latitude (PK)         │
+                               │  longitude (PK)        │
+                               │  timestamp (PK)        │
+                               │  offset_seconds (PK)   │
+                               │  value                 │
+                               └───────────────────────┘
 ```
 
-### 2.3 Indexe
+### 2.3 Retention
 
-```sql
--- observations: Schneller Zugriff nach Lauf, Parameter und Ort
-CREATE INDEX idx_obs_run ON observations (forecast_run_id);
-CREATE INDEX idx_obs_param ON observations (parameter_id);
-CREATE INDEX idx_obs_grid ON observations (grid_point_id);
-CREATE INDEX idx_obs_valid ON observations (valid_time);
-CREATE INDEX idx_obs_run_param ON observations (forecast_run_id, parameter_id);
-CREATE INDEX idx_obs_run_param_grid ON observations (forecast_run_id, parameter_id, grid_point_id);
-
--- forecast_runs: Schneller Zugriff nach Modell und Laufzeit
-CREATE INDEX idx_run_model ON forecast_runs (model_id);
-CREATE INDEX idx_run_time ON forecast_runs (run_time);
-CREATE INDEX idx_run_status ON forecast_runs (status);
-
--- grid_points: Räumliche Abfragen
-CREATE INDEX idx_grid_lat ON grid_points (latitude);
-CREATE INDEX idx_grid_lon ON grid_points (longitude);
-CREATE SPATIAL INDEX idx_grid_location ON grid_points (latitude, longitude);
-```
+Es gibt keine `data_retention_rules`-Tabelle mehr. Aufbewahrungsfristen sind Teil der Worker-Konfiguration (siehe [4.1](#41-configyaml-global)) und wirken direkt auf die `datapoints_*`-Tabellen (`DELETE ... WHERE timestamp < NOW() - INTERVAL max_days DAY`).
 
 ---
 
 ## 3. Datenquellen-Spezifikation
 
-### 3.1 NOAA NOMADS (GDAS/Global Forecast System)
+Jede der folgenden Datenquellen wird als eigenständiges Plugin implementiert (`plugin_code` in Klammern). Die hier aufgeführten Parameter definieren, welche Datenpunkte das jeweilige Plugin in seiner YAML-Konfiguration deklariert und damit in `pdid_registry` registriert (siehe [2.1.1](#211-pdid_registry--register-der-datenpunkte)).
+
+### 3.1 NOAA NOMADS (GDAS/Global Forecast System) — Plugin `noaa_gdas`
 
 **Basis-URL:** `https://nomads.ncep.noaa.gov/cgi-bin/filter_gdas1.pl`
 
@@ -281,16 +216,16 @@ CREATE SPATIAL INDEX idx_grid_location ON grid_points (latitude, longitude);
 - `gdas1.grb2` — Hauptdatei
 - Enthält: Temperatur, Wind (U/V), Druck, Feuchtigkeit, Strahlung
 
-**Parameter (Auswahl):**
-| GRIB ID | Beschreibung |
-|---------|-------------|
-| 11 | Bodentemperatur (K) |
-| 12 | Lufttemperatur auf verschiedenen Niveaus (K) |
-| 130 | Geopotentialhöhe (gpm) |
-| 33 | U-Wind-Komponente (m/s) |
-| 35 | V-Wind-Komponente (m/s) |
-| 132 | Relative Luftfeuchte (%) |
-| 203 | Akkumulierter Niederschlag (kg/m²) |
+**Parameter (Auswahl) → Datenpunkt-Code (`datapoint_code`) in `pdid_registry`:**
+| GRIB ID | Beschreibung | datapoint_code | unit | value_type |
+|---------|-------------|-----------------|------|------------|
+| 11 | Bodentemperatur | temperature_surface | K | float |
+| 12 | Lufttemperatur auf verschiedenen Niveaus | temperature_2m | K | float |
+| 130 | Geopotentialhöhe | geopotential_height | gpm | float |
+| 33 | U-Wind-Komponente | wind_u_10m | m/s | float |
+| 35 | V-Wind-Komponente | wind_v_10m | m/s | float |
+| 132 | Relative Luftfeuchte | relative_humidity | % | float |
+| 203 | Akkumulierter Niederschlag | precipitation | kg/m² | float |
 
 **Aufruf-Beispiel:**
 ```
@@ -341,7 +276,9 @@ https://nomads.ncep.noaa.gov/cgi-bin/filter_gdas1.pl?file=gdas1.grb2&var_...
 
 ## 4. Worker-Konfiguration
 
-### 4.1 config.yaml
+Die Worker-Konfiguration ist zweigeteilt: eine globale `config.yaml` (Datenbank, aktive Plugins, Retention, Logging) und je Plugin eine eigenständige YAML-Datei (Fetch-Parameter, Datenpunkt-Definitionen). Dadurch bringt jedes Plugin sein Wissen über Fetch und Datenpunkte selbst mit — die globale Konfiguration muss bei neuen Plugins nur um einen Eintrag in `plugins.enabled` ergänzt werden.
+
+### 4.1 config.yaml (global)
 
 ```yaml
 # PredictionDB Worker Konfiguration
@@ -354,81 +291,19 @@ database:
   password: ${DB_PASSWORD:-prediction}
   pool_size: 5
 
-# Datenquellen
-sources:
-  - name: noaa_gdas
-    type: grib2
-    enabled: true
-    interval_hours: 6
-    fetch:
-      url: "https://nomads.ncep.noaa.gov/cgi-bin/filter_gdas1.pl"
-      params:
-        file: "gdas1.grb2"
-        var_T: "on"
-        var_UGRD: "on"
-        var_VGRD: "on"
-        level_type: "1"
-        min_lat: "-90"
-        max_lat: "90"
-        min_lon: "0"
-        max_lon: "360"
-    parse:
-      timeout_seconds: 300
-      batch_size: 1000
+# Plugins
+plugins:
+  directory: /app/plugins     # Verzeichnis mit einem Unterordner je Plugin
+  enabled:
+    - noaa_gdas
+    - dwd_icon
+    - open_meteo
 
-  - name: dwd_icon
-    type: grib2
-    enabled: true
-    interval_hours: 6
-    fetch:
-      url: "https://opendata.dwd.de/climate_environment/CMS/..."
-    parse:
-      timeout_seconds: 600
-      batch_size: 5000
-
-  - name: open_meteo
-    type: json
-    enabled: true
-    interval_hours: 1
-    fetch:
-      url: "https://api.open-meteo.com/v1/forecast"
-      params:
-        latitude: "52.52"       # Berlin (anpassbar)
-        longitude: "13.41"
-        hourly: >-
-          temperature_2m,
-          relative_humidity_2m,
-          wind_speed_10m,
-          precipitation,
-          cloud_cover,
-          surface_pressure
-        timezone: "Europe/Berlin"
-    parse:
-      batch_size: 100
-
-# Speicherung
-storage:
-  # GRIB-Dateien lokal speichern?
-  store_raw_files: false
-  raw_files_dir: /data/raw
-
-  # Prognose-Parameter, die gespeichert werden
-  save_parameters:
-    - temperature
-    - wind_u
-    - wind_v
-    - pressure
-    - humidity
-    - radiation
-    - precipitation
-
-# Bereinigung
+# Bereinigung (wirkt auf alle datapoints_*-Tabellen)
 retention:
   enabled: true
-  # Alte Prognosen löschen (Standard: 365 Tage)
-  max_days: 365
-  # Täglicher Bereinigungs-Job um 3:00 Uhr
-  cleanup_cron: "0 3 * * *"
+  max_days: 365                # Wie lange Datenpunkte behalten?
+  cleanup_cron: "0 3 * * *"     # Täglicher Bereinigungs-Job um 3:00 Uhr
 
 # Logging
 logging:
@@ -438,7 +313,53 @@ logging:
   backup_count: 5
 ```
 
-### 4.2 Worker-Architektur
+### 4.2 Plugin-Konfiguration (Beispiel `plugins/noaa_gdas/config.yaml`)
+
+```yaml
+plugin:
+  code: noaa_gdas
+  name: "NOAA GDAS / GFS"
+  enabled: true
+  interval_hours: 6
+
+fetch:
+  type: grib2
+  url: "https://nomads.ncep.noaa.gov/cgi-bin/filter_gdas1.pl"
+  params:
+    file: "gdas1.grb2"
+    var_T: "on"
+    var_UGRD: "on"
+    var_VGRD: "on"
+    level_type: "1"
+    min_lat: "-90"
+    max_lat: "90"
+    min_lon: "0"
+    max_lon: "360"
+  timeout_seconds: 300
+  batch_size: 1000
+
+# Datenpunkte, die dieses Plugin liefert.
+# Wird beim Start des Plugins in pdid_registry synchronisiert (siehe 2.1.1).
+datapoints:
+  - code: temperature_2m
+    grib_param_id: 12
+    unit: K
+    value_type: float
+  - code: wind_u_10m
+    grib_param_id: 33
+    unit: m/s
+    value_type: float
+  - code: wind_v_10m
+    grib_param_id: 35
+    unit: m/s
+    value_type: float
+  - code: relative_humidity
+    grib_param_id: 132
+    unit: "%"
+    value_type: float
+```
+
+### 4.3 Worker-Architektur
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -447,9 +368,9 @@ logging:
 │  ┌────────────────────────────────────────────────────────┐ │
 │  │              Scheduler (Celery Beat)                   │ │
 │  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────────┐ │ │
-│  │  │ NOAA    │ │ DWD     │ │ Open-   │ │ Cleanup     │ │ │
-│  │  │ Fetcher │ │ Fetcher │ │ Meteo   │ │ Job         │ │ │
-│  │  │ (6h)    │ │ (6h)    │ │ (1h)    │ │ (daily)     │ │ │
+│  │  │ Plugin  │ │ Plugin  │ │ Plugin  │ │ Cleanup     │ │ │
+│  │  │ noaa_   │ │ dwd_    │ │ open_   │ │ Job         │ │ │
+│  │  │ gdas(6h)│ │ icon(6h)│ │ meteo(1h│ │ (daily)     │ │ │
 │  │  └────┬────┘ └────┬────┘ └────┬────┘ └──────┬──────┘ │ │
 │  └───────┼───────────┼───────────┼──────────────┼────────┘ │
 │          │           │           │              │          │
@@ -457,25 +378,25 @@ logging:
 │  ┌─────────────────────────────────────────────────────┐  │
 │  │              Worker Pool (Celery Workers)           │  │
 │  │  ┌────────────┐  ┌────────────┐  ┌────────────┐    │  │
-│  │  │ Fetcher    │  │ Fetcher    │  │ Fetcher    │    │  │
+│  │  │ Plugin     │  │ Plugin     │  │ Plugin     │    │  │
 │  │  │ #1 (GRIB)  │  │ #2 (GRIB)  │  │ #3 (JSON)  │    │  │
 │  │  └─────┬──────┘  └─────┬──────┘  └─────┬──────┘    │  │
 │  └────────┼───────────────┼───────────────┼────────────┘  │
 │           │               │               │               │
 │           ▼               ▼               │               │
 │  ┌─────────────────────────────────────────────────────┐  │
-│  │              Parse & Transform Pipeline             │  │
+│  │       Plugin-interner Fetch & Parse (je Plugin)     │  │
 │  │                                                     │  │
-│  │  GRIB-Datei ──► Parser ──► Normalizer ──► Validator│  │
-│  │   JSON ───────► Parser ──► Normalizer ──► Validator│  │
+│  │  GRIB-Datei ──► Parser ──► Mapping auf PDID/Value   │  │
+│  │   JSON ───────► Parser ──► Mapping auf PDID/Value   │  │
 │  └──────────────────────────┬──────────────────────────┘  │
 │                             │                              │
 │                             ▼                              │
 │  ┌─────────────────────────────────────────────────────┐  │
 │  │              Database Uploader                      │  │
 │  │                                                     │  │
-│  │  Batch INSERT (1000-10000 records)                  │  │
-│  │  ON DUPLICATE KEY UPDATE                            │  │
+│  │  Batch INSERT in datapoints_* (1000-10000 Zeilen)   │  │
+│  │  ON DUPLICATE KEY UPDATE (pdid, lat, lon, ts, offset)│ │
 │  └──────────────────────────┬──────────────────────────┘  │
 │                             │                              │
 │                             ▼                              │
@@ -616,32 +537,36 @@ PredictionDB/
 ├── src/
 │   └── predictiondb/
 │       ├── __init__.py
-│       ├── config.py          # Lädt config.yaml
+│       ├── config.py          # Lädt globale config.yaml
 │       ├── database.py        # DB-Verbindung (SQLAlchemy)
-│       ├── models.py          # SQLAlchemy ORM-Modelle
+│       ├── models.py          # SQLAlchemy ORM-Modelle (pdid_registry, datapoints_*)
+│       ├── plugin.py          # Plugin-Basisklasse & Registry-Sync (YAML → pdid_registry)
 │       │
-│       ├── sources/
-│       │   ├── base.py        # Basisklasse für Datenquellen
-│       │   ├── noaa_gdas.py   # NOAA GDAS Fetcher
-│       │   ├── dwd_icon.py    # DWD ICON Fetcher
-│       │   ├── ecmwf.py       # ECMWF Fetcher
-│       │   └── open_meteo.py  # Open-Meteo Fetcher
+│       ├── plugins/
+│       │   ├── noaa_gdas/
+│       │   │   ├── plugin.py    # Fetcher + Parser + Mapping auf Datenpunkte
+│       │   │   └── config.yaml  # Fetch-Parameter & Datenpunkt-Definitionen
+│       │   ├── dwd_icon/
+│       │   │   ├── plugin.py
+│       │   │   └── config.yaml
+│       │   ├── ecmwf/
+│       │   │   ├── plugin.py
+│       │   │   └── config.yaml
+│       │   └── open_meteo/
+│       │       ├── plugin.py
+│       │       └── config.yaml
 │       │
-│       ├── parsers/
-│       │   ├── base.py        # Basisklasse für Parser
-│       │   ├── grib2.py       # GRIB2-Parser (pygrib / CMC)
-│       │   └── json_parser.py # JSON-Parser
+│       ├── parsers/            # Gemeinsame Parser-Utilities (von Plugins genutzt)
+│       │   ├── grib2.py        # GRIB2-Parser (pygrib / CMC)
+│       │   └── json_parser.py  # JSON-Parser
 │       │
-│       ├── normalizer.py      # Daten-Normalisierung
-│       ├── validator.py       # Daten-Validierung
-│       ├── uploader.py        # Batch-Upload zu MariaDB
-│       └── cleanup.py         # Alte Daten löschen
+│       ├── uploader.py         # Batch-Upload zu MariaDB
+│       └── cleanup.py          # Retention: alte Datenpunkte löschen
 │
 ├── tests/
 │   ├── test_config.py
-│   ├── test_sources/
+│   ├── test_plugins/
 │   ├── test_parsers/
-│   ├── test_normalizer.py
 │   └── test_uploader.py
 │
 ├── docker/
@@ -652,11 +577,11 @@ PredictionDB/
 │   │   ├── Dockerfile
 │   │   └── entrypoint.sh
 │   └── mysql/
-│       ├── init.sql           # Tabellen erstellen
+│       ├── init.sql           # Tabellen erstellen (pdid_registry, datapoints_*)
 │       └── my.cnf             # MariaDB Konfiguration
 │
 ├── config/
-│   ├── config.yaml            # Haupt-Konfiguration
+│   ├── config.yaml            # Globale Worker-Konfiguration (DB, aktive Plugins, Retention)
 │   └── config.example.yaml    # Beispiel-Konfiguration
 │
 ├── scripts/
@@ -674,157 +599,86 @@ PredictionDB/
 ```python
 # src/predictiondb/models.py
 
-from datetime import datetime, date, time
-from decimal import Decimal
+from datetime import datetime
 from enum import Enum
-from typing import Optional
 
 from sqlalchemy import (
-    Column, Integer, String, Text, Boolean, Float,
-    DateTime, Date, Time, ForeignKey, Enum as SAEnum,
-    UniqueConstraint, Index, DECIMAL, BIGINT, TINYINT,
-    Numeric, TIMESTAMP
+    Column, Integer, String, Boolean, Float,
+    DateTime, ForeignKey, Enum as SAEnum,
+    UniqueConstraint, Index, DECIMAL, TIMESTAMP
 )
-from sqlalchemy.orm import relationship, DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase
 
 
 class Base(DeclarativeBase):
     pass
 
 
-class SourceType(str, Enum):
-    GRIB2 = "grib2"
-    GRIB1 = "grib1"
-    JSON = "json"
-    CSV = "csv"
-    XML = "xml"
-
-
-class RunStatus(str, Enum):
-    DOWNLOADING = "downloading"
-    PARSING = "parsing"
-    COMPLETED = "completed"
-    FAILED = "failed"
-
-
-class QualityFlag(int, Enum):
-    OK = 0
-    APPROXIMATED = 1
-    ERROR = 2
+class ValueType(str, Enum):
+    INT = "int"
+    FLOAT = "float"
+    VARCHAR = "varchar"
 
 
 # ============================================================
 # Tabellen-Modelle
 # ============================================================
 
-class Source(Base):
-    __tablename__ = 'sources'
+class PDIDRegistry(Base):
+    """Register der Datenpunkte — wird von jedem Plugin beim Start aus
+    seiner YAML-Konfiguration synchronisiert, nicht manuell gepflegt."""
+    __tablename__ = 'pdid_registry'
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    code = Column(String(50), unique=True, nullable=False)
-    name = Column(String(100), nullable=False)
-    type = Column(SAEnum(SourceType), nullable=False)
-    base_url = Column(Text)
-    update_interval_hours = Column(Integer, default=6)
-    is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    models = relationship("Model", back_populates="source")
-    forecast_runs = relationship("ForecastRun", back_populates="source")
-
-
-class Model(Base):
-    __tablename__ = 'models'
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    source_id = Column(Integer, ForeignKey('sources.id'), nullable=False)
-    code = Column(String(50), nullable=False)
-    name = Column(String(100), nullable=False)
-    resolution_degrees = Column(DECIMAL(4, 2))
-    valid_from = Column(DateTime)
-    valid_until = Column(DateTime)
-    run_time = Column(DateTime)
-    is_current = Column(Boolean, default=False)
-
-    source = relationship("Source", back_populates="models")
-    forecast_runs = relationship("ForecastRun", back_populates="model")
-
-
-class Parameter(Base):
-    __tablename__ = 'parameters'
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    grib_param_id = Column(Integer)
-    code = Column(String(50), unique=True, nullable=False)
-    name = Column(String(100), nullable=False)
+    pdid = Column(Integer, primary_key=True, autoincrement=True)
+    plugin_code = Column(String(50), nullable=False)
+    datapoint_code = Column(String(100), nullable=False)
     unit = Column(String(20), nullable=False)
-    category = Column(String(50))
+    value_type = Column(SAEnum(ValueType), nullable=False)
+    description = Column(String(255))
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-
-class ForecastRun(Base):
-    __tablename__ = 'forecast_runs'
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    model_id = Column(Integer, ForeignKey('models.id'), nullable=False)
-    run_time = Column(DateTime, nullable=False)
-    valid_from = Column(DateTime, nullable=False)
-    valid_until = Column(DateTime, nullable=False)
-    file_path = Column(String(500))
-    file_size_bytes = Column(BIGINT)
-    status = Column(SAEnum(RunStatus), default=RunStatus.DOWNLOADING)
-    error_message = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    model = relationship("Model", back_populates="forecast_runs")
-    observations = relationship("Observation", back_populates="run")
-
-
-class GridPoint(Base):
-    __tablename__ = 'grid_points'
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    latitude = Column(DECIMAL(9, 6), nullable=False)
-    longitude = Column(DECIMAL(9, 6), nullable=False)
-    elevation_m = Column(DECIMAL(8, 2))
-    grid_index = Column(Integer, nullable=False)
-    is_active = Column(Boolean, default=True)
+    created_at = Column(TIMESTAMP, default=datetime.utcnow)
 
     __table_args__ = (
-        UniqueConstraint('latitude', 'longitude', name='uq_grid'),
+        UniqueConstraint('plugin_code', 'datapoint_code', name='uq_pdid'),
     )
 
 
-class Observation(Base):
-    __tablename__ = 'observations'
+class _DatapointMixin:
+    """Gemeinsame Spalten aller datapoints_*-Tabellen."""
+    pdid = Column(Integer, ForeignKey('pdid_registry.pdid'), primary_key=True)
+    latitude = Column(DECIMAL(9, 6), primary_key=True)
+    longitude = Column(DECIMAL(9, 6), primary_key=True)
+    timestamp = Column(DateTime, primary_key=True)          # Gültigkeitszeitpunkt
+    offset_seconds = Column(Integer, primary_key=True, default=0)  # 0 = Analyse, < 0 = echte Messung
 
-    id = Column(BIGINT, primary_key=True, autoincrement=True)
-    forecast_run_id = Column(Integer, ForeignKey('forecast_runs.id'), nullable=False)
-    parameter_id = Column(Integer, ForeignKey('parameters.id'), nullable=False)
-    grid_point_id = Column(Integer, ForeignKey('grid_points.id'), nullable=False)
-    valid_time = Column(DateTime, nullable=False)
-    value = Column(DECIMAL(10, 4))
-    quality_flag = Column(TINYINT, default=0)
-    forecast_hour = Column(Integer)
-    created_at = Column(DateTime, default=datetime.utcnow)
 
-    run = relationship("ForecastRun", back_populates="observations")
-    parameter = relationship("Parameter")
-    grid_point = relationship("GridPoint")
+class DatapointInt(_DatapointMixin, Base):
+    __tablename__ = 'datapoints_int'
+
+    value = Column(Integer, nullable=False)
 
     __table_args__ = (
-        UniqueConstraint(
-            'forecast_run_id', 'parameter_id', 'grid_point_id', 'valid_time',
-            name='uq_observation'
-        ),
-        Index('idx_obs_run', 'forecast_run_id'),
-        Index('idx_obs_param', 'parameter_id'),
-        Index('idx_obs_grid', 'grid_point_id'),
-        Index('idx_obs_valid', 'valid_time'),
-        Index('idx_obs_run_param', 'forecast_run_id', 'parameter_id'),
-        Index('idx_obs_run_param_grid', 'forecast_run_id', 'parameter_id', 'grid_point_id'),
+        Index('idx_datapoints_int_timestamp', 'timestamp'),
+    )
+
+
+class DatapointFloat(_DatapointMixin, Base):
+    __tablename__ = 'datapoints_float'
+
+    value = Column(Float, nullable=False)
+
+    __table_args__ = (
+        Index('idx_datapoints_float_timestamp', 'timestamp'),
+    )
+
+
+class DatapointVarchar(_DatapointMixin, Base):
+    __tablename__ = 'datapoints_varchar'
+
+    value = Column(String(255), nullable=False)
+
+    __table_args__ = (
+        Index('idx_datapoints_varchar_timestamp', 'timestamp'),
     )
 ```
 
@@ -839,16 +693,16 @@ class Observation(Base):
 - [ ] config.yaml Struktur definieren
 - [ ] Grundlegende Worker-Architektur
 
-### Phase 2: Datenquellen (Woche 2-3)
-- [ ] NOAA GDAS Fetcher implementieren
+### Phase 2: Plugins (Woche 2-3)
+- [ ] NOAA GDAS Plugin implementieren (Fetch + Parser + Datenpunkt-Mapping)
 - [ ] GRIB2-Parser (pygrib)
 - [ ] Open-Meteo JSON-Parser
-- [ ] Daten-Normalisierung
+- [ ] pdid_registry-Sync aus Plugin-YAML
 
 ### Phase 3: Storage & Scheduling (Woche 4)
 - [ ] Batch-Upload zu MariaDB
 - [ ] Scheduler (Celery Beat oder APScheduler)
-- [ ] Konfiguration für mehrere Quellen
+- [ ] Konfiguration für mehrere Plugins
 
 ### Phase 4: Cleanup & Monitoring (Woche 5)
 - [ ] Datenbereinigung (retention rules)
@@ -877,11 +731,11 @@ DB_PORT=3306
 WORKER_LOG_LEVEL=INFO
 WORKER_PARALLELISM=2
 
-# Datenquellen
-SOURCE_NOAA_ENABLED=true
-SOURCE_DWD_ENABLED=true
-SOURCE_OPEN_METEO_ENABLED=true
-SOURCE_ECMWF_ENABLED=false
+# Plugins
+PLUGIN_NOAA_GDAS_ENABLED=true
+PLUGIN_DWD_ICON_ENABLED=true
+PLUGIN_OPEN_METEO_ENABLED=true
+PLUGIN_ECMWF_ENABLED=false
 
 # API (optional)
 API_ENABLED=false
@@ -898,7 +752,7 @@ API_PORT=8000
 3. 🔲 `docker-compose.yml` erstellen
 4. 🔲 SQL-Init-Skript erstellen
 5. 🔲 Worker-Python-Paket strukturieren
-6. 🔲 NOAA GDAS Fetcher implementieren
+6. 🔲 NOAA GDAS Plugin implementieren
 7. 🔲 GRIB2-Parser integrieren
 8. 🔲 Scheduler einrichten
 9. 🔲 Tests schreiben
