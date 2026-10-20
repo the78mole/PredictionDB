@@ -999,7 +999,22 @@ CREATE TABLE fcst.plant_forecast (                -- Hypertable, komprimiert
 | Inferenz je Lauf (`ml-predict`) | CPU | Sekunden |
 | Gitter-Modelle (Phase 6+, optional) | GPU zwingend | Stunden |
 
-**Was „annehmbar“ heißt:** Ein neuer GFS-Lauf kommt alle 6 h, die Inferenz liegt mit Sekunden weit darunter. Neu trainiert wird wöchentlich sowie nach jedem neuen MaStR-Snapshot bzw. jeder neuen Clusterung (7.5). Ein Training muss deshalb sicher über Nacht fertig sein, also in unter 6–8 h. Ideal ist unter 1 h, damit Experimente zügig gehen.
+**Was „annehmbar“ heißt:** Ein neuer GFS-Lauf kommt alle 6 h, die Inferenz liegt mit Sekunden weit darunter. In der Entwicklung sollte ein Trainingslauf möglichst unter 1 h bleiben, damit Experimente zügig gehen. Im Betrieb darf ein Neutraining auch deutlich länger dauern (siehe unten).
+
+**Nachtrainieren statt Neutraining:** Ein bestehendes Modell muss nicht jedes Mal von Grund auf neu trainiert werden. Es wird regulär nachgeführt, und nur bei bestimmten Anlässen wird neu trainiert.
+
+| Verfahren | Wann | Aufwand | Risiko |
+|---|---|---|---|
+| **Fine-Tuning (Warm-Start)** des Produktionsmodells mit den Daten seit dem letzten Training | Standard, wöchentlich | wenige Epochen, Minuten auch auf CPU | Drift Richtung jüngste Wetterlagen |
+| **Laufende Nachführung** (Online-Learning, kleine Gradientenschritte nach jedem neuen Ist-Wert) | optional, z. B. täglich für Bias-Korrektur | Sekunden | Instabilität, katastrophales Vergessen seltener Lagen |
+| **Neutraining** von Grund auf | bei Strukturänderungen (siehe unten), sonst etwa jährlich als Referenz | Stunden, ggf. Miet-GPU | gering, aber teuer |
+
+- **Gegen Vergessen:** Beim Fine-Tuning werden die neuen Daten mit einer Stichprobe der gesamten Historie gemischt (Replay), gewichtet nach Saison, damit seltene Lagen wie Dunkelflaute, Hitzewelle und Sturm erhalten bleiben. Die Lernrate ist klein, und je Lauf gibt es nur wenige Epochen. Optional werden die unteren Schichten eingefroren.
+- **Laufende Nachführung** bevorzugt als leichte Schicht statt im ganzen Netz: ein kleiner Korrekturterm (Bias je Horizont und Tageszeit) oder ein Online-Lerner auf dem Restfehler, der täglich nachgeführt wird. Das Netz selbst bleibt dabei stabil und reproduzierbar. LightGBM lässt sich ebenfalls fortsetzen (`init_model`), bekommt aber in der Praxis meist ein günstiges Neutraining.
+- **Neutraining ist nötig,** wenn sich die Eingänge ändern: neue Clusterversion aus dem MaStR (7.5), neue oder entfallene Features, eine neue Wetterquelle, geänderte Zielauflösung (z. B. 15 min) oder eine geänderte Architektur. Ein Neutraining ist auch nötig, wenn der Fehler trotz Fine-Tuning dauerhaft steigt, etwa bei einem Strukturbruch im Markt.
+- **Champion/Challenger:** Jedes nachtrainierte oder neue Modell (Challenger) läuft zunächst im Schatten mit und wird auf demselben Validierungszeitraum gegen das Produktionsmodell (Champion) verglichen. Verglichen werden Pinball-Loss je Horizont und getrennt nach Lagen. Nur wenn der Challenger insgesamt besser ist und in keiner wichtigen Lage deutlich schlechter, wird er in MLflow zu `production`. Der Champion bleibt als Rückfall registriert.
+
+Für den **Produktivbetrieb** ist die Trainingszeit deshalb unkritisch: Das bisherige Modell bleibt brauchbar und verliert nur langsam an Genauigkeit, bis ein Nachfolger fertig und geprüft ist. Kurze Laufzeiten zählen vor allem in der **Entwicklung**, damit sich Ideen schnell testen lassen. Dafür sind die lokale GPU bzw. Miet-GPUs gedacht, und dafür gibt es einen kleinen Entwicklungs-Datensatz (z. B. ein Jahr, reduzierte Cluster), der in Minuten durchläuft.
 
 **Stufen:**
 
@@ -1035,6 +1050,7 @@ flowchart LR
 - **Zugang von außen:** Der Job bekommt nur zeitlich begrenzte presigned URLs (Lesen für den Snapshot, Schreiben für das Ergebnis), erreichbar über einen Reverse Proxy mit TLS, der nur diesen Bucket freigibt. Alternativ läuft die Verbindung über ein VPN (WireGuard bzw. Tailscale). Garage-Schlüssel mit Vollzugriff verlassen die VM nicht.
 - **Ausgabe:** Modell, Metriken und Snapshot-Hash zurück nach `ml-exchange`. Der Dispatcher registriert das Ergebnis in MLflow (`ml-artifacts`). Ein Modell geht erst nach dem Vergleich mit dem aktuellen Produktionsmodell auf dem Validierungszeitraum in `production`.
 - **Datenschutz:** Trainings-Snapshots für Miet-GPUs enthalten nur öffentliche Daten (Wetter, Markt, MaStR). Messwerte eigener Anlagen (7.6) werden nur lokal verarbeitet. Bei Marktplatz-Anbietern mit privaten Hosts ist das wichtig.
+- **Nachtrainieren im Job:** Für ein Fine-Tuning enthält der Snapshot zusätzlich die Gewichte des Champions und die Replay-Stichprobe. Der Job gibt einen Challenger zurück, der dann den Vergleich oben durchläuft.
 - **Kostenbremse:** Der Dispatcher setzt eine maximale Laufzeit je Job. Die Miet-Instanz wird nach dem Upload des Ergebnisses beendet.
 
 ---
