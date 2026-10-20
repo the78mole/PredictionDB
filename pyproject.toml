@@ -35,13 +35,18 @@ extend-exclude = ["*.md"]
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "DTZ"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["predictiondb_core", "gribkit", "wx_ingest"]
+known-first-party = ["predictiondb_core", "gribkit", "wx_ingest", "energy_ingest"]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
-mypy_path = ["packages/core/src", "packages/gribkit/src", "services/wx_ingest/src"]
+mypy_path = [
+    "packages/core/src",
+    "packages/gribkit/src",
+    "services/wx_ingest/src",
+    "services/energy_ingest/src",
+]
 explicit_package_bases = true
 files = ["."]
 exclude = ["^\\.venv/", "^build/"]

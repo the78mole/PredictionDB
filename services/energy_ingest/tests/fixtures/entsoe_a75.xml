@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<GL_MarketDocument xmlns="urn:iec62325.351:tc57wg16:451-6:generationloaddocument:3:0">
+  <mRID>test</mRID>
+  <type>A75</type>
+  <process.processType>A16</process.processType>
+  <TimeSeries>
+    <mRID>1</mRID>
+    <businessType>A01</businessType>
+    <objectAggregation>A08</objectAggregation>
+    <inBiddingZone_Domain.mRID codingScheme="A01">10Y1001A1001A83F</inBiddingZone_Domain.mRID>
+    <quantity_Measure_Unit.name>MAW</quantity_Measure_Unit.name>
+    <curveType>A01</curveType>
+    <MktPSRType><psrType>B19</psrType></MktPSRType>
+    <Period>
+      <timeInterval><start>2026-10-18T22:00Z</start><end>2026-10-18T23:00Z</end></timeInterval>
+      <resolution>PT15M</resolution>
+      <Point><position>1</position><quantity>10000</quantity></Point>
+      <Point><position>2</position><quantity>10100</quantity></Point>
+      <Point><position>3</position><quantity>10200</quantity></Point>
+      <Point><position>4</position><quantity>10300</quantity></Point>
+    </Period>
+  </TimeSeries>
+  <TimeSeries>
+    <mRID>2</mRID>
+    <businessType>A01</businessType>
+    <inBiddingZone_Domain.mRID codingScheme="A01">10Y1001A1001A83F</inBiddingZone_Domain.mRID>
+    <curveType>A03</curveType>
+    <MktPSRType><psrType>B14</psrType></MktPSRType>
+    <Period>
+      <timeInterval><start>2026-10-18T22:00Z</start><end>2026-10-18T23:00Z</end></timeInterval>
+      <resolution>PT15M</resolution>
+      <Point><position>1</position><quantity>0</quantity></Point>
+    </Period>
+  </TimeSeries>
+  <TimeSeries>
+    <mRID>3</mRID>
+    <businessType>A01</businessType>
+    <inBiddingZone_Domain.mRID codingScheme="A01">10Y1001A1001A83F</inBiddingZone_Domain.mRID>
+    <curveType>A03</curveType>
+    <MktPSRType><psrType>B16</psrType></MktPSRType>
+    <Period>
+      <timeInterval><start>2026-10-18T22:00Z</start><end>2026-10-18T23:00Z</end></timeInterval>
+      <resolution>PT15M</resolution>
+      <Point><position>1</position><quantity>1</quantity></Point>
+      <Point><position>3</position><quantity>5</quantity></Point>
+    </Period>
+  </TimeSeries>
+  <TimeSeries>
+    <mRID>4</mRID>
+    <businessType>A04</businessType>
+    <outBiddingZone_Domain.mRID codingScheme="A01">10Y1001A1001A83F</outBiddingZone_Domain.mRID>
+    <curveType>A01</curveType>
+    <MktPSRType><psrType>B10</psrType></MktPSRType>
+    <Period>
+      <timeInterval><start>2026-10-18T22:00Z</start><end>2026-10-18T22:15Z</end></timeInterval>
+      <resolution>PT15M</resolution>
+      <Point><position>1</position><quantity>999</quantity></Point>
+    </Period>
+  </TimeSeries>
+</GL_MarketDocument>
