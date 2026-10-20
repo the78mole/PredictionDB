@@ -1,0 +1,74 @@
+# Stack für die PVE-VM (Kapitel 8.2 der Architektur). Lokale Entwicklung: compose.override.yaml.
+name: predictiondb
+
+x-app: &app
+  image: ghcr.io/the78mole/predictiondb:${TAG:-latest}
+  env_file: .env
+  environment:
+    PDB_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    PDB_S3_ENDPOINT_URL: http://garage:3900
+    PDB_GARAGE_ADMIN_URL: http://garage:3903
+    PDB_GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN}
+  restart: unless-stopped
+  networks: [backend]
+
+services:
+  postgres:
+    image: timescale/timescaledb:2.31.0-pg17
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks: [backend]
+
+  garage:
+    image: dxflrs/garage:v2.4.1
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET}
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN}
+    volumes:
+      - ./config/garage.toml:/etc/garage.toml:ro
+      - garage-meta:/var/lib/garage/meta
+      - garage-data:/var/lib/garage/data
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks: [backend]
+
+  # Einmalig: Layout, Zugangsschlüssel und Buckets anlegen (idempotent)
+  garage-init:
+    <<: *app
+    restart: "no"
+    command: ["pdb-garage-init"]
+    depends_on:
+      garage: {condition: service_healthy}
+
+  # Einmalig: Datenbankschema auf den neuesten Stand bringen
+  migrate:
+    <<: *app
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres: {condition: service_healthy}
+
+  # Weitere Dienste (ingest-*, energy-ingest, wx-process, ml-*, api, mlflow, grafana)
+  # kommen mit ihren Paketen dazu und hängen von migrate und garage-init ab.
+
+volumes:
+  pgdata: {}
+  garage-meta: {}
+  garage-data: {}
+
+networks:
+  backend: {}
+  frontend: {}

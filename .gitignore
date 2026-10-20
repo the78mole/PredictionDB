@@ -23,7 +23,7 @@ ENV/
 *~
 
 # Docker
-docker/mysql/data/
+# (Daten liegen in Docker-Volumes)
 
 # Local config (never commit secrets)
 .env
@@ -47,3 +47,7 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Lokale Compose-Daten
+.mypy_cache/
+.ruff_cache/

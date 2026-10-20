@@ -1,0 +1,56 @@
+[project]
+name = "predictiondb"
+version = "0.1.0"
+description = "Strombedarfs- und Strompreisprognose für Deutschland auf Basis kostenfreier Wetter- und Energiedaten"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "LicenseRef-BUSL-1.1"
+license-files = ["LICENSE"]
+dependencies = ["predictiondb-core"]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.13",
+    "pytest>=8.3",
+    "ruff>=0.8",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/*", "services/*"]
+
+[tool.uv.sources]
+predictiondb-core = { workspace = true }
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "DTZ"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["predictiondb_core"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+mypy_path = ["packages/core/src"]
+explicit_package_bases = true
+files = ["."]
+exclude = ["^\\.venv/", "^build/"]
+
+[[tool.mypy.overrides]]
+module = ["obstore.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["packages", "services", "tests"]
+addopts = ["--import-mode=importlib", "-ra"]
+markers = [
+    "integration: benötigt laufende Dienste (Postgres, Garage) aus compose.yaml",
+]
