@@ -1,6 +1,6 @@
 # Strompreisprognose – Architekturentwurf
 
-**Version:** 0.4 (Entwurf) · **Stand:** 2026-10-20 · **Status:** zur Diskussion
+**Version:** 0.5 (Entwurf) · **Stand:** 2026-10-20 · **Status:** zur Diskussion
 
 ---
 
@@ -12,6 +12,7 @@
   2. **Silber:** einheitliches Gitter je Lauf als **Zarr** (float16/Scale-Offset + Zstd) in Garage. Grundlage für Training und Regionen-Aggregation.
   3. **Gold:** aggregierte Feature-Zeitreihen (DE-weit und je Regelzone/Bundesland, kapazitäts- bzw. bevölkerungsgewichtet) plus Energie-Marktdaten in **PostgreSQL + TimescaleDB** (komprimierte Hypertables).
 - **Gitterdaten gehören nicht zeilenweise in die Datenbank.** Eine Zeile pro Gitterpunkt × Variable × Zeitschritt × Lauf (wie im bestehenden PredictionDB-Entwurf) würde allein für GFS über Deutschland mehrere Milliarden Zeilen pro Jahr erzeugen (Rechnung in 5.4).
+- **Prognose eigener Anlagen:** Über die API lassen sich einzelne PV-, Windkraft- und Wasserkraftanlagen mit Stammdaten und optional einem Jahr Messwerten anlegen; sie bekommen eine Erzeugungsprognose aus denselben Wetterdaten, physikalisch gerechnet und mit den Messwerten kalibriert (7.6).
 - **Repository:** `the78mole/PredictionDB` (Nachfolger der dortigen `SPECIFICATION.md` v0.1).
 - **Python mit uv**, ein uv-Workspace mit mehreren Paketen; jeder Dienst ein eigenes, schlankes Image.
 - **Cloud-Migration** ist von Anfang an mitgedacht: nur S3-API, Postgres-Protokoll und 12-Factor-Konfiguration. Garage → AWS S3/R2/Hetzner, Postgres → Managed Postgres (Timescale Cloud o. Ä.), Compose → Kubernetes/Nomad.
@@ -84,7 +85,7 @@ flowchart LR
     subgraph USE["Nutzung"]
         direction TB
         DASH["Grafana-Dashboards"]
-        API["REST-API<br/>Prognosen, Punktabfragen"]
+        API["REST-API<br/>Prognosen, Punktabfragen,<br/>eigene PV-, Wind-, Wasseranlagen"]
     end
 
     NWP -- "GRIB2, Partial Download" --> SYS
@@ -214,6 +215,10 @@ Für das **Training** wird Historie benötigt. Archiv-Optionen:
 | Grenzkuppelflüsse, Nachbar-Preise | ENTSO-E | Token | 15/60 min | – |
 | Installierte Leistung je Standort | Marktstammdatenregister (MaStR), Gesamtdatenexport | offen | Stichtag | DL-DE BY 2.0 |
 | Kraftwerksnichtverfügbarkeiten | ENTSO-E (Unavailability) | Token | Ereignis | – |
+| Pegel: Wasserstand und Abfluss | PEGELONLINE (WSV, Bundeswasserstraßen); Landesportale (z. B. GKD Bayern, HVZ Baden-Württemberg, Hochwasserportale der Länder) | offen (REST bzw. Download), Landesportale teils nur Webseiten | 15 min | PEGELONLINE DL-DE Zero 2.0; Landesportale je Portal prüfen |
+| Niederschlag beobachtet (Radar) | DWD RADOLAN (z. B. RW stündlich, 1 km) auf opendata.dwd.de | offen | 5 min / 1 h | DWD-Nutzungsbedingungen (frei, Quellenangabe) |
+| Abflussprognosen | GloFAS (Copernicus CEMS) über das Early Warning Data Store; Vorhersagen der Landes-Hochwasserzentralen | GloFAS: kostenlose Registrierung | täglich, bis 30 Tage | Copernicus-Lizenz |
+| Speicherfüllstände Wasserkraft (Nachbarländer) | ENTSO-E „Water reservoirs and hydro storage plants“ | Token | Woche | – |
 | Feiertage, Schulferien | Python `holidays`; Ferien-API bzw. statische Tabellen | offen | Tag | – |
 
 Bekannte Lücke: **Brennstoff- und CO₂-Preise** (TTF-Gas, EUA) sind als Echtzeitdaten nicht verlässlich kostenlos zu bekommen. Für den Anfang reicht eine tägliche, verzögerte Reihe (z. B. aus frei veröffentlichten Tagesschlusskursen bzw. Energy-Charts, falls verfügbar). Das wird in Phase 3 geklärt; das Modell funktioniert auch ohne, verliert aber bei Preisregimewechseln an Güte.
@@ -315,7 +320,10 @@ stateDiagram-v2
 | Globalstrahlung | `DSWRF:surface` | `ssrd` (akkumuliert) | `aswdir_s` + `aswdifd_s` |
 | Bewölkung | `TCDC:entire atmosphere` | `tcc` | `clct` |
 | Niederschlag / Schnee | `APCP`, `CSNOW` | `tp`, `sf` | `tot_prec` |
+| Schneedecke (Wasseräquivalent, Wasserkraft 7.6) | `WEASD:surface`, `SNOD:surface` | `sd` | `w_snow`, `h_snow` |
+| Bodenfeuchte (Wasserkraft 7.6) | `SOILW:0-0.1 m below ground` (und tiefere Schichten) | `swvl1`–`swvl4` | `w_so` |
 | Bodendruck | `PRMSL:mean sea level` | `msl` | `pmsl` |
+| Druck am Boden (Luftdichte für Wind, 7.6) | `PRES:surface` | `sp` | `ps` |
 
 Ausschnitt: **44–58° N, 0–20° E** (DE plus Nachbarn, relevant für Kuppelflüsse und Wetterlagen). Bei GFS 0,25° sind das 57 × 81 = 4 617 Gitterpunkte.
 
@@ -581,6 +589,7 @@ PredictionDB/
 | Scheduling | `APScheduler 4` (in-process, Cron-Trigger, Persistenz in Postgres) | kein Celery/Redis nötig |
 | Energie-APIs | `entsoe-py`; SMARD/Energy-Charts über eigene dünne Clients | |
 | ML | PyTorch + Lightning; `neuralforecast` für Referenzarchitekturen; LightGBM als Baseline | |
+| Anlagenmodelle (7.6) | `pvlib` (PV: Sonnenstand, Transposition, Zelltemperatur), `windpowerlib` (Höhenprofil, Leistungskurven) | beide BSD-3-Clause bzw. MIT |
 | Tracking | MLflow (Backend Postgres, Artefakte in Garage) | |
 | Observability | `structlog` (JSON), Prometheus-Metriken via `prometheus-client` | |
 
@@ -672,7 +681,7 @@ Hinweis zum GRIB-Parsing: Ein eigener GRIB2-Parser in reinem Python lohnt nicht.
 |---|---|---|---|
 | Netzlast DE (ENTSO-E „Actual Total Load“) | 15 min (Training ggf. stündlich) | 0–16 Tage | Wetter (Temperatur), Kalender, Saison dominieren |
 | Day-Ahead-Preis DE-LU | 15 min | D+1 (Kern), D+2 … D+14 (Szenario) | Treiber: Residuallast = Last − Wind − PV, Nachbarländer, Brennstoffpreise |
-| Hilfsziele: Wind- und PV-Einspeisung DE | 15 min | 0–16 Tage | verbessern Preisprognose deutlich (Residuallast) |
+| Hilfsziele: Wind-, PV- und Laufwasser-Einspeisung DE | 15 min | 0–16 Tage | verbessern Preisprognose deutlich (Residuallast) |
 
 Ehrliche Erwartung: Für D+1 lässt sich ein guter Preis erreichen; jenseits von etwa 5–7 Tagen wird vor allem die Struktur (Tagesgang, Wochenende, wind-/sonnenreiche Phasen) prognostiziert, nicht der genaue Preis. Deshalb Quantilprognosen (z. B. P10/P50/P90) statt Punktwerten.
 
@@ -822,7 +831,160 @@ CREATE TABLE assets.capacity_daily (             -- rekonstruierte installierte 
 );
 ```
 
+- **Wasserkraft im Systemmodell:** MaStR führt Wasserkraftanlagen mit Art (Laufwasser, Speicher, Pumpspeicher), Leistung und meist Koordinaten. Laufwasser wird nicht per k-Means geclustert, sondern nach **Flussgebieten** (z. B. Inn, Isar, Lech, Iller, Donau, Hochrhein, Main, Mosel, sonstige), weil Anlagen am selben Fluss denselben Abfluss sehen. Je Cluster gehen ein, jeweils mit den Nachlauf- und Gedächtnis-Features aus 7.6: Abfluss an zwei bis drei Leitpegeln (PEGELONLINE bzw. Landesportale, Ist-Werte), GloFAS-Abflussprognose, gebietsgemittelter Niederschlag und Schneeschmelze aus den Wettermodellen. Zielgröße für das Lernen ist die ENTSO-E-Erzeugung „Hydro Run-of-river and poundage“ für DE. Pumpspeicher und Speicher werden nicht aus dem Wetter prognostiziert. Die Füllstände der Speicher in den Nachbarländern (ENTSO-E „Water reservoirs and hydro storage plants“, wöchentlich, vor allem CH, AT, FR, NO) gehen als Preis-Feature ein, weil sie das Angebot an flexibler Wasserkraft bestimmen.
+
 **Wirkung im Netz:** Die Cluster-Leistungsindizes sind die wichtigsten Eingänge der Stufe 1 (Wind- und PV-Einspeisung) aus 7.3; deren Summe ergibt mit der Lastprognose die Residuallast für die Preis-Stufe. Die installierte Leistung je Cluster geht zusätzlich als Feature ein, damit das Netz den Zubau lernt.
+
+### 7.6 Prognose für eigene Anlagen (PV, Wind, Wasserkraft) über die API
+
+Ziel: Über die API lässt sich eine einzelne PV-, Windkraft- oder Wasserkraftanlage (vom großen Laufwasserkraftwerk bis zur privaten Kleinanlage) mit ihren Stammdaten anlegen, optional mit rund einem Jahr Messwerten. Die API liefert dann laufend eine Erzeugungsprognose aus den Wetterdaten, die ohnehin geladen werden. Das passt zum Additional Use Grant der Lizenz (Prognose eigener Anlagen an eigenen Standorten, Kap. 12).
+
+Der Ansatz ist zweistufig: Ein **physikalisches Modell** liefert sofort nach dem Anlegen eine Prognose. Sobald Messwerte vorliegen, korrigiert eine **Kalibrierung** dessen systematische Fehler.
+
+```mermaid
+flowchart LR
+    S["POST /plants<br/>Stammdaten"] --> P[("assets.own_plant")]
+    M["PUT /plants/{id}/measurements<br/>Historie, optional"] --> MS[("assets.own_measurement")]
+    SIL[("Silber: Wetter-Zarr<br/>je Lauf")] --> X["Punktextraktion<br/>am Standort bzw.<br/>Einzugsgebietsmittel"]
+    PG["Pegel und<br/>Abflussprognosen"] --> X
+    P --> X
+    X --> PHY["Physikalisches Modell<br/>PV: pvlib · Wind: Leistungskurve<br/>Wasser: Abfluss × Fallhöhe"]
+    MS --> CAL["Kalibrierung<br/>gegen Hindcasts"]
+    PHY --> CAL
+    CAL --> COR["Korrekturmodell<br/>je Anlage"]
+    R["PUT /plants/{id}/curtailment-rules<br/>Fledermaus, Vogel, Schall"] --> AB["Abschaltregeln<br/>auf Wetter anwenden"]
+    PHY --> AB
+    AB --> F[("fcst.plant_forecast")]
+    COR --> AB
+    F --> G["GET /plants/{id}/forecast"]
+```
+
+**Endpunkte** (FastAPI, Teil des Dienstes `api`, Auth per API-Schlüssel; jede Anlage gehört einem Schlüssel bzw. Nutzer):
+
+| Methode und Pfad | Zweck |
+|---|---|
+| `POST /plants` | Anlage anlegen (`type`: `pv`, `wind` oder `hydro`, Stammdaten siehe unten); Antwort mit `plant_id` |
+| `GET/PATCH/DELETE /plants/{id}` | Stammdaten lesen, ändern, Anlage samt Messwerten löschen |
+| `PUT /plants/{id}/measurements` | Messwerte hochladen (CSV oder JSON: Zeitstempel UTC, Leistung in kW oder Energie je Intervall in kWh, Intervall 15 min oder 1 h). Typischer Umfang ist ein Jahr, mehr ist besser. Mehrfaches Hochladen ergänzt bzw. überschreibt Zeiträume. |
+| `POST /plants/{id}/calibrate` | Kalibrierung anstoßen (asynchron, Status über `GET /plants/{id}/calibration`). Läuft auch automatisch nach einem Upload. |
+| `GET /plants/{id}/forecast` | Prognose; Parameter `model` (Standard `best`, sonst `gfs`, `ecmwf`, `icon_eu` …), `run` (`latest` oder Zeitpunkt), `horizon_h` (bis 384 bei GFS), `resolution` (15 min / 1 h), `quantiles` |
+| `PUT /plants/{id}/curtailment-rules` | Abschaltregeln eintragen (Artenschutz, Schall, Abregelung), siehe unten |
+| `GET /plants/{id}/backtest` | Güte der Prognose gegen die hochgeladenen Messwerte (MAE, RMSE, Bias je Vorlauftag) |
+
+**Stammdaten PV:**
+
+- Standort: `lat`, `lon`, optional Höhe über NN.
+- Eine oder mehrere **Teilflächen** (Ost/West-Dächer, Fassaden), je Teilfläche `peak_power_kwp`, `azimuth_deg` (Konvention 0 = Nord, 90 = Ost, 180 = Süd, 270 = West) und `tilt_deg` (0 = waagerecht).
+- Optional: Wechselrichter-AC-Leistung (Clipping), Einspeisebegrenzung (z. B. 60 % oder 70 %), Modultechnik bzw. Temperaturkoeffizient, Montageart (Aufdach, Freifläche, gebäudeintegriert; bestimmt die Zelltemperatur), Horizont- bzw. Verschattungsprofil, Systemverluste, Inbetriebnahmedatum (Degradation).
+
+**Stammdaten Wind:**
+
+- Standort: `lat`, `lon`, optional Geländehöhe.
+- `hub_height_m`, `rotor_diameter_m`, `rated_power_kw`.
+- Leistungskurve: entweder Hersteller und Typ (Nachschlagen in einer Turbinen-Bibliothek, z. B. der oedb-Turbinendaten, die `windpowerlib` nutzt) oder eine eigene Kurve als Tabelle (Windgeschwindigkeit → Leistung) bzw. `cp`-Kurve.
+- Optional: Ein- und Abschaltgeschwindigkeit, Anzahl gleicher Anlagen (Park), Verfügbarkeit, Rauigkeitslänge bzw. Geländetyp, Abschaltauflagen (Fledermäuse, Vögel, Schall, Schattenwurf) als Regeln, siehe unten.
+
+**Stammdaten Wasserkraft:**
+
+- Standort: `lat`, `lon` der Wasserfassung bzw. des Krafthauses, Gewässername.
+- `head_m` (Fallhöhe, brutto bzw. netto), `design_flow_m3s` (Ausbaudurchfluss), `rated_power_kw`, Anzahl Maschinen.
+- Turbinentyp (Kaplan, Francis, Pelton, Durchström-/Ossberger, Wasserrad, Wasserkraftschnecke) und optional eine eigene Wirkungsgradkurve (Durchfluss → Wirkungsgrad). Fehlt sie, gilt eine typische Kurve je Turbinentyp.
+- Mindestdurchfluss je Maschine (unterhalb steht die Turbine), Restwasser- bzw. Mindestwasserauflage (konstant oder je Monat, z. B. nach Bescheid), Abschaltdurchfluss bei Hochwasser, optional die Fallhöhenabnahme bei hohem Abfluss (steigendes Unterwasser).
+- Hydrologischer Bezug, mindestens eine der Angaben:
+  - zugehöriger **Pegel** (PEGELONLINE-ID oder Messstellennummer eines Landesportals) samt Flächenverhältnis Anlage zu Pegel,
+  - **Einzugsgebiet** als Polygon (GeoJSON) oder als Fläche in km². Ohne Polygon wird es aus einem freien Höhenmodell (Copernicus DEM 30 m) ab dem Standort abgeleitet, z. B. mit `pysheds`.
+- Bei Speicher- und Pumpspeicheranlagen zusätzlich Speichergröße. Deren Einsatz folgt aber vor allem dem Strompreis und lässt sich aus dem Wetter allein nicht prognostizieren (siehe unten).
+
+**Abschaltauflagen für Fledermäuse und Vögel (Wind):**
+
+Viele Genehmigungen schreiben Abschaltungen zum Artenschutz vor. Diese Zeiten fehlen in jeder reinen Wetterprognose und müssen deshalb als Regeln je Anlage hinterlegt werden. Der Anwender trägt sie über `PUT /plants/{id}/curtailment-rules` ein, typischerweise aus dem Genehmigungsbescheid.
+
+- **Fledermäuse:** Die Auflagen sind meist rein wetter- und zeitabhängig und lassen sich deshalb vorhersagen. Ein typisches Beispiel: 1. April bis 31. Oktober, von einer Stunde vor Sonnenuntergang bis Sonnenaufgang, wenn die Windgeschwindigkeit auf Nabenhöhe unter 6 m/s liegt, die Temperatur über 10 °C und es nicht regnet. Die Werte stehen im Bescheid und ändern sich oft nach dem Gondelmonitoring der ersten Betriebsjahre (z. B. ProBat). Deshalb sind die Regeln versioniert und haben ein Gültigkeitsdatum.
+- **Vögel:** Hier gibt es zwei Arten. Feste Zeitfenster wie Brutzeit oder Zugzeit, tagsüber zwischen Sonnenauf- und -untergang, ggf. mit Wetterbedingung, werden wie bei Fledermäusen gerechnet. Ereignisgesteuerte Abschaltungen, z. B. bei Mahd, Ernte oder Bodenbearbeitung im Umkreis (häufig beim Rotmilan, am Tag des Ereignisses und an den Folgetagen), sind nicht aus dem Wetter ableitbar. Der Anwender trägt sie als konkrete Termine ein, sobald sie bekannt sind. Ohne Termin geht für die Erntemonate optional ein erwarteter Verfügbarkeitsabschlag in die Quantile ein. Kamerabasierte Antikollisionssysteme werden ebenfalls als pauschaler Abschlag je Monat und Tageszeit modelliert.
+- **Regelformat** (JSON, per Pydantic validiert; mehrere Regeln je Anlage, verknüpft mit ODER):
+
+```json
+{
+  "name": "Fledermaus Bescheid 2024",
+  "valid_from": "2024-04-01", "valid_to": null,
+  "months": [4, 5, 6, 7, 8, 9, 10],
+  "time_window": {"start": {"ref": "sunset", "offset_min": -60}, "end": {"ref": "sunrise", "offset_min": 0}},
+  "conditions": {"wind_hub_ms": {"lt": 6.0}, "t2m_c": {"gt": 10.0}, "precip_mm_h": {"lt": 0.2}},
+  "action": {"type": "stop"}
+}
+```
+
+`ref` kann `sunrise`, `sunset`, `civil_dawn`, `civil_dusk` oder eine feste Uhrzeit (Ortszeit) sein; Sonnenzeiten rechnet `pvlib` aus dem Standort. `action` ist `stop` oder `limit` mit `max_kw` (z. B. reduzierter Betrieb für Schallschutz). Ereignisse wie Mahd werden als `{"type": "event", "from": …, "to": …}` eingetragen.
+- **Anwendung in der Prognose:** Die Regeln werden auf die prognostizierten Wetterwerte am Standort angewandt. Weil die Bedingungen an Schwellen hängen (Wind knapp unter 6 m/s), wird je Quantil bzw. Ensemble-Mitglied geprüft, nicht nur auf dem Median. Die Prognose liefert dadurch Leistung **mit** und **ohne** Abschaltung sowie die Wahrscheinlichkeit, dass eine Abschaltung greift. Das Ergebnis ist auch für die Ertragsplanung nützlich, weil die Abschaltverluste je Monat sichtbar werden.
+- **Kalibrierung:** In den Messwerten markieren die Regeln die Zeiträume, in denen die Anlage absichtlich stand. Diese gehen nicht in die Leistungskurve ein. Umgekehrt meldet der Backtest auffällige Stillstände, die zu keiner Regel passen (fehlende Regel, Störung oder Abregelung durch den Netzbetreiber).
+- Für PV und Wasserkraft gibt es dieselbe Regel-Schnittstelle, bei Wasserkraft z. B. für monatliche Restwasserauflagen, Fischschutz- bzw. Wanderzeiten oder Revisionen. Bei PV dient sie für Abregelungen, etwa feste Einspeisegrenzen oder Steuerbefehle nach § 14a bzw. Redispatch, soweit sie bekannt sind.
+
+**Physikalisches Modell:**
+
+- **Wetter am Standort:** `wx-process` bzw. `ml-predict` liest je Lauf die benötigten Variablen aus Silber und interpoliert bilinear auf den Standort. Das ist eine kleine Zeitreihe je Anlage und Lauf und kostet kaum Rechenzeit. Standorte außerhalb des Ausschnitts (4.3) werden beim Anlegen abgelehnt, bis der Ausschnitt erweitert ist.
+- **PV** (Bibliothek `pvlib`): Globalstrahlung (`DSWRF` bzw. `ssrd`) zerlegen in Direkt- und Diffusanteil (Erbs bzw. DISC, bei ICON direkt `aswdir_s`/`aswdifd_s`), Transposition auf jede Teilfläche (Perez), Einfallswinkelverluste, Zelltemperatur aus 2-m-Temperatur, 10-m-Wind und Montageart, dann DC-Leistung, Wechselrichter, Clipping und Einspeisebegrenzung. Wichtig: GFS liefert `DSWRF` als Mittel über wechselnde Intervalle (Rücksetzen alle 6 h); `gribkit` wandelt das in echte Stundenmittel um, bevor es nach Silber geht. Für 15 min wird mit dem Sonnenstand interpoliert, nicht linear.
+- **Wind** (Bibliothek `windpowerlib`): Windgeschwindigkeit auf Nabenhöhe aus 10 m und 100 m (bei GFS zusätzlich 80 m) über das gemessene Höhenprofil (Potenzgesetz mit Exponent aus den beiden Niveaus, ersatzweise logarithmisches Profil mit Rauigkeitslänge), Luftdichtekorrektur aus Temperatur und Bodendruck (`PRES:surface` kommt dafür in die Variablenliste 4.3), dann Leistungskurve. Bei Parks ein einfacher Wake-Abschlag als Parameter.
+- **Wasserkraft:** Die Leistung hängt am Abfluss, nicht direkt am Wetter. Gerechnet wird `P = ρ · g · Q_T · H(Q) · η(Q_T)` mit `Q_T = min(Q − Q_Rest, Q_Ausbau)`. Unter dem Mindestdurchfluss ist `P = 0`, über dem Abschaltdurchfluss ebenfalls. Der Abfluss `Q` kommt je nach verfügbaren Daten aus einer von drei Quellen, in dieser Rangfolge:
+  1. **Abflussprognose eines Dienstes** für den Pegel, soweit kostenfrei verfügbar: Hochwasser- und Abflussvorhersagen der Landesportale sowie GloFAS (Copernicus, global, bis 30 Tage, kostenlos mit Registrierung). EFAS ist für Europa genauer, Echtzeitprognosen gibt es dort aber nur für Partnerbehörden. Für kleine Bäche gibt es meist keine Prognose.
+  2. **Eigenes Niederschlag-Abfluss-Modell** je Einzugsgebiet: gebietsgemittelter Niederschlag und Temperatur aus den Wettermodellen, Schneespeicher mit Grad-Tag-Verfahren (Schneeschmelze, wichtig im Alpenvorland), Boden- und Grundwasserspeicher. Ein konzeptionelles Modell wie GR4J oder HBV (eigene kleine Implementierung oder ein vorhandenes Python-Paket, Auswahl im Spike) wird an der Pegel- oder Erzeugungshistorie kalibriert.
+  3. **Persistenz**: Ohne Pegel und ohne Historie wird der letzte bekannte Wert fortgeschrieben, mit Rezessionskurve (Trockenwetterabfall). Mit Niederschlag wird angehoben.
+  
+  Weil Abfluss träge ist, ist der jüngste Mess- oder Erzeugungswert für die ersten Tage der beste Prädiktor. Laufende Messwerte (Push oder Pegel) verbessern die Wasserkraftprognose daher stärker als bei PV und Wind. Die 384 h von GFS liefern vor allem den Trend (Regenphasen, Schneeschmelze).
+  **Nachlauf und Gedächtnis:** Bei Wasserkraft wirkt Wetter oft erst mit erheblicher Verzögerung auf den Ertrag. Die Prognose muss deshalb den Zustand des Einzugsgebiets aus der Vergangenheit mitführen und darf nicht erst beim Prognosestart beginnen.
+
+  | Prozess | typischer Nachlauf | Folge für die Prognose |
+  |---|---|---|
+  | Oberflächenabfluss im kleinen, steilen Gebiet | Stunden | Niederschlag der nächsten Stunden bis Tage zählt |
+  | Hochwasserwelle in mittleren Flüssen | 1–5 Tage | Regen von gestern bestimmt den Ertrag von morgen |
+  | Zwischenabfluss, Bodenspeicher | Tage bis Wochen | Bodenfeuchte und kumulierter Niederschlag als Zustand |
+  | Grundwasser, Basisabfluss | Wochen bis Monate | bestimmt den Ertrag in Trockenphasen, langsame Rezession |
+  | Schneedecke | Wochen bis Monate | Winterniederschlag wird erst bei Schmelze (Frühjahr, im Hochgebirge Sommer) wirksam |
+
+  - **Laufzeit je Einzugsgebiet:** Startwert aus Fläche und Gefälle (Konzentrationszeit), dann aus der Historie geschätzt (Kreuzkorrelation Niederschlag → Abfluss bzw. Erzeugung). Bei Flussgebiets-Clustern (7.5) kommt die Fließzeit zwischen Oberlieger-Pegel und Anlage hinzu; dort ist der Pegel weiter oben selbst der beste Prädiktor.
+  - **Zustand mitführen:** Das Niederschlag-Abfluss-Modell läuft durchgehend auf beobachteten Werten (DWD RADOLAN-Radarniederschlag bzw. die Analysen der Wettermodelle, Temperatur aus DWD CDC). Bei jedem Lauf startet die Prognose aus diesem Zustand: Schneespeicher, Bodenfeuchte, Grundwasser. Vor dem ersten Einsatz braucht das Modell eine Einlaufzeit von mindestens einem Jahr Wetterhistorie, besser mehreren. Das gilt auch dann, wenn keine Erzeugungshistorie vorliegt.
+  - **Gedächtnis-Features** für das Korrekturmodell und das Systemmodell: kumulierter Niederschlag über 1, 3, 7, 14, 30 und 90 Tage (gebietsgemittelt), Schneewasseräquivalent (`WEASD` bzw. `sd`) und positive Gradtage seit Winterbeginn, Bodenfeuchte aus den Modellen (GFS `SOILW`, ECMWF `swvl1`–`swvl4`), aktueller Abfluss bzw. Erzeugung samt Trend und Rezessionskonstante.
+  - **Reichweite:** Wegen des Nachlaufs steckt ein großer Teil der Erträge der nächsten Tage schon im System. Die Prognose ist dort auch bei unsicherem Wetter gut. Die 384 h von GFS decken den Niederschlag der nächsten 16 Tage ab, der sich teils erst danach auswirkt; Prognosen über drei bis vier Wochen sind deshalb in Teilen möglich. Darüber hinaus bleiben Schneevorrat gegen Klimatologie und optional Saisonprognosen (ECMWF SEAS5 über den Copernicus CDS, kostenlos mit Registrierung). Die Ausgabe kennzeichnet ab dem Ende der Wetterprognose, dass klimatologisch weitergerechnet wird.
+  - **Historie:** Mit Erzeugungsdaten über ein Jahr lassen sich Laufzeit und Speicherparameter schätzen. Zwei bis drei Jahre sind deutlich besser, weil Schneejahre und Trockenjahre stark schwanken.
+- **Unsicherheit:** Quantile aus der Streuung der Modelle (GFS, ECMWF, ICON) und den GEFS- bzw. ECMWF-Ensemble-Mitgliedern, solange keine Kalibrierung vorliegt.
+
+**Kalibrierung mit historischen Daten:**
+
+- **Qualitätsprüfung:** Lücken, Nullwerte bei Strahlung bzw. Wind (Ausfall, Abregelung, Schnee auf den Modulen), Zeitzonen- und Sommerzeitfehler (Verschiebung der Mittagsspitze), Einheitenfehler (kW gegen kWh). Verdächtige Zeiträume werden markiert und nicht zum Lernen verwendet.
+- **Hindcast statt Ist-Wetter:** Die Messwerte werden mit den archivierten Prognosen verglichen, die damals tatsächlich vorlagen (gleiche Regel wie in 7.4). So lernt die Korrektur auch die typischen Fehler des Wettermodells. Für Zeiträume vor dem eigenen Archiv dienen die Backfill-Quellen aus 3.1 (GFS-Archiv auf AWS, Open-Meteo Historical Forecast für Prototypen).
+- **Stufe 1, Parameter nachschätzen:** bei PV effektive Leistung, Ausrichtung und Neigung, Verlustfaktor und Verschattung je Sonnenstand (Azimut × Höhe), bei Wind eine empirische Leistungskurve aus gebinnten Messwerten sowie eine Korrektur je Windrichtung (Gelände, Nachbaranlagen). Bei Wasserkraft werden Flächenverhältnis zum Pegel, Wirkungsgradkurve und Restwasser aus der Beziehung Abfluss → Leistung geschätzt und die Parameter des Niederschlag-Abfluss-Modells an der Erzeugungshistorie kalibriert. Ein Jahr deckt dabei gerade einen Jahresgang ab; zwei bis drei Jahre sind deutlich besser, weil Trockenjahre und Schneejahre stark schwanken.
+- **Stufe 2, Korrekturmodell:** Ab etwa einem Jahr Messwerten ein kleines LightGBM-Quantilmodell je Anlage auf den Rest (Messung − Physik). Eingänge sind Vorlauf, Tageszeit, Sonnenstand bzw. Windrichtung, Wettervariablen und Modell-Spread. Mit weniger Daten bleibt es bei Stufe 1. Jede Kalibrierung wird versioniert in MLflow abgelegt. Die API meldet, auf welcher Kalibrierung eine Prognose beruht.
+- Wenn regelmäßig neue Messwerte kommen (z. B. per Push aus dem Wechselrichter oder Home Assistant), läuft die Kalibrierung monatlich neu.
+
+**Betrieb:** Nach jedem vollständigen Lauf (`NOTIFY nwp_run_complete`) berechnet `ml-predict` die Prognosen aller registrierten Anlagen und schreibt sie nach `fcst.plant_forecast`. Die API liest daraus und rechnet nur für neu angelegte Anlagen sofort auf Anfrage. Bei einigen hundert Anlagen bleibt das im Sekundenbereich je Lauf.
+
+**Ergänzende Tabellen:**
+
+```sql
+CREATE TABLE assets.own_plant (
+  plant_id uuid PRIMARY KEY, owner_id text NOT NULL, type text NOT NULL,   -- 'pv'|'wind'|'hydro'
+  name text, lat real NOT NULL, lon real NOT NULL, elevation_m real,
+  params jsonb NOT NULL,          -- Teilflächen bzw. Turbine, validiert per Pydantic-Schema je Typ
+  calibration_version text, created_at timestamptz DEFAULT now()
+);
+CREATE TABLE assets.own_measurement (             -- Hypertable
+  plant_id uuid, ts timestamptz, power_kw real, flag smallint DEFAULT 0,   -- flag: 0 ok, >0 ausgeschlossen
+  PRIMARY KEY (plant_id, ts)
+);
+CREATE TABLE assets.own_curtailment_rule (
+  plant_id uuid, rule_id serial, valid_from date, valid_to date, rule jsonb NOT NULL,
+  PRIMARY KEY (plant_id, rule_id)
+);
+CREATE TABLE fcst.plant_forecast (                -- Hypertable, komprimiert
+  plant_id uuid, model text, run_time timestamptz, valid_time timestamptz,
+  calibration_version text, p10_kw real, p50_kw real, p90_kw real,
+  p50_uncurtailed_kw real, curtailment_prob real,  -- ohne Abschaltregeln; Wahrscheinlichkeit einer Abschaltung
+  PRIMARY KEY (plant_id, model, run_time, valid_time)
+);
+```
+
+**Datenschutz:** Standort und Erzeugungsdaten einer privaten Anlage sind personenbezogene Daten. Sie bleiben in der eigenen Datenbank, werden nicht mit dem MaStR-Bestand verknüpft und mit `DELETE /plants/{id}` vollständig entfernt.
+
+**Bezug zum restlichen System:** Die Anlagenprognose braucht nur Silber (Phase 4) und kein trainiertes Netz. Sie kann deshalb früh als erster sichtbarer Nutzen kommen (Phase 4b in Kap. 11). Umgekehrt dient eine gut kalibrierte eigene Anlage als Referenz, um die PV- und Wind-Indizes der Cluster aus 7.5 zu prüfen.
 
 ---
 
@@ -994,6 +1156,7 @@ Datenabfluss beachten: Bei S3-Diensten mit Egress-Kosten (AWS) sollten Training 
 | **2 – GFS-Ingest** | GFS mit NOMADS + AWS-Fallback, Bronze, Zustandsführung, Backfill ab 2021 aus AWS | durchgehende GFS-Historie |
 | **3 – Energiedaten** | ENTSO-E, SMARD/Energy-Charts, MaStR-Quartalsabruf und Bestandsrekonstruktion, Feiertage | Zielgrößen, Anlagenbestand + Kalender in Gold |
 | **4 – Processing** | Silber-Zarr, Anlagen-Cluster und Gitter-Gewichte (7.5), Wind-/PV-/Temperatur-Features | Feature-Tabellen |
+| **4b – Anlagenprognose** | API für eigene PV-, Wind- und Wasserkraftanlagen (7.6): Stammdaten, Messwert-Upload, pvlib/windpowerlib, Abflussmodell, Kalibrierung | erste nutzbare Prognose ohne trainiertes Netz |
 | **5 – Baseline-ML** | LightGBM für Last und Preis, Evaluierungs-Framework, MLflow | Referenzwerte |
 | **6 – NN** | TFT/TiDE zweistufig, Quantile, Inferenzdienst, Grafana | erste produktive Prognose |
 | **7 – Weitere Quellen** | ECMWF IFS/AIFS, ICON-EU/D2, GEFS, GEM; Redundanz-Features | robuster Betrieb |
@@ -1006,6 +1169,7 @@ flowchart LR
     P2 --> P4["4 Processing"]
     P3 --> P4
     P4 --> P5["5 Baseline-ML"] --> P6["6 NN"]
+    P4 --> P4B["4b Anlagenprognose<br/>PV/Wind/Wasser"]
     P2 --> P7["7 Weitere Quellen"]
     P7 --> P6
     P6 --> P8["8 API & Härtung"]
@@ -1021,4 +1185,5 @@ flowchart LR
 4. **Zielauflösung des Preises:** 15 min (aktueller Markt) oder Stunde (einfacher, längere homogene Historie)? Vorschlag: 15 min als Ausgabe, Training mit Stundenmitteln vor Okt. 2025 und Upsampling-Kennzeichnung.
 5. **Ausschnitt:** Nur DE oder Mitteleuropa (Nachbarländer beeinflussen Preis über Kuppelflüsse)? Vorschlag: 44–58° N, 0–20° E.
 6. **GPU:** Steht auf einem PVE-Host eine GPU für Passthrough bereit? Davon hängt ab, ob Gitter-Modelle lokal trainiert werden.
-7. Zu verifizierende Detailwerte vor der Implementierung: exakte NOMADS-Rate-Limits, aktuelle Vorhaltezeiten auf opendata.dwd.de und data.ecmwf.int, Beginn der Archive auf AWS, aktuelle Garage- und TimescaleDB-Versionen.
+7. Zu verifizierende Detailwerte vor der Implementierung: exakte NOMADS-Rate-Limits, aktuelle Vorhaltezeiten auf opendata.dwd.de und data.ecmwf.int, Beginn der Archive auf AWS, aktuelle Garage- und TimescaleDB-Versionen, Zugang und Lizenz von GloFAS/EFAS sowie Schnittstellen der Pegelportale der Länder.
+8. **Anlagen-API (7.6):** Nur eigene Anlagen oder auch Anlagen weiterer Nutzer? Mehrere Nutzer bzw. fremde Anlagen fallen nicht unter den Additional Use Grant (nur intern). Lizenz der Turbinen-Leistungskurven (oedb) vor Übernahme prüfen.
