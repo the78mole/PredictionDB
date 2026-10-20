@@ -16,11 +16,15 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
 import httpx
 from aiolimiter import AsyncLimiter
+from tenacity import AsyncRetrying, retry_if_exception, stop_after_attempt, wait_exponential
+
 from gribkit import (
     BBox,
+    ByteRange,
     GribError,
     MessageSpec,
     crop,
@@ -30,7 +34,6 @@ from gribkit import (
     parse_idx,
     select,
 )
-from tenacity import AsyncRetrying, retry_if_exception, stop_after_attempt, wait_exponential
 from wx_ingest.config import EndpointConfig
 
 #: HTTP-Status, bei denen eine Wiederholung sinnvoll ist.
@@ -90,9 +93,11 @@ class Endpoint:
     def name(self) -> str:
         return self.config.name
 
-    async def get(self, url: str, **kwargs) -> httpx.Response:
+    async def get(self, url: str, **kwargs: Any) -> httpx.Response:
         retrying = AsyncRetrying(
-            retry=retry_if_exception(lambda e: isinstance(e, (httpx.TransportError, _RetryableStatus))),
+            retry=retry_if_exception(
+                lambda e: isinstance(e, (httpx.TransportError, _RetryableStatus))
+            ),
             stop=stop_after_attempt(self._retry_attempts),
             wait=wait_exponential(multiplier=1, max=self._retry_wait_max),
             reraise=True,
@@ -134,7 +139,7 @@ class Endpoint:
             raise FetchError(f"keine der angeforderten Nachrichten in {url}.idx")
         ranges = merge_ranges(chosen, max_gap=self.config.max_gap)
 
-        async def load(r) -> bytes:
+        async def load(r: ByteRange) -> bytes:
             resp = await self.get(url, headers={"Range": r.header})
             if resp.status_code == 404:
                 # .idx schon da, GRIB-Datei noch nicht vollständig hochgeladen

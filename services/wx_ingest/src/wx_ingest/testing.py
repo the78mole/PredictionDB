@@ -1,10 +1,14 @@
+"""Hilfen für Tests: simulierte GFS-Spiegel (S3 mit .idx + GRIB2) für httpx.MockTransport."""
+
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Any
 
 import httpx
+
 from gribkit.testing import make_global_message
 from wx_ingest.config import GfsConfig
 
@@ -22,7 +26,7 @@ LAYOUT = [
 ]
 
 
-def config_dict(**over) -> dict:
+def config_dict(**over: Any) -> dict[str, Any]:
     cfg = {
         "code": "gfs_test",
         "runs": [0, 6, 12, 18],
@@ -60,8 +64,12 @@ class FakeGfsHost:
             base = f"/gfs.{RUN:%Y%m%d}/{RUN:%H}/atmos/gfs.t{RUN:%H}z.pgrb2.0p25.f{step:03d}"
             data, lines = b"", []
             for n, (var, level, fcst) in enumerate(LAYOUT, start=1):
-                msg, _, _ = make_global_message(values_fn=lambda lat, lon, n=n: n * 100 + lat + 0 * lon)
-                lines.append(f"{n}:{len(data)}:d={RUN:%Y%m%d%H}:{var}:{level}:{fcst.format(h=step)}:")
+                msg, _, _ = make_global_message(
+                    values_fn=lambda lat, lon, n=n: n * 100 + lat + 0 * lon  # type: ignore[misc]
+                )
+                lines.append(
+                    f"{n}:{len(data)}:d={RUN:%Y%m%d%H}:{var}:{level}:{fcst.format(h=step)}:"
+                )
                 data += msg
             self.files[base] = data
             self.idx[base + ".idx"] = "\n".join(lines) + "\n"
@@ -80,6 +88,8 @@ class FakeGfsHost:
         if not rng or not self.honour_range:
             return httpx.Response(200, content=data)
         m = re.fullmatch(r"bytes=(\d+)-(\d*)", rng)
+        if m is None:
+            return httpx.Response(416)
         start, end = int(m[1]), int(m[2]) if m[2] else len(data) - 1
         return httpx.Response(206, content=data[start : end + 1])
 
@@ -97,5 +107,5 @@ def make_client(*hosts: FakeGfsHost) -> httpx.AsyncClient:
     return httpx.AsyncClient(transport=httpx.MockTransport(Router(*hosts)))
 
 
-def make_config(**over) -> GfsConfig:
+def make_config(**over: Any) -> GfsConfig:
     return GfsConfig.model_validate(config_dict(**over))

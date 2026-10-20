@@ -36,7 +36,7 @@ class IdxEntry:
 
     @property
     def key(self) -> str:
-        """``VAR:LEVEL:FCST`` – wie wgrib2 es ausgibt."""
+        """``VAR:LEVEL:FCST``, wie wgrib2 es ausgibt."""
         return f"{self.var}:{self.level}:{self.fcst}"
 
 

@@ -2,12 +2,23 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import numpy as np
+import numpy.typing as npt
+
+ValuesFn = Callable[[npt.NDArray[np.float64], npt.NDArray[np.float64]], npt.NDArray[np.float64]]
+
+
+def _default_values(
+    lat: npt.NDArray[np.float64], lon: npt.NDArray[np.float64]
+) -> npt.NDArray[np.float64]:
+    return lat * 1000 + lon
 
 
 def make_global_message(
     inc: float = 1.0,
-    values_fn=lambda lat, lon: lat * 1000 + lon,
+    values_fn: ValuesFn = _default_values,
     j_scans_positively: bool = False,
     short_name: str = "2t",
 ) -> tuple[bytes, np.ndarray, np.ndarray]:

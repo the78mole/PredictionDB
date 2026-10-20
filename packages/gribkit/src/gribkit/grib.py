@@ -83,7 +83,7 @@ def crop_message(message: bytes, bbox: BBox) -> bytes:
     """Schneidet eine ``regular_ll``-Nachricht auf alle Gitterpunkte innerhalb von ``bbox``.
 
     Längen werden modulo 360 behandelt, sodass auch Ausschnitte über den
-    Nullmeridian (``west < 0`` bei einem 0–360°-Gitter) funktionieren.
+    Nullmeridian (``west < 0`` bei einem 0-360°-Gitter) funktionieren.
     """
     import eccodes as ec
 
@@ -116,10 +116,14 @@ def crop_message(message: bytes, bbox: BBox) -> bytes:
             ec.codes_set(out, "Nj", int(rows.size))
             ec.codes_set(out, "latitudeOfFirstGridPointInDegrees", float(lats[rows[0]]))
             ec.codes_set(out, "latitudeOfLastGridPointInDegrees", float(lats[rows[-1]]))
-            ec.codes_set(out, "longitudeOfFirstGridPointInDegrees", float(np.mod(lons[cols[0]], 360.0)))
-            ec.codes_set(out, "longitudeOfLastGridPointInDegrees", float(np.mod(lons[cols[-1]], 360.0)))
+            ec.codes_set(
+                out, "longitudeOfFirstGridPointInDegrees", float(np.mod(lons[cols[0]], 360.0))
+            )
+            ec.codes_set(
+                out, "longitudeOfLastGridPointInDegrees", float(np.mod(lons[cols[-1]], 360.0))
+            )
             ec.codes_set_values(out, sub.ravel())
-            return ec.codes_get_message(out)
+            return bytes(ec.codes_get_message(out))
         finally:
             ec.codes_release(out)
     finally:

@@ -1,17 +1,26 @@
 from pathlib import Path
 
 import pytest
-from gribkit import IdxParseError, MessageSpec, merge_ranges, missing_specs, parse_idx, select
+
+from gribkit import (
+    IdxEntry,
+    IdxParseError,
+    MessageSpec,
+    merge_ranges,
+    missing_specs,
+    parse_idx,
+    select,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
 @pytest.fixture
-def f042():
+def f042() -> list[IdxEntry]:
     return parse_idx((FIXTURES / "gfs.t06z.pgrb2.0p25.f042.idx").read_text())
 
 
-def test_parse_real_gfs_idx(f042):
+def test_parse_real_gfs_idx(f042: list[IdxEntry]) -> None:
     assert len(f042) == 743
     first = f042[0]
     assert (first.number, first.offset, first.date, first.var, first.level, first.fcst) == (
@@ -27,7 +36,7 @@ def test_parse_real_gfs_idx(f042):
     assert f042[-1].length is None and f042[-1].end is None
 
 
-def test_total_size_sets_last_length(f042):
+def test_total_size_sets_last_length(f042: list[IdxEntry]) -> None:
     text = (FIXTURES / "gfs.t06z.pgrb2.0p25.f042.idx").read_text()
     entries = parse_idx(text, total_size=f042[-1].offset + 1234)
     assert entries[-1].length == 1234
@@ -35,7 +44,7 @@ def test_total_size_sets_last_length(f042):
         parse_idx(text, total_size=f042[-1].offset)
 
 
-def test_select_and_missing(f042):
+def test_select_and_missing(f042: list[IdxEntry]) -> None:
     specs = [
         MessageSpec("TMP", "2 m above ground"),
         MessageSpec("TCDC", "entire atmosphere"),
@@ -52,13 +61,13 @@ def test_select_and_missing(f042):
     assert [s.var for s in missing_specs(f042, specs)] == ["NOPE"]
 
 
-def test_f000_has_no_accumulations():
+def test_f000_has_no_accumulations() -> None:
     entries = parse_idx((FIXTURES / "gfs.t06z.pgrb2.0p25.f000.idx").read_text())
     specs = [MessageSpec("DSWRF", "surface"), MessageSpec("TMP", "2 m above ground")]
     assert [s.var for s in missing_specs(entries, specs)] == ["DSWRF"]
 
 
-def test_merge_adjacent_and_gap():
+def test_merge_adjacent_and_gap() -> None:
     text = "\n".join(
         [
             "1:0:d=2026102006:A:surface:anl:",
@@ -79,7 +88,7 @@ def test_merge_adjacent_and_gap():
     assert merged[0].extract(payload) == payload[0:100] + payload[300:400]
 
 
-def test_merge_open_end_and_submessages():
+def test_merge_open_end_and_submessages() -> None:
     text = "\n".join(
         [
             "1:0:d=2026102006:A:surface:anl:",
@@ -95,13 +104,13 @@ def test_merge_open_end_and_submessages():
     assert ranges[0].extract(b"x" * 150) == b"x" * 150
 
 
-def test_extract_checks_length():
+def test_extract_checks_length() -> None:
     e = parse_idx("1:0:d=1:A:surface:anl:", total_size=10)
     with pytest.raises(ValueError):
         merge_ranges(e)[0].extract(b"short")
 
 
-def test_parse_errors():
+def test_parse_errors() -> None:
     with pytest.raises(IdxParseError):
         parse_idx("1:abc:d=1:A:surface:anl:")
     with pytest.raises(IdxParseError):

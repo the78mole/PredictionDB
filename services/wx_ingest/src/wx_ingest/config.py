@@ -7,9 +7,10 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from gribkit import BBox, MessageSpec
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from gribkit import BBox, MessageSpec
 
 
 class EndpointConfig(BaseModel):

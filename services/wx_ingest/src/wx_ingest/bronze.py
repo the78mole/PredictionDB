@@ -18,9 +18,11 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
+from typing import Any
 
 import obstore
 from obstore.store import ObjectStore, S3Store
+
 from wx_ingest.config import StorageSettings
 
 
@@ -75,28 +77,35 @@ class Bronze:
     def run_key(self, run: datetime) -> str:
         return f"{self.run_prefix(run)}/run.json"
 
-    async def _get_json(self, key: str) -> dict | None:
+    async def _get_json(self, key: str) -> dict[str, Any] | None:
         try:
             result = await obstore.get_async(self.store, key)
         except FileNotFoundError:
             return None
-        return json.loads(bytes(await result.bytes_async()))
+        data: dict[str, Any] = json.loads(bytes(await result.bytes_async()))
+        return data
 
     async def step_manifest(self, run: datetime, step: int) -> StepManifest | None:
         data = await self._get_json(self.manifest_key(run, step))
         return None if data is None else StepManifest(**data)
 
-    async def run_manifest(self, run: datetime) -> dict | None:
+    async def run_manifest(self, run: datetime) -> dict[str, Any] | None:
         return await self._get_json(self.run_key(run))
 
-    async def put_step(self, run: datetime, step: int, grib: bytes, manifest: StepManifest) -> StepManifest:
+    async def put_step(
+        self, run: datetime, step: int, grib: bytes, manifest: StepManifest
+    ) -> StepManifest:
         manifest.sha256 = hashlib.sha256(grib).hexdigest()
         manifest.size = len(grib)
         await obstore.put_async(self.store, self.step_key(run, step), grib)
         await obstore.put_async(
-            self.store, self.manifest_key(run, step), json.dumps(asdict(manifest), indent=1).encode()
+            self.store,
+            self.manifest_key(run, step),
+            json.dumps(asdict(manifest), indent=1).encode(),
         )
         return manifest
 
-    async def put_run(self, run: datetime, summary: dict) -> None:
-        await obstore.put_async(self.store, self.run_key(run), json.dumps(summary, indent=1).encode())
+    async def put_run(self, run: datetime, summary: dict[str, Any]) -> None:
+        await obstore.put_async(
+            self.store, self.run_key(run), json.dumps(summary, indent=1).encode()
+        )

@@ -1,15 +1,47 @@
 # Vorläufige Workspace-Wurzel, damit gribkit und wx_ingest testbar sind.
-# Wird durch die Wurzel aus dem Grundgerüst-PR ersetzt.
+# Übernimmt die Werkzeug-Konfiguration aus dem Grundgerüst-Branch und wird
+# beim Zusammenführen durch dessen Wurzel ersetzt.
+[tool.uv]
+package = false
+
 [tool.uv.workspace]
 members = ["packages/*", "services/*"]
 
 [dependency-groups]
 dev = [
-    "pytest>=8",
+    "mypy>=1.13",
+    "pytest>=8.3",
     "pytest-asyncio>=0.24",
+    "ruff>=0.8",
+    "types-PyYAML",
 ]
 
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "DTZ"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["gribkit", "wx_ingest"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+mypy_path = ["packages/gribkit/src", "services/wx_ingest/src"]
+explicit_package_bases = true
+files = ["packages", "services"]
+exclude = ["^\\.venv/", "^build/"]
+
+[[tool.mypy.overrides]]
+module = ["obstore.*", "eccodes.*", "gribapi.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
-addopts = "-m \"not network\""
+testpaths = ["packages", "services"]
+addopts = ["--import-mode=importlib", "-ra", "-m", "not network"]
 asyncio_mode = "auto"
 markers = ["network: braucht Internetzugang zu den NOAA-Quellen (mit -m network ausführen)"]

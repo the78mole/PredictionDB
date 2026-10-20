@@ -11,9 +11,10 @@ import logging
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 
 import httpx
+
 from gribkit import IdxParseError
 from wx_ingest.bronze import Bronze, StepManifest
 from wx_ingest.config import GfsConfig
@@ -83,7 +84,9 @@ class GfsIngestor:
             except StepUnavailable:
                 continue
             except (FetchError, IdxParseError, httpx.HTTPError) as exc:
-                log.warning("GFS %s f%03d über %s fehlgeschlagen: %s", f"{run:%Y%m%d%H}", step, ep.name, exc)
+                log.warning(
+                    "GFS %s f%03d über %s fehlgeschlagen: %s", f"{run:%Y%m%d%H}", step, ep.name, exc
+                )
                 errors.append(f"{ep.name}: {exc}")
                 continue
             manifest = StepManifest(
@@ -102,7 +105,13 @@ class GfsIngestor:
                 bbox=self._bbox_dict(),
             )
             manifest = await self.bronze.put_step(run, step, data.grib, manifest)
-            log.info("GFS %s f%03d gespeichert (%s, %d B)", f"{run:%Y%m%d%H}", step, ep.name, manifest.size)
+            log.info(
+                "GFS %s f%03d gespeichert (%s, %d B)",
+                f"{run:%Y%m%d%H}",
+                step,
+                ep.name,
+                manifest.size,
+            )
             return StepResult(step, "stored", ep.name, manifest.size)
         return StepResult(step, "failed" if errors else "pending", errors=errors)
 
@@ -157,7 +166,10 @@ class GfsIngestor:
         if result.complete:
             await self._finish_run(run, ordered)
         log.info(
-            "GFS %s: %s%s", f"{run:%Y%m%d%H}", result.counts(), " – vollständig" if result.complete else ""
+            "GFS %s: %s%s",
+            f"{run:%Y%m%d%H}",
+            result.counts(),
+            " (vollständig)" if result.complete else "",
         )
         return result
 
@@ -185,11 +197,12 @@ class GfsIngestor:
 
     async def backfill(self, start: datetime, end: datetime) -> list[RunResult]:
         return [
-            await self.ingest_run(run, stop_on_pending=False) for run in self.config.runs_between(start, end)
+            await self.ingest_run(run, stop_on_pending=False)
+            for run in self.config.runs_between(start, end)
         ]
 
 
-def result_dict(r: RunResult) -> dict:
+def result_dict(r: RunResult) -> dict[str, Any]:
     return {
         "run": r.run.isoformat(),
         "complete": r.complete,

@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
+
 from wx_ingest.bronze import Bronze, make_store
 from wx_ingest.config import GfsConfig, StorageSettings
 from wx_ingest.ingest import GfsIngestor, result_dict
@@ -48,7 +49,9 @@ def parse_steps(text: str) -> list[int]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="wx-ingest", description="Wettermodell-Ingest nach Garage (Bronze)")
+    p = argparse.ArgumentParser(
+        prog="wx-ingest", description="Wettermodell-Ingest nach Garage (Bronze)"
+    )
     p.add_argument("-v", "--verbose", action="store_true")
     sub = p.add_subparsers(dest="model", required=True)
     gfs = sub.add_parser("gfs", help="NOAA GFS 0,25°")
@@ -56,12 +59,16 @@ def build_parser() -> argparse.ArgumentParser:
     cmd = gfs.add_subparsers(dest="cmd", required=True)
 
     latest = cmd.add_parser("latest", help="unvollständige Läufe im Rückblickfenster laden")
-    latest.add_argument("--watch", type=int, metavar="SEK", help="wiederholen im Abstand von SEK Sekunden")
+    latest.add_argument(
+        "--watch", type=int, metavar="SEK", help="wiederholen im Abstand von SEK Sekunden"
+    )
 
     run = cmd.add_parser("run", help="einen Lauf laden")
     run.add_argument("run", type=parse_run)
     run.add_argument(
-        "--steps", type=parse_steps, help="z. B. 0-12,24,48 (nur gültige Schritte der Konfiguration)"
+        "--steps",
+        type=parse_steps,
+        help="z. B. 0-12,24,48 (nur gültige Schritte der Konfiguration)",
     )
 
     bf = cmd.add_parser("backfill", help="Zeitraum aus Archiv-Endpunkten nachladen")
