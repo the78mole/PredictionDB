@@ -1,11 +1,12 @@
-# Vorläufige Workspace-Wurzel, damit gribkit und wx_ingest testbar sind.
-# Übernimmt die Werkzeug-Konfiguration aus dem Grundgerüst-Branch und wird
-# beim Zusammenführen durch dessen Wurzel ersetzt.
-[tool.uv]
-package = false
-
-[tool.uv.workspace]
-members = ["packages/*", "services/*"]
+[project]
+name = "predictiondb"
+version = "0.1.0"
+description = "Strombedarfs- und Strompreisprognose für Deutschland auf Basis kostenfreier Wetter- und Energiedaten"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "LicenseRef-BUSL-1.1"
+license-files = ["LICENSE"]
+dependencies = ["predictiondb-core"]
 
 [dependency-groups]
 dev = [
@@ -16,6 +17,15 @@ dev = [
     "types-PyYAML",
 ]
 
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/*", "services/*"]
+
+[tool.uv.sources]
+predictiondb-core = { workspace = true }
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
@@ -25,15 +35,15 @@ extend-exclude = ["*.md"]
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "DTZ"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["gribkit", "wx_ingest"]
+known-first-party = ["predictiondb_core", "gribkit", "wx_ingest"]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
-mypy_path = ["packages/gribkit/src", "services/wx_ingest/src"]
+mypy_path = ["packages/core/src", "packages/gribkit/src", "services/wx_ingest/src"]
 explicit_package_bases = true
-files = ["packages", "services"]
+files = ["."]
 exclude = ["^\\.venv/", "^build/"]
 
 [[tool.mypy.overrides]]
@@ -41,7 +51,10 @@ module = ["obstore.*", "eccodes.*", "gribapi.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-testpaths = ["packages", "services"]
-addopts = ["--import-mode=importlib", "-ra", "-m", "not network"]
+testpaths = ["packages", "services", "tests"]
+addopts = ["-ra", "-m", "not network"]
 asyncio_mode = "auto"
-markers = ["network: braucht Internetzugang zu den NOAA-Quellen (mit -m network ausführen)"]
+markers = [
+    "network: braucht Internetzugang zu externen Quellen (mit -m network ausführen)",
+    "integration: benötigt laufende Dienste (Postgres, Garage) aus compose.yaml",
+]

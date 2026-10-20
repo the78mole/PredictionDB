@@ -1,0 +1,26 @@
+[project]
+name = "predictiondb-core"
+version = "0.1.0"
+description = "Gemeinsame Basis: Konfiguration, Logging, S3- und Datenbankzugriff"
+requires-python = ">=3.12"
+license = "LicenseRef-BUSL-1.1"
+dependencies = [
+    "alembic>=1.14",
+    "httpx>=0.28",
+    "obstore>=0.6",
+    "psycopg[binary]>=3.2",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "sqlalchemy>=2.0",
+    "structlog>=24.4",
+]
+
+[project.scripts]
+pdb-garage-init = "predictiondb_core.garage_init:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/predictiondb_core"]
