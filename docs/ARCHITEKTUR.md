@@ -1,6 +1,6 @@
 # Strompreisprognose – Architekturentwurf
 
-**Version:** 0.5 (Entwurf) · **Stand:** 2026-10-20 · **Status:** zur Diskussion
+**Version:** 0.6 (Entwurf) · **Stand:** 2026-10-20 · **Status:** zur Diskussion
 
 ---
 
@@ -359,7 +359,7 @@ wx-bronze/icon-eu/2026/10/20/06/t_2m/s017.grib2
 ### 5.2 Garage (Single Node)
 
 - Image `dxflrs/garage`, `replication_factor = 1`, ein Datenverzeichnis und ein Metadatenverzeichnis auf getrennten Volumes (Metadaten möglichst auf SSD).
-- Buckets: `wx-bronze`, `wx-silver`, `ml-artifacts` (MLflow), `backups` (pg_dump/WAL-G).
+- Buckets: `wx-bronze`, `wx-silver`, `ml-artifacts` (MLflow), `ml-exchange` (Trainings-Snapshots und -Ergebnisse, 7.7), `backups` (pg_dump/WAL-G).
 - Zugriff ausschließlich über S3-API (`obstore` oder `s3fs`/`fsspec`), Endpoint, Region und Keys aus Umgebungsvariablen. Damit ist der Wechsel zu jedem S3-kompatiblen Dienst reine Konfiguration.
 - Lebenszyklus: Bronze für GFS z. B. 2 Jahre vollständig, danach nur 00Z/12Z behalten; Silber unbegrenzt (klein). Garage unterstützt Lifecycle-Regeln nur eingeschränkt, daher Aufräumjob im `maintenance`-Container.
 - Hinweis: Single Node heißt **keine Redundanz auf Speicherebene**. Backups der Buckets auf ein zweites Ziel (anderer PVE-Storage oder externes S3) über `rclone` einplanen, sobald Daten wertvoll werden (z. B. weil Quellen sie nicht mehr vorhalten).
@@ -755,7 +755,7 @@ flowchart LR
       M->>D: Auktionsergebnis ca. 13:00 MEZ/MESZ<br/>(published) → Ziel für das Training
   ```
 - **Validierung:** rollierende Zeitreihen-Kreuzvalidierung (Expanding Window), Metriken MAE/RMSE je Horizont, Pinball-Loss, für Preis zusätzlich Rang-/Spread-Güte (wichtig für Lastverschiebung).
-- **Training** als einmaliger Container (`docker compose run ml-train …`), auf der VM CPU-basiert machbar für Regionen-Features. Für Gitter-Modelle GPU nötig: dann Training in der Cloud oder per GPU-Passthrough auf PVE.
+- **Training** als portabler Container-Job (`docker compose run ml-train …` oder auf einer gemieteten GPU), auf der VM CPU-basiert machbar für Regionen-Features. Hardware, Laufzeiten und Ablauf in 7.7.
 - **Inferenz** (`ml-predict`): reagiert auf `NOTIFY features_ready`, lädt das in MLflow als `production` markierte Modell, schreibt Quantile nach `fcst.prediction`.
 - **Monitoring:** täglicher Abgleich Prognose ↔ Ist in Grafana; Drift-Alarm bei Fehleranstieg.
 
@@ -986,6 +986,57 @@ CREATE TABLE fcst.plant_forecast (                -- Hypertable, komprimiert
 
 **Bezug zum restlichen System:** Die Anlagenprognose braucht nur Silber (Phase 4) und kein trainiertes Netz. Sie kann deshalb früh als erster sichtbarer Nutzen kommen (Phase 4b in Kap. 11). Umgekehrt dient eine gut kalibrierte eigene Anlage als Referenz, um die PV- und Wind-Indizes der Cluster aus 7.5 zu prüfen.
 
+### 7.7 Trainings-Hardware und Training als portabler Job
+
+**Datenmenge:** Das Training ist klein. Zehn Jahre Stundenwerte sind rund 90 000 Zeitpunkte. Dazu kommen einige hundert bis wenige tausend Features (Wetter je Cluster, installierte Leistung, Kalender, Markt-Lags). Die Last steckt im Datenumfang und in der Zahl der Trainingsläufe, nicht in der Modellgröße. Ein Rechenzentrum ist nicht nötig.
+
+| Aufgabe | Hardware | Größenordnung Laufzeit |
+|---|---|---|
+| LightGBM-Baseline (7.3) | CPU der VM | Minuten |
+| Kleine Sequenzmodelle (LSTM, TFT, N-HiTS, TiDE) über 384 h | CPU oder GPU mit 12–16 GB (z. B. RTX 3060 12 GB, RTX 4060 Ti 16 GB) | CPU: Stunden; GPU: etwa 10–60 min je Lauf |
+| Hyperparameter-Suche (viele Läufe, z. B. Optuna) | GPU lohnt sich hier am meisten, notfalls nachts auf CPU | Stunden |
+| Kalibrierung eigener Anlagen (7.6) | CPU | Sekunden bis Minuten je Anlage |
+| Inferenz je Lauf (`ml-predict`) | CPU | Sekunden |
+| Gitter-Modelle (Phase 6+, optional) | GPU zwingend | Stunden |
+
+**Was „annehmbar“ heißt:** Ein neuer GFS-Lauf kommt alle 6 h, die Inferenz liegt mit Sekunden weit darunter. Neu trainiert wird wöchentlich sowie nach jedem neuen MaStR-Snapshot bzw. jeder neuen Clusterung (7.5). Ein Training muss deshalb sicher über Nacht fertig sein, also in unter 6–8 h. Ideal ist unter 1 h, damit Experimente zügig gehen.
+
+**Stufen:**
+
+1. **Start auf CPU:** LightGBM und erste Sequenzmodelle laufen auf der VM (8.1). Für Trainingsläufe kann die VM vorübergehend mehr vCPUs bekommen.
+2. **GPU lokal:** eine durchgereichte Consumer-GPU an die VM (PCIe-Passthrough auf PVE) oder ein separater Trainingsrechner im LAN.
+3. **GPU stundenweise mieten:** für Hyperparameter-Suchen oder wenn lokal keine GPU da ist. Eine RTX 3090/4090 reicht für die Modellgrößen hier deutlich. Grobe Preise (Stand Okt. 2026, schwanken stark, vor Nutzung prüfen):
+
+   | Anbieter | Art | Größenordnung RTX 4090 bzw. vergleichbar |
+   |---|---|---|
+   | Vast.ai | Marktplatz mit privaten Anbietern | ca. 0,20–0,50 $/h; Zuverlässigkeit und Datenschutz je Anbieter verschieden |
+   | RunPod | Marktplatz und eigene Rechenzentren, fertige PyTorch-Images | ca. 0,35–0,70 $/h |
+   | Lambda, Paperspace, Jarvislabs | klassische Cloud-GPUs zum Festpreis | eher ab 0,50 $/h |
+   | Hetzner GPU-Server | Rechenzentrum in Deutschland, monatliche Abrechnung | lohnt erst bei Dauernutzung |
+   | Google Colab, Kaggle | kostenlos bzw. günstig | nur für Experimente, Zeitlimits, nicht automatisierbar |
+
+   Eine Hyperparameter-Suche über einige Stunden kostet damit einige Euro.
+
+**Training als portabler Container-Job:** Damit es egal ist, wo trainiert wird, ist `ml-train` ein in sich geschlossenes Image (CPU- und CUDA-Variante aus demselben Dockerfile) mit klarer Ein- und Ausgabe:
+
+```mermaid
+flowchart LR
+    D["ml-train dispatch<br/>auf der VM"] --> SN["Trainings-Snapshot<br/>Features aus Gold als Parquet<br/>+ Zielgrößen + Konfiguration"]
+    SN --> EX[("Garage-Bucket<br/>ml-exchange")]
+    EX -- "zeitlich begrenzte<br/>presigned URLs" --> J["ml-train-Container<br/>CPU, lokale GPU<br/>oder Miet-GPU"]
+    J --> ART["Modell + Metriken<br/>+ Snapshot-Hash"]
+    ART --> EX
+    EX --> REG["MLflow-Registry<br/>ml-artifacts"]
+    REG --> PRED["ml-predict<br/>nach Freigabe"]
+```
+
+- **Eingabe:** Der Dispatcher (Unterbefehl `ml-train dispatch` im selben Image) auf der VM exportiert einen versionierten Trainings-Snapshot (Features und Zielgrößen aus Gold als Parquet, Clusterversion, Trainingskonfiguration) in den Bucket `ml-exchange`. Der Snapshot ist mit einem Hash versehen, damit sich jedes Modell genau einem Datenstand zuordnen lässt.
+- **Ausführung:** lokal mit `docker compose run ml-train`, auf einem Rechner im LAN oder auf einer gemieteten GPU-Instanz (Image aus der Registry ziehen, ein Befehl mit Snapshot-URL). Der Job braucht keine Verbindung zu Postgres und keinen Zugang ins Heimnetz.
+- **Zugang von außen:** Der Job bekommt nur zeitlich begrenzte presigned URLs (Lesen für den Snapshot, Schreiben für das Ergebnis), erreichbar über einen Reverse Proxy mit TLS, der nur diesen Bucket freigibt. Alternativ läuft die Verbindung über ein VPN (WireGuard bzw. Tailscale). Garage-Schlüssel mit Vollzugriff verlassen die VM nicht.
+- **Ausgabe:** Modell, Metriken und Snapshot-Hash zurück nach `ml-exchange`. Der Dispatcher registriert das Ergebnis in MLflow (`ml-artifacts`). Ein Modell geht erst nach dem Vergleich mit dem aktuellen Produktionsmodell auf dem Validierungszeitraum in `production`.
+- **Datenschutz:** Trainings-Snapshots für Miet-GPUs enthalten nur öffentliche Daten (Wetter, Markt, MaStR). Messwerte eigener Anlagen (7.6) werden nur lokal verarbeitet. Bei Marktplatz-Anbietern mit privaten Hosts ist das wichtig.
+- **Kostenbremse:** Der Dispatcher setzt eine maximale Laufzeit je Job. Die Miet-Instanz wird nach dem Upload des Ergebnisses beendet.
+
 ---
 
 ## 8. Deployment auf der PVE-VM
@@ -1184,6 +1235,6 @@ flowchart LR
 3. **Kommerzielle Nutzung?** Entscheidet, ob Open-Meteo produktiv genutzt werden darf und ob bestimmte Lizenzauflagen (ENTSO-E-Bedingungen) relevant werden.
 4. **Zielauflösung des Preises:** 15 min (aktueller Markt) oder Stunde (einfacher, längere homogene Historie)? Vorschlag: 15 min als Ausgabe, Training mit Stundenmitteln vor Okt. 2025 und Upsampling-Kennzeichnung.
 5. **Ausschnitt:** Nur DE oder Mitteleuropa (Nachbarländer beeinflussen Preis über Kuppelflüsse)? Vorschlag: 44–58° N, 0–20° E.
-6. **GPU:** Steht auf einem PVE-Host eine GPU für Passthrough bereit? Davon hängt ab, ob Gitter-Modelle lokal trainiert werden.
+6. **GPU:** Steht auf einem PVE-Host eine GPU für Passthrough bereit (bekannt für PVE2: 12 Threads, 62 GB RAM, GPU unbekannt)? Ohne lokale GPU startet das Training auf CPU, Hyperparameter-Suchen laufen auf stundenweise gemieteten GPUs (7.7).
 7. Zu verifizierende Detailwerte vor der Implementierung: exakte NOMADS-Rate-Limits, aktuelle Vorhaltezeiten auf opendata.dwd.de und data.ecmwf.int, Beginn der Archive auf AWS, aktuelle Garage- und TimescaleDB-Versionen, Zugang und Lizenz von GloFAS/EFAS sowie Schnittstellen der Pegelportale der Länder.
 8. **Anlagen-API (7.6):** Nur eigene Anlagen oder auch Anlagen weiterer Nutzer? Mehrere Nutzer bzw. fremde Anlagen fallen nicht unter den Additional Use Grant (nur intern). Lizenz der Turbinen-Leistungskurven (oedb) vor Übernahme prüfen.
