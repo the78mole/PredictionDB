@@ -1,14 +1,16 @@
 # Stack für die PVE-VM (Kapitel 8.2 der Architektur). Lokale Entwicklung: compose.override.yaml.
 name: predictiondb
 
+x-app-env: &app-env
+  PDB_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+  PDB_S3_ENDPOINT_URL: http://garage:3900
+  PDB_GARAGE_ADMIN_URL: http://garage:3903
+  PDB_GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN}
+
 x-app: &app
   image: ghcr.io/the78mole/predictiondb:${TAG:-latest}
   env_file: .env
-  environment:
-    PDB_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-    PDB_S3_ENDPOINT_URL: http://garage:3900
-    PDB_GARAGE_ADMIN_URL: http://garage:3903
-    PDB_GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN}
+  environment: *app-env
   restart: unless-stopped
   networks: [backend]
 
@@ -61,7 +63,20 @@ services:
     depends_on:
       postgres: {condition: service_healthy}
 
-  # Weitere Dienste (ingest-*, energy-ingest, wx-process, ml-*, api, mlflow, grafana)
+  # GFS 0,25° per Partial Download nach Bronze (services/wx_ingest)
+  ingest-gfs:
+    <<: *app
+    command: ["wx-ingest", "gfs", "latest", "--watch", "600"]
+    environment:
+      <<: *app-env
+      S3_ENDPOINT_URL: http://garage:3900
+      S3_ACCESS_KEY_ID: ${PDB_S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${PDB_S3_SECRET_ACCESS_KEY}
+      S3_BUCKET_BRONZE: ${PDB_BUCKET_BRONZE:-wx-bronze}
+    depends_on:
+      garage-init: {condition: service_completed_successfully}
+
+  # Weitere Dienste (energy-ingest, wx-process, ml-*, api, mlflow, grafana)
   # kommen mit ihren Paketen dazu und hängen von migrate und garage-init ab.
 
 volumes:

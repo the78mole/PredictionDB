@@ -12,6 +12,7 @@ dependencies = ["predictiondb-core"]
 dev = [
     "mypy>=1.13",
     "pytest>=8.3",
+    "pytest-asyncio>=0.24",
     "ruff>=0.8",
 ]
 
@@ -50,7 +51,9 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["packages", "services", "tests"]
-addopts = ["--import-mode=importlib", "-ra"]
+addopts = ["-ra", "-m", "not network"]
+asyncio_mode = "auto"
 markers = [
+    "network: braucht Internetzugang zu externen Quellen (mit -m network ausführen)",
     "integration: benötigt laufende Dienste (Postgres, Garage) aus compose.yaml",
 ]
