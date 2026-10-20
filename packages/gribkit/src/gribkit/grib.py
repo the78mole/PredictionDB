@@ -79,11 +79,14 @@ def _axis(first: float, inc: float, count: int, positive: bool) -> np.ndarray:
     return first + np.arange(count) * (inc if positive else -inc)
 
 
-def crop_message(message: bytes, bbox: BBox) -> bytes:
+def crop_message(message: bytes, bbox: BBox, packing: str | None = None) -> bytes:
     """Schneidet eine ``regular_ll``-Nachricht auf alle Gitterpunkte innerhalb von ``bbox``.
 
     Längen werden modulo 360 behandelt, sodass auch Ausschnitte über den
     Nullmeridian (``west < 0`` bei einem 0-360°-Gitter) funktionieren.
+    Die Ausgabe ist immer Nord→Süd abgetastet (wie die globalen GFS-Dateien),
+    damit Bronze unabhängig vom Endpunkt einheitlich ist. ``packing`` setzt
+    optional eine andere Packungsart (z. B. ``grid_complex_spatial_differencing``).
     """
     import eccodes as ec
 
@@ -101,6 +104,7 @@ def crop_message(message: bytes, bbox: BBox) -> bytes:
         lons = _axis(ec.codes_get(h, "longitudeOfFirstGridPointInDegrees"), di, ni, True)
 
         rows = np.flatnonzero((lats >= bbox.south - _EPS) & (lats <= bbox.north + _EPS))
+        rows = rows[np.argsort(-lats[rows], kind="stable")]
         rel = np.mod(lons - bbox.west + _EPS, 360.0) - _EPS
         cols = np.flatnonzero(rel <= bbox.width + _EPS)
         cols = cols[np.argsort(rel[cols], kind="stable")]
@@ -114,6 +118,7 @@ def crop_message(message: bytes, bbox: BBox) -> bytes:
         try:
             ec.codes_set(out, "Ni", int(cols.size))
             ec.codes_set(out, "Nj", int(rows.size))
+            ec.codes_set(out, "jScansPositively", 0)
             ec.codes_set(out, "latitudeOfFirstGridPointInDegrees", float(lats[rows[0]]))
             ec.codes_set(out, "latitudeOfLastGridPointInDegrees", float(lats[rows[-1]]))
             ec.codes_set(
@@ -122,6 +127,8 @@ def crop_message(message: bytes, bbox: BBox) -> bytes:
             ec.codes_set(
                 out, "longitudeOfLastGridPointInDegrees", float(np.mod(lons[cols[-1]], 360.0))
             )
+            if packing and ec.codes_get(out, "packingType") != packing:
+                ec.codes_set(out, "packingType", packing)
             ec.codes_set_values(out, sub.ravel())
             return bytes(ec.codes_get_message(out))
         finally:
@@ -130,6 +137,6 @@ def crop_message(message: bytes, bbox: BBox) -> bytes:
         ec.codes_release(h)
 
 
-def crop(data: bytes, bbox: BBox) -> bytes:
+def crop(data: bytes, bbox: BBox, packing: str | None = None) -> bytes:
     """Schneidet alle Nachrichten eines GRIB2-Bytestroms zu."""
-    return b"".join(crop_message(m, bbox) for m in iter_messages(data))
+    return b"".join(crop_message(m, bbox, packing) for m in iter_messages(data))

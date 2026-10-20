@@ -36,6 +36,10 @@ from gribkit import (
 )
 from wx_ingest.config import EndpointConfig
 
+#: NOMADS liefert einfache Packung. CCSDS komprimiert dieselben quantisierten Werte
+#: verlustfrei (etwa 40 % kleiner); komplexe Packung würde hier Bits verlieren.
+NOMADS_PACKING = "grid_ccsds"
+
 #: HTTP-Status, bei denen eine Wiederholung sinnvoll ist.
 RETRY_STATUS = frozenset({408, 425, 429, 500, 502, 503, 504})
 
@@ -171,9 +175,11 @@ class Endpoint:
         if resp.status_code == 200 and body.startswith(b"GRIB"):
             try:
                 n = sum(1 for _ in iter_messages(body))
+                # NOMADS tastet Süd→Nord ab; crop dreht auf Nord→Süd wie bei idx_range
+                grib = await asyncio.to_thread(crop, body, bbox, NOMADS_PACKING)
             except GribError as exc:
-                raise FetchError(f"NOMADS-Antwort unvollständig: {exc}") from exc
-            return StepData(grib=body, url=str(resp.request.url), n_messages=n)
+                raise FetchError(f"NOMADS-Antwort unbrauchbar: {exc}") from exc
+            return StepData(grib=grib, url=str(resp.request.url), n_messages=n)
         text = body[:2000].decode("utf-8", "replace").lower()
         if resp.status_code == 404 or "not present" in text or "no such file" in text:
             raise StepUnavailable(str(resp.request.url))

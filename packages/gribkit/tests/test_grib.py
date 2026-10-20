@@ -67,11 +67,28 @@ def test_crop_across_prime_meridian() -> None:
     np.testing.assert_allclose(np.mod(lons[0], 360), expected_lon)
 
 
-def test_crop_south_to_north_scanning() -> None:
+def test_crop_south_to_north_input_is_flipped() -> None:
     msg, _, _ = make_global_message(j_scans_positively=True)
-    values, lats, lons, keys = _decode(crop(msg, BBox(north=58, south=44, west=0, east=20)))
-    assert keys["latitudeOfFirstGridPointInDegrees"] == 44
+    out = crop(msg, BBox(north=58, south=44, west=0, east=20))
+    values, lats, lons, keys = _decode(out)
+    assert keys["latitudeOfFirstGridPointInDegrees"] == 58
+    assert keys["latitudeOfLastGridPointInDegrees"] == 44
     np.testing.assert_allclose(values, lats * 1000 + lons, atol=0.01)
+    np.testing.assert_allclose(lats[:, 0], np.arange(58, 43, -1))
+
+
+def test_crop_repacks_lossless_with_ccsds() -> None:
+    import eccodes as ec
+
+    msg, _, _ = make_global_message()
+    bbox = BBox(north=58, south=44, west=0, east=20)
+    plain, ccsds = crop(msg, bbox), crop(msg, bbox, packing="grid_ccsds")
+    h = ec.codes_new_from_message(ccsds)
+    try:
+        assert ec.codes_get(h, "packingType") == "grid_ccsds"
+    finally:
+        ec.codes_release(h)
+    np.testing.assert_array_equal(_decode(ccsds)[0], _decode(plain)[0])
 
 
 def test_crop_quarter_degree_grid_point_count() -> None:

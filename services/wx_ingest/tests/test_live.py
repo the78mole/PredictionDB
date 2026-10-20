@@ -1,4 +1,4 @@
-"""Echter Abruf eines Schritts von AWS. Läuft nur mit ``-m network``."""
+"""Echter Abruf eines Schritts von AWS bzw. NOMADS. Läuft nur mit ``-m network``."""
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -16,11 +16,12 @@ REPO = Path(__file__).resolve().parents[3]
 
 
 @pytest.mark.network
-async def test_one_step_from_aws(bronze: Bronze) -> None:
+@pytest.mark.parametrize("endpoint", ["aws", "nomads"])
+async def test_one_step(bronze: Bronze, endpoint: str) -> None:
     import eccodes as ec
 
     cfg = GfsConfig.from_yaml(REPO / "config/sources/gfs_0p25.yaml")
-    cfg.endpoints = [e for e in cfg.endpoints if e.name == "aws"]
+    cfg.endpoints = [e for e in cfg.endpoints if e.name == endpoint]
     run = (datetime.now(UTC) - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
     async with httpx.AsyncClient(timeout=60) as client:
         result = await GfsIngestor(cfg, bronze, client).ingest_run(run, [6])
@@ -38,6 +39,7 @@ async def test_one_step_from_aws(bronze: Bronze) -> None:
     assert len(msgs) == m.n_messages >= 13
     h = ec.codes_new_from_message(next(x for x in msgs if _short(x) == "2t"))
     assert (ec.codes_get(h, "Ni"), ec.codes_get(h, "Nj")) == (81, 57)
+    assert ec.codes_get(h, "latitudeOfFirstGridPointInDegrees") == 58
     v = ec.codes_get_values(h)
     assert np.min(v) > 220 and np.max(v) < 330
     ec.codes_release(h)

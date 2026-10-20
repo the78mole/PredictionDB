@@ -11,6 +11,10 @@ Ausschnitt zugeschnittenen Schritte in Garage (Bucket `wx-bronze`) ab. Grundlage
    `idx_range`: `.idx` laden, Nachrichten wählen, je Byte-Bereich eine Range-Anfrage
    (Multi-Range liefert bei S3 die ganze Datei), Antwortlänge und GRIB-Struktur prüfen,
    lokal zuschneiden.
+   NOMADS liefert Süd→Nord und einfache Packung; die Antwort wird auf Nord→Süd gedreht
+   und verlustfrei mit CCSDS gepackt, damit Bronze unabhängig vom Endpunkt einheitlich ist.
+   Der Filter kombiniert jede Variable mit jedem Level und liefert daher einzelne
+   zusätzliche Felder (derzeit `TMP` in 100 m und am Boden).
 3. `gfs/0p25/JJJJ/MM/TT/HH/fSSS.grib2` schreiben, danach das Manifest `fSSS.json`
    (Endpunkt, URL, SHA-256, Größe, Nachrichten, im Schritt fehlende Variablen).
 4. Liegen alle 209 Schritte, entsteht `run.json` als Laufmanifest.
@@ -41,5 +45,5 @@ uv run wx-ingest gfs backfill 2026-10-01T00 2026-10-07T18   # nur Archiv-Endpunk
 
 ```bash
 uv run pytest services/wx_ingest                 # offline, mit simulierten Spiegeln
-uv run pytest services/wx_ingest -m network      # ein echter Schritt von AWS
+uv run pytest services/wx_ingest -m network      # je ein echter Schritt von AWS und NOMADS
 ```

@@ -190,6 +190,20 @@ async def test_nomads_filter(bronze: Bronze) -> None:
     m = await bronze.step_manifest(RUN, 0)
     assert m is not None
     assert m.endpoint == "nomads" and m.n_messages == 2
+    # NOMADS-Ausgabe wird auf Ausschnitt, Nord→Süd und CCSDS-Packung gebracht
+    import eccodes as ec
+
+    grib = bytes(
+        await (await obstore.get_async(bronze.store, bronze.step_key(RUN, 0))).bytes_async()
+    )
+    first = next(iter(iter_messages(grib)))
+    h = ec.codes_new_from_message(first)
+    try:
+        assert (ec.codes_get(h, "Ni"), ec.codes_get(h, "Nj")) == (21, 15)
+        assert ec.codes_get(h, "jScansPositively") == 0
+        assert ec.codes_get(h, "packingType") == "grid_ccsds"
+    finally:
+        ec.codes_release(h)
 
 
 def test_nomads_params_negative_lon() -> None:
