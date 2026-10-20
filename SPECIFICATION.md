@@ -1,765 +1,225 @@
 # PredictionDB — Spezifikation
 
-**Version:** 0.1.0  
-**Status:** Entwurf  
-**Letzte Änderung:** 2026-07-21
+**Version:** 0.2.0  
+**Status:** Entwurf, teilweise umgesetzt  
+**Letzte Änderung:** 2026-10-21
 
-> **Hinweis (2026-10-20):** Die Architektur wird in [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md) weiterentwickelt (Ziel: Strombedarfs- und Strompreisprognose für Deutschland). Wo sich beide Dokumente widersprechen, gilt ARCHITEKTUR.md, insbesondere bei Datenbank (PostgreSQL + TimescaleDB statt MariaDB), Ablage von Gitterdaten (Garage-S3 als GRIB2/Zarr statt Zeilen je Gitterpunkt) und Scheduling (APScheduler statt Celery). Plugin-Konzept, PDID-Register und Vorlauf-Semantik bleiben erhalten.
-
----
-
-## 1. Projektübersicht
-
-PredictionDB ist eine lokale Datenbank-Lösung zur Sammlung, Speicherung und Verwaltung von Wetter- und Prognosedaten aus externen Quellen. Das System besteht aus einem MariaDB-Datenbank-Container und einem Worker-Container, der Daten abruft, verarbeitet und in die Datenbank übernimmt.
-
-### 1.1 Ziele
-
-- **Zentrale Speicherung** aller Wetterdaten an einem Ort
-- **Automatisierte Datenerfassung** aus mehreren externen Quellen
-- **Historische Analyse** von Wetterdaten über Zeiträume
-- **Schnittstelle** für ein Prognosesystem
-- **Offline-fähig** — vollständig lokal auf dem eigenen Server
-
-### 1.2 Architektur-Überblick
-
-```
-┌────────────────────────────────────────────────────────────────────┐
-│                    predictiondb (Docker Compose)                   │
-│                                                                    │
-│  ┌──────────────────────┐       ┌──────────────────────────────┐   │
-│  │  Worker Container    │       │      MariaDB Container       │   │
-│  │                      │       │                              │   │
-│  │  ┌────────────────┐  │       │  ┌────────────────────────┐  │   │
-│  │  │  Plugin        │──┼───────┼─►│  Tables:               │  │   │
-│  │  │  (Fetcher +    │  │       │  │  - pdid_registry       │  │   │
-│  │  │   Parser, je   │  │       │  │  - datapoints_int      │  │   │
-│  │  │   Datenquelle, │  │       │  │  - datapoints_float    │  │   │
-│  │  │   YAML-Config) │  │       │  │  - datapoints_varchar  │  │   │
-│  │  └────────────────┘  │       │  └────────────────────────┘  │   │
-│  │       │              │       │                              │   │
-│  │       ▼              │       │  Volume: /var/lib/mysql      │   │
-│  │  ┌────────────────┐  │       │                              │   │
-│  │  │  Uploader      │──┼───────┼─►INSERT/UPDATE Datenpunkte    │   │
-│  │  └────────────────┘  │       │  (PDID, Timestamp, Offset,   │   │
-│  └──────────────────────┘       │   Value)                     │   │
-│                                 └──────────────────────────────┘   │
-│                                 ┌──────────────────────────────┐   │
-│                                 │   PredictionDB API           │   │
-│                                 │   (optional, v2)             │   │
-│                                 └──────────────────────────────┘   │
-│                                                                    │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │  Datenquellen (extern, über Internet) — je eine als Plugin   │   │
-│  │                                                             │   │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌───────────────────┐  │   │
-│  │  │ NOAA NOMADS  │  │ DWD          │  │ Open-Meteo API    │  │   │
-│  │  │ (GRIB2)      │  │ (GRIB/TXT)   │  │ (JSON)            │  │   │
-│  │  └──────────────┘  └──────────────┘  └───────────────────┘  │   │
-│  │                                                             │   │
-│  │  ┌──────────────┐  ┌──────────────┐                         │   │
-│  │  │ ECMWF        │  │ KML/RWTH     │                         │   │
-│  │  │ (HRES/IFS)   │  │ (JSON)       │                         │   │
-│  │  └──────────────┘  └──────────────┘                         │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-└────────────────────────────────────────────────────────────────────┘
-```
+Diese Spezifikation fasst zusammen, **was** PredictionDB leisten soll und was davon heute umgesetzt
+ist. Das **Wie** mit Begründungen, Alternativen und Diagrammen steht in
+[docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md); Kapitelverweise („A 7.6“) beziehen sich darauf. Bei
+Widersprüchen gilt ARCHITEKTUR.md. Version 0.1 (MariaDB, Gitterwerte als Zeilen, Celery) ist
+überholt und steht in der Git-Historie.
 
 ---
 
-## 2. Datenmodell
+## 1. Ziel und Umfang
 
-### 2.1 Konzept
+PredictionDB lädt regelmäßig kostenfreie Wettervorhersagen (allen voran NOAA GFS 384 h) per
+GRIB2-Partial-Download, speichert sie platzsparend, führt sie mit Energie- und Marktdaten für
+Deutschland (Gebotszone DE-LU) und dem Anlagenbestand aus dem Marktstammdatenregister zusammen
+und prognostiziert damit:
 
-Die Fachlogik je Datenquelle (Wettermodell, API, Sensor, ...) steckt vollständig in einem **Plugin**. Ein Plugin bringt seine eigene Konfiguration als YAML-Datei mit (Fetch-Parameter, Intervall, Zuordnung der Rohdaten auf Datenpunkte) und liefert der Datenbank ausschließlich fertige, generische **Datenpunkte**. Die Datenbank selbst kennt keine Quellen, Modelle, Läufe oder Gitterpunkte mehr — sie speichert nur Zeitreihenwerte. Neue Plugins oder Änderungen an bestehenden erfordern damit keine Schema-Änderung.
+| Ziel | Auflösung | Horizont | Stand |
+|---|---|---|---|
+| Netzlast DE | 15 min | 0–16 Tage | geplant (Phase 5–6) |
+| Day-Ahead-Preis DE-LU, als Quantile | 15 min | D+1 Kern, bis D+14 Szenario | geplant (Phase 5–6) |
+| Wind-, PV- und Laufwasser-Einspeisung DE (Hilfsziele) | 15 min | 0–16 Tage | geplant |
+| Erzeugung eigener PV-, Wind- und Wasserkraftanlagen über die API | 15 min / 1 h | bis 384 h, bei Wasser teils länger | geplant (Phase 4b, A 7.6) |
 
-**Zeitpunkt statt Lauf+Offset:** GRIB-Dateien liefern typischerweise einen Vorhersage-Lauf-Zeitpunkt (`run_time`) und einen Offset dazu (0 = Analyse, +1h, +2h, ...). Beispiel: Lauf `2026-07-21 12:00:00` mit Offsets `0`, `+1h`, `+2h`, ... Damit Abfragen nicht bei jedem Zugriff `run_time + offset` nachrechnen müssen, wird das beim Import bereits aufgelöst: gespeichert wird der **Gültigkeitszeitpunkt** `timestamp = run_time + offset`. Der `offset` bleibt zusätzlich erhalten, damit ersichtlich ist, wie weit im Voraus ein Wert vorhergesagt wurde — dadurch können für denselben `timestamp` mehrere Vorhersagen aus unterschiedlichen Läufen (verschiedene Offsets) koexistieren, z.B. für Genauigkeits-Analysen über die Vorlaufzeit. `run_time` lässt sich bei Bedarf über `timestamp - offset` zurückrechnen und muss daher nicht separat gespeichert werden.
+Rahmenbedingungen: Python mit uv, nur kostenfreie Datenquellen (mehrere je Datenart für
+Redundanz), Betrieb als Docker-Compose-Stack in einer VM auf Proxmox VE, S3 über Garage
+(Single Node), PostgreSQL + TimescaleDB, später migrierbar in die Cloud (A 9). Lizenz: Business
+Source License 1.1 mit Additional Use Grant für interne Nutzung ([LICENSE](LICENSE)).
 
-**Negativer Offset = echte Messung:** Ein negativer Offset (z.B. `-1`) markiert keine Vorhersage, sondern einen tatsächlich gemessenen Wert (z.B. Sensor- oder Stationsmessung) für den jeweiligen `timestamp` — im Unterschied zu Offset `0`, der weiterhin die Modell-Analyse (also einen vom Modell berechneten, nicht real gemessenen Wert) bezeichnet. Dadurch können Analyse, Vorhersage und reale Messung für denselben Zeitpunkt nebeneinander gespeichert und verglichen werden (z.B. zur Bewertung der Vorhersagegüte).
+## 2. Begriffe
 
-**PDID (Plugin-Datapoint-ID):** Jeder Datenpunkt-Typ, den ein Plugin liefert (z.B. "2m-Temperatur von noaa_gdas"), bekommt eine PDID. Sie legt implizit Plugin, Datenpunkt-Name und Einheit fest — die Zuordnung steht im Register ([2.1.1](#211-pdid_registry--register-der-datenpunkte)) und wird beim Start des Plugins aus dessen YAML-Konfiguration synchronisiert.
-
-Ein Datenpunkt besteht damit nur noch aus diesen Werten:
-
-| Feld | Bedeutung |
+| Begriff | Bedeutung |
 |---|---|
-| `pdid` | Verweis auf Plugin + Datenpunkt-Name + Einheit (siehe Register) |
-| `latitude`, `longitude` | Ort, für den der Wert gilt |
-| `timestamp` | Gültigkeitszeitpunkt des Werts |
-| `offset` | Vorlaufzeit der Vorhersage zum `timestamp` (0 = Analyse, negativ = echte Messung) |
-| `value` | Mess-/Vorhersagewert |
-
-Jeder Wert ist also einem Ort zugeordnet — bei gegitterten Modellen (GRIB) liefert ein Plugin je Zeitschritt mehrere Zeilen (eine je Gitterpunkt/Ausschnitt), bei Punkt-APIs (z.B. Open-Meteo) i.d.R. nur eine feste `latitude`/`longitude` je Plugin-Instanz.
-
-Da Plugins Werte unterschiedlichen Typs liefern (Zahlen, Text, ...), gibt es **je Value-Type eine eigene Tabelle** statt einer generischen `value`-Spalte.
-
-#### 2.1.1 `pdid_registry` — Register der Datenpunkte
-
-Ordnet jede PDID einem Plugin, einem Datenpunkt-Namen, einer Einheit und dem Value-Type (und damit der Ziel-Tabelle aus 2.1.2) zu. Wird von jedem Plugin beim Start aus seiner YAML-Konfiguration synchronisiert, nicht manuell gepflegt.
-
-```sql
-CREATE TABLE pdid_registry (
-    pdid INT AUTO_INCREMENT PRIMARY KEY,
-    plugin_code VARCHAR(50) NOT NULL,                    -- z.B. 'noaa_gdas', 'dwd_icon', 'open_meteo'
-    datapoint_code VARCHAR(100) NOT NULL,                -- z.B. 'temperature_2m', 'wind_speed_10m'
-    unit VARCHAR(20) NOT NULL,                           -- z.B. 'K', 'm/s', 'hPa'
-    value_type ENUM('int', 'float', 'varchar') NOT NULL, -- legt die Ziel-Tabelle fest
-    description VARCHAR(255),
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_pdid (plugin_code, datapoint_code)
-);
-```
-
-#### 2.1.2 `datapoints_*` — Werte-Tabellen (eine je Value-Type)
-
-Gleiche Struktur je Typ, nur die `value`-Spalte unterscheidet sich. Weitere Typen (z.B. `datapoints_bool`, `datapoints_text`) lassen sich nach demselben Muster ergänzen.
-
-```sql
-CREATE TABLE datapoints_int (
-    pdid INT NOT NULL,
-    latitude DECIMAL(9,6) NOT NULL,
-    longitude DECIMAL(9,6) NOT NULL,
-    timestamp DATETIME NOT NULL,           -- Gültigkeitszeitpunkt
-    offset_seconds INT NOT NULL DEFAULT 0, -- Vorlaufzeit zum timestamp (0 = Analyse, < 0 = echte Messung)
-    value INT NOT NULL,
-    PRIMARY KEY (pdid, latitude, longitude, timestamp, offset_seconds),
-    FOREIGN KEY (pdid) REFERENCES pdid_registry(pdid),
-    INDEX idx_datapoints_int_timestamp (timestamp)
-);
-
-CREATE TABLE datapoints_float (
-    pdid INT NOT NULL,
-    latitude DECIMAL(9,6) NOT NULL,
-    longitude DECIMAL(9,6) NOT NULL,
-    timestamp DATETIME NOT NULL,
-    offset_seconds INT NOT NULL DEFAULT 0,
-    value DOUBLE NOT NULL,
-    PRIMARY KEY (pdid, latitude, longitude, timestamp, offset_seconds),
-    FOREIGN KEY (pdid) REFERENCES pdid_registry(pdid),
-    INDEX idx_datapoints_float_timestamp (timestamp)
-);
-
-CREATE TABLE datapoints_varchar (
-    pdid INT NOT NULL,
-    latitude DECIMAL(9,6) NOT NULL,
-    longitude DECIMAL(9,6) NOT NULL,
-    timestamp DATETIME NOT NULL,
-    offset_seconds INT NOT NULL DEFAULT 0,
-    value VARCHAR(255) NOT NULL,
-    PRIMARY KEY (pdid, latitude, longitude, timestamp, offset_seconds),
-    FOREIGN KEY (pdid) REFERENCES pdid_registry(pdid),
-    INDEX idx_datapoints_varchar_timestamp (timestamp)
-);
-```
-
-Die zusammengesetzte Primärschlüssel `(pdid, latitude, longitude, timestamp, offset_seconds)` erlaubt genau eine Zeile je (Datenpunkt, Ort, Gültigkeitszeitpunkt, Vorlaufzeit) — ein `INSERT ... ON DUPLICATE KEY UPDATE` überschreibt also eine erneut gelieferte Vorhersage mit demselben Offset für denselben Ort und Gültigkeitszeitpunkt, behält aber Vorhersagen mit anderem Offset oder an anderem Ort.
-
-#### 2.1.3 Beispiel
-
-GRIB-Lauf am `2026-07-21 12:00:00`, Parameter `temperature_2m` von `noaa_gdas` (PDID `1`) für einen Gitterpunkt bei Berlin, Offsets `0`, `+1h`, `+2h`, plus eine echte Messung für `13:00:00` von einem Mess-Plugin (PDID `2`, Offset `-1`) an derselben Stelle:
-
-| pdid | latitude | longitude | timestamp | offset_seconds | value |
-|---|---|---|---|---|---|
-| 1 | 52.520000 | 13.410000 | 2026-07-21 12:00:00 | 0 | 21.4 |
-| 1 | 52.520000 | 13.410000 | 2026-07-21 13:00:00 | 3600 | 20.9 |
-| 1 | 52.520000 | 13.410000 | 2026-07-21 14:00:00 | 7200 | 20.1 |
-| 2 | 52.520000 | 13.410000 | 2026-07-21 13:00:00 | -1 | 21.1 |
-
-Abfrage "aktuellste Vorhersage je Ort und Gültigkeitszeitpunkt" (kleinster nicht-negativer Offset zuerst): `... WHERE pdid = 1 AND latitude = 52.52 AND longitude = 13.41 AND offset_seconds >= 0 ORDER BY timestamp, offset_seconds`. Abfrage "nur Analysen": `... WHERE pdid = 1 AND offset_seconds = 0`. Abfrage "nur echte Messungen": `... WHERE pdid = 2 AND offset_seconds < 0`.
-
-### 2.2 ER-Diagramm
-
-```
-┌────────────────────┐        ┌───────────────────────┐
-│  pdid_registry      │  1   n │  datapoints_int        │
-│                     │───────►│  pdid (PK, FK)         │
-│  pdid (PK)          │        │  latitude (PK)         │
-│  plugin_code        │        │  longitude (PK)        │
-│  datapoint_code     │        │  timestamp (PK)        │
-│  unit               │        │  offset_seconds (PK)   │
-│  value_type         │        │  value                 │
-│                     │        └───────────────────────┘
-│                     │  1   n ┌───────────────────────┐
-│                     │───────►│  datapoints_float      │
-│                     │        │  pdid (PK, FK)         │
-│                     │        │  latitude (PK)         │
-│                     │        │  longitude (PK)        │
-│                     │        │  timestamp (PK)        │
-│                     │        │  offset_seconds (PK)   │
-│                     │        │  value                 │
-│                     │        └───────────────────────┘
-│                     │
-│                     │  1   n ┌───────────────────────┐
-│                     │───────►│  datapoints_varchar    │
-└────────────────────┘        │  pdid (PK, FK)         │
-                               │  latitude (PK)         │
-                               │  longitude (PK)        │
-                               │  timestamp (PK)        │
-                               │  offset_seconds (PK)   │
-                               │  value                 │
-                               └───────────────────────┘
-```
-
-### 2.3 Retention
-
-Es gibt keine `data_retention_rules`-Tabelle mehr. Aufbewahrungsfristen sind Teil der Worker-Konfiguration (siehe [4.1](#41-configyaml-global)) und wirken direkt auf die `datapoints_*`-Tabellen (`DELETE ... WHERE timestamp < NOW() - INTERVAL max_days DAY`).
-
----
-
-## 3. Datenquellen-Spezifikation
-
-Jede der folgenden Datenquellen wird als eigenständiges Plugin implementiert (`plugin_code` in Klammern). Die hier aufgeführten Parameter definieren, welche Datenpunkte das jeweilige Plugin in seiner YAML-Konfiguration deklariert und damit in `pdid_registry` registriert (siehe [2.1.1](#211-pdid_registry--register-der-datenpunkte)).
-
-### 3.1 NOAA NOMADS (GDAS/Global Forecast System) — Plugin `noaa_gdas`
-
-**Basis-URL:** `https://nomads.ncep.noaa.gov/cgi-bin/filter_gdas1.pl`
-
-**GRIB2-Dateien:**
-- `gdas1.grb2` — Hauptdatei
-- Enthält: Temperatur, Wind (U/V), Druck, Feuchtigkeit, Strahlung
-
-**Parameter (Auswahl) → Datenpunkt-Code (`datapoint_code`) in `pdid_registry`:**
-| GRIB ID | Beschreibung | datapoint_code | unit | value_type |
-|---------|-------------|-----------------|------|------------|
-| 11 | Bodentemperatur | temperature_surface | K | float |
-| 12 | Lufttemperatur auf verschiedenen Niveaus | temperature_2m | K | float |
-| 130 | Geopotentialhöhe | geopotential_height | gpm | float |
-| 33 | U-Wind-Komponente | wind_u_10m | m/s | float |
-| 35 | V-Wind-Komponente | wind_v_10m | m/s | float |
-| 132 | Relative Luftfeuchte | relative_humidity | % | float |
-| 203 | Akkumulierter Niederschlag | precipitation | kg/m² | float |
-
-**Aufruf-Beispiel:**
-```
-https://nomads.ncep.noaa.gov/cgi-bin/filter_gdas1.pl?file=gdas1.grb2&var_...
-```
-
-**Aktualisierungsintervall:** Alle 6 Stunden (00Z, 06Z, 12Z, 18Z)
-
-**Verfügbare Daten:** Bis zu 16 Tage im Voraus
-
----
-
-### 3.2 DWD (Deutscher Wetterdienst) — ICON
-
-**Basis-URL:** `https://opendata.dwd.de/climate_environment/CMS/`
-
-**GRIB2-Dateien:**
-- ICON-EU: 0.02° Auflösung (~2 km)
-- ICON-D2: 0.02° Auflösung (Deutschland)
-
-**Verfügbare Daten:** Bis zu 96 Stunden im Voraus
-
----
-
-### 3.3 ECMWF — HRES
-
-**API-Endpunkt:** `https://api.ecmwf.int/v1`
-
-**Modell:** High Resolution Ensemble Forecast (HRES)
-
-**Aktualisierungsintervall:** Alle 12 Stunden
-
-**Daten:** Bis zu 10 Tage im Voraus
-
----
-
-### 3.4 Open-Meteo API
-
-**API-Endpunkt:** `https://api.open-meteo.com/v1/forecast`
-
-**Format:** JSON
-
-**Vorteile:** Kein Login notwendig, CORS-freundlich
-
-**Parameter:** Temperatur, Wind, Bewölkung, Niederschlag, etc.
-
----
-
-## 4. Worker-Konfiguration
-
-Die Worker-Konfiguration ist zweigeteilt: eine globale `config.yaml` (Datenbank, aktive Plugins, Retention, Logging) und je Plugin eine eigenständige YAML-Datei (Fetch-Parameter, Datenpunkt-Definitionen). Dadurch bringt jedes Plugin sein Wissen über Fetch und Datenpunkte selbst mit — die globale Konfiguration muss bei neuen Plugins nur um einen Eintrag in `plugins.enabled` ergänzt werden.
-
-### 4.1 config.yaml (global)
-
-```yaml
-# PredictionDB Worker Konfiguration
-
-database:
-  host: mariadb
-  port: 3306
-  name: predictiondb
-  user: ${DB_USER:-prediction}
-  password: ${DB_PASSWORD:-prediction}
-  pool_size: 5
-
-# Plugins
-plugins:
-  directory: /app/plugins     # Verzeichnis mit einem Unterordner je Plugin
-  enabled:
-    - noaa_gdas
-    - dwd_icon
-    - open_meteo
-
-# Bereinigung (wirkt auf alle datapoints_*-Tabellen)
-retention:
-  enabled: true
-  max_days: 365                # Wie lange Datenpunkte behalten?
-  cleanup_cron: "0 3 * * *"     # Täglicher Bereinigungs-Job um 3:00 Uhr
-
-# Logging
-logging:
-  level: INFO          # DEBUG, INFO, WARNING, ERROR
-  file: /var/log/predictiondb/worker.log
-  max_file_size_mb: 100
-  backup_count: 5
-```
-
-### 4.2 Plugin-Konfiguration (Beispiel `plugins/noaa_gdas/config.yaml`)
-
-```yaml
-plugin:
-  code: noaa_gdas
-  name: "NOAA GDAS / GFS"
-  enabled: true
-  interval_hours: 6
-
-fetch:
-  type: grib2
-  url: "https://nomads.ncep.noaa.gov/cgi-bin/filter_gdas1.pl"
-  params:
-    file: "gdas1.grb2"
-    var_T: "on"
-    var_UGRD: "on"
-    var_VGRD: "on"
-    level_type: "1"
-    min_lat: "-90"
-    max_lat: "90"
-    min_lon: "0"
-    max_lon: "360"
-  timeout_seconds: 300
-  batch_size: 1000
-
-# Datenpunkte, die dieses Plugin liefert.
-# Wird beim Start des Plugins in pdid_registry synchronisiert (siehe 2.1.1).
-datapoints:
-  - code: temperature_2m
-    grib_param_id: 12
-    unit: K
-    value_type: float
-  - code: wind_u_10m
-    grib_param_id: 33
-    unit: m/s
-    value_type: float
-  - code: wind_v_10m
-    grib_param_id: 35
-    unit: m/s
-    value_type: float
-  - code: relative_humidity
-    grib_param_id: 132
-    unit: "%"
-    value_type: float
-```
-
-### 4.3 Worker-Architektur
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Worker Container                          │
-│                                                              │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │              Scheduler (Celery Beat)                   │ │
-│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────────┐ │ │
-│  │  │ Plugin  │ │ Plugin  │ │ Plugin  │ │ Cleanup     │ │ │
-│  │  │ noaa_   │ │ dwd_    │ │ open_   │ │ Job         │ │ │
-│  │  │ gdas(6h)│ │ icon(6h)│ │ meteo(1h│ │ (daily)     │ │ │
-│  │  └────┬────┘ └────┬────┘ └────┬────┘ └──────┬──────┘ │ │
-│  └───────┼───────────┼───────────┼──────────────┼────────┘ │
-│          │           │           │              │          │
-│          ▼           ▼           ▼              │          │
-│  ┌─────────────────────────────────────────────────────┐  │
-│  │              Worker Pool (Celery Workers)           │  │
-│  │  ┌────────────┐  ┌────────────┐  ┌────────────┐    │  │
-│  │  │ Plugin     │  │ Plugin     │  │ Plugin     │    │  │
-│  │  │ #1 (GRIB)  │  │ #2 (GRIB)  │  │ #3 (JSON)  │    │  │
-│  │  └─────┬──────┘  └─────┬──────┘  └─────┬──────┘    │  │
-│  └────────┼───────────────┼───────────────┼────────────┘  │
-│           │               │               │               │
-│           ▼               ▼               │               │
-│  ┌─────────────────────────────────────────────────────┐  │
-│  │       Plugin-interner Fetch & Parse (je Plugin)     │  │
-│  │                                                     │  │
-│  │  GRIB-Datei ──► Parser ──► Mapping auf PDID/Value   │  │
-│  │   JSON ───────► Parser ──► Mapping auf PDID/Value   │  │
-│  └──────────────────────────┬──────────────────────────┘  │
-│                             │                              │
-│                             ▼                              │
-│  ┌─────────────────────────────────────────────────────┐  │
-│  │              Database Uploader                      │  │
-│  │                                                     │  │
-│  │  Batch INSERT in datapoints_* (1000-10000 Zeilen)   │  │
-│  │  ON DUPLICATE KEY UPDATE (pdid, lat, lon, ts, offset)│ │
-│  └──────────────────────────┬──────────────────────────┘  │
-│                             │                              │
-│                             ▼                              │
-│                    MariaDB Container                       │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 5. docker-compose.yml
-
-```yaml
-services:
-  # ============================================================
-  # MariaDB — Zentrale Datenbank
-  # ============================================================
-  mariadb:
-    image: mariadb:11.4
-    container_name: predictiondb-mariadb
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-prediction_root}
-      MYSQL_DATABASE: predictiondb
-      MYSQL_USER: prediction
-      MYSQL_PASSWORD: ${DB_PASSWORD:-prediction}
-    ports:
-      - "3306:3306"
-    volumes:
-      - predictiondb-data:/var/lib/mysql
-      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/01-init.sql
-      - ./docker/mysql/my.cnf:/etc/mysql/conf.d/my.cnf
-    healthcheck:
-      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - predictiondb-net
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          cpus: '1.0'
-
-  # ============================================================
-  # Worker — Datenabfrage und -speicherung
-  # ============================================================
-  worker:
-    build:
-      context: .
-      dockerfile: docker/worker/Dockerfile
-    container_name: predictiondb-worker
-    restart: unless-stopped
-    env_file:
-      - .env
-    volumes:
-      - predictiondb-config:/app/config
-      - predictiondb-logs:/var/log/predictiondb
-      - predictiondb-raw:/data/raw:ro   # Falls GRIB-Dateien gespeichert werden
-    depends_on:
-      mariadb:
-        condition: service_healthy
-    networks:
-      - predictiondb-net
-    deploy:
-      resources:
-        limits:
-          memory: 4G
-          cpus: '2.0'
-
-  # ============================================================
-  # Cleanup — Datenbereinigung (optional)
-  # ============================================================
-  cleanup:
-    build:
-      context: .
-      dockerfile: docker/worker/Dockerfile
-    container_name: predictiondb-cleanup
-    restart: unless-stopped
-    command: ["python", "-m", "predictiondb.cleanup"]
-    env_file:
-      - .env
-    volumes:
-      - predictiondb-logs:/var/log/predictiondb
-    depends_on:
-      mariadb:
-        condition: service_healthy
-    networks:
-      - predictiondb-net
-
-  # ============================================================
-  # API — Zugriff auf die Daten (optional, v2)
-  # ============================================================
-  # api:
-  #   build:
-  #     context: .
-  #     dockerfile: docker/api/Dockerfile
-  #   container_name: predictiondb-api
-  #   restart: unless-stopped
-  #   ports:
-  #     - "8000:8000"
-  #   env_file:
-  #     - .env
-  #   depends_on:
-  #     mariadb:
-  #       condition: service_healthy
-  #   networks:
-  #     - predictiondb-net
-
-volumes:
-  predictiondb-data:
-    driver: local
-  predictiondb-config:
-    driver: local
-  predictiondb-logs:
-    driver: local
-  predictiondb-raw:
-    driver: local
-
-networks:
-  predictiondb-net:
-    driver: bridge
-```
-
----
-
-## 6. Docker-Struktur
-
-```
-PredictionDB/
-├── SPECIFICATION.md          ← Diese Datei
-├── docker-compose.yml
-├── .env
-├── .gitignore
-├── README.md
-├── pyproject.toml
-│
-├── src/
-│   └── predictiondb/
-│       ├── __init__.py
-│       ├── config.py          # Lädt globale config.yaml
-│       ├── database.py        # DB-Verbindung (SQLAlchemy)
-│       ├── models.py          # SQLAlchemy ORM-Modelle (pdid_registry, datapoints_*)
-│       ├── plugin.py          # Plugin-Basisklasse & Registry-Sync (YAML → pdid_registry)
-│       │
-│       ├── plugins/
-│       │   ├── noaa_gdas/
-│       │   │   ├── plugin.py    # Fetcher + Parser + Mapping auf Datenpunkte
-│       │   │   └── config.yaml  # Fetch-Parameter & Datenpunkt-Definitionen
-│       │   ├── dwd_icon/
-│       │   │   ├── plugin.py
-│       │   │   └── config.yaml
-│       │   ├── ecmwf/
-│       │   │   ├── plugin.py
-│       │   │   └── config.yaml
-│       │   └── open_meteo/
-│       │       ├── plugin.py
-│       │       └── config.yaml
-│       │
-│       ├── parsers/            # Gemeinsame Parser-Utilities (von Plugins genutzt)
-│       │   ├── grib2.py        # GRIB2-Parser (pygrib / CMC)
-│       │   └── json_parser.py  # JSON-Parser
-│       │
-│       ├── uploader.py         # Batch-Upload zu MariaDB
-│       └── cleanup.py          # Retention: alte Datenpunkte löschen
-│
-├── tests/
-│   ├── test_config.py
-│   ├── test_plugins/
-│   ├── test_parsers/
-│   └── test_uploader.py
-│
-├── docker/
-│   ├── worker/
-│   │   ├── Dockerfile
-│   │   └── entrypoint.sh
-│   ├── api/                   # (optional, v2)
-│   │   ├── Dockerfile
-│   │   └── entrypoint.sh
-│   └── mysql/
-│       ├── init.sql           # Tabellen erstellen (pdid_registry, datapoints_*)
-│       └── my.cnf             # MariaDB Konfiguration
-│
-├── config/
-│   ├── config.yaml            # Globale Worker-Konfiguration (DB, aktive Plugins, Retention)
-│   └── config.example.yaml    # Beispiel-Konfiguration
-│
-├── scripts/
-│   ├── migrate.py             # Datenbank-Migrationen
-│   └── seed.py                # Testdaten einspielen
-│
-└── docs/
-    └── api.md                 # API-Dokumentation (v2)
-```
-
----
-
-## 7. SQLAlchemy Models
-
-```python
-# src/predictiondb/models.py
-
-from datetime import datetime
-from enum import Enum
-
-from sqlalchemy import (
-    Column, Integer, String, Boolean, Float,
-    DateTime, ForeignKey, Enum as SAEnum,
-    UniqueConstraint, Index, DECIMAL, TIMESTAMP
-)
-from sqlalchemy.orm import DeclarativeBase
-
-
-class Base(DeclarativeBase):
-    pass
-
-
-class ValueType(str, Enum):
-    INT = "int"
-    FLOAT = "float"
-    VARCHAR = "varchar"
-
-
-# ============================================================
-# Tabellen-Modelle
-# ============================================================
-
-class PDIDRegistry(Base):
-    """Register der Datenpunkte — wird von jedem Plugin beim Start aus
-    seiner YAML-Konfiguration synchronisiert, nicht manuell gepflegt."""
-    __tablename__ = 'pdid_registry'
-
-    pdid = Column(Integer, primary_key=True, autoincrement=True)
-    plugin_code = Column(String(50), nullable=False)
-    datapoint_code = Column(String(100), nullable=False)
-    unit = Column(String(20), nullable=False)
-    value_type = Column(SAEnum(ValueType), nullable=False)
-    description = Column(String(255))
-    is_active = Column(Boolean, default=True)
-    created_at = Column(TIMESTAMP, default=datetime.utcnow)
-
-    __table_args__ = (
-        UniqueConstraint('plugin_code', 'datapoint_code', name='uq_pdid'),
-    )
-
-
-class _DatapointMixin:
-    """Gemeinsame Spalten aller datapoints_*-Tabellen."""
-    pdid = Column(Integer, ForeignKey('pdid_registry.pdid'), primary_key=True)
-    latitude = Column(DECIMAL(9, 6), primary_key=True)
-    longitude = Column(DECIMAL(9, 6), primary_key=True)
-    timestamp = Column(DateTime, primary_key=True)          # Gültigkeitszeitpunkt
-    offset_seconds = Column(Integer, primary_key=True, default=0)  # 0 = Analyse, < 0 = echte Messung
-
-
-class DatapointInt(_DatapointMixin, Base):
-    __tablename__ = 'datapoints_int'
-
-    value = Column(Integer, nullable=False)
-
-    __table_args__ = (
-        Index('idx_datapoints_int_timestamp', 'timestamp'),
-    )
-
-
-class DatapointFloat(_DatapointMixin, Base):
-    __tablename__ = 'datapoints_float'
-
-    value = Column(Float, nullable=False)
-
-    __table_args__ = (
-        Index('idx_datapoints_float_timestamp', 'timestamp'),
-    )
-
-
-class DatapointVarchar(_DatapointMixin, Base):
-    __tablename__ = 'datapoints_varchar'
-
-    value = Column(String(255), nullable=False)
-
-    __table_args__ = (
-        Index('idx_datapoints_varchar_timestamp', 'timestamp'),
-    )
-```
-
----
-
-## 8. Implementierungs-Phasen
-
-### Phase 1: Fundament (Woche 1)
-- [ ] `docker-compose.yml` erstellen
-- [ ] MariaDB mit init.sql aufsetzen
-- [ ] SQLAlchemy Models implementieren
-- [ ] config.yaml Struktur definieren
-- [ ] Grundlegende Worker-Architektur
-
-### Phase 2: Plugins (Woche 2-3)
-- [ ] NOAA GDAS Plugin implementieren (Fetch + Parser + Datenpunkt-Mapping)
-- [ ] GRIB2-Parser (pygrib)
-- [ ] Open-Meteo JSON-Parser
-- [ ] pdid_registry-Sync aus Plugin-YAML
-
-### Phase 3: Storage & Scheduling (Woche 4)
-- [ ] Batch-Upload zu MariaDB
-- [ ] Scheduler (Celery Beat oder APScheduler)
-- [ ] Konfiguration für mehrere Plugins
-
-### Phase 4: Cleanup & Monitoring (Woche 5)
-- [ ] Datenbereinigung (retention rules)
-- [ ] Logging und Error-Handling
-- [ ] Health-Checks
-
-### Phase 5: API (optional, v2)
-- [ ] FastAPI-Endpoint für Datenabfrage
-- [ ] Authentifizierung
-- [ ] Swagger-Dokumentation
-
----
-
-## 9. Konfiguration (.env)
-
-```bash
-# Datenbank
-DB_ROOT_PASSWORD=prediction_root_secure
-DB_PASSWORD=prediction_secure
-DB_USER=prediction
-DB_NAME=predictiondb
-DB_HOST=mariadb
-DB_PORT=3306
-
-# Worker
-WORKER_LOG_LEVEL=INFO
-WORKER_PARALLELISM=2
-
-# Plugins
-PLUGIN_NOAA_GDAS_ENABLED=true
-PLUGIN_DWD_ICON_ENABLED=true
-PLUGIN_OPEN_METEO_ENABLED=true
-PLUGIN_ECMWF_ENABLED=false
-
-# API (optional)
-API_ENABLED=false
-API_HOST=0.0.0.0
-API_PORT=8000
-```
-
----
-
-## 10. Nächste Schritte
-
-1. ✅ Git-Repository erstellen
-2. ✅ SPECIFICATION.md erstellen
-3. 🔲 `docker-compose.yml` erstellen
-4. 🔲 SQL-Init-Skript erstellen
-5. 🔲 Worker-Python-Paket strukturieren
-6. 🔲 NOAA GDAS Plugin implementieren
-7. 🔲 GRIB2-Parser integrieren
-8. 🔲 Scheduler einrichten
-9. 🔲 Tests schreiben
-10. 🔲 Dokumentation vervollständigen
-
----
-
-*Diese Spezifikation dient als Grundlage und sollte entsprechend den Anforderungen angepasst und erweitert werden.*
+| `run_time` | Startzeit eines Modelllaufs (z. B. GFS 06Z) |
+| `valid_time` | Zeitpunkt, für den ein Wert gilt; Vorlauf = `valid_time − run_time` |
+| `issue_time` | Zeitpunkt, zu dem eine eigene Prognose erstellt wird |
+| `published` | Zeitpunkt, ab dem ein Energiewert öffentlich bekannt war (Leakage-Schutz) |
+| Bronze / Silber / Gold | Speicherstufen: Original-GRIB2 / Zarr-Gitter / Features und Energiedaten in der DB |
+| Cluster | Gebiet gleichartiger Anlagen je Technologie aus dem MaStR, z. B. `wind_on:v2026Q4:c07` |
+
+Die Ideen der Version 0.1 bleiben erhalten: ein **Register der Merkmale** (früher
+`pdid_registry`, jetzt `meta.feature`), ein **Plugin je Quelle** und die Trennung von Gültigkeit und
+Vorlauf. Messwerte stehen nicht mehr mit negativem Vorlauf in derselben Tabelle, sondern in
+`energy.*` bzw. eigenen Tabellen.
+
+## 3. Datenhaltung
+
+### 3.1 Objektspeicher (Garage, S3-API)
+
+| Bucket | Inhalt | Stand |
+|---|---|---|
+| `wx-bronze` | GFS-Schritte, auf 44–58° N / 0–20° E zugeschnitten, CCSDS-gepackt: `gfs/0p25/JJJJ/MM/TT/HH/fSSS.grib2` mit Manifest `fSSS.json`, je Lauf `run.json` | umgesetzt |
+| `assets-bronze` | MaStR-Gesamtexport unverändert je Stichtag, mit `manifest.json` | umgesetzt |
+| `wx-silver` | einheitliches Gitter je Lauf als Zarr v3 (float16 + Zstd) | geplant (`wx-process`) |
+| `assets-silver` | Gitter-Gewichte je Cluster als Zarr | geplant |
+| `ml-artifacts` | MLflow-Artefakte (Modelle) | geplant |
+| `ml-exchange` | Trainings-Snapshots und -Ergebnisse für portable Trainingsjobs (A 7.7) | geplant |
+| `backups` | pg_dump / WAL-G | geplant |
+
+Zugriff ausschließlich über die S3-API; Endpoint, Region und Schlüssel kommen aus der Umgebung.
+`garage-init` legt Layout, Schlüssel und Buckets idempotent an.
+
+### 3.2 Datenbank (PostgreSQL 17 + TimescaleDB)
+
+Schema per Alembic (`migrations/`, Revisionen `0001` → `0002_energy` → `0002_assets`):
+
+| Schema | Tabellen | Zweck | Stand |
+|---|---|---|---|
+| `meta` | `source` (mit `priority`, `license`), `nwp_run`, `grib_message`, `feature`, `region`, `energy_fetch` | Quellen, Laufzustand, Merkmalsregister, Regionen, Backfill-Stand | umgesetzt |
+| `energy` | `series`, `value` (Hypertable, komprimiert ab 30 Tagen), View `value_best` | Preise, Last, Erzeugung, ÜNB-Prognosen je Quelle; `value_best` wählt je Code und Zeitpunkt die Quelle mit dem kleinsten Rang | umgesetzt |
+| `assets` | `snapshot`, `unit`, `gemeinde`, `clustering`, `cluster`, `cluster_cell`, `grid_weight`, `capacity_daily` (Hypertable) | MaStR-Bestand, Verortung, Cluster, Gitter-Gewichte, Tagesbestand | umgesetzt |
+| `feat` | `nwp_value` (Hypertable, komprimiert) | Wetter-Features je Merkmal, Region, Lauf und Gültigkeit | Schema da, Befüllung geplant |
+| `fcst` | `prediction` (Hypertable) | eigene Prognosen je Modellversion, Ziel und Quantil | Schema da, Befüllung geplant |
+| `assets`, `fcst` (Erweiterung) | `own_plant`, `own_measurement`, `own_curtailment_rule`, `plant_forecast` | eigene Anlagen und ihre Prognosen (A 7.6) | geplant |
+| `fcst` (Erweiterung) | `model_spread` | Streuung parallel laufender Modellversionen (A 7.7) | geplant |
+
+Einheiten und Zeit: alle Zeitstempel in UTC, Intervalle am Intervallbeginn, Leistungen in MW (bei
+eigenen Anlagen kW), Preise in EUR/MWh.
+
+## 4. Datenquellen
+
+Alle Quellen sind kostenfrei. Jede Quelle ist ein Plugin bzw. eine Quelldefinition mit eigener
+Konfiguration in `config/sources/`. Übersicht und Lizenzen in A 3.
+
+| Quelle | Daten | Stand |
+|---|---|---|
+| NOAA GFS 0,25° (NOMADS-Filter, AWS, Google) | 384-h-Läufe 00/06/12/18Z, 0–120 h stündlich, danach 3-stündlich (209 Schritte) | umgesetzt (`wx-ingest`) |
+| ENTSO-E Transparency (Token), SMARD, Energy-Charts | Day-Ahead-Preis, Last, Residuallast, Erzeugung je Träger, ÜNB-Prognosen | umgesetzt (`energy-ingest`), Historie ab 2015 |
+| MaStR-Gesamtdatenexport | Wind, PV, Biomasse, Wasser mit Leistung, Datum, Ort, Technik | umgesetzt (`mastr-ingest`), quartalsweise |
+| ECMWF IFS/AIFS Open Data, DWD ICON-EU/-D2, GEFS, GEM | weitere Wettermodelle, Ensembles | geplant (Phase 7) |
+| Netztransparenz.de | Wind-/PV-Prognosen der ÜNB | geplant |
+| PEGELONLINE, Pegelportale der Länder, GloFAS | Wasserstand, Abfluss, Abflussprognosen | geplant (A 7.5, 7.6) |
+| DWD RADOLAN, DWD CDC | beobachteter Niederschlag, Stationsdaten | geplant |
+| Open-Meteo | nur Prototyping und Backfill, nicht produktiv | optional |
+
+GFS-Variablen (umgesetzt, `config/sources/gfs_0p25.yaml`): `TMP`, `DPT`, `RH` in 2 m, `UGRD`/`VGRD`
+in 10 m und 100 m, `GUST`, `DSWRF`, `TCDC`, `APCP`, `CSNOW`, `PRMSL`. Für A 7.6 kommen noch dazu:
+`PRES:surface` (Luftdichte Wind), `WEASD`/`SNOD` (Schnee), `SOILW` (Bodenfeuchte).
+
+## 5. Dienste
+
+Ein Image für alle Python-Dienste (`docker/Dockerfile`), Monorepo als uv-Workspace.
+
+| Dienst (Compose) | Paket / Befehl | Aufgabe | Stand |
+|---|---|---|---|
+| `postgres` | `timescale/timescaledb:2.31.0-pg17` | Datenbank | umgesetzt |
+| `garage` | `dxflrs/garage:v2.4.1` | S3, Single Node | umgesetzt |
+| `garage-init` | `pdb-garage-init` | Layout, Schlüssel, Buckets (einmalig) | umgesetzt |
+| `migrate` | `alembic upgrade head` | Schema (einmalig) | umgesetzt |
+| `ingest-gfs` | `wx-ingest gfs latest --watch 600` | GFS nach Bronze, Endpunkte in Rangfolge NOMADS → AWS → Google | umgesetzt |
+| `energy-ingest` | `energy-ingest sync --watch 900` | Abgleich alle 15 min (3 Tage zurück bis 2 Tage voraus), Quellenvergleich, schrittweiser Backfill | umgesetzt |
+| `mastr-snapshot` | `mastr-ingest snapshot --if-due --watch 21600` | MaStR je Quartal: Import, Verortung, Cluster, Gewichte, Tagesbestand | umgesetzt |
+| `wx-process` | – | Bronze → Silber (Zarr), Cluster-Features nach `feat.nwp_value` | geplant (Phase 4) |
+| `ml-predict` | – | Inferenz nach jedem vollständigen Lauf, mehrere Modellversionen parallel | geplant |
+| `ml-train` | – | Training bzw. Fine-Tuning als portabler Container-Job (A 7.7) | geplant |
+| `api` | FastAPI | Prognosen, Punktabfragen, eigene Anlagen | geplant (Phase 8, Anlagen ab 4b) |
+| `mlflow`, `grafana` | – | Modellregistry, Dashboards und Alarme | geplant |
+
+Bibliotheken des Workspace: `packages/core` (Konfiguration `PDB_*`, Logging, S3, DB, Garage-Init),
+`packages/gribkit` (`.idx` lesen, Byte-Bereiche zusammenfassen, GRIB2 prüfen und zuschneiden).
+Bedienung je Dienst steht in dessen README.
+
+## 6. Funktionale Anforderungen
+
+### 6.1 Wetterdaten
+
+- Neue GFS-Läufe werden spätestens 10 min nach Veröffentlichung eines Schritts erkannt und geladen.
+- Nur benötigte Variablen und der Ausschnitt werden übertragen (NOMADS-Filter bzw. Range-Requests).
+- Fällt ein Endpunkt aus, wird der nächste versucht. Backfill nutzt nur Archiv-Endpunkte.
+- Jeder gespeicherte Schritt hat ein Manifest (Endpunkt, SHA-256, Größe, Nachrichten, fehlende
+  Variablen). Ein Lauf gilt erst als vollständig, wenn alle Schritte liegen.
+- Bereits gespeicherte Schritte werden nicht erneut geladen, außer Variablenliste oder Ausschnitt
+  ändern sich.
+
+### 6.2 Energie- und Anlagendaten
+
+- Mehrere Quellen je Reihe werden parallel gespeichert und gegeneinander geprüft (Warnung ab 5 %
+  Abweichung). Für das Lernen gilt die Quelle mit dem kleinsten Rang.
+- Jeder Energiewert trägt `published`. Beim Training werden nur Werte verwendet, die zum
+  Prognosezeitpunkt bekannt waren.
+- Der MaStR-Bestand wird quartalsweise gesichert. Die installierte Leistung je Cluster und Tag wird
+  aus Inbetriebnahme, Stilllegung und Wiederaufnahme rekonstruiert, damit das Training den
+  historischen Bestand sieht. Cluster werden höchstens jährlich neu gebildet und sind versioniert.
+
+### 6.3 Prognosen
+
+- Zweistufig: zuerst Last, Wind, PV und Laufwasser, daraus die Residuallast, dann der Preis als
+  Quantile (A 7.3). Baseline: saisonal-naiv, Analog-Tag, LightGBM.
+- Nur Läufe mit `run_time + Verzug ≤ issue_time` gehen ein (A 7.4).
+- Wasserkraft berücksichtigt den Nachlauf von Niederschlag, Schnee und Boden (A 7.6).
+- Mehrere Modellversionen laufen parallel. Ihre Streuung wird gespeichert, als Unsicherheitsmaß
+  ausgegeben und bei Ausreißern gemeldet (A 7.7).
+
+### 6.4 Eigene Anlagen (API, A 7.6)
+
+| Methode und Pfad | Zweck |
+|---|---|
+| `POST /plants` | Anlage anlegen: `pv` (Teilflächen mit kWp, Azimut, Neigung), `wind` (Nabenhöhe, Rotordurchmesser, Nennleistung, Leistungskurve) oder `hydro` (Fallhöhe, Ausbaudurchfluss, Turbinentyp, Restwasser, Pegel bzw. Einzugsgebiet) |
+| `GET/PATCH/DELETE /plants/{id}` | Stammdaten lesen, ändern, Anlage samt Daten löschen |
+| `PUT /plants/{id}/measurements` | Messwerte hochladen (CSV/JSON, 15 min oder 1 h, typisch ein Jahr) |
+| `PUT /plants/{id}/curtailment-rules` | Abschaltregeln (Fledermäuse, Vögel, Schall, Restwasser, Abregelung) |
+| `POST /plants/{id}/calibrate`, `GET /plants/{id}/calibration` | Kalibrierung gegen Hindcasts anstoßen und abfragen |
+| `GET /plants/{id}/forecast` | Prognose mit Quantilen, mit und ohne Abschaltung |
+| `GET /plants/{id}/backtest` | Güte gegen die eigenen Messwerte |
+
+Ohne Messwerte liefert ein physikalisches Modell (pvlib, windpowerlib, Abfluss × Fallhöhe) eine
+Prognose. Messwerte eigener Anlagen werden nur lokal verarbeitet.
+
+### 6.5 Training (A 7.7)
+
+- Regelfall ist das wöchentliche Nachtrainieren des Produktionsmodells (Fine-Tuning mit
+  Replay-Stichprobe). Neu trainiert wird bei Strukturänderungen (neue Clusterversion, neue
+  Features oder Quellen, andere Zielauflösung) oder dauerhaft steigendem Fehler.
+- Ein neues Modell ersetzt das bisherige erst nach einem Champion/Challenger-Vergleich.
+- Training läuft als portabler Container-Job auf CPU, lokaler GPU oder gemieteter GPU. Ein Job
+  bekommt nur einen Trainings-Snapshot über zeitlich begrenzte Links und braucht keinen Zugang ins
+  Heimnetz.
+
+## 7. Nichtfunktionale Anforderungen
+
+| Bereich | Anforderung |
+|---|---|
+| Speicher | Wetter als GRIB2/Zarr im Objektspeicher, nicht zeilenweise in der DB (Größenordnung 15 GB je Jahr statt Milliarden Zeilen, A 5.4) |
+| Betrieb | VM mit 6–8 vCPU, 24–32 GB RAM, 500 GB Daten (A 8.1); alle Dienste in Compose, Konfiguration über `.env` (Präfix `PDB_`) |
+| Robustheit | Jeder Dienst ist wiederanlauffähig und idempotent; Zustand liegt in der DB bzw. in Manifesten |
+| Beobachtbarkeit | strukturierte JSON-Logs (`structlog`), später Prometheus-Metriken und Grafana-Alarme |
+| Inferenz | Sekunden je Lauf; Training im Betrieb unkritisch, in der Entwicklung möglichst unter 1 h |
+| Portabilität | nur S3-API, Postgres-Protokoll und 12-Factor-Konfiguration, damit der Umzug in die Cloud reine Konfiguration ist |
+| Lizenzen | Quellenvermerke in `meta.source.license`, in API-Antworten und Dashboards |
+| Datenschutz | Standort und Messwerte eigener Anlagen sind personenbezogen, werden nicht mit dem MaStR verknüpft und lassen sich vollständig löschen |
+
+## 8. Konfiguration
+
+Wichtige Variablen (vollständig in `.env.example` und den READMEs der Dienste):
+
+| Variable | Zweck |
+|---|---|
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `PDB_DATABASE_URL` | Datenbank |
+| `GARAGE_RPC_SECRET`, `GARAGE_ADMIN_TOKEN`, `PDB_GARAGE_CAPACITY` | Garage |
+| `PDB_S3_ENDPOINT_URL`, `PDB_S3_REGION`, `PDB_S3_ACCESS_KEY_ID`, `PDB_S3_SECRET_ACCESS_KEY` | S3-Zugang der Dienste |
+| `PDB_ENTSOE_TOKEN`, `PDB_ENERGY_SOURCES`, `PDB_ENERGY_BACKFILL_FROM` | Energiedaten |
+| `PDB_MASTR_CONFIG`, `PDB_MASTR_WORK_DIR` | MaStR-Import |
+| `WX_GFS_CONFIG` | GFS-Quelldefinition |
+| `PDB_LOG_LEVEL`, `PDB_LOG_JSON` | Logging |
+
+## 9. Umsetzungsstand
+
+| Phase (A 11) | Inhalt | Stand |
+|---|---|---|
+| 0 – Spike | Bibliotheken, Mengengerüst | entschieden: eigenes `gribkit` statt Herbie; Mengengerüst noch an echten Läufen messen |
+| 1 – Fundament | uv-Workspace, Compose mit TimescaleDB und Garage, Alembic, `core`, CI (Lint, Typen, Tests, Image) | erledigt |
+| 2 – GFS-Ingest | `wx-ingest` mit NOMADS, AWS, Google; Backfill | erledigt, Backfill der Historie offen |
+| 3 – Energiedaten | `energy-ingest`, `mastr-ingest` | erledigt |
+| 4 – Processing | `wx-process`: Silber-Zarr, Cluster-Features | offen |
+| 4b – Anlagenprognose | API für eigene PV-, Wind- und Wasserkraftanlagen | offen |
+| 5 – Baseline-ML | LightGBM, Evaluierung, MLflow | offen |
+| 6 – NN | Sequenzmodelle, Quantile, Inferenzdienst, Grafana | offen |
+| 7 – Weitere Quellen | ECMWF, ICON, GEFS, GEM, Pegel | offen |
+| 8 – API & Härtung | FastAPI, Auth, Alarme, Backups, Cloud-Probelauf | offen |
+
+Offene Entscheidungen stehen in A 12.
