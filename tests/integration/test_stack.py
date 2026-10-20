@@ -33,7 +33,9 @@ def test_schema_and_hypertables() -> None:
             ).scalars()
         )
     assert version
-    assert {"feat.nwp_value", "energy.value", "fcst.prediction"} <= hypertables
+    assert {"feat.nwp_value", "energy.value", "fcst.prediction", "assets.capacity_daily"} <= (
+        hypertables
+    )
 
 
 def test_buckets_read_write() -> None:

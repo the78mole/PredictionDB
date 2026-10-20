@@ -70,6 +70,15 @@ services:
     depends_on:
       garage-init: {condition: service_completed_successfully}
 
+  # MaStR-Gesamtdatenexport einmal je Quartal: Import, Gebietscluster, Tagesbestand
+  # (services/mastr_ingest). Prüft alle 6 h, ob im laufenden Quartal schon ein Snapshot liegt.
+  mastr-snapshot:
+    <<: *app
+    command: ["mastr-ingest", "snapshot", "--if-due", "--watch", "21600"]
+    depends_on:
+      garage-init: {condition: service_completed_successfully}
+      migrate: {condition: service_completed_successfully}
+
   # Weitere Dienste (energy-ingest, wx-process, ml-*, api, mlflow, grafana)
   # kommen mit ihren Paketen dazu und hängen von migrate und garage-init ab.
 

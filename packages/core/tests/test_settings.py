@@ -11,7 +11,13 @@ def test_defaults_without_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
         monkeypatch.delenv(var, raising=False)
     s = Settings()
     assert s.database_url.startswith("postgresql+psycopg://")
-    assert s.buckets.all() == ["wx-bronze", "wx-silver", "ml-artifacts", "backups"]
+    assert s.buckets.all() == [
+        "wx-bronze",
+        "wx-silver",
+        "ml-artifacts",
+        "backups",
+        "assets-bronze",
+    ]
 
 
 def test_env_overrides(monkeypatch: pytest.MonkeyPatch) -> None:

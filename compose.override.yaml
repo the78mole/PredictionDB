@@ -12,3 +12,4 @@ services:
   garage-init: *build
   migrate: *build
   ingest-gfs: *build
+  mastr-snapshot: *build

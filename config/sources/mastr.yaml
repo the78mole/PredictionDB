@@ -1,0 +1,38 @@
+# Marktstammdatenregister (MaStR), Gesamtdatenexport – siehe docs/ARCHITEKTUR.md Kap. 7.5.
+# Lizenz der Daten: Datenlizenz Deutschland – Namensnennung – Version 2.0 (DL-DE BY 2.0).
+code: mastr
+license: DL-DE BY 2.0
+page_url: https://www.marktstammdatenregister.de/MaStR/Datendownload
+# {date} = JJJJMMTT, {version} = MaStR-Release (z. B. 26.2). Der Export eines Tages liegt nur
+# an diesem Tag vor und entsteht nachts gegen 02–04 Uhr.
+download_url: https://download.marktstammdatenregister.de/Gesamtdatenexport_{date}_{version}.zip
+
+# Ein Snapshot je Quartal; `snapshot --if-due` lädt nur, wenn im laufenden Quartal noch keiner liegt.
+# Unit-Zeilen älterer Snapshots werden nach dem Import gelöscht (das ZIP bleibt in assets-bronze).
+keep_snapshots: 4
+
+# Bestand je Tag ab diesem Datum (davor in Betrieb genommene Anlagen zählen ab hier mit).
+history_start: 2015-01-01
+
+# Gitter, auf dem geclustert wird (Grad, Punkte auf Vielfachen der Auflösung wie bei GFS 0,25°).
+cluster_grid: {name: 0p25, res: 0.25}
+# Gitter, für die Leistungsgewichte je Zelle geschrieben werden (assets.grid_weight).
+weight_grids:
+  - {name: gfs_0p25, res: 0.25}
+# Ältere Clusterung wird nach so vielen Tagen durch eine neue Version ersetzt, sonst werden
+# neue Anlagen dem nächstgelegenen bestehenden Cluster zugeordnet.
+recluster_after_days: 365
+
+# Clusterzahl je Technologie (Startwerte, über die Prognosegüte zu wählen).
+technologies:
+  wind_on: {clusters: 25}
+  wind_off: {clusters: 4}
+  pv_ground: {clusters: 20}
+  pv_roof: {clusters: 25}
+  biomass: {clusters: 8}
+  hydro: {clusters: 8}
+
+# Ersatzpunkte für Offshore-Anlagen ohne Koordinaten (nach Seelage).
+sea_areas:
+  Nordsee: {lat: 54.3, lon: 6.6}
+  Ostsee: {lat: 54.8, lon: 13.5}
