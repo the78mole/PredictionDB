@@ -8,4 +8,4 @@
 
 ## Beitragsbedingungen
 
-- [ ] Ich habe die [Beitragsbedingungen](../blob/main/CONTRIBUTING.md) gelesen und akzeptiere sie. Alle Commits tragen eine `Signed-off-by`-Zeile (`git commit -s`).
+- [ ] Ich habe die [Beitragsbedingungen](https://github.com/the78mole/PredictionDB/blob/main/CONTRIBUTING.md) gelesen und akzeptiere sie. Alle Commits tragen eine `Signed-off-by`-Zeile (`git commit -s`).
