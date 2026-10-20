@@ -4,6 +4,8 @@
 **Status:** Entwurf  
 **Letzte Änderung:** 2026-07-21
 
+> **Hinweis (2026-10-20):** Die Architektur wird in [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md) weiterentwickelt (Ziel: Strombedarfs- und Strompreisprognose für Deutschland). Wo sich beide Dokumente widersprechen, gilt ARCHITEKTUR.md, insbesondere bei Datenbank (PostgreSQL + TimescaleDB statt MariaDB), Ablage von Gitterdaten (Garage-S3 als GRIB2/Zarr statt Zeilen je Gitterpunkt) und Scheduling (APScheduler statt Celery). Plugin-Konzept, PDID-Register und Vorlauf-Semantik bleiben erhalten.
+
 ---
 
 ## 1. Projektübersicht
@@ -15,7 +17,7 @@ PredictionDB ist eine lokale Datenbank-Lösung zur Sammlung, Speicherung und Ver
 - **Zentrale Speicherung** aller Wetterdaten an einem Ort
 - **Automatisierte Datenerfassung** aus mehreren externen Quellen
 - **Historische Analyse** von Wetterdaten über Zeiträume
-- **Schnittstelle** für das beECO Prediction-System
+- **Schnittstelle** für ein Prognosesystem
 - **Offline-fähig** — vollständig lokal auf dem eigenen Server
 
 ### 1.2 Architektur-Überblick
