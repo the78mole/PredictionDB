@@ -1013,6 +1013,18 @@ CREATE TABLE fcst.plant_forecast (                -- Hypertable, komprimiert
 - **Laufende Nachführung** bevorzugt als leichte Schicht statt im ganzen Netz: ein kleiner Korrekturterm (Bias je Horizont und Tageszeit) oder ein Online-Lerner auf dem Restfehler, der täglich nachgeführt wird. Das Netz selbst bleibt dabei stabil und reproduzierbar. LightGBM lässt sich ebenfalls fortsetzen (`init_model`), bekommt aber in der Praxis meist ein günstiges Neutraining.
 - **Neutraining ist nötig,** wenn sich die Eingänge ändern: neue Clusterversion aus dem MaStR (7.5), neue oder entfallene Features, eine neue Wetterquelle, geänderte Zielauflösung (z. B. 15 min) oder eine geänderte Architektur. Ein Neutraining ist auch nötig, wenn der Fehler trotz Fine-Tuning dauerhaft steigt, etwa bei einem Strukturbruch im Markt.
 - **Champion/Challenger:** Jedes nachtrainierte oder neue Modell (Challenger) läuft zunächst im Schatten mit und wird auf demselben Validierungszeitraum gegen das Produktionsmodell (Champion) verglichen. Verglichen werden Pinball-Loss je Horizont und getrennt nach Lagen. Nur wenn der Challenger insgesamt besser ist und in keiner wichtigen Lage deutlich schlechter, wird er in MLflow zu `production`. Der Champion bleibt als Rückfall registriert.
+- **Mehrere Modelle parallel:** `ml-predict` inferiert nicht nur den Champion, sondern eine feste Gruppe aktiver Versionen nebeneinander, typischerweise den Champion, ein bis zwei Challenger, den Vorgänger-Champion und die LightGBM-Baseline. Die Prognosen aller Versionen landen in `fcst.prediction` (Schlüssel enthält `model_version`). Der Mehraufwand ist gering, weil die Inferenz nur Sekunden dauert.
+  - **Abweichung als Signal:** Je Ausgabezeitpunkt und Horizont wird die Streuung zwischen den Versionen berechnet (Spannweite bzw. Standardabweichung der P50-Werte) und in `fcst.model_spread` gespeichert. Eine große Abweichung zeigt eine Lage, die die Modelle unterschiedlich gelernt haben, oder ein Problem mit einem Modell oder seinen Eingängen. Sie geht als zusätzliches Unsicherheitsmaß in die API-Antwort ein und löst in Grafana einen Alarm aus, wenn sie über einer Schwelle liegt (z. B. mehr als das Doppelte des üblichen Spreads für diesen Horizont).
+  - **Auswertung:** Mit dem Ist-Wert zeigt die Tabelle für jede Version, wie gut sie in welcher Lage war. Das ist die Grundlage für den Champion/Challenger-Vergleich und für eine spätere gewichtete Kombination der Versionen (Ensemble), falls die besser abschneidet als der Champion allein.
+  - **Aufbewahrung:** Aktiv inferiert werden höchstens etwa fünf Versionen. Alle Versionen bleiben in der MLflow-Registry, die Gewichte ausgedienter Versionen in `ml-artifacts` bleiben mindestens ein Jahr erhalten bzw. dauerhaft für jeden früheren Champion. Ihre gespeicherten Prognosen bleiben dauerhaft in der Datenbank, komprimiert über TimescaleDB, damit sich Vergleiche jederzeit nachvollziehen lassen.
+
+```sql
+CREATE TABLE fcst.model_spread (                  -- Hypertable
+  target text, issue_time timestamptz, valid_time timestamptz,
+  n_models smallint, p50_min real, p50_max real, p50_std real,
+  PRIMARY KEY (target, issue_time, valid_time)
+);
+```
 
 Für den **Produktivbetrieb** ist die Trainingszeit deshalb unkritisch: Das bisherige Modell bleibt brauchbar und verliert nur langsam an Genauigkeit, bis ein Nachfolger fertig und geprüft ist. Kurze Laufzeiten zählen vor allem in der **Entwicklung**, damit sich Ideen schnell testen lassen. Dafür sind die lokale GPU bzw. Miet-GPUs gedacht, und dafür gibt es einen kleinen Entwicklungs-Datensatz (z. B. ein Jahr, reduzierte Cluster), der in Minuten durchläuft.
 
