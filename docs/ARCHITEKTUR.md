@@ -216,6 +216,7 @@ Für das **Training** wird Historie benötigt. Archiv-Optionen:
 | Installierte Leistung je Standort | Marktstammdatenregister (MaStR), Gesamtdatenexport | offen | Stichtag | DL-DE BY 2.0 |
 | Kraftwerksnichtverfügbarkeiten | ENTSO-E (Unavailability) | Token | Ereignis | – |
 | Pegel: Wasserstand und Abfluss | PEGELONLINE (WSV, Bundeswasserstraßen); Landesportale (z. B. GKD Bayern, HVZ Baden-Württemberg, Hochwasserportale der Länder) | offen (REST bzw. Download), Landesportale teils nur Webseiten | 15 min | PEGELONLINE DL-DE Zero 2.0; Landesportale je Portal prüfen |
+| Niederschlag beobachtet (Radar) | DWD RADOLAN (z. B. RW stündlich, 1 km) auf opendata.dwd.de | offen | 5 min / 1 h | DWD-Nutzungsbedingungen (frei, Quellenangabe) |
 | Abflussprognosen | GloFAS (Copernicus CEMS) über das Early Warning Data Store; Vorhersagen der Landes-Hochwasserzentralen | GloFAS: kostenlose Registrierung | täglich, bis 30 Tage | Copernicus-Lizenz |
 | Speicherfüllstände Wasserkraft (Nachbarländer) | ENTSO-E „Water reservoirs and hydro storage plants“ | Token | Woche | – |
 | Feiertage, Schulferien | Python `holidays`; Ferien-API bzw. statische Tabellen | offen | Tag | – |
@@ -320,6 +321,7 @@ stateDiagram-v2
 | Bewölkung | `TCDC:entire atmosphere` | `tcc` | `clct` |
 | Niederschlag / Schnee | `APCP`, `CSNOW` | `tp`, `sf` | `tot_prec` |
 | Schneedecke (Wasseräquivalent, Wasserkraft 7.6) | `WEASD:surface`, `SNOD:surface` | `sd` | `w_snow`, `h_snow` |
+| Bodenfeuchte (Wasserkraft 7.6) | `SOILW:0-0.1 m below ground` (und tiefere Schichten) | `swvl1`–`swvl4` | `w_so` |
 | Bodendruck | `PRMSL:mean sea level` | `msl` | `pmsl` |
 | Druck am Boden (Luftdichte für Wind, 7.6) | `PRES:surface` | `sp` | `ps` |
 
@@ -829,7 +831,7 @@ CREATE TABLE assets.capacity_daily (             -- rekonstruierte installierte 
 );
 ```
 
-- **Wasserkraft im Systemmodell:** MaStR führt Wasserkraftanlagen mit Art (Laufwasser, Speicher, Pumpspeicher), Leistung und meist Koordinaten. Laufwasser wird nicht per k-Means geclustert, sondern nach **Flussgebieten** (z. B. Inn, Isar, Lech, Iller, Donau, Hochrhein, Main, Mosel, sonstige), weil Anlagen am selben Fluss denselben Abfluss sehen. Je Cluster gehen ein: Abfluss an zwei bis drei Leitpegeln (PEGELONLINE bzw. Landesportale, Ist-Werte), GloFAS-Abflussprognose, gebietsgemittelter Niederschlag und Schneeschmelze aus den Wettermodellen. Zielgröße für das Lernen ist die ENTSO-E-Erzeugung „Hydro Run-of-river and poundage“ für DE. Pumpspeicher und Speicher werden nicht aus dem Wetter prognostiziert. Die Füllstände der Speicher in den Nachbarländern (ENTSO-E „Water reservoirs and hydro storage plants“, wöchentlich, vor allem CH, AT, FR, NO) gehen als Preis-Feature ein, weil sie das Angebot an flexibler Wasserkraft bestimmen.
+- **Wasserkraft im Systemmodell:** MaStR führt Wasserkraftanlagen mit Art (Laufwasser, Speicher, Pumpspeicher), Leistung und meist Koordinaten. Laufwasser wird nicht per k-Means geclustert, sondern nach **Flussgebieten** (z. B. Inn, Isar, Lech, Iller, Donau, Hochrhein, Main, Mosel, sonstige), weil Anlagen am selben Fluss denselben Abfluss sehen. Je Cluster gehen ein, jeweils mit den Nachlauf- und Gedächtnis-Features aus 7.6: Abfluss an zwei bis drei Leitpegeln (PEGELONLINE bzw. Landesportale, Ist-Werte), GloFAS-Abflussprognose, gebietsgemittelter Niederschlag und Schneeschmelze aus den Wettermodellen. Zielgröße für das Lernen ist die ENTSO-E-Erzeugung „Hydro Run-of-river and poundage“ für DE. Pumpspeicher und Speicher werden nicht aus dem Wetter prognostiziert. Die Füllstände der Speicher in den Nachbarländern (ENTSO-E „Water reservoirs and hydro storage plants“, wöchentlich, vor allem CH, AT, FR, NO) gehen als Preis-Feature ein, weil sie das Angebot an flexibler Wasserkraft bestimmen.
 
 **Wirkung im Netz:** Die Cluster-Leistungsindizes sind die wichtigsten Eingänge der Stufe 1 (Wind- und PV-Einspeisung) aus 7.3; deren Summe ergibt mit der Lastprognose die Residuallast für die Preis-Stufe. Die installierte Leistung je Cluster geht zusätzlich als Feature ein, damit das Netz den Zubau lernt.
 
@@ -928,6 +930,21 @@ Viele Genehmigungen schreiben Abschaltungen zum Artenschutz vor. Diese Zeiten fe
   3. **Persistenz**: Ohne Pegel und ohne Historie wird der letzte bekannte Wert fortgeschrieben, mit Rezessionskurve (Trockenwetterabfall). Mit Niederschlag wird angehoben.
   
   Weil Abfluss träge ist, ist der jüngste Mess- oder Erzeugungswert für die ersten Tage der beste Prädiktor. Laufende Messwerte (Push oder Pegel) verbessern die Wasserkraftprognose daher stärker als bei PV und Wind. Die 384 h von GFS liefern vor allem den Trend (Regenphasen, Schneeschmelze).
+  **Nachlauf und Gedächtnis:** Bei Wasserkraft wirkt Wetter oft erst mit erheblicher Verzögerung auf den Ertrag. Die Prognose muss deshalb den Zustand des Einzugsgebiets aus der Vergangenheit mitführen und darf nicht erst beim Prognosestart beginnen.
+
+  | Prozess | typischer Nachlauf | Folge für die Prognose |
+  |---|---|---|
+  | Oberflächenabfluss im kleinen, steilen Gebiet | Stunden | Niederschlag der nächsten Stunden bis Tage zählt |
+  | Hochwasserwelle in mittleren Flüssen | 1–5 Tage | Regen von gestern bestimmt den Ertrag von morgen |
+  | Zwischenabfluss, Bodenspeicher | Tage bis Wochen | Bodenfeuchte und kumulierter Niederschlag als Zustand |
+  | Grundwasser, Basisabfluss | Wochen bis Monate | bestimmt den Ertrag in Trockenphasen, langsame Rezession |
+  | Schneedecke | Wochen bis Monate | Winterniederschlag wird erst bei Schmelze (Frühjahr, im Hochgebirge Sommer) wirksam |
+
+  - **Laufzeit je Einzugsgebiet:** Startwert aus Fläche und Gefälle (Konzentrationszeit), dann aus der Historie geschätzt (Kreuzkorrelation Niederschlag → Abfluss bzw. Erzeugung). Bei Flussgebiets-Clustern (7.5) kommt die Fließzeit zwischen Oberlieger-Pegel und Anlage hinzu; dort ist der Pegel weiter oben selbst der beste Prädiktor.
+  - **Zustand mitführen:** Das Niederschlag-Abfluss-Modell läuft durchgehend auf beobachteten Werten (DWD RADOLAN-Radarniederschlag bzw. die Analysen der Wettermodelle, Temperatur aus DWD CDC). Bei jedem Lauf startet die Prognose aus diesem Zustand: Schneespeicher, Bodenfeuchte, Grundwasser. Vor dem ersten Einsatz braucht das Modell eine Einlaufzeit von mindestens einem Jahr Wetterhistorie, besser mehreren. Das gilt auch dann, wenn keine Erzeugungshistorie vorliegt.
+  - **Gedächtnis-Features** für das Korrekturmodell und das Systemmodell: kumulierter Niederschlag über 1, 3, 7, 14, 30 und 90 Tage (gebietsgemittelt), Schneewasseräquivalent (`WEASD` bzw. `sd`) und positive Gradtage seit Winterbeginn, Bodenfeuchte aus den Modellen (GFS `SOILW`, ECMWF `swvl1`–`swvl4`), aktueller Abfluss bzw. Erzeugung samt Trend und Rezessionskonstante.
+  - **Reichweite:** Wegen des Nachlaufs steckt ein großer Teil der Erträge der nächsten Tage schon im System. Die Prognose ist dort auch bei unsicherem Wetter gut. Die 384 h von GFS decken den Niederschlag der nächsten 16 Tage ab, der sich teils erst danach auswirkt; Prognosen über drei bis vier Wochen sind deshalb in Teilen möglich. Darüber hinaus bleiben Schneevorrat gegen Klimatologie und optional Saisonprognosen (ECMWF SEAS5 über den Copernicus CDS, kostenlos mit Registrierung). Die Ausgabe kennzeichnet ab dem Ende der Wetterprognose, dass klimatologisch weitergerechnet wird.
+  - **Historie:** Mit Erzeugungsdaten über ein Jahr lassen sich Laufzeit und Speicherparameter schätzen. Zwei bis drei Jahre sind deutlich besser, weil Schneejahre und Trockenjahre stark schwanken.
 - **Unsicherheit:** Quantile aus der Streuung der Modelle (GFS, ECMWF, ICON) und den GEFS- bzw. ECMWF-Ensemble-Mitgliedern, solange keine Kalibrierung vorliegt.
 
 **Kalibrierung mit historischen Daten:**
