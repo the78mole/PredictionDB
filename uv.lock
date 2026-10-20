@@ -8,6 +8,7 @@ resolution-markers = [
 
 [manifest]
 members = [
+    "energy-ingest",
     "gribkit",
     "mastr-ingest",
     "predictiondb",
@@ -293,6 +294,31 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/8a/3a/f78785a4daf64c68a248f98b85ef9fab49ac1eb78fd2644a38c21661df3b/eckitlib-2.5.0.33-cp314-cp314-macosx_15_0_x86_64.whl", hash = "sha256:00afc20a7f40dc630bec76d312420f48de4e1f9b6dae3144b5ff9fa27344b4e2", size = 6703324, upload-time = "2026-10-16T19:09:13.086Z" },
     { url = "https://files.pythonhosted.org/packages/5e/2f/3469b7446a3a828555cad382c185b967cdf391e24aef5fb1a34b99bf819e/eckitlib-2.5.0.33-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:694a8462acf29f25a04a1a0c1f64edbc32d668e1b230bf1887a0cd1fe6de7455", size = 35185035, upload-time = "2026-10-16T18:51:45.663Z" },
     { url = "https://files.pythonhosted.org/packages/26/b0/5e38c37e5e17f3643cd831b0f04bf1acbb0d8c11391fc4c2184abee150ec/eckitlib-2.5.0.33-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:15d61e597e7dc54bbd4bd4d6df001b9c212a8f19f9f7e1b9952db0fe3b7939e0", size = 35976871, upload-time = "2026-10-16T18:52:27.565Z" },
+]
+
+[[package]]
+name = "energy-ingest"
+version = "0.1.0"
+source = { editable = "services/energy_ingest" }
+dependencies = [
+    { name = "httpx" },
+    { name = "predictiondb-core" },
+    { name = "psycopg", extra = ["binary"] },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "sqlalchemy" },
+    { name = "tenacity" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "predictiondb-core", editable = "packages/core" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
+    { name = "pydantic", specifier = ">=2.7" },
+    { name = "pydantic-settings", specifier = ">=2.7" },
+    { name = "sqlalchemy", specifier = ">=2.0" },
+    { name = "tenacity", specifier = ">=8.5" },
 ]
 
 [[package]]
