@@ -15,9 +15,11 @@ class Buckets(BaseSettings):
     silver: str = "wx-silver"
     ml_artifacts: str = "ml-artifacts"
     backups: str = "backups"
+    #: Original-Exporte statischer Quellen (MaStR-Gesamtdatenexport)
+    assets_bronze: str = "assets-bronze"
 
     def all(self) -> list[str]:
-        return [self.bronze, self.silver, self.ml_artifacts, self.backups]
+        return [self.bronze, self.silver, self.ml_artifacts, self.backups, self.assets_bronze]
 
 
 class Settings(BaseSettings):

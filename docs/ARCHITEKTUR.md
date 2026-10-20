@@ -766,14 +766,14 @@ Ziel: Wetterprognosen dort auswerten, wo die Wind-, PV- und anderen EE-Anlagen t
 ```mermaid
 flowchart TB
     Z["MaStR-Gesamtexport<br/>quartalsweise"] --> B[("assets-bronze<br/>Original-ZIP")]
-    B --> P["Parsen<br/>open-mastr / lxml"]
+    B --> P["Parsen<br/>lxml.iterparse"]
     P --> U[("assets.unit<br/>je Snapshot")]
     U --> GEO["Verorten<br/>Koordinaten oder<br/>Gemeinde-Schwerpunkt"]
     GEO --> CL["Clustern je Technologie<br/>leistungsgewichtetes k-Means"]
     U --> HIST["Bestand je Tag<br/>aus Inbetriebnahme/Stilllegung"]
     CL --> CAPD[("assets.capacity_daily")]
     HIST --> CAPD
-    CL --> GW[("Gitter-Gewichte je Cluster<br/>und Wettermodell<br/>assets-silver")]
+    CL --> GW[("Gitter-Gewichte je Cluster<br/>und Wettermodell<br/>assets.grid_weight")]
     SIL[("Silber: Wetter-Zarr<br/>je Lauf")] --> MUL["Gewichte × Prognose"]
     GW --> MUL
     MUL --> F[("feat.nwp_value<br/>Leistungsindex je Cluster")]
@@ -784,8 +784,8 @@ flowchart TB
 **Abruf (quartalsweise):**
 
 - Quelle: MaStR-Gesamtdatenexport (<https://www.marktstammdatenregister.de/MaStR/Datendownload>), ZIP mit XML-Dateien je Einheitentyp (mehrere GB entpackt), Lizenz DL-DE BY 2.0.
-- Job `mastr-snapshot` im Container `energy-ingest`, Cron am ersten Tag jedes Quartals (manuell auslösbar). Das Original-ZIP landet in Garage `assets-bronze/mastr/YYYY-MM-DD/` und bleibt erhalten, damit Auswertungen reproduzierbar sind.
-- Parsing mit dem Python-Paket `open-mastr` (OpenEnergyPlatform, lädt den Gesamtexport und schreibt ihn in eine relationale DB) oder eigenem Streaming-XML-Parser (`lxml.iterparse`), falls `open-mastr` zu schwergewichtig ist. Entscheidung im Spike (Phase 0).
+- Dienst `mastr-snapshot` (Paket `services/mastr_ingest`, CLI `mastr-ingest`), prüft alle 6 h, ob im laufenden Quartal schon ein Snapshot liegt, und lädt sonst den Export des Tages (manuell auslösbar). Das Original-ZIP landet in Garage `assets-bronze/mastr/YYYY-MM-DD/` und bleibt erhalten, damit Auswertungen reproduzierbar sind.
+- Parsing mit eigenem Streaming-XML-Parser (`lxml.iterparse`, UTF-16), weil `open-mastr` alle Tabellen über pandas in eine eigene DB schreibt und unter AGPL steht. Aufzählungen werden über `Katalogwerte.xml` als Text ausgewertet, damit neue Releases mit verschobenen Ids nichts brechen.
 - Relevante Felder je Einheit: Energieträger, Bruttoleistung/Nettonennleistung, Inbetriebnahme- und Stilllegungsdatum, Betriebsstatus, Koordinaten bzw. PLZ/Gemeinde, bei Wind Nabenhöhe, Rotordurchmesser, Hersteller/Typ, on-/offshore, bei PV Hauptausrichtung, Neigung, Freifläche/Dach, Einspeiseart (Voll-/Überschusseinspeisung, Eigenverbrauch).
 
 **Verortung:**
@@ -807,7 +807,7 @@ flowchart TB
 **Kombination mit der Wetterprognose:**
 
 - Für jedes Cluster eine Gewichtsmatrix „Leistung je Gitterzelle“ pro Wettermodellgitter (GFS 0,25°, ECMWF 0,25°, ICON-EU 0,0625°). `wx-process` multipliziert jede Prognose mit dieser Matrix und schreibt je Cluster, Lauf und Gültigkeitszeit Kennzahlen nach `feat.nwp_value` (Leistungsindex in MW, mittlere Windgeschwindigkeit bzw. Einstrahlung).
-- Region-Codes in `meta.region` erhalten dafür die Form `wind_on:v2025Q4:c07`; Gitter-Gewichte liegen als kleine Zarr-Arrays in Garage `assets-silver/`.
+- Region-Codes in `meta.region` erhalten dafür die Form `wind_on:v2025Q4:c07`; Gitter-Gewichte liegen in der Tabelle `assets.grid_weight` (je Gitter, Cluster und Zelle Leistung und Anteil; wenige tausend Zeilen), daraus baut `wx-process` die dichte Matrix.
 
 **Ergänzende Tabellen:**
 
@@ -832,6 +832,8 @@ CREATE TABLE assets.capacity_daily (             -- rekonstruierte installierte 
 ```
 
 - **Wasserkraft im Systemmodell:** MaStR führt Wasserkraftanlagen mit Art (Laufwasser, Speicher, Pumpspeicher), Leistung und meist Koordinaten. Laufwasser wird nicht per k-Means geclustert, sondern nach **Flussgebieten** (z. B. Inn, Isar, Lech, Iller, Donau, Hochrhein, Main, Mosel, sonstige), weil Anlagen am selben Fluss denselben Abfluss sehen. Je Cluster gehen ein, jeweils mit den Nachlauf- und Gedächtnis-Features aus 7.6: Abfluss an zwei bis drei Leitpegeln (PEGELONLINE bzw. Landesportale, Ist-Werte), GloFAS-Abflussprognose, gebietsgemittelter Niederschlag und Schneeschmelze aus den Wettermodellen. Zielgröße für das Lernen ist die ENTSO-E-Erzeugung „Hydro Run-of-river and poundage“ für DE. Pumpspeicher und Speicher werden nicht aus dem Wetter prognostiziert. Die Füllstände der Speicher in den Nachbarländern (ENTSO-E „Water reservoirs and hydro storage plants“, wöchentlich, vor allem CH, AT, FR, NO) gehen als Preis-Feature ein, weil sie das Angebot an flexibler Wasserkraft bestimmen.
+
+Umgesetzt in Revision `0002_assets` mit einigen Ergänzungen: `assets.clustering` (Version, Snapshot, Gitter), `assets.cluster_cell` (Zelle → Cluster), `assets.grid_weight` und `assets.gemeinde` (optionale Referenzpunkte, z. B. aus VG250). Geclustert wird auf den Zellen des GFS-0,25°-Gitters (summierte Leistung je Zelle), sodass jede Zelle genau einem Cluster gehört. Ohne Koordinaten wird eine Einheit über Gemeinde, PLZ, Kreis und Bundesland verortet (Mittel der Einheiten mit Koordinaten bzw. Referenzpunkt); `geo_precision` hält die Stufe fest. Wasserkraft wird vorerst wie die übrigen Technologien per k-Means geclustert; die Gruppierung nach Flussgebieten (oben) ersetzt das später. Details: `services/mastr_ingest/README.md`.
 
 **Wirkung im Netz:** Die Cluster-Leistungsindizes sind die wichtigsten Eingänge der Stufe 1 (Wind- und PV-Einspeisung) aus 7.3; deren Summe ergibt mit der Lastprognose die Residuallast für die Preis-Stufe. Die installierte Leistung je Cluster geht zusätzlich als Feature ein, damit das Netz den Zubau lernt.
 

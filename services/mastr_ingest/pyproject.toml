@@ -1,0 +1,32 @@
+[project]
+name = "mastr-ingest"
+version = "0.1.0"
+description = "Quartalsweiser Import des Marktstammdatenregisters, Bestandsrekonstruktion und Gebietscluster je Technologie"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "LicenseRef-BUSL-1.1"
+dependencies = [
+    "predictiondb-core",
+    "httpx>=0.28",
+    "lxml>=5.3",
+    "numpy>=2.1",
+    "obstore>=0.6",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "pyyaml>=6",
+    "sqlalchemy>=2.0",
+    "tenacity>=8.5",
+]
+
+[project.scripts]
+mastr-ingest = "mastr_ingest.cli:main"
+
+[tool.uv.sources]
+predictiondb-core = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mastr_ingest"]

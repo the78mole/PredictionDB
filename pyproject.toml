@@ -35,7 +35,7 @@ extend-exclude = ["*.md"]
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "DTZ"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["predictiondb_core", "gribkit", "wx_ingest", "energy_ingest"]
+known-first-party = ["predictiondb_core", "gribkit", "wx_ingest", "energy_ingest", "mastr_ingest"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -46,13 +46,14 @@ mypy_path = [
     "packages/gribkit/src",
     "services/wx_ingest/src",
     "services/energy_ingest/src",
+    "services/mastr_ingest/src",
 ]
 explicit_package_bases = true
 files = ["."]
 exclude = ["^\\.venv/", "^build/"]
 
 [[tool.mypy.overrides]]
-module = ["obstore.*", "eccodes.*", "gribapi.*"]
+module = ["obstore.*", "eccodes.*", "gribapi.*", "lxml.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

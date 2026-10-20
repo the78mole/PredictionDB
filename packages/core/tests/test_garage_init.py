@@ -81,8 +81,14 @@ def test_init_creates_layout_key_and_buckets() -> None:
     assert fake.layout_version == 1
     assert fake.staged[0]["capacity"] == 10 * 10**9
     assert fake.keys == {KEY_ID}
-    assert set(fake.buckets) == {"wx-bronze", "wx-silver", "ml-artifacts", "backups"}
-    assert len(fake.grants) == 4
+    assert set(fake.buckets) == {
+        "wx-bronze",
+        "wx-silver",
+        "ml-artifacts",
+        "backups",
+        "assets-bronze",
+    }
+    assert len(fake.grants) == 5
 
 
 def test_init_is_idempotent() -> None:
