@@ -16,12 +16,13 @@ permissions:
 jobs:
   lint:
     name: Lint und Typen
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.0
         with:
           enable-cache: true
+          save-cache: false  # nur der Job test speichert den gemeinsamen Cache
       - run: uv sync --locked --all-packages
       - run: uv run ruff check .
       - run: uv run ruff format --check .
@@ -29,7 +30,7 @@ jobs:
 
   test:
     name: Unit-Tests
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.0
@@ -40,12 +41,13 @@ jobs:
 
   stack:
     name: Image und Compose-Stack
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.0
         with:
           enable-cache: true
+          save-cache: false
       - name: .env mit Wegwerf-Geheimnissen
         run: |
           cp .env.example .env
