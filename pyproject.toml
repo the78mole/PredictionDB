@@ -14,6 +14,7 @@ dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
     "ruff>=0.8",
+    "types-PyYAML",
 ]
 
 [tool.uv]
@@ -34,19 +35,19 @@ extend-exclude = ["*.md"]
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "DTZ"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["predictiondb_core"]
+known-first-party = ["predictiondb_core", "gribkit", "wx_ingest"]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
-mypy_path = ["packages/core/src"]
+mypy_path = ["packages/core/src", "packages/gribkit/src", "services/wx_ingest/src"]
 explicit_package_bases = true
 files = ["."]
 exclude = ["^\\.venv/", "^build/"]
 
 [[tool.mypy.overrides]]
-module = ["obstore.*"]
+module = ["obstore.*", "eccodes.*", "gribapi.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
