@@ -37,6 +37,11 @@ PDB_INTEGRATION=1 uv run pytest tests/integration  # gegen den laufenden Stack
 
 Neue Datenbankänderungen kommen als neue Alembic-Revision (`uv run alembic revision -m "..."`).
 
+## Beiträge
+
+Beiträge setzen die Annahme der [Beitragsbedingungen](CONTRIBUTING.md) voraus,
+insbesondere die Einräumung von Nutzungsrechten an den Projektinhaber.
+
 ## Lizenz
 
 Business Source License 1.1, siehe [LICENSE](LICENSE).
