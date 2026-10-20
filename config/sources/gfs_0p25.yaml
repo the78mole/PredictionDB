@@ -1,0 +1,51 @@
+# NOAA GFS 0,25°, 384-h-Läufe – siehe docs/ARCHITEKTUR.md Kap. 3.1, 4 und 6.3.
+code: gfs_0p25
+model: gfs
+resolution: 0p25
+product: pgrb2.0p25
+runs: [0, 6, 12, 18]
+# 0–120 h stündlich (121 Schritte), 123–384 h dreistündlich (88 Schritte)
+steps:
+  - [0, 120, 1]
+  - [123, 384, 3]
+# DE plus Nachbarn: 57 × 81 = 4 617 Gitterpunkte
+bbox: {north: 58, south: 44, west: 0, east: 20}
+lookback_hours: 30
+step_concurrency: 4
+
+# Reihenfolge = Priorität. NOMADS schneidet serverseitig zu (kleinste Übertragung),
+# drosselt aber; AWS/Google halten das Archiv für Backfill vor.
+endpoints:
+  - name: nomads
+    kind: nomads_filter
+    url: https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_0p25_1hr.pl
+    concurrency: 1
+    rate_per_min: 50   # vor Inbetriebnahme verifizieren (ARCHITEKTUR.md 12.7)
+  - name: aws
+    kind: idx_range
+    url: https://noaa-gfs-bdp-pds.s3.amazonaws.com
+    archive: true
+    concurrency: 8
+  - name: gcs
+    kind: idx_range
+    url: https://storage.googleapis.com/global-forecast-system
+    archive: true
+    concurrency: 8
+
+# Auswahl nach ARCHITEKTUR.md 4.3. Ohne fcst werden alle passenden Nachrichten
+# übernommen, bei TCDC/CSNOW also Momentanwert und Intervallmittel.
+# DSWRF und APCP fehlen im Analyse-Schritt f000; das Manifest führt sie unter "absent".
+messages:
+  - {var: TMP,   level: 2 m above ground}
+  - {var: DPT,   level: 2 m above ground}
+  - {var: RH,    level: 2 m above ground}
+  - {var: UGRD,  level: 10 m above ground}
+  - {var: VGRD,  level: 10 m above ground}
+  - {var: UGRD,  level: 100 m above ground}
+  - {var: VGRD,  level: 100 m above ground}
+  - {var: GUST,  level: surface}
+  - {var: DSWRF, level: surface}
+  - {var: TCDC,  level: entire atmosphere}
+  - {var: APCP,  level: surface}
+  - {var: CSNOW, level: surface}
+  - {var: PRMSL, level: mean sea level}
