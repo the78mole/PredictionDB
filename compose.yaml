@@ -70,7 +70,15 @@ services:
     depends_on:
       garage-init: {condition: service_completed_successfully}
 
-  # Weitere Dienste (energy-ingest, wx-process, ml-*, api, mlflow, grafana)
+  # Day-Ahead-Preise, Last und Erzeugung DE (SMARD, Energy-Charts, ENTSO-E) nach energy.*
+  # Alle 15 min Abgleich um heute, dazu schrittweise Backfill der Historie seit 2015.
+  energy-ingest:
+    <<: *app
+    command: ["energy-ingest", "sync", "--watch", "900"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+
+  # Weitere Dienste (wx-process, ml-*, api, mlflow, grafana)
   # kommen mit ihren Paketen dazu und hängen von migrate und garage-init ab.
 
 volumes:
