@@ -1,4 +1,7 @@
-"""Quellen-Konfiguration (``config/sources/*.yaml``) und Laufzeit-Einstellungen."""
+"""Quellen-Konfiguration (``config/sources/*.yaml``).
+
+S3-Zugang und Logging kommen aus ``predictiondb_core`` (Umgebungsvariablen ``PDB_*``).
+"""
 
 from __future__ import annotations
 
@@ -8,7 +11,6 @@ from typing import Literal
 
 import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from gribkit import BBox, MessageSpec
 
@@ -109,15 +111,3 @@ class GfsConfig(BaseModel):
     @classmethod
     def from_yaml(cls, path: str | Path) -> GfsConfig:
         return cls.model_validate(yaml.safe_load(Path(path).read_text()))
-
-
-class StorageSettings(BaseSettings):
-    """S3-Zugang zu Garage (bzw. jedem S3-kompatiblen Dienst) aus Umgebungsvariablen."""
-
-    model_config = SettingsConfigDict(env_prefix="S3_", env_file=".env", extra="ignore")
-
-    endpoint_url: str = "http://localhost:3900"
-    region: str = "garage"
-    access_key_id: str | None = None
-    secret_access_key: str | None = None
-    bucket_bronze: str = "wx-bronze"

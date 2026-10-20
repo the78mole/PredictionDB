@@ -21,9 +21,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import obstore
-from obstore.store import ObjectStore, S3Store
-
-from wx_ingest.config import StorageSettings
+from obstore.store import ObjectStore
 
 
 @dataclass
@@ -45,18 +43,6 @@ class StepManifest:
     messages: list[str] = field(default_factory=list)
     bbox: dict[str, float] = field(default_factory=dict)
     stored_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat(timespec="seconds"))
-
-
-def make_store(settings: StorageSettings) -> ObjectStore:
-    return S3Store(
-        settings.bucket_bronze,
-        endpoint=settings.endpoint_url,
-        region=settings.region,
-        access_key_id=settings.access_key_id,
-        secret_access_key=settings.secret_access_key,
-        virtual_hosted_style_request=False,
-        client_options={"allow_http": settings.endpoint_url.startswith("http://")},
-    )
 
 
 class Bronze:

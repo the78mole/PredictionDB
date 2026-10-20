@@ -26,7 +26,8 @@ fehlenden Schritt nicht weiter gefragt. Schritte mit passendem Manifest werden �
 ## Aufruf
 
 ```bash
-export S3_ENDPOINT_URL=http://garage:3900 S3_ACCESS_KEY_ID=… S3_SECRET_ACCESS_KEY=…
+# Zugang wie alle Dienste über predictiondb_core (.env bzw. Umgebung, Präfix PDB_)
+export PDB_S3_ENDPOINT_URL=http://localhost:3900 PDB_S3_ACCESS_KEY_ID=… PDB_S3_SECRET_ACCESS_KEY=…
 uv run wx-ingest gfs latest                  # unvollständige Läufe der letzten 30 h
 uv run wx-ingest gfs latest --watch 600      # dauerhaft alle 10 min
 uv run wx-ingest gfs run 2026102006 --steps 0-6
@@ -35,10 +36,11 @@ uv run wx-ingest gfs backfill 2026-10-01T00 2026-10-07T18   # nur Archiv-Endpunk
 
 | Variable | Standard |
 |---|---|
-| `S3_ENDPOINT_URL` | `http://localhost:3900` |
-| `S3_REGION` | `garage` |
-| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | – |
-| `S3_BUCKET_BRONZE` | `wx-bronze` |
+| `PDB_S3_ENDPOINT_URL` | `http://localhost:3900` |
+| `PDB_S3_REGION` | `garage` |
+| `PDB_S3_ACCESS_KEY_ID`, `PDB_S3_SECRET_ACCESS_KEY` | – |
+| `PDB_BUCKET_BRONZE` | `wx-bronze` |
+| `PDB_LOG_LEVEL`, `PDB_LOG_JSON` | `INFO`, `true` |
 | `WX_GFS_CONFIG` | `config/sources/gfs_0p25.yaml` |
 
 ## Tests

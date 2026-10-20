@@ -13,7 +13,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import logging
 import os
 import sys
 from datetime import UTC, datetime
@@ -21,8 +20,11 @@ from pathlib import Path
 
 import httpx
 
-from wx_ingest.bronze import Bronze, make_store
-from wx_ingest.config import GfsConfig, StorageSettings
+from predictiondb_core.log import configure_logging
+from predictiondb_core.s3 import s3_store
+from predictiondb_core.settings import get_settings
+from wx_ingest.bronze import Bronze
+from wx_ingest.config import GfsConfig
 from wx_ingest.ingest import GfsIngestor, result_dict
 
 DEFAULT_CONFIG = Path(os.environ.get("WX_GFS_CONFIG", "config/sources/gfs_0p25.yaml"))
@@ -79,7 +81,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 async def _main(args: argparse.Namespace) -> int:
     config = GfsConfig.from_yaml(args.config)
-    bronze = Bronze(make_store(StorageSettings()), config.model, config.resolution)
+    settings = get_settings()
+    bronze = Bronze(s3_store(settings.buckets.bronze, settings), config.model, config.resolution)
     timeout = httpx.Timeout(60.0, connect=15.0)
     async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
         ingestor = GfsIngestor(config, bronze, client, archive_only=args.cmd == "backfill")
@@ -107,11 +110,8 @@ async def _main(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    )
-    logging.getLogger("httpx").setLevel(logging.WARNING)
+    settings = get_settings()
+    configure_logging("DEBUG" if args.verbose else settings.log_level, settings.log_json)
     return asyncio.run(_main(args))
 
 

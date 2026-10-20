@@ -7,7 +7,6 @@ Manifest werden übersprungen, ein Neustart lädt nur Fehlendes nach.
 from __future__ import annotations
 
 import asyncio
-import logging
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -16,11 +15,12 @@ from typing import Any, Literal
 import httpx
 
 from gribkit import IdxParseError
+from predictiondb_core.log import get_logger
 from wx_ingest.bronze import Bronze, StepManifest
 from wx_ingest.config import GfsConfig
 from wx_ingest.gfs import Endpoint, FetchError, StepUnavailable
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 StepStatus = Literal["stored", "skipped", "pending", "failed"]
 
@@ -85,7 +85,11 @@ class GfsIngestor:
                 continue
             except (FetchError, IdxParseError, httpx.HTTPError) as exc:
                 log.warning(
-                    "GFS %s f%03d über %s fehlgeschlagen: %s", f"{run:%Y%m%d%H}", step, ep.name, exc
+                    "step_failed",
+                    run=f"{run:%Y%m%d%H}",
+                    step=step,
+                    endpoint=ep.name,
+                    error=str(exc),
                 )
                 errors.append(f"{ep.name}: {exc}")
                 continue
@@ -106,11 +110,11 @@ class GfsIngestor:
             )
             manifest = await self.bronze.put_step(run, step, data.grib, manifest)
             log.info(
-                "GFS %s f%03d gespeichert (%s, %d B)",
-                f"{run:%Y%m%d%H}",
-                step,
-                ep.name,
-                manifest.size,
+                "step_stored",
+                run=f"{run:%Y%m%d%H}",
+                step=step,
+                endpoint=ep.name,
+                bytes=manifest.size,
             )
             return StepResult(step, "stored", ep.name, manifest.size)
         return StepResult(step, "failed" if errors else "pending", errors=errors)
@@ -165,12 +169,7 @@ class GfsIngestor:
         result.complete = full_run and all(r.status in ("stored", "skipped") for r in ordered)
         if result.complete:
             await self._finish_run(run, ordered)
-        log.info(
-            "GFS %s: %s%s",
-            f"{run:%Y%m%d%H}",
-            result.counts(),
-            " (vollständig)" if result.complete else "",
-        )
+        log.info("run_checked", run=f"{run:%Y%m%d%H}", complete=result.complete, **result.counts())
         return result
 
     async def _finish_run(self, run: datetime, steps: list[StepResult]) -> None:
