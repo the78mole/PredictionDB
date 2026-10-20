@@ -1,0 +1,15 @@
+# Vorläufige Workspace-Wurzel, damit gribkit und wx_ingest testbar sind.
+# Wird durch die Wurzel aus dem Grundgerüst-PR ersetzt.
+[tool.uv.workspace]
+members = ["packages/*", "services/*"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+]
+
+[tool.pytest.ini_options]
+addopts = "-m \"not network\""
+asyncio_mode = "auto"
+markers = ["network: braucht Internetzugang zu den NOAA-Quellen (mit -m network ausführen)"]
