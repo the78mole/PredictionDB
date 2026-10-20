@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint und Typen
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked --all-packages
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy
+
+  test:
+    name: Unit-Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked --all-packages
+      - run: uv run pytest
+
+  stack:
+    name: Image und Compose-Stack
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: .env mit Wegwerf-Geheimnissen
+        run: |
+          cp .env.example .env
+          sed -i \
+            -e "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=ci/" \
+            -e "s/^PDB_DATABASE_URL=.*/PDB_DATABASE_URL=postgresql+psycopg:\/\/predictiondb:ci@localhost:5432\/predictiondb/" \
+            -e "s/^GARAGE_RPC_SECRET=.*/GARAGE_RPC_SECRET=$(openssl rand -hex 32)/" \
+            -e "s/^GARAGE_ADMIN_TOKEN=.*/GARAGE_ADMIN_TOKEN=$(openssl rand -hex 32)/" \
+            -e "s/^PDB_S3_ACCESS_KEY_ID=.*/PDB_S3_ACCESS_KEY_ID=GK$(openssl rand -hex 12)/" \
+            -e "s/^PDB_S3_SECRET_ACCESS_KEY=.*/PDB_S3_SECRET_ACCESS_KEY=$(openssl rand -hex 32)/" \
+            .env
+      - run: docker compose config --quiet
+      - run: docker compose build
+      - run: docker compose up -d --wait postgres garage
+      - run: docker compose run --rm garage-init
+      - run: docker compose run --rm migrate
+      - name: Integrationstests gegen den Stack
+        run: |
+          uv sync --locked --all-packages
+          set -a; . ./.env; set +a
+          PDB_INTEGRATION=1 uv run pytest tests/integration
+      - name: Logs bei Fehler
+        if: failure()
+        run: docker compose logs
+      - if: always()
+        run: docker compose down -v
