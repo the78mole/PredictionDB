@@ -100,12 +100,23 @@ def build_parser() -> argparse.ArgumentParser:
     bf.add_argument(
         "--parallel-runs", type=int, default=1, metavar="N", help="Läufe gleichzeitig (Standard 1)"
     )
+    bf.add_argument(
+        "--archive-concurrency",
+        type=int,
+        metavar="N",
+        help="gleichzeitige Anfragen je Archiv-Endpunkt (Standard aus der Konfiguration)",
+    )
     bf.add_argument("--no-job-log", action="store_true", help="ohne Protokoll in meta.backfill_job")
     return p
 
 
 async def _main(args: argparse.Namespace) -> int:
     config = GfsConfig.from_yaml(args.config)
+    if getattr(args, "archive_concurrency", None):
+        # Die Grenze gilt für alle parallelen Läufe zusammen; mehr Läufe brauchen mehr Anfragen
+        for ep in config.endpoints:
+            if ep.archive:
+                ep.concurrency = args.archive_concurrency
     settings = get_settings()
     bronze = Bronze(s3_store(settings.buckets.bronze, settings), config.model, config.resolution)
     timeout = httpx.Timeout(60.0, connect=15.0)

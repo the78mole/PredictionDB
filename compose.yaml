@@ -99,6 +99,8 @@ services:
   # GFS-Historie aus dem AWS-Archiv (nur bei Bedarf: docker compose --profile backfill up -d).
   # Ab GFS v16 (2021-03-22 12Z), jüngste Läufe zuerst; ein Neustart setzt dort fort, wo er stand.
   # Läufe per GFS_BACKFILL_RUNS wählbar (Standard 0,12), danach z. B. 6,18 nachziehen.
+  # Tempo: GFS_BACKFILL_PARALLEL Läufe gleichzeitig, GFS_BACKFILL_CONCURRENCY Anfragen je
+  # Archiv-Endpunkt für alle Läufe zusammen (Engpass ist die Latenz zum Archiv, nicht die CPU).
   gfs-backfill:
     <<: *app
     profiles: [backfill]
@@ -111,6 +113,7 @@ services:
       - --runs=${GFS_BACKFILL_RUNS:-0,12}
       - --newest-first
       - --parallel-runs=${GFS_BACKFILL_PARALLEL:-2}
+      - --archive-concurrency=${GFS_BACKFILL_CONCURRENCY:-8}
     depends_on:
       garage-init: {condition: service_completed_successfully}
       migrate: {condition: service_completed_successfully}
