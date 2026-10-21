@@ -1180,8 +1180,35 @@ Bemerkungen:
 
 - **Ein Image für alle Python-Dienste** (Multi-Stage-Build mit `uv sync --frozen --no-dev`), unterschieden nur durch den Befehl. Das vereinfacht Updates; bei Bedarf später getrennte Images (z. B. ML-Image mit PyTorch ist groß).
 - Ingest je Quellfamilie als eigener Container: Ausfall oder Sperre einer Quelle betrifft die anderen nicht; einzeln skalier- und neu startbar.
-- Geheimnisse (ENTSO-E-Token, Garage-Keys, DB-Passwort) in `.env` bzw. Docker Secrets; nie im Repo.
+- Geheimnisse (ENTSO-E-Token, Garage-Keys, DB-Passwort) in `.env` bzw. Docker Secrets; nie im Repo. Ablage und Zugriff siehe 8.3.
 - Provisionierung der VM selbst: Cloud-Init-Template auf PVE oder Ansible-Rolle (Docker installieren, Repo/Compose-Datei ausrollen, `docker compose up -d`). Passt ggf. zu bestehenden Repos wie `it-infra` oder `portainers`, die ich nicht angesehen habe.
+- Der aktuelle Betriebsstand (VM 108 auf PVE2, Adressen, Befehle) steht in [BETRIEB-PVE2.md](BETRIEB-PVE2.md).
+
+### 8.3 Geheimnisse und OpenBao
+
+Quelle der Wahrheit für alle Zugangsdaten des Stacks ist das selbst betriebene OpenBao
+(`https://openbao.intern.chaintronics.com/`), **Namespace `it-infra`**, KV v2 unter `secret/`.
+PredictionDB ist Eigeninfrastruktur, nicht Elektro-Glaser-Geschäft; die Namespaces
+`elektro-glaser`, `the78mole-private` und `mcp_tooling` sind tabu.
+
+| Ort | Inhalt | Zweck |
+|---|---|---|
+| OpenBao `it-infra`, `secret/predictiondb` | `postgres_password`, `garage_rpc_secret`, `garage_admin_token`, `s3_access_key_id`, `s3_secret_access_key`, `entsoe_token`, dazu `url`/`notes` | Quelle der Wahrheit, KeePass-artiger Datensatz |
+| `.env` auf der VM (`/opt/predictiondb`, chmod 600) | dieselben Werte als `POSTGRES_PASSWORD`, `GARAGE_*`, `PDB_S3_*`, `PDB_ENTSOE_TOKEN` | Laufzeit für Docker Compose; wird aus OpenBao erzeugt, nie von Hand gepflegt |
+| `.env.bao` im lokalen Checkout (chmod 600, gitignored) | `BAO_ADDR`, `BAO_NAMESPACE=it-infra`, `BAO_TOKEN` (scoped, `it-infra-rw`) | Zugriff von der Entwicklungsmaschine |
+| `.envrc` (im Repo) | lädt `.env.bao` per direnv | setzt das scoped Token, bevor das Root-Token aus `~/.vault-token` greifen kann |
+
+Regeln:
+
+- Lokal immer über direnv arbeiten (`direnv allow` im Repo). Ohne `.envrc` fiele `bao` auf das
+  Root-Token zurück; `unset BAO_TOKEN` ist daher nie die Lösung für ein `403`.
+- Werte nur per stdin schreiben (`printf '%s' "$V" | bao kv patch secret/predictiondb feld=-`) und
+  nur als Variable lesen (`bao kv get -field=…`), nie ausgeben.
+- Neue Geheimnisse (z. B. der ENTSO-E-Token) zuerst in OpenBao, dann die `.env` der VM daraus
+  erzeugen und den betroffenen Dienst neu starten.
+- Die VM selbst bekommt vorerst kein OpenBao-Token; die `.env` wird von der Entwicklungsmaschine
+  aus geschrieben. Bei der Cloud-Migration (Kapitel 9) ersetzt ein Agent mit eigenem, nur
+  lesendem Token oder der Secret-Store des Anbieters diesen Schritt.
 
 ---
 
