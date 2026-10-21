@@ -17,7 +17,7 @@ import json
 import os
 import signal
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -148,7 +148,9 @@ async def _backfill(
     args: argparse.Namespace, config: GfsConfig, ingestor: GfsIngestor
 ) -> list[RunResult]:
     """Backfill mit Protokoll in ``meta.backfill_job`` (für das Status-Dashboard)."""
-    end = args.end or datetime.now(UTC)
+    # Ohne Ende nur bis vor das Fenster des Live-Modus: jüngere Läufe erscheinen noch und
+    # gehören ``wx-ingest gfs latest``; der Backfill würde sie sonst als unvollständig abhaken.
+    end = args.end or datetime.now(UTC) - timedelta(hours=config.lookback_hours)
     hours = args.runs or config.runs
     runs = ingestor.backfill_runs(args.start, end, hours=hours, newest_first=args.newest_first)
     jobs = JobLog(None if args.no_job_log else create_db_engine())
