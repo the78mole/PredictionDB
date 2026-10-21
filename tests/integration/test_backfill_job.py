@@ -1,4 +1,4 @@
-"""Backfill-Protokoll (``meta.backfill_job``) und die Dashboard-Abfragen dazu.
+"""Backfill-Protokoll (``meta.backfill_job``, ``meta.backfill_run``) und die Dashboard-Abfragen.
 
 Läuft nur mit ``PDB_INTEGRATION=1`` nach ``migrate``. Angelegte Jobs werden wieder entfernt.
 """
@@ -6,7 +6,7 @@ Läuft nur mit ``PDB_INTEGRATION=1`` nach ``migrate``. Angelegte Jobs werden wie
 import json
 import os
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -24,6 +24,7 @@ pytestmark = [
 
 DASHBOARD = Path(__file__).parents[2] / "config/grafana/dashboards/status.json"
 RUN = datetime(2099, 1, 1, tzinfo=UTC)
+RUNS = [RUN + timedelta(hours=12 * i) for i in range(3)]
 
 
 @pytest.fixture
@@ -44,7 +45,7 @@ def _job(eng: Engine, job_id: int) -> dict[str, object]:
 
 def test_job_log_lifecycle(engine: Engine) -> None:
     jobs = JobLog(engine)
-    jobs.start("gfs_0p25", RUN, RUN, [0, 12], True, 3)
+    jobs.start("gfs_0p25", RUN, RUN, [0, 12], True, RUNS)
     assert jobs.job_id is not None
     jobs.progress(RunResult(RUN, [StepResult(0, "stored", "aws", 100)], complete=True))
     jobs.progress(RunResult(RUN, [StepResult(0, "skipped")], complete=True))
@@ -66,7 +67,8 @@ def test_job_log_lifecycle(engine: Engine) -> None:
 
 def test_stale_job_is_marked_aborted(engine: Engine) -> None:
     old = JobLog(engine)
-    old.start("gfs_0p25", RUN, RUN, [0], False, 1)
+    old.start("gfs_0p25", RUN, RUN, [0], False, [RUN])
+    old.run_started(RUN, 2)
     assert old.job_id is not None
     with engine.begin() as c:
         c.execute(
@@ -76,5 +78,45 @@ def test_stale_job_is_marked_aborted(engine: Engine) -> None:
             ),
             {"id": old.job_id},
         )
-    JobLog(engine).start("gfs_0p25", RUN, RUN, [0], False, 1)
+    JobLog(engine).start("gfs_0p25", RUN, RUN, [0], False, [RUN])
     assert _job(engine, old.job_id)["status"] == "aborted"
+    assert _runs(engine, old.job_id)[RUN]["status"] == "aborted"
+
+
+def _runs(eng: Engine, job_id: int) -> dict[datetime, dict[str, object]]:
+    with eng.connect() as c:
+        rows = c.execute(
+            text("SELECT * FROM meta.backfill_run WHERE job_id = :id"), {"id": job_id}
+        ).mappings()
+        return {r["run_time"]: dict(r) for r in rows}
+
+
+def test_run_log_queue_and_dashboard(engine: Engine) -> None:
+    jobs = JobLog(engine)
+    jobs.start("gfs_0p25", RUN, RUN, [0, 12], True, RUNS[::-1])
+    assert jobs.job_id is not None
+    runs = _runs(engine, jobs.job_id)
+    assert [runs[r]["queue_pos"] for r in RUNS[::-1]] == [1, 2, 3]
+    assert {r["status"] for r in runs.values()} == {"queued"}
+
+    newest, middle, oldest = RUNS[::-1]
+    jobs.run_started(newest, 2)
+    jobs.step_done(newest, StepResult(0, "stored", "aws", 100))
+    jobs.run_started(middle, 2)
+    jobs.progress(RunResult(middle, [StepResult(0, "skipped"), StepResult(3, "skipped")], True))
+    runs = _runs(engine, jobs.job_id)
+    assert (runs[newest]["status"], runs[newest]["steps_done"]) == ("running", 1)
+    assert (runs[newest]["bytes_stored"], runs[middle]["status"]) == (100, "skipped")
+
+    panels = {p["id"]: p for p in json.loads(DASHBOARD.read_text())["panels"]}
+    with engine.connect() as c:
+        queue = c.execute(text(panels[27]["targets"][0]["rawSql"])).mappings().all()
+        done = c.execute(text(panels[28]["targets"][0]["rawSql"])).mappings().all()
+    mine = [r for r in queue if r["Job"] == jobs.job_id]
+    assert [(r["Status"], r["Pos."]) for r in mine] == [("läuft", 1), ("wartet", 3)]
+    assert float(mine[0]["Fortschritt"]) == 50.0
+    assert done[0]["Job"] == jobs.job_id and done[0]["Ergebnis"] == "schon da"
+
+    jobs.finish("aborted", "abgebrochen")
+    runs = _runs(engine, jobs.job_id)
+    assert (runs[newest]["status"], runs[oldest]["status"]) == ("aborted", "queued")
