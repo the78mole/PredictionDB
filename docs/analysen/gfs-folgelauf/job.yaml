@@ -1,0 +1,34 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; ausgeführt von auswertung.py im selben Ordner
+id: gfs-folgelauf
+title: GFS, Gewinn des 6 h späteren Laufs zur selben Zielzeit
+question: >
+  Wie viel genauer ist ein GFS-Lauf als der 6 h ältere Lauf für dieselben Zielzeiten, je Größe
+  und Horizont? Lohnt es sich, Features schon aus einem Teillauf zu rechnen, statt den
+  vorherigen vollständigen Lauf zu nehmen?
+requested_by: Maulwurf
+kind: custom                   # Lauf-gegen-Lauf-Vergleich an denselben Gültigkeitszeiten
+inputs:
+  forecast:
+    source: gfs_0p25
+    period: {from: 2025-09-20, to: 2026-09-19}   # ein volles Jahr, alle Jahreszeiten
+    runs: [0, 6, 12, 18]       # jeder Lauf ist einmal "neu" und einmal "vorher"
+    variables: [t2m, d2m, ff10, prmsl, dswrf]
+  observations:
+    source: dwd_cdc
+    stations: {country: DE, min_completeness: 0.8}
+method:
+  pairs: {shift_h: 6}          # neuer Lauf R mit Horizont h gegen Lauf R-6h mit Horizont h+6
+  horizons_h: [0, 6, 12, 18, 24, 30, 36, 42, 48, 60, 72, 96, 120]   # Horizont des neuen Laufs
+  time_interpolation: linear   # nur für fehlende Schritte, erst beim Lesen
+  space_interpolation: bilinear
+  corrections: {t2m: lapse_rate_0.0065}
+  windows: {dswrf: mean_6h_ending, skip_night: true}
+  metrics: [rmse_new, rmse_old, gain = 1 - MSE_new/MSE_old, n]
+  uncertainty: {gain: bootstrap_over_runs, level: 0.95}
+  group_by: [variable, horizon, season, run_hour]
+  day_ahead:                   # Gebotsschluss Day-Ahead 12:00 Ortszeit, Zielzeiten Folgetag
+    run: 6
+    horizons_h: [18, 24, 30, 36, 42]
+outputs:
+  figures: [gain_by_horizon, rmse_new_vs_old, gain_by_season]
+schedule: once
