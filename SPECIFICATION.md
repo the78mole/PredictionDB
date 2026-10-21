@@ -55,7 +55,7 @@ Vorlauf. Messwerte stehen nicht mehr mit negativem Vorlauf in derselben Tabelle,
 |---|---|---|
 | `wx-bronze` | GFS-Schritte, auf 44–58° N / 0–20° E zugeschnitten, CCSDS-gepackt: `gfs/0p25/JJJJ/MM/TT/HH/fSSS.grib2` mit Manifest `fSSS.json`, je Lauf `run.json` | umgesetzt |
 | `assets-bronze` | MaStR-Gesamtexport unverändert je Stichtag, mit `manifest.json` | umgesetzt |
-| `wx-silver` | einheitliches Gitter je Lauf als Zarr v3 (float16 + Zstd) | geplant (`wx-process`) |
+| `wx-silver` | GFS je Lauf als Zarr v3 (Int16 mit Scale/Offset, Blosc/Zstd, ca. 13 MB je Lauf), Mittel und Summen je Intervall: `gfs/0p25/JJJJ/MM/TT/HH.zarr` | umgesetzt (`wx-process`) |
 | `assets-silver` | Gitter-Gewichte je Cluster als Zarr | geplant |
 | `ml-artifacts` | MLflow-Artefakte (Modelle) | geplant |
 | `ml-exchange` | Trainings-Snapshots und -Ergebnisse für portable Trainingsjobs (A 7.7) | geplant |
@@ -66,14 +66,14 @@ Zugriff ausschließlich über die S3-API; Endpoint, Region und Schlüssel kommen
 
 ### 3.2 Datenbank (PostgreSQL 17 + TimescaleDB)
 
-Schema per Alembic (`migrations/`, Revisionen `0001` → `0002_energy` → `0002_assets`):
+Schema per Alembic (`migrations/`, Revisionen `0001` → `0002_energy` → `0002_assets` → `0003_wx_features`):
 
 | Schema | Tabellen | Zweck | Stand |
 |---|---|---|---|
-| `meta` | `source` (mit `priority`, `license`), `nwp_run`, `grib_message`, `feature`, `region`, `energy_fetch` | Quellen, Laufzustand, Merkmalsregister, Regionen, Backfill-Stand | umgesetzt |
+| `meta` | `source` (mit `priority`, `license`), `nwp_run`, `nwp_feature_run`, `grib_message`, `feature`, `region`, `energy_fetch` | Quellen, Laufzustand, Verarbeitungsstand je Lauf und Clusterung, Merkmalsregister, Regionen, Backfill-Stand | umgesetzt |
 | `energy` | `series`, `value` (Hypertable, komprimiert ab 30 Tagen), View `value_best` | Preise, Last, Erzeugung, ÜNB-Prognosen je Quelle; `value_best` wählt je Code und Zeitpunkt die Quelle mit dem kleinsten Rang | umgesetzt |
 | `assets` | `snapshot`, `unit`, `gemeinde`, `clustering`, `cluster`, `cluster_cell`, `grid_weight`, `capacity_daily` (Hypertable) | MaStR-Bestand, Verortung, Cluster, Gitter-Gewichte, Tagesbestand | umgesetzt |
-| `feat` | `nwp_value` (Hypertable, komprimiert) | Wetter-Features je Merkmal, Region, Lauf und Gültigkeit | Schema da, Befüllung geplant |
+| `feat` | `nwp_value` (Hypertable, komprimiert ab 30 Tagen) | Wetter-Features je Merkmal, Cluster-Region, Lauf und Gültigkeit (GFS, `cluster_cap_weighted`) | umgesetzt |
 | `fcst` | `prediction` (Hypertable) | eigene Prognosen je Modellversion, Ziel und Quantil | Schema da, Befüllung geplant |
 | `assets`, `fcst` (Erweiterung) | `own_plant`, `own_measurement`, `own_curtailment_rule`, `plant_forecast` | eigene Anlagen und ihre Prognosen (A 7.6) | geplant |
 | `fcst` (Erweiterung) | `model_spread` | Streuung parallel laufender Modellversionen (A 7.7) | geplant |
@@ -114,7 +114,7 @@ Ein Image für alle Python-Dienste (`docker/Dockerfile`), Monorepo als uv-Worksp
 | `ingest-gfs` | `wx-ingest gfs latest --watch 600` | GFS nach Bronze, Endpunkte in Rangfolge NOMADS → AWS → Google | umgesetzt |
 | `energy-ingest` | `energy-ingest sync --watch 900` | Abgleich alle 15 min (3 Tage zurück bis 2 Tage voraus), Quellenvergleich, schrittweiser Backfill | umgesetzt |
 | `mastr-snapshot` | `mastr-ingest snapshot --if-due --watch 21600` | MaStR je Quartal: Import, Verortung, Cluster, Gewichte, Tagesbestand | umgesetzt |
-| `wx-process` | – | Bronze → Silber (Zarr), Cluster-Features nach `feat.nwp_value` | geplant (Phase 4) |
+| `wx-process` | `wx-process gfs latest --watch 600` | Bronze → Silber (Zarr), Wind-, PV- und Wetter-Features je MaStR-Cluster nach `feat.nwp_value` | umgesetzt |
 | `ml-predict` | – | Inferenz nach jedem vollständigen Lauf, mehrere Modellversionen parallel | geplant |
 | `ml-train` | – | Training bzw. Fine-Tuning als portabler Container-Job (A 7.7) | geplant |
 | `api` | FastAPI | Prognosen, Punktabfragen, eigene Anlagen | geplant (Phase 8, Anlagen ab 4b) |
@@ -204,6 +204,7 @@ Wichtige Variablen (vollständig in `.env.example` und den READMEs der Dienste):
 | `PDB_S3_ENDPOINT_URL`, `PDB_S3_REGION`, `PDB_S3_ACCESS_KEY_ID`, `PDB_S3_SECRET_ACCESS_KEY` | S3-Zugang der Dienste |
 | `PDB_ENTSOE_TOKEN`, `PDB_ENERGY_SOURCES`, `PDB_ENERGY_BACKFILL_FROM` | Energiedaten |
 | `PDB_MASTR_CONFIG`, `PDB_MASTR_WORK_DIR` | MaStR-Import |
+| `PDB_WX_PROCESS_CONFIG` | Wetter-Verarbeitung |
 | `WX_GFS_CONFIG` | GFS-Quelldefinition |
 | `PDB_LOG_LEVEL`, `PDB_LOG_JSON` | Logging |
 
@@ -215,7 +216,7 @@ Wichtige Variablen (vollständig in `.env.example` und den READMEs der Dienste):
 | 1 – Fundament | uv-Workspace, Compose mit TimescaleDB und Garage, Alembic, `core`, CI (Lint, Typen, Tests, Image) | erledigt |
 | 2 – GFS-Ingest | `wx-ingest` mit NOMADS, AWS, Google; Backfill | erledigt, Backfill der Historie offen |
 | 3 – Energiedaten | `energy-ingest`, `mastr-ingest` | erledigt |
-| 4 – Processing | `wx-process`: Silber-Zarr, Cluster-Features | offen |
+| 4 – Processing | `wx-process`: Silber-Zarr, Cluster-Features | erledigt für GFS; bevölkerungsgewichtete Temperatur offen |
 | 4b – Anlagenprognose | API für eigene PV-, Wind- und Wasserkraftanlagen | offen |
 | 5 – Baseline-ML | LightGBM, Evaluierung, MLflow | offen |
 | 6 – NN | Sequenzmodelle, Quantile, Inferenzdienst, Grafana | offen |

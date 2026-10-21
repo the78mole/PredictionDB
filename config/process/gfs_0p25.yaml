@@ -1,0 +1,37 @@
+# Verarbeitung GFS 0,25°: Bronze → Silber (Zarr) → Gold (Features je MaStR-Cluster).
+# Siehe services/wx_process/README.md und docs/ARCHITEKTUR.md Kap. 5.1 und 7.5.
+source: gfs_0p25
+# Läufe, Schritte und Bronze-Schlüssel wie beim Ingest
+source_config: config/sources/gfs_0p25.yaml
+# Gitter-Gewichte aus mastr-ingest (weight_grids in config/sources/mastr.yaml)
+weight_grid: gfs_0p25
+aggregation: cluster_cap_weighted
+lookback_hours: 48
+read_concurrency: 8
+
+silver:
+  step_chunk: 48
+  zstd_level: 5
+
+# Art der Features je Technologie (wind, pv, hydro, other). Nabenhöhe gilt, wenn das MaStR
+# für das Cluster keine liefert. Leistungskurven sind generisch (kubisch bis Nennleistung)
+# und dienen als Index, nicht als Abbild einzelner Anlagentypen.
+technologies:
+  wind_on:
+    kind: wind
+    hub_height_m: 100
+    power_curve: {cut_in: 3.0, rated: 12.0, cut_out: 25.0}
+  wind_off:
+    kind: wind
+    hub_height_m: 105
+    power_curve: {cut_in: 3.5, rated: 13.0, cut_out: 25.0}
+  pv_ground: {kind: pv}
+  pv_roof: {kind: pv}
+  hydro: {kind: hydro}
+  biomass: {kind: other}
+
+# PV-Index aus Globalstrahlung und Lufttemperatur (ohne Ausrichtung und Neigung)
+pv:
+  performance_ratio: 0.85
+  temp_coeff: -0.004
+  noct_c: 45

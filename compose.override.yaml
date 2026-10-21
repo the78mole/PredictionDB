@@ -13,3 +13,4 @@ services:
   migrate: *build
   ingest-gfs: *build
   mastr-snapshot: *build
+  wx-process: *build
