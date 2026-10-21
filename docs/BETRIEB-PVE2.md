@@ -34,15 +34,19 @@ Verzeichnis `/opt/predictiondb` (Git-Checkout von `main`, Remote `git@github.com
 | `garage-init` | einmalig, fertig | Buckets `wx-bronze`, `wx-silver`, `ml-artifacts`, `backups` |
 | `migrate` | einmalig, fertig | Schemas `meta`, `energy`, `feat`, `fcst` (Revision `0002_energy`) |
 | `ingest-gfs` | läuft | prüft alle 600 s auf neue GFS-Läufe, schreibt nach `wx-bronze` |
+| `wx-process` | läuft | rechnet vollständige GFS-Läufe zu Silber (Zarr) und Features je MaStR-Cluster |
+| `mastr-snapshot` | läuft | ein MaStR-Export je Quartal (erster: 2026-10-20) |
+| `grafana` | läuft | **https://predb.intern.chaintronics.com** (NPM-Proxy-Host 37 → `10.0.7.248:3000`), Benutzer `admin` |
 | `energy-ingest` | läuft | alle 900 s SMARD und Energy-Charts nach `energy.*`, dazu Backfill; ENTSO-E aus, bis `PDB_ENTSOE_TOKEN` gesetzt ist |
 
-Im Proxy-Netz ist bisher nichts veröffentlicht. Für `predb.intern.chaintronics.com` den künftigen
-Web-Dienst (api/grafana) zusätzlich auf `10.0.7.248:<port>` binden und im NPM als Ziel eintragen.
+Im Proxy-Netz ist nur Grafana veröffentlicht (`compose.vm.yaml`: `10.0.7.248:3000`). Der Proxy-Host im
+NPM nutzt das Wildcard-Zertifikat `*.intern.chaintronics.com` und erzwingt HTTPS. Das Startdashboard
+„PredictionDB Status“ zeigt Energiedaten und Backfill, verarbeitete GFS-Läufe, MaStR und Speicher.
 
 ## Zugangsdaten holen
 
 ```sh
-ssh daniel@172.22.7.162 'grep -E "^(POSTGRES_PASSWORD|PDB_S3_ACCESS_KEY_ID|PDB_S3_SECRET_ACCESS_KEY)=" /opt/predictiondb/.env'
+ssh predb 'grep -E "^(POSTGRES_PASSWORD|PDB_S3_ACCESS_KEY_ID|PDB_S3_SECRET_ACCESS_KEY|GRAFANA_ADMIN_PASSWORD)=" /opt/predictiondb/.env'
 ```
 
 ## Häufige Befehle (auf der VM, in `/opt/predictiondb`)
