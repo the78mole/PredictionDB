@@ -1,0 +1,41 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; ausgeführt von auswertung.py im selben Ordner
+id: gfs-v16-jahre
+title: GFS v16 über die Jahre, Prognosefehler an DWD-Stationen
+question: >
+  Hat sich GFS v16 zwischen 2021 und 2026 verbessert oder verschlechtert, und lässt sich
+  eine Veränderung von einer schwierigeren Wetterlage (Klimawandel, Extremereignisse) trennen?
+requested_by: Maulwurf
+kind: custom                   # verification plus Persistenz-Referenz und Monatsreihe
+inputs:
+  forecast:
+    source: gfs_0p25
+    periods:                   # je ein volles Jahr mit allen Jahreszeiten
+      - {label: früh 2021/22, from: 2021-04-01, to: 2022-03-31}
+      - {label: mittel 2023/24, from: 2023-10-01, to: 2024-09-30}
+      - {label: jüngst 2025/26, from: 2025-09-20, to: 2026-09-19}
+    runs: [0, 12]
+    variables: [t2m, d2m, ff10, prmsl, dswrf]
+  observations:
+    source: dwd_cdc
+    stations: {country: DE, min_completeness: 0.8, in_all_periods: true}
+method:
+  horizons_h: [0, 6, 12, 24, 36, 72, 96, 240]
+  time_interpolation: linear   # nur für fehlende Schritte, erst beim Lesen
+  space_interpolation: bilinear
+  corrections: {t2m: lapse_rate_0.0065}
+  windows: {dswrf: mean_6h_ending, skip_night: true}
+  reference: persistence_same_hour   # letzte Messung zur gleichen Tageszeit vor dem Lauf
+  metrics: [bias, mae, rmse, n, skill_vs_persistence]
+  uncertainty: {rmse: bootstrap_over_runs, skill: bootstrap_over_runs, level: 0.95}
+  group_by: [period, variable, horizon, season]
+  monthly_series:              # Verlauf über die ganze v16-Zeit, Modell-Updates als Marken
+    from: 2021-04-01
+    to: 2026-09-19
+    runs: [0]
+    horizons_h: [24, 72]
+  markers:
+    - {date: 2022-11-29T12, label: v16.3.0}
+    - {date: 2024-07-02T12, label: v16.3.16}
+outputs:
+  figures: [error_by_horizon, skill_by_horizon, season_bars, monthly_series]
+schedule: once

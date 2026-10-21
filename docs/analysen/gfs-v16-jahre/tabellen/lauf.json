@@ -1,0 +1,41 @@
+{
+ "job": "gfs-v16-jahre",
+ "job_sha256": "1a5daa70d60f0f6cc5b72e9a1be6ff31518e571bb7ecfcc0e2319f0c553af234",
+ "git_commit": "f6e486ad0b683738f776d4c0319d100cc9a7cf03",
+ "gestartet": "2026-10-21T11:26:25+00:00",
+ "beendet": "2026-10-21T12:13:44+00:00",
+ "zeitraeume": {
+  "früh 2021/22": [
+   "2021-04-01T00:00:00+00:00",
+   "2022-03-31T18:00:00+00:00"
+  ],
+  "mittel 2023/24": [
+   "2023-10-01T00:00:00+00:00",
+   "2024-09-30T18:00:00+00:00"
+  ],
+  "jüngst 2025/26": [
+   "2025-09-20T00:00:00+00:00",
+   "2026-09-19T18:00:00+00:00"
+  ]
+ },
+ "laeufe_utc": [
+  0,
+  12
+ ],
+ "horizonte_h": [
+  0,
+  6,
+  12,
+  24,
+  36,
+  72,
+  96,
+  240
+ ],
+ "stationen_wetter": 168,
+ "stationen_strahlung": 30,
+ "modellschritte": 21532,
+ "schritte_nicht_im_archiv": {},
+ "schritte_zeitlich_interpoliert": {},
+ "fehlerpaare": 14741677
+}

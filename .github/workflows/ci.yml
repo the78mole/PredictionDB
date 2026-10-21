@@ -27,6 +27,8 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run mypy
+      - name: mypy für die Analyse-Skripte (je Ordner einzeln, alle heißen auswertung.py)
+        run: for f in docs/analysen/*/auswertung.py; do uv run mypy "$f" || exit 1; done
 
   test:
     name: Unit-Tests

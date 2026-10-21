@@ -51,7 +51,8 @@ mypy_path = [
 ]
 explicit_package_bases = true
 files = ["."]
-exclude = ["^\\.venv/", "^build/"]
+# Analyse-Skripte heißen alle auswertung.py und werden in der CI einzeln geprüft
+exclude = ["^\\.venv/", "^build/", "^docs/analysen/"]
 
 [[tool.mypy.overrides]]
 module = ["obstore.*", "eccodes.*", "gribapi.*", "lxml.*", "matplotlib.*"]
