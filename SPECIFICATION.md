@@ -2,7 +2,7 @@
 
 **Version:** 0.2.0  
 **Status:** Entwurf, teilweise umgesetzt  
-**Letzte Änderung:** 2026-10-21
+**Letzte Änderung:** 2026-10-21 (Wärme/Kälte vorgemerkt)
 
 Diese Spezifikation fasst zusammen, **was** PredictionDB leisten soll und was davon heute umgesetzt
 ist. Das **Wie** mit Begründungen, Alternativen und Diagrammen steht in
@@ -25,6 +25,9 @@ und prognostiziert damit:
 | Day-Ahead-Preis DE-LU, als Quantile | 15 min | D+1 Kern, bis D+14 Szenario | geplant (Phase 5–6) |
 | Wind-, PV- und Laufwasser-Einspeisung DE (Hilfsziele) | 15 min | 0–16 Tage | geplant |
 | Erzeugung eigener PV-, Wind- und Wasserkraftanlagen über die API | 15 min / 1 h | bis 384 h, bei Wasser teils länger | geplant (Phase 4b, A 7.6) |
+| Wärme- und Kältelast bzw. -bedarf eines Gebäudes und eines Nah-/Fernwärme- oder Kältenetzes | 15 min / 1 h | Folgetag, 24 h, 96 h | vorgemerkt (A 7.8) |
+| Strombedarf von Wärmepumpen | 15 min / 1 h | Folgetag, 24 h, 96 h | vorgemerkt (A 7.8) |
+| Optimaler Betrieb eines Wärmepumpen-Heizsystems (Preise, Speicher, PV, COP) | 15 min / 1 h | rollierend 24–96 h | vorgemerkt (A 7.8) |
 
 Rahmenbedingungen: Python mit uv, nur kostenfreie Datenquellen (mehrere je Datenart für
 Redundanz), Betrieb als Docker-Compose-Stack in einer VM auf Proxmox VE, S3 über Garage
@@ -97,9 +100,10 @@ Konfiguration in `config/sources/`. Übersicht und Lizenzen in A 3.
 | DWD RADOLAN, DWD CDC | beobachteter Niederschlag, Stationsdaten | geplant |
 | Open-Meteo | nur Prototyping und Backfill, nicht produktiv | optional |
 
-GFS-Variablen (umgesetzt, `config/sources/gfs_0p25.yaml`): `TMP`, `DPT`, `RH` in 2 m, `UGRD`/`VGRD`
-in 10 m und 100 m, `GUST`, `DSWRF`, `TCDC`, `APCP`, `CSNOW`, `PRMSL`. Für A 7.6 kommen noch dazu:
-`PRES:surface` (Luftdichte Wind), `WEASD`/`SNOD` (Schnee), `SOILW` (Bodenfeuchte).
+GFS-Variablen (umgesetzt, `config/sources/gfs_0p25.yaml`, 22 Felder): `TMP`, `DPT`, `RH` in 2 m,
+`UGRD`/`VGRD` in 10 m und 100 m, `GUST`, `DSWRF`, `TCDC`, `APCP`, `CSNOW`, `PRMSL`. Seit 2026-10-21
+kommen für Anlagenprognosen (A 7.6) sowie Wärme und Kälte (A 7.8) dazu: `PRES`, `DLWRF`, `SUNSD`,
+`WEASD`, `SNOD` am Boden sowie `TSOIL` und `SOILW` in 0–0,1 m und 0,1–0,4 m Tiefe.
 
 ## 5. Dienste
 
@@ -180,6 +184,19 @@ Prognose. Messwerte eigener Anlagen werden nur lokal verarbeitet.
   bekommt nur einen Trainings-Snapshot über zeitlich begrenzte Links und braucht keinen Zugang ins
   Heimnetz.
 
+### 6.6 Wärme, Kälte und Wärmepumpen (vorgemerkt, A 7.8)
+
+Geplant, Architektur folgt später:
+
+- Wärme- und Kältelast bzw. -bedarf für ein Gebäude und für ein Nah-/Fernwärme- oder Kältenetz,
+  jeweils für den Folgetag sowie die kommenden 24 h und 96 h.
+- Strombedarfsprognose von Wärmepumpen.
+- Ermittlung des optimalen Betriebs eines Wärmepumpen-Heizsystems aus Strompreisen, Wärmespeicher
+  und Speicherfüllstand, PV-Prognose und der wetterabhängigen Effizienz (COP).
+
+Die dafür nötigen Wetterdaten (Temperatur, Feuchte, Wind, kurz- und langwellige Strahlung,
+Sonnenscheindauer, Bodentemperatur, Schnee) werden bereits gesammelt (Abschnitt 4).
+
 ## 7. Nichtfunktionale Anforderungen
 
 | Bereich | Anforderung |
@@ -221,5 +238,6 @@ Wichtige Variablen (vollständig in `.env.example` und den READMEs der Dienste):
 | 6 – NN | Sequenzmodelle, Quantile, Inferenzdienst, Grafana | offen |
 | 7 – Weitere Quellen | ECMWF, ICON, GEFS, GEM, Pegel | offen |
 | 8 – API & Härtung | FastAPI, Auth, Alarme, Backups, Cloud-Probelauf | offen |
+| später – Wärme/Kälte | Gebäude, Netze, Wärmepumpen, Betriebsoptimierung (A 7.8) | vorgemerkt; Wetterdaten werden gesammelt |
 
 Offene Entscheidungen stehen in A 12.

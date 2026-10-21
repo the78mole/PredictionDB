@@ -49,3 +49,14 @@ messages:
   - {var: APCP,  level: surface}
   - {var: CSNOW, level: surface}
   - {var: PRMSL, level: mean sea level}
+  # Ergänzt 2026-10-21 für Anlagenprognosen (ARCHITEKTUR.md 7.6) und Wärme/Kälte (7.8),
+  # damit die Historie ab jetzt mitläuft.
+  - {var: PRES,  level: surface}                  # Luftdichte (Wind), Enthalpie (Kühlung)
+  - {var: DLWRF, level: surface}                  # langwellige Gegenstrahlung: Gebäude-Wärmeverlust, Nachtauskühlung
+  - {var: SUNSD, level: surface}                  # Sonnenscheindauer
+  - {var: WEASD, level: surface}                  # Schnee-Wasseräquivalent (Wasserkraft, PV)
+  - {var: SNOD,  level: surface}                  # Schneehöhe
+  - {var: TSOIL, level: 0-0.1 m below ground}     # Bodentemperatur: Sole-WP, Netzverluste
+  - {var: TSOIL, level: 0.1-0.4 m below ground}
+  - {var: SOILW, level: 0-0.1 m below ground}     # Bodenfeuchte (Wasserkraft)
+  - {var: SOILW, level: 0.1-0.4 m below ground}

@@ -1,6 +1,6 @@
 # Strompreisprognose – Architekturentwurf
 
-**Version:** 0.6 (Entwurf) · **Stand:** 2026-10-20 · **Status:** zur Diskussion
+**Version:** 0.7 (Entwurf) · **Stand:** 2026-10-21 · **Status:** zur Diskussion
 
 ---
 
@@ -313,7 +313,7 @@ stateDiagram-v2
 | Zweck | GFS-Kurzname : Level | ECMWF `param` | ICON |
 |---|---|---|---|
 | Temperatur (Last: Heizen/Kühlen) | `TMP:2 m above ground` | `2t` | `t_2m` |
-| Taupunkt/Feuchte | `DPT:2 m above ground` / `RH:2 m` | `2d` | `td_2m` |
+| Taupunkt/Feuchte (auch Kühllast, 7.8) | `DPT:2 m above ground` / `RH:2 m` | `2d` | `td_2m` |
 | Wind 10 m | `UGRD/VGRD:10 m above ground` | `10u/10v` | `u_10m/v_10m` |
 | Wind 100 m (Nabenhöhe) | `UGRD/VGRD:100 m above ground` | `100u/100v` | (über Modellflächen; vorerst 10 m + Böen) |
 | Böen | `GUST:surface` | `10fg` | `vmax_10m` |
@@ -321,9 +321,14 @@ stateDiagram-v2
 | Bewölkung | `TCDC:entire atmosphere` | `tcc` | `clct` |
 | Niederschlag / Schnee | `APCP`, `CSNOW` | `tp`, `sf` | `tot_prec` |
 | Schneedecke (Wasseräquivalent, Wasserkraft 7.6) | `WEASD:surface`, `SNOD:surface` | `sd` | `w_snow`, `h_snow` |
-| Bodenfeuchte (Wasserkraft 7.6) | `SOILW:0-0.1 m below ground` (und tiefere Schichten) | `swvl1`–`swvl4` | `w_so` |
+| Bodenfeuchte (Wasserkraft 7.6) | `SOILW:0-0.1 m below ground`, `SOILW:0.1-0.4 m below ground` | `swvl1`–`swvl4` | `w_so` |
+| Bodentemperatur (Sole-Wärmepumpen, Netzverluste, 7.8) | `TSOIL:0-0.1 m below ground`, `TSOIL:0.1-0.4 m below ground` | `stl1`, `stl2` | `t_so` |
+| Langwellige Gegenstrahlung (Gebäude, 7.8) | `DLWRF:surface` | `strd` | `athb_s` (Netto) |
+| Sonnenscheindauer (7.8) | `SUNSD:surface` | – (aus Strahlung ableiten) | `dursun` |
 | Bodendruck | `PRMSL:mean sea level` | `msl` | `pmsl` |
-| Druck am Boden (Luftdichte für Wind, 7.6) | `PRES:surface` | `sp` | `ps` |
+| Druck am Boden (Luftdichte für Wind 7.6, Enthalpie 7.8) | `PRES:surface` | `sp` | `ps` |
+
+Alle GFS-Felder dieser Tabelle stehen in `config/sources/gfs_0p25.yaml` (22 Felder) und werden seit 2026-10-21 gesammelt. Die ECMWF- und ICON-Spalten gelten, sobald diese Quellen dazukommen; die Namen dort vor der Umsetzung prüfen.
 
 Ausschnitt: **44–58° N, 0–20° E** (DE plus Nachbarn, relevant für Kuppelflüsse und Wetterlagen). Bei GFS 0,25° sind das 57 × 81 = 4 617 Gitterpunkte.
 
@@ -1067,6 +1072,34 @@ flowchart LR
 - **Nachtrainieren im Job:** Für ein Fine-Tuning enthält der Snapshot zusätzlich die Gewichte des Champions und die Replay-Stichprobe. Der Job gibt einen Challenger zurück, der dann den Vergleich oben durchläuft.
 - **Kostenbremse:** Der Dispatcher setzt eine maximale Laufzeit je Job. Die Miet-Instanz wird nach dem Upload des Ergebnisses beendet.
 
+### 7.8 Geplant: Wärme, Kälte und Wärmepumpen
+
+Diese Features sind vorgemerkt. Die Architektur wird später ausgearbeitet. Schon jetzt werden aber die nötigen Wetterdaten gesammelt (siehe unten), damit beim Start eine Historie vorliegt.
+
+| Feature | Inhalt | Horizonte |
+|---|---|---|
+| **Wärme- und Kältelast, Wärme- und Kältebedarf** | Prognose für ein einzelnes Gebäude sowie für ein Nah- oder Fernwärmenetz bzw. Kältenetz (Netzlast inkl. Verluste) | Folgetag, kommende 24 h und 96 h |
+| **Strombedarf von Wärmepumpen** | elektrische Leistung einer Wärmepumpe aus Wärmebedarf und Leistungszahl (COP), die von Quellen- und Vorlauftemperatur abhängt | wie oben |
+| **Betriebsoptimierung eines Wärmepumpen-Heizsystems** | Fahrplan für Wärmepumpe und Wärmespeicher: wann laden, wann aus dem Speicher heizen. Eingänge sind Strompreise (Day-Ahead bzw. dynamischer Tarif), Speichergröße und -füllstand, PV-Prognose der eigenen Anlage (7.6), COP aus der Wetterprognose und Komfortgrenzen. | rollierend, z. B. 24–96 h |
+
+**Benötigte Wetterdaten** (alle im GFS-Umfang 4.3 enthalten und seit 2026-10-21 in Bronze gesammelt):
+
+| Größe | Zweck | GFS-Feld |
+|---|---|---|
+| Lufttemperatur 2 m | Heiz- und Kühlgradstunden, Transmissionsverluste, COP von Luft-Wärmepumpen | `TMP:2 m above ground` |
+| Taupunkt, relative Feuchte | latente Kühllast, Enthalpie, Abtauverluste von Luft-Wärmepumpen (vor allem bei 0–7 °C und hoher Feuchte) | `DPT`, `RH:2 m above ground` |
+| Wind 10 m | Lüftungs- und Infiltrationsverluste, Wärmeübergang an der Fassade | `UGRD/VGRD:10 m above ground` |
+| Globalstrahlung | solare Gewinne (Heizen) bzw. solare Last (Kühlen), PV-Prognose | `DSWRF:surface` |
+| Langwellige Gegenstrahlung | Abstrahlung von Dach und Fassade, Nachtauskühlung | `DLWRF:surface` |
+| Bewölkung, Sonnenscheindauer | Ergänzung zur Strahlung, Aufteilung direkt/diffus | `TCDC:entire atmosphere`, `SUNSD:surface` |
+| Bodendruck | Enthalpie, Luftdichte | `PRES:surface` |
+| Bodentemperatur 0–0,1 m und 0,1–0,4 m | Quellentemperatur von Sole-Wärmepumpen und Erdkollektoren, Verluste erdverlegter Netzleitungen | `TSOIL` |
+| Schneedecke | Dämmwirkung auf dem Dach, Schnee auf PV-Modulen | `WEASD`, `SNOD` |
+
+Für das Training braucht es mehr Historie, als die eigene Sammlung zu Beginn hat. Dafür dienen der GFS-Backfill aus dem AWS-Archiv (gleiche Felder) und ERA5 als Reanalyse (3.1).
+
+**Weitere Daten, die später hinzukommen:** Gebäudestammdaten (beheizte Fläche, Heizlast oder Wärmeverlustkoeffizient, Wärmeabgabesystem und Vorlauftemperatur, Speichergröße), Messwerte (Wärmemengenzähler, Stromzähler der Wärmepumpe, Raum-, Vorlauf- und Rücklauftemperaturen), bei Netzen die Vorlauf- und Rücklauftemperaturen und die Zahl der Abnehmer sowie Strom- und Netzentgelt-Tarife. Die API für eigene Anlagen (7.6) ist dafür die natürliche Erweiterung (neue Typen `building`, `heat_network`, `heat_pump`). Nutzungsrechtlich gilt dasselbe wie in 7.6: abgedeckt sind eigene Gebäude und selbst betriebene Netze.
+
 ---
 
 ## 8. Deployment auf der PVE-VM
@@ -1269,6 +1302,7 @@ Datenabfluss beachten: Bei S3-Diensten mit Egress-Kosten (AWS) sollten Training 
 | **6 – NN** | TFT/TiDE zweistufig, Quantile, Inferenzdienst, Grafana | erste produktive Prognose |
 | **7 – Weitere Quellen** | ECMWF IFS/AIFS, ICON-EU/D2, GEFS, GEM; Redundanz-Features | robuster Betrieb |
 | **8 – API & Härtung** | FastAPI, Auth, Alarme, Backups, Cloud-Probelauf | betriebsbereit |
+| **später – Wärme/Kälte** | Wärme-/Kältelast für Gebäude und Netze, Strombedarf von Wärmepumpen, Betriebsoptimierung (7.8); Architektur noch offen | geplant |
 
 ```mermaid
 flowchart LR
