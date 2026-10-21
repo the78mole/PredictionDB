@@ -134,14 +134,52 @@ async def _main(args: argparse.Namespace) -> int:
         elif args.cmd == "backfill":
             results = await _backfill(args, config, ingestor)
         else:
-            while True:
-                results = await ingestor.ingest_recent()
-                if not args.watch:
-                    break
-                print(json.dumps([result_dict(r) for r in results]), flush=True)
-                await asyncio.sleep(args.watch)
+            results = await _latest(args, config, ingestor)
     print(json.dumps([result_dict(r) for r in results], indent=1))
     return 1 if any(s.status == "failed" for r in results for s in r.steps) else 0
+
+
+async def _latest(
+    args: argparse.Namespace, config: GfsConfig, ingestor: GfsIngestor
+) -> list[RunResult]:
+    """Live-Modus mit Protokoll in ``meta.backfill_job`` (mode 'live') für das Dashboard."""
+    jobs = JobLog(create_db_engine() if args.watch else None)
+    now = datetime.now(UTC)
+    start = now - timedelta(hours=config.lookback_hours)
+    await asyncio.to_thread(
+        jobs.start, config.code, start, now, config.runs, False, config.recent_runs(now), "live"
+    )
+
+    async def started(run: datetime, n_steps: int) -> None:
+        await asyncio.to_thread(jobs.run_started, run, n_steps)
+
+    async def step_done(run: datetime, step: StepResult) -> None:
+        if step.status == "stored":
+            await asyncio.to_thread(jobs.step_done, run, step)
+
+    async def progress(r: RunResult) -> None:
+        await asyncio.to_thread(jobs.live_progress, r)
+
+    try:
+        while True:
+            now = datetime.now(UTC)
+            runs = config.recent_runs(now)
+            await asyncio.to_thread(
+                jobs.live_window, now - timedelta(hours=config.lookback_hours), now, runs
+            )
+            results = await ingestor.ingest_recent(
+                now, on_start=started, on_step=step_done, on_run=progress
+            )
+            if not args.watch:
+                return results
+            print(json.dumps([result_dict(r) for r in results]), flush=True)
+            await asyncio.sleep(args.watch)
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        jobs.finish("aborted", "beendet")
+        raise
+    except Exception as exc:
+        jobs.finish("failed", f"{type(exc).__name__}: {exc}")
+        raise
 
 
 async def _backfill(

@@ -6,7 +6,7 @@
   ],
   "timezone": "",
   "schemaVersion": 41,
-  "version": 20,
+  "version": 21,
   "editable": false,
   "refresh": "5m",
   "time": {
@@ -492,7 +492,7 @@
     },
     {
       "type": "table",
-      "title": "GFS-Backfill: laufende Jobs",
+      "title": "GFS-Downloads: laufende Jobs",
       "id": 25,
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -515,7 +515,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT job_id AS \"Job\",\n       to_char(range_start AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') || ' – ' ||\n         to_char(range_end AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zeitraum\",\n       array_to_string(run_hours, '/') || 'Z' AS \"Läufe\",\n       round(100.0 * (n_complete + n_incomplete) / nullif(n_runs, 0), 1) AS \"Fortschritt\",\n       (n_complete + n_incomplete) || '/' || n_runs AS \"Bearbeitet\",\n       n_complete - n_skipped AS \"Neu\",\n       n_skipped AS \"Da\",\n       n_incomplete AS \"Unv.\",\n       n_failed_steps AS \"Fehler\",\n       bytes_stored AS \"Bronze\",\n       to_char(last_run AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zuletzt\",\n       to_char(started_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Start\",\n       CASE WHEN n_complete + n_incomplete > n_skipped\n            THEN to_char((now() + (now() - started_at) * (n_runs - n_complete - n_incomplete)\n                          / (n_complete + n_incomplete - n_skipped)) AT TIME ZONE 'Europe/Berlin',\n                         'DD.MM. HH24:MI') END AS \"Fertig ca.\",\n       CASE WHEN updated_at < now() - interval '30 minutes' THEN 'hängt?' ELSE 'läuft' END AS \"Status\"\n  FROM meta.backfill_job\n WHERE status = 'running'\n ORDER BY started_at DESC"
+          "rawSql": "SELECT job_id AS \"Job\",\n       CASE mode WHEN 'live' THEN 'Live' ELSE 'Backfill' END AS \"Art\",\n       to_char(range_start AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') || ' – ' ||\n         to_char(range_end AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zeitraum\",\n       array_to_string(run_hours, '/') || 'Z' AS \"Läufe\",\n       round(100.0 * (n_complete + n_incomplete) / nullif(n_runs, 0), 1) AS \"Fortschritt\",\n       (n_complete + n_incomplete) || '/' || n_runs AS \"Bearbeitet\",\n       n_complete - n_skipped AS \"Neu\",\n       n_skipped AS \"Da\",\n       n_incomplete AS \"Unv.\",\n       n_failed_steps AS \"Fehler\",\n       bytes_stored AS \"Bronze\",\n       to_char(last_run AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zuletzt\",\n       to_char(started_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Start\",\n       CASE WHEN mode = 'backfill' AND n_complete + n_incomplete > n_skipped\n            THEN to_char((now() + (now() - started_at) * (n_runs - n_complete - n_incomplete)\n                          / (n_complete + n_incomplete - n_skipped)) AT TIME ZONE 'Europe/Berlin',\n                         'DD.MM. HH24:MI') END AS \"Fertig ca.\",\n       CASE WHEN updated_at < now() - interval '30 minutes' THEN 'hängt?' ELSE 'läuft' END AS \"Status\"\n  FROM meta.backfill_job\n WHERE status = 'running'\n ORDER BY started_at DESC"
         }
       ],
       "fieldConfig": {
@@ -538,6 +538,18 @@
               {
                 "id": "custom.align",
                 "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Art"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
               }
             ]
           },
@@ -577,7 +589,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 420
+                "value": 350
               },
               {
                 "id": "unit",
@@ -757,7 +769,7 @@
     },
     {
       "type": "table",
-      "title": "GFS-Backfill: letzte 10 abgeschlossene Jobs",
+      "title": "GFS-Downloads: letzte 10 abgeschlossene Jobs",
       "id": 26,
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -780,7 +792,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT job_id AS \"Job\",\n       to_char(range_start AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') || ' – ' ||\n         to_char(range_end AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zeitraum\",\n       array_to_string(run_hours, '/') || 'Z' AS \"Läufe\",\n       round(100.0 * (n_complete + n_incomplete) / nullif(n_runs, 0), 1) AS \"Fortschritt\",\n       (n_complete + n_incomplete) || '/' || n_runs AS \"Bearbeitet\",\n       n_complete - n_skipped AS \"Neu\",\n       n_skipped AS \"Da\",\n       n_incomplete AS \"Unv.\",\n       n_failed_steps AS \"Fehler\",\n       bytes_stored AS \"Bronze\",\n       to_char(last_run AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zuletzt\",\n       to_char(started_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Start\",\n       to_char(finished_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Ende\",\n       floor(extract(epoch FROM finished_at - started_at) / 3600)::int || ':' || to_char(finished_at - started_at, 'MI') AS \"Dauer\",\n       CASE status WHEN 'done' THEN 'fertig' WHEN 'failed' THEN 'Fehler'\n                   ELSE 'abgebr.' END AS \"Status\"\n  FROM meta.backfill_job\n WHERE status <> 'running'\n ORDER BY finished_at DESC NULLS LAST\n LIMIT 10"
+          "rawSql": "SELECT job_id AS \"Job\",\n       CASE mode WHEN 'live' THEN 'Live' ELSE 'Backfill' END AS \"Art\",\n       to_char(range_start AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') || ' – ' ||\n         to_char(range_end AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zeitraum\",\n       array_to_string(run_hours, '/') || 'Z' AS \"Läufe\",\n       round(100.0 * (n_complete + n_incomplete) / nullif(n_runs, 0), 1) AS \"Fortschritt\",\n       (n_complete + n_incomplete) || '/' || n_runs AS \"Bearbeitet\",\n       n_complete - n_skipped AS \"Neu\",\n       n_skipped AS \"Da\",\n       n_incomplete AS \"Unv.\",\n       n_failed_steps AS \"Fehler\",\n       bytes_stored AS \"Bronze\",\n       to_char(last_run AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zuletzt\",\n       to_char(started_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Start\",\n       to_char(finished_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Ende\",\n       floor(extract(epoch FROM finished_at - started_at) / 3600)::int || ':' || to_char(finished_at - started_at, 'MI') AS \"Dauer\",\n       CASE status WHEN 'done' THEN 'fertig' WHEN 'failed' THEN 'Fehler'\n                   ELSE 'abgebr.' END AS \"Status\"\n  FROM meta.backfill_job\n WHERE status <> 'running'\n ORDER BY finished_at DESC NULLS LAST\n LIMIT 10"
         }
       ],
       "fieldConfig": {
@@ -803,6 +815,18 @@
               {
                 "id": "custom.align",
                 "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Art"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
               }
             ]
           },
@@ -842,7 +866,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 420
+                "value": 350
               },
               {
                 "id": "unit",
@@ -1038,7 +1062,7 @@
     },
     {
       "type": "table",
-      "title": "GFS-Backfill: laufende und anstehende Läufe",
+      "title": "GFS-Downloads: laufende und anstehende Läufe",
       "id": 27,
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -1050,7 +1074,7 @@
         "x": 0,
         "y": 38
       },
-      "description": "Laufende Läufe oben, darunter die nächsten 50 der Warteschlange (nächster zuerst). Lauf in UTC, Start in lokaler Zeit. Der Job steht in der Tabelle der laufenden Jobs darüber.",
+      "description": "Laufende Läufe oben, darunter wartende: zuerst Live (warten auf NOAA), dann die nächsten der Backfill-Warteschlange. Lauf in UTC, Start in lokaler Zeit.",
       "targets": [
         {
           "refId": "A",
@@ -1061,7 +1085,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT CASE r.status WHEN 'running' THEN 'läuft' ELSE 'wartet' END AS \"Status\",\n       r.queue_pos AS \"Pos\",\n       to_char(r.run_time AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') AS \"Lauf\",\n       CASE WHEN r.status = 'running'\n            THEN round(100.0 * r.steps_done / nullif(r.n_steps, 0), 1) END AS \"Fortschritt\",\n       CASE WHEN r.status = 'running' THEN r.steps_done || '/' || r.n_steps END AS \"Schritte\",\n       CASE WHEN r.status = 'running' THEN r.bytes_stored END AS \"Bronze\",\n       to_char(r.started_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Start\"\n  FROM meta.backfill_run r JOIN meta.backfill_job j USING (job_id)\n WHERE j.status = 'running' AND r.status IN ('running', 'queued')\n ORDER BY (r.status = 'running') DESC, r.queue_pos\n LIMIT 50"
+          "rawSql": "SELECT CASE j.mode WHEN 'live' THEN 'Live' ELSE 'Backfill' END AS \"Art\",\n       CASE r.status WHEN 'running' THEN 'läuft' ELSE 'wartet' END AS \"Status\",\n       r.queue_pos AS \"Pos\",\n       to_char(r.run_time AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') AS \"Lauf\",\n       CASE WHEN r.status = 'running'\n            THEN round(100.0 * r.steps_done / nullif(r.n_steps, 0), 1) END AS \"Fortschritt\",\n       CASE WHEN r.status = 'running' THEN r.steps_done || '/' || r.n_steps END AS \"Schritte\",\n       CASE WHEN r.status = 'running' THEN r.bytes_stored END AS \"Bronze\",\n       to_char(r.started_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Start\"\n  FROM meta.backfill_run r JOIN meta.backfill_job j USING (job_id)\n WHERE j.status = 'running' AND r.status IN ('running', 'queued')\n ORDER BY (r.status = 'running') DESC, (j.mode = 'live') DESC, r.queue_pos\n LIMIT 50"
         }
       ],
       "fieldConfig": {
@@ -1071,6 +1095,18 @@
           }
         },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Art"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
@@ -1163,7 +1199,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 400
+                "value": 330
               },
               {
                 "id": "unit",
@@ -1202,7 +1238,7 @@
     },
     {
       "type": "table",
-      "title": "GFS-Backfill: zuletzt abgeschlossene Läufe",
+      "title": "GFS-Downloads: zuletzt abgeschlossene Läufe",
       "id": 28,
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -1225,7 +1261,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT to_char(r.run_time AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') AS \"Lauf\",\n       CASE r.status WHEN 'complete' THEN 'geladen' WHEN 'skipped' THEN 'schon da'\n                     WHEN 'incomplete' THEN 'unvollst.' ELSE 'abgebr.' END AS \"Ergebnis\",\n       r.steps_stored AS \"Neu\",\n       r.steps_failed AS \"Fehler\",\n       r.bytes_stored AS \"Bronze\",\n       to_char(r.finished_at - r.started_at, 'HH24:MI:SS') AS \"Dauer\",\n       to_char(r.finished_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Fertig\",\n       r.job_id AS \"Job\"\n  FROM meta.backfill_run r\n WHERE r.finished_at IS NOT NULL\n ORDER BY r.finished_at DESC\n LIMIT 50"
+          "rawSql": "SELECT to_char(r.run_time AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') AS \"Lauf\",\n       CASE r.status WHEN 'complete' THEN 'geladen' WHEN 'skipped' THEN 'schon da'\n                     WHEN 'incomplete' THEN 'unvollst.' ELSE 'abgebr.' END AS \"Ergebnis\",\n       r.steps_stored AS \"Neu\",\n       r.steps_failed AS \"Fehler\",\n       r.bytes_stored AS \"Bronze\",\n       to_char(r.finished_at - r.started_at, 'HH24:MI:SS') AS \"Dauer\",\n       to_char(r.finished_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Fertig\",\n       CASE j.mode WHEN 'live' THEN 'Live' ELSE 'Backfill' END AS \"Art\"\n  FROM meta.backfill_run r JOIN meta.backfill_job j USING (job_id)\n WHERE r.finished_at IS NOT NULL\n ORDER BY r.finished_at DESC\n LIMIT 50"
         }
       ],
       "fieldConfig": {
@@ -1334,16 +1370,12 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Job"
+              "options": "Art"
             },
             "properties": [
               {
                 "id": "custom.width",
-                "value": 48
-              },
-              {
-                "id": "custom.align",
-                "value": "center"
+                "value": 70
               }
             ]
           }

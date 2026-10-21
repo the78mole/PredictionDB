@@ -49,6 +49,7 @@ class JobLog:
         hours: list[int],
         newest_first: bool,
         runs: list[datetime],
+        mode: str = "backfill",
     ) -> None:
         """Legt den Job und seine Läufe in Warteschlangen-Reihenfolge an."""
         self._run(
@@ -64,8 +65,8 @@ class JobLog:
         )
         job_id = self._run(
             """INSERT INTO meta.backfill_job
-                 (source_id, range_start, range_end, run_hours, newest_first, n_runs, host)
-               SELECT source_id, :start, :end, :hours, :newest, :n, :host
+                 (source_id, range_start, range_end, run_hours, newest_first, n_runs, host, mode)
+               SELECT source_id, :start, :end, :hours, :newest, :n, :host, :mode
                  FROM meta.source WHERE code = :source
                RETURNING job_id""",
             {
@@ -76,6 +77,7 @@ class JobLog:
                 "newest": newest_first,
                 "n": len(runs),
                 "host": socket.gethostname(),
+                "mode": mode,
             },
         )
         self.job_id = None if job_id is None else int(str(job_id))
@@ -92,8 +94,10 @@ class JobLog:
             return
         self._run(
             """UPDATE meta.backfill_run
-                  SET status = 'running', n_steps = :n, started_at = now(), updated_at = now()
-                WHERE job_id = :id AND run_time = :run""",
+                  SET status = 'running', n_steps = :n,
+                      steps_done = CASE WHEN started_at IS NULL THEN 0 ELSE steps_done END,
+                      started_at = coalesce(started_at, now()), updated_at = now()
+                WHERE job_id = :id AND run_time = :run AND status <> 'complete'""",
             {"id": self.job_id, "run": run, "n": n_steps},
         )
 
@@ -149,6 +153,58 @@ class JobLog:
                 "n": len(r.steps),
                 "status": "skipped" if skipped else "complete" if r.complete else "incomplete",
             },
+        )
+
+    def live_window(self, start: datetime, end: datetime, runs: list[datetime]) -> None:
+        """Live-Modus: gleitendes Fenster nachführen, neue Läufe hinten einreihen."""
+        if self.job_id is None:
+            return
+        self._run(
+            """INSERT INTO meta.backfill_run (job_id, run_time, queue_pos)
+               SELECT :id, r, (SELECT coalesce(max(queue_pos), 0) FROM meta.backfill_run
+                                WHERE job_id = :id) + n
+                 FROM unnest(CAST(:runs AS timestamptz[])) WITH ORDINALITY AS q(r, n)
+               ON CONFLICT (job_id, run_time) DO NOTHING""",
+            {"id": self.job_id, "runs": runs},
+        )
+        # Aus dem Fenster gefallene, nie vollständig gewordene Läufe abschließen
+        self._run(
+            """UPDATE meta.backfill_run SET status = 'incomplete', finished_at = now(),
+                      updated_at = now()
+                WHERE job_id = :id AND run_time < :start AND status IN ('queued', 'running')""",
+            {"id": self.job_id, "start": start},
+        )
+        self._run(
+            """UPDATE meta.backfill_job
+                  SET range_start = :start, range_end = :end, updated_at = now(),
+                      n_runs = (SELECT count(*) FROM meta.backfill_run WHERE job_id = :id)
+                WHERE job_id = :id""",
+            {"id": self.job_id, "start": start, "end": end},
+        )
+
+    def live_progress(self, r: RunResult) -> None:
+        """Live-Modus: Stand eines Laufs nach dem Zyklus; unvollständige warten weiter."""
+        if self.job_id is None:
+            return
+        done = sum(1 for s in r.steps if s.status in ("stored", "skipped"))
+        self._run(
+            """UPDATE meta.backfill_run
+                  SET status = CASE WHEN :complete THEN 'complete' ELSE 'queued' END,
+                      steps_done = :done,
+                      finished_at = CASE WHEN :complete THEN now() END, updated_at = now()
+                WHERE job_id = :id AND run_time = :run AND status <> 'complete'""",
+            {"id": self.job_id, "run": r.run, "complete": r.complete, "done": done},
+        )
+        self._run(
+            """UPDATE meta.backfill_job j
+                  SET n_complete = c.complete, n_failed_steps = c.failed,
+                      bytes_stored = c.bytes, last_run = :run, updated_at = now()
+                 FROM (SELECT count(*) FILTER (WHERE status = 'complete') AS complete,
+                              coalesce(sum(steps_failed), 0) AS failed,
+                              coalesce(sum(bytes_stored), 0) AS bytes
+                         FROM meta.backfill_run WHERE job_id = :id) c
+                WHERE j.job_id = :id""",
+            {"id": self.job_id, "run": r.run},
         )
 
     def finish(self, status: str, error: str | None = None) -> None:
