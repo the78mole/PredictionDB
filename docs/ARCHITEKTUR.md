@@ -1,6 +1,6 @@
 # Strompreisprognose – Architekturentwurf
 
-**Version:** 0.7 (Entwurf) · **Stand:** 2026-10-21 · **Status:** zur Diskussion
+**Version:** 0.8 (Entwurf) · **Stand:** 2026-10-21 · **Status:** zur Diskussion
 
 ---
 
@@ -201,7 +201,7 @@ Für das **Training** wird Historie benötigt. Archiv-Optionen:
 |---|---|---|
 | Historische GFS-Prognosen | AWS `noaa-gfs-bdp-pds` (ab ~2021), NCEI-Archiv (älter) | per `.idx`-Range wie im Live-Betrieb |
 | Historische ECMWF-Open-Data-Prognosen | AWS `ecmwf-forecasts` (ab ~2023) | Umfang vorher prüfen |
-| Wetter-„Wahrheit“ | ERA5 über Copernicus CDS (kostenloses Konto), DWD-Stationsdaten (CDC) | für Bias-Korrektur und als Ziel bei Hilfsmodellen |
+| Wetter-„Wahrheit“ | ERA5 über Copernicus CDS (kostenloses Konto), DWD-Stationsdaten (CDC), NOAA ISD/Global Hourly auf AWS als Ausweichquelle (7.9) | für Bias-Korrektur und als Ziel bei Hilfsmodellen |
 | Schnell-Backfill Punktdaten | Open-Meteo Historical Forecast API | gut für erste Modelle |
 
 ### 3.2 Energie- und Marktdaten (Deutschland, Gebotszone DE-LU)
@@ -354,6 +354,8 @@ flowchart LR
 ```
 
 Umgesetzt in `services/wx_process` (Revision `0003_wx_features`): Silber liegt als ein Store je Lauf unter `wx-silver/gfs/0p25/JJJJ/MM/TT/HH.zarr` (statt eines wachsenden Stores je Modell), damit Neuberechnung und Aufräumen auf einen Lauf beschränkt bleiben; Int16 mit CF-Attributen `scale_factor`/`add_offset`, lesbar mit `xarray.open_zarr`. Mittel und Summen stehen dort als Werte für das Intervall seit dem vorherigen Schritt (die 6-h-Eimer von GFS sind zurückgerechnet). Einen vollständigen Lauf erkennt `wx-process` vorerst am Laufmanifest `run.json` in Bronze (Abfrage alle 10 min), nicht über `NOTIFY nwp_run_complete`; danach setzt es `meta.nwp_run` auf `processed` und sendet `NOTIFY features_ready`.
+
+**Zeitachse:** Bronze und Silber halten die Zeitschritte der Quelle unverändert (GFS: stündlich bis 120 h, danach dreistündlich). Zeitliche Interpolation geschieht erst beim Lesen und nur auf Anforderung (7.9).
 
 Objekt-Schlüssel (Bronze), sprechend und partitionierbar:
 
@@ -1103,6 +1105,108 @@ Für das Training braucht es mehr Historie, als die eigene Sammlung zu Beginn ha
 
 **Weitere Daten, die später hinzukommen:** Gebäudestammdaten (beheizte Fläche, Heizlast oder Wärmeverlustkoeffizient, Wärmeabgabesystem und Vorlauftemperatur, Speichergröße), Messwerte (Wärmemengenzähler, Stromzähler der Wärmepumpe, Raum-, Vorlauf- und Rücklauftemperaturen), bei Netzen die Vorlauf- und Rücklauftemperaturen und die Zahl der Abnehmer sowie Strom- und Netzentgelt-Tarife. Die API für eigene Anlagen (7.6) ist dafür die natürliche Erweiterung (neue Typen `building`, `heat_network`, `heat_pump`). Nutzungsrechtlich gilt dasselbe wie in 7.6: abgedeckt sind eigene Gebäude und selbst betriebene Netze.
 
+### 7.9 Analyse-Jobs
+
+Neben Training und Inferenz braucht das Projekt immer wieder Auswertungen, die eine konkrete Frage beantworten: Wie gut ist GFS je Vorlauf? Hat sich ein Modellwechsel gelohnt? Wie weit liegen zwei Quellen auseinander? Wie hätte ein Modell im letzten Winter abgeschnitten? Solche Analysen werden strukturiert beauftragt, laufen reproduzierbar und hinterlassen einen Ergebnisordner im Repo.
+
+**Ablauf:**
+
+```mermaid
+flowchart LR
+    Q["Fragestellung<br/>im Projekt"] --> J["job.yaml<br/>docs/analysen/slug/"]
+    J --> R["pdb-analysis run<br/>Container, Profil analysis"]
+    D[("Bronze, Silber, Gold,<br/>Beobachtungen")] -- "Lese-Schicht<br/>mit Interpolation" --> R
+    R --> E["Ergebnisordner<br/>README.md, tabellen/,<br/>grafiken/, lauf.json"]
+    E --> PR["PR ins Repo"]
+    R --> REG[("meta.analysis_run")]
+```
+
+1. **Auftrag:** Die Frage wird als `job.yaml` im künftigen Ergebnisordner `docs/analysen/<slug>/` festgehalten (Beispiel unten). So ist schon vor dem Lauf klar und prüfbar, was verglichen wird.
+2. **Lauf:** `pdb-analysis run docs/analysen/<slug>/job.yaml` im gemeinsamen Image (Compose-Profil `analysis`, `restart: "no"`), lokal, auf der VM oder als portabler Job wie in 7.7. Der Lauf liest nur und schreibt nichts in Produktionstabellen außer seinem Eintrag in `meta.analysis_run`.
+3. **Ergebnis:** `README.md` mit Fragestellung, Ergebnis in Kürze, Daten und Methode, Unsicherheit und Einschränkungen, dazu `tabellen/*.csv` (Fehlerwerte, verwendete Stationen), `grafiken/*.png` bzw. `.svg`, die unveränderte `job.yaml` und `tabellen/lauf.json`. `lauf.json` hält Zeiträume, Läufe, Horizonte, Umfang (Stationen, Fehlerpaare), fehlende und zeitlich interpolierte Schritte sowie Git-Commit, Image-Version und Hashes der Eingangsobjekte fest. Braucht ein Job eigene Logik (`kind: custom`), liegt sie als `auswertung.py` im Ordner und nutzt die gemeinsamen Helfer. Große Zwischenergebnisse (z. B. Paare Prognose/Messung je Station) liegen als Parquet in Garage `analysis/<slug>/<run_id>/`, nicht im Repo.
+4. **Übergabe:** Der Ergebnisordner kommt per PR ins Repo. Wiederkehrende Jobs (`schedule`) laufen über `maintenance` und aktualisieren ihren Ordner bzw. ein Grafana-Dashboard.
+
+**Job-Definition** (Schema per Pydantic geprüft):
+
+```yaml
+id: gfs-v15-v16
+title: GFS v15 gegen v16, Prognosefehler an DWD-Stationen
+question: Wie stark unterscheiden sich die Fehler von v15 und v16 gegenüber Messungen, von der Analyse bis 10 Tage?
+requested_by: Maulwurf
+kind: verification             # verification | comparison | backtest | data_quality | custom
+inputs:
+  forecast:
+    source: gfs_0p25
+    periods:                   # Version je Lauf aus meta.model_version
+      - {label: v15 2021, from: 2021-01-01, to: 2021-03-22}
+      - {label: v16 2022, from: 2022-01-01, to: 2022-03-22}   # gleiche Kalendertage
+      - {label: v16 2023, from: 2023-01-01, to: 2023-03-22}   # Kontrolle: Jahresschwankung
+    runs: [0, 12]
+    variables: [t2m, d2m, ff10, prmsl, dswrf]
+  observations:
+    source: dwd_cdc            # Ausweichquelle: noaa_isd
+    stations: {country: DE, min_completeness: 0.8, in_all_periods: true}
+method:
+  horizons_h: [0, 6, 12, 24, 36, 72, 96, 240]
+  time_interpolation: linear   # nur für fehlende Schritte, erst beim Lesen; none | linear | solar
+  space_interpolation: bilinear
+  corrections: {t2m: lapse_rate_0.0065}       # Modellhöhe -> Stationshöhe
+  windows: {dswrf: mean_6h_ending, skip_night: true}
+  metrics: [bias, mae, rmse, n]
+  uncertainty: {rmse: bootstrap_over_runs, level: 0.95}
+  group_by: [period, variable, horizon]
+outputs:
+  figures: [error_by_horizon]
+schedule: once                 # once | monthly | on_new_model_version
+```
+
+Das Beispiel entspricht der ersten Analyse ([`docs/analysen/gfs-v15-v16/`](analysen/gfs-v15-v16/README.md)). Sie lief noch als eigenständiges Skript mit Parametern als Konstanten; die Job-Definition oben ist daraus abgeleitet und gilt für künftige Jobs.
+
+**Grundsätze, die sich aus der ersten Analyse ergeben haben:**
+
+- **Speichern in nativer Zeitauflösung, interpolieren beim Lesen.** Bronze und Silber halten die Schritte so, wie die Quelle sie liefert (GFS v16: stündlich bis 120 h, danach dreistündlich; ältere Archive teils nur dreistündlich). Zeitliche Interpolation geschieht ausschließlich in der Lese-Schicht (`wxread`, gemeinsam für Analyse, Features und API) und nur auf Anforderung (`time_interpolation`). Momentanwerte werden linear interpoliert. Intervallmittel und -summen werden auf die Teilintervalle verteilt, nicht linear zwischen Stützstellen gezogen. Strahlung wird nach dem Sonnenstand verteilt. Jedes Ergebnis vermerkt, welche Werte interpoliert sind, damit Fehler bei interpolierten Vorläufen nicht mit echten Stundenwerten vermischt werden.
+- **Modellversionen explizit führen.** NCEP ändert Modell, Gitter und Archivpfade mit jeder GFS-Version (v15 bis 2021-03-22 06Z unter `gfs.JJJJMMTT/HH/`, v16 ab 12Z desselben Tages unter `.../HH/atmos/`). Eine Tabelle `meta.model_version` (Quelle, Version, gültig ab bis, Archivpfad, Schrittraster) ordnet jeden Lauf einer Version zu. Feature-Pipelines, Training und Analysen können so nach Version filtern bzw. die Version als Feature nutzen.
+- **Versionsvergleiche über Zeiträume, nicht über Paare.** Im AWS-Archiv gibt es keinen Lauf, der in beiden Versionen vorliegt. Ein Vergleich läuft daher über Fehlerstatistiken gleicher Kalendertage in verschiedenen Jahren. Mindestens zwei Jahre der neuen Version dienen als Kontrolle: Nur was in beiden gleich vom alten Wert abweicht, gilt als Versionseffekt. Die RMSE bekommt ein Bootstrap-Intervall über die Läufe.
+- **Feste Stationsmenge.** Verglichen wird nur an Stationen mit ausreichender Vollständigkeit in allen Zeiträumen (erste Analyse: mindestens 80 % der Stunden), damit sich die Stichprobe zwischen den Zeiträumen nicht ändert.
+- **Variablengerecht vergleichen.** 2-m-Temperatur wird mit 0,0065 K/m auf die Stationshöhe korrigiert. Intervallgrößen wie Strahlung werden als Fenstermittel verglichen (GFS-6-h-Mittel gegen das Mittel der DWD-Stundenwerte desselben Fensters), reine Nachtfenster zählen nicht.
+- **Beobachtungen sind eine eigene Quelle.** Für Verifikation braucht es Messwerte als „Wahrheit“: DWD CDC (Stationen DE, stündlich: Temperatur, Taupunkt, Wind, Druck, Globalstrahlung) und als Ausweichquelle NOAA ISD bzw. Global Hourly (SYNOP-Stationen weltweit, frei auf AWS). Sie landen im Schema `obs` (`obs.station`, `obs.value` als Hypertable mit Station, Variable, Zeit, Wert, Qualitätskennung), mit Quelle und Rang wie bei `energy.*`. Die erste Analyse hat die DWD-Daten noch selbst geladen und nur lokal zwischengespeichert.
+
+**Erkenntnisse aus der ersten Analyse (GFS v15 gegen v16):**
+
+| Größe | Befund | Folge |
+|---|---|---|
+| Temperatur, Taupunkt | v16 etwas besser (RMSE −0,1 bis −0,2 K bis 36 h), im Rahmen der Jahresschwankung, kein Bias-Sprung | keine |
+| Wind 10 m | v16 Bias +0,3 bis +0,45 statt +0,15 m/s, in beiden v16-Jahren gleich; einziger klarer Versionsbruch | Windstrom-Features je Version biaskorrigieren oder Version als Merkmal |
+| Luftdruck | praktisch gleich (beide etwa 0,3 hPa unter den Stationen) | keine |
+| Globalstrahlung | v16 Bias +7 bis +13 statt +17 W/m², RMSE vergleichbar | keine bis gering |
+
+Daraus folgt für das Training (7.7): v15-Läufe (etwa aus NCAR RDA d084001 ab 2015) sind brauchbar, aber nicht nahtlos. Kommen sie in die Trainingshistorie, läuft die Modellversion aus `meta.model_version` als Merkmal mit oder der Wind wird je Version korrigiert. Für den Backfill ab v16 ändert sich nichts. Eine erneute Verifikation (`schedule: on_new_model_version`) ist bei jeder neuen GFS-Version fällig.
+
+**Was der erste Lauf vermisst hat und deshalb Teil der Architektur ist:**
+
+- Beobachtungen in der DB (`obs`, siehe oben) statt eigener Zwischenspeicher je Analyse.
+- Eine gemeinsame Lese-Schicht `wxread`: Gitter auf Station (bilinear), Höhenkorrektur, Zeitinterpolation mit Vermerk, Fenstermittel für Intervallgrößen.
+- Ablage für Analyse-Zwischenstände in Garage (`analysis/<slug>/<run_id>/`, eigener Schlüssel mit Schreibrecht nur dort).
+- Wiederverwendbare Statistik-Helfer im Paket `pdb_analysis` (Bias, MAE, RMSE, Bootstrap-Intervalle, Standardgrafik Fehler je Vorlauf).
+
+**Ergänzende Tabellen:**
+
+```sql
+CREATE TABLE meta.model_version (
+  source_id smallint REFERENCES meta.source, version text,
+  valid_from timestamptz, valid_to timestamptz,     -- erster und letzter Lauf
+  archive_prefix text, step_grid text,              -- z. B. '0-120/1,123-384/3'
+  PRIMARY KEY (source_id, version)
+);
+CREATE TABLE meta.analysis_run (
+  run_id uuid PRIMARY KEY, job_id text NOT NULL, job_sha256 text NOT NULL,
+  git_commit text, image text, started_at timestamptz, finished_at timestamptz,
+  status text, result_prefix text                    -- Garage analysis/<slug>/<run_id>/
+);
+```
+
+Analyse-Jobs sind bewusst einfach gehalten: eine YAML-Datei, ein Befehl, ein Ordner. Eine eigene Job-Queue oder ein Workflow-System ist erst nötig, wenn regelmäßig viele Jobs parallel laufen.
+
 ---
 
 ## 8. Deployment auf der PVE-VM
@@ -1287,6 +1391,7 @@ Datenabfluss beachten: Bei S3-Diensten mit Egress-Kosten (AWS) sollten Training 
 - **Metriken:** Läufe pro Quelle vollständig/verspätet/fehlgeschlagen, Bytes je Lauf, Latenz zwischen Veröffentlichung und Ablage, Prognosefehler je Horizont.
 - **Alarme:** „Kein vollständiger GFS-Lauf seit 12 h“, „ENTSO-E-Daten älter als 2 h“, „Garage-Füllstand > 80 %“.
 - **Tests:** Unit-Tests für `.idx`-Parser und Range-Merging mit aufgezeichneten Fixtures; Integrationstest gegen echte Endpunkte als separater, manuell ausgelöster CI-Job (nicht in jedem Lauf, wegen Rate-Limits).
+- **Analysen:** Auswertungen laufen als Analyse-Jobs mit Ergebnisordner unter `docs/analysen/` (7.9).
 - **Lizenzen:** Quellenvermerke (DWD, ECMWF CC BY 4.0, SMARD/Energy-Charts CC BY 4.0, MaStR DL-DE BY 2.0) in API-Antworten und Dashboards mitführen.
 
 ---
