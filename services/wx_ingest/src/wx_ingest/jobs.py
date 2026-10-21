@@ -1,4 +1,6 @@
-"""Backfill-Protokoll in ``meta.backfill_job`` (Status-Dashboard).
+"""Backfill-Protokoll je Job (``meta.backfill_job``) und je Lauf (``meta.backfill_run``).
+
+Beides speist die Backfill-Tabellen im Status-Dashboard.
 
 Die Datenbank ist für den Download nicht nötig: Ist sie nicht erreichbar, wird nur gewarnt
 und ohne Protokoll weitergeladen.
@@ -13,7 +15,7 @@ from sqlalchemy import Engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from predictiondb_core.log import get_logger
-from wx_ingest.ingest import RunResult
+from wx_ingest.ingest import RunResult, StepResult
 
 log = get_logger(__name__)
 
@@ -46,12 +48,18 @@ class JobLog:
         end: datetime,
         hours: list[int],
         newest_first: bool,
-        n_runs: int,
+        runs: list[datetime],
     ) -> None:
+        """Legt den Job und seine Läufe in Warteschlangen-Reihenfolge an."""
         self._run(
-            f"""UPDATE meta.backfill_job SET status = 'aborted', finished_at = updated_at,
-                       error = 'ohne Abschluss beendet'
-                 WHERE status = 'running' AND updated_at < now() - interval '{STALE}'""",
+            f"""WITH stale AS (
+                  UPDATE meta.backfill_job SET status = 'aborted', finished_at = updated_at,
+                         error = 'ohne Abschluss beendet'
+                   WHERE status = 'running' AND updated_at < now() - interval '{STALE}'
+                  RETURNING job_id)
+                UPDATE meta.backfill_run SET status = 'aborted', finished_at = now(),
+                       updated_at = now()
+                 WHERE job_id IN (SELECT job_id FROM stale) AND status = 'running'""",
             {},
         )
         job_id = self._run(
@@ -66,11 +74,47 @@ class JobLog:
                 "end": end,
                 "hours": hours,
                 "newest": newest_first,
-                "n": n_runs,
+                "n": len(runs),
                 "host": socket.gethostname(),
             },
         )
         self.job_id = None if job_id is None else int(str(job_id))
+        if self.job_id is not None:
+            self._run(
+                """INSERT INTO meta.backfill_run (job_id, run_time, queue_pos)
+                   SELECT :id, r, n FROM unnest(CAST(:runs AS timestamptz[]))
+                                         WITH ORDINALITY AS q(r, n)""",
+                {"id": self.job_id, "runs": runs},
+            )
+
+    def run_started(self, run: datetime, n_steps: int) -> None:
+        if self.job_id is None:
+            return
+        self._run(
+            """UPDATE meta.backfill_run
+                  SET status = 'running', n_steps = :n, started_at = now(), updated_at = now()
+                WHERE job_id = :id AND run_time = :run""",
+            {"id": self.job_id, "run": run, "n": n_steps},
+        )
+
+    def step_done(self, run: datetime, step: StepResult) -> None:
+        if self.job_id is None:
+            return
+        self._run(
+            """UPDATE meta.backfill_run
+                  SET steps_done = steps_done + 1,
+                      steps_stored = steps_stored + :stored,
+                      steps_failed = steps_failed + :failed,
+                      bytes_stored = bytes_stored + :bytes, updated_at = now()
+                WHERE job_id = :id AND run_time = :run""",
+            {
+                "id": self.job_id,
+                "run": run,
+                "stored": int(step.status == "stored"),
+                "failed": int(step.status == "failed"),
+                "bytes": step.size,
+            },
+        )
 
     def progress(self, r: RunResult) -> None:
         if self.job_id is None:
@@ -95,6 +139,17 @@ class JobLog:
                 "run": r.run,
             },
         )
+        self._run(
+            """UPDATE meta.backfill_run
+                  SET status = :status, steps_done = :n, finished_at = now(), updated_at = now()
+                WHERE job_id = :id AND run_time = :run""",
+            {
+                "id": self.job_id,
+                "run": r.run,
+                "n": len(r.steps),
+                "status": "skipped" if skipped else "complete" if r.complete else "incomplete",
+            },
+        )
 
     def finish(self, status: str, error: str | None = None) -> None:
         if self.job_id is None:
@@ -104,4 +159,12 @@ class JobLog:
                   SET status = :status, error = :error, updated_at = now(), finished_at = now()
                 WHERE job_id = :id""",
             {"id": self.job_id, "status": status, "error": error},
+        )
+        # Läufe, die mitten im Download standen, gelten als abgebrochen; wartende bleiben
+        # liegen und werden vom nächsten Job neu eingeplant.
+        self._run(
+            """UPDATE meta.backfill_run SET status = 'aborted', finished_at = now(),
+                      updated_at = now()
+                WHERE job_id = :id AND status = 'running'""",
+            {"id": self.job_id},
         )

@@ -6,7 +6,7 @@
   ],
   "timezone": "",
   "schemaVersion": 41,
-  "version": 11,
+  "version": 12,
   "editable": false,
   "refresh": "5m",
   "time": {
@@ -677,6 +677,139 @@
       }
     },
     {
+      "type": "table",
+      "title": "GFS-Backfill: laufende und anstehende Läufe",
+      "id": 27,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 12,
+        "x": 0,
+        "y": 38
+      },
+      "description": "Laufende Läufe oben, darunter die nächsten 50 der Warteschlange (nächster zuerst).",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT CASE r.status WHEN 'running' THEN 'läuft' ELSE 'wartet' END AS \"Status\",\n       r.queue_pos AS \"Pos.\",\n       to_char(r.run_time AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') AS \"Lauf\",\n       CASE WHEN r.status = 'running'\n            THEN round(100.0 * r.steps_done / nullif(r.n_steps, 0), 1) END AS \"Fortschritt\",\n       CASE WHEN r.status = 'running' THEN r.steps_done || ' / ' || r.n_steps END AS \"Schritte\",\n       CASE WHEN r.status = 'running' THEN r.bytes_stored END AS \"Bronze\",\n       r.started_at AS \"Gestartet\",\n       r.job_id AS \"Job\"\n  FROM meta.backfill_run r JOIN meta.backfill_job j USING (job_id)\n WHERE j.status = 'running' AND r.status IN ('running', 'queued')\n ORDER BY (r.status = 'running') DESC, r.queue_pos\n LIMIT 50"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Fortschritt"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Bronze"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "GFS-Backfill: zuletzt abgeschlossene Läufe",
+      "id": 28,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 12,
+        "x": 12,
+        "y": 38
+      },
+      "description": "Die letzten 50 abgeschlossenen Läufe aller Jobs, neueste oben.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT to_char(r.run_time AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') AS \"Lauf\",\n       CASE r.status WHEN 'complete' THEN 'geladen' WHEN 'skipped' THEN 'schon da'\n                     WHEN 'incomplete' THEN 'unvollständig' ELSE 'abgebrochen' END AS \"Ergebnis\",\n       r.steps_stored AS \"Schritte neu\",\n       r.steps_failed AS \"Fehler\",\n       r.bytes_stored AS \"Bronze\",\n       justify_interval(date_trunc('second', r.finished_at - r.started_at))::text AS \"Dauer\",\n       r.finished_at AS \"Fertig\",\n       r.job_id AS \"Job\"\n  FROM meta.backfill_run r\n WHERE r.finished_at IS NOT NULL\n ORDER BY r.finished_at DESC\n LIMIT 50"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Bronze"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
       "type": "row",
       "title": "Anlagenbestand (MaStR)",
       "id": 10,
@@ -685,7 +818,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 38
+        "y": 50
       },
       "panels": []
     },
@@ -701,7 +834,7 @@
         "h": 8,
         "w": 9,
         "x": 0,
-        "y": 39
+        "y": 51
       },
       "targets": [
         {
@@ -746,7 +879,7 @@
         "h": 8,
         "w": 15,
         "x": 9,
-        "y": 39
+        "y": 51
       },
       "targets": [
         {
@@ -784,7 +917,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 47
+        "y": 59
       },
       "panels": []
     },
@@ -800,7 +933,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 48
+        "y": 60
       },
       "targets": [
         {
@@ -862,7 +995,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 48
+        "y": 60
       },
       "targets": [
         {
@@ -924,7 +1057,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 52
+        "y": 64
       },
       "targets": [
         {
@@ -967,7 +1100,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 52
+        "y": 64
       },
       "targets": [
         {
@@ -1010,7 +1143,7 @@
         "h": 8,
         "w": 16,
         "x": 8,
-        "y": 48
+        "y": 60
       },
       "targets": [
         {
@@ -1055,7 +1188,7 @@
         "h": 10,
         "w": 8,
         "x": 0,
-        "y": 56
+        "y": 68
       },
       "targets": [
         {
@@ -1094,7 +1227,7 @@
         "h": 10,
         "w": 8,
         "x": 8,
-        "y": 56
+        "y": 68
       },
       "targets": [
         {
@@ -1133,7 +1266,7 @@
         "h": 10,
         "w": 8,
         "x": 16,
-        "y": 56
+        "y": 68
       },
       "targets": [
         {
@@ -1240,7 +1373,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 66
+        "y": 78
       },
       "panels": []
     },
@@ -1256,7 +1389,7 @@
         "h": 8,
         "w": 6,
         "x": 0,
-        "y": 67
+        "y": 79
       },
       "targets": [
         {
@@ -1299,7 +1432,7 @@
         "h": 8,
         "w": 18,
         "x": 6,
-        "y": 67
+        "y": 79
       },
       "targets": [
         {
