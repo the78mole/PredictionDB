@@ -6,7 +6,7 @@
   ],
   "timezone": "",
   "schemaVersion": 41,
-  "version": 24,
+  "version": 25,
   "editable": false,
   "refresh": "5m",
   "time": {
@@ -193,7 +193,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH ds AS (\n  SELECT source_id, dataset, min(chunk_start) AS erster\n    FROM meta.energy_fetch GROUP BY 1, 2)\nSELECT s.code AS \"Quelle\",\n       round((100 * avg(extract(epoch FROM now() - ds.erster)\n                        / extract(epoch FROM now() - timestamptz '2015-01-01')))::numeric, 1) AS \"Fortschritt\"\n  FROM ds JOIN meta.source s USING (source_id)\n GROUP BY 1 ORDER BY 1"
+          "rawSql": "WITH ds AS (\n  SELECT source_id, dataset, min(chunk_start) AS erster\n    FROM meta.energy_fetch GROUP BY 1, 2),\np AS (\n  SELECT s.code,\n         least(100, round((100 * avg(extract(epoch FROM now() - ds.erster)\n                          / extract(epoch FROM now() - timestamptz '2015-01-01')))::numeric, 1)) AS pct\n    FROM ds JOIN meta.source s USING (source_id)\n   GROUP BY 1)\nSELECT code || '  ' || replace(to_char(pct, 'FM990.0'), '.', ',') || ' %' AS \"Quelle\",\n       pct AS \"Fortschritt\"\n  FROM p ORDER BY code"
         }
       ],
       "description": "Mittel über alle Datensätze einer Quelle: Anteil der Zeitspanne 2015 bis heute, die schon geladen ist.",
@@ -208,7 +208,7 @@
           ],
           "fields": ""
         },
-        "valueMode": "color",
+        "valueMode": "hidden",
         "namePlacement": "top",
         "sizing": "auto"
       },
