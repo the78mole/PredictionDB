@@ -23,3 +23,12 @@ def test_unreachable_database_disables_log() -> None:
     jobs = JobLog(engine)
     jobs.start("gfs_0p25", RUN, RUN, [0, 12], True, 1)
     assert jobs.engine is None and jobs.job_id is None
+
+
+def test_statements_without_rows(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    # UPDATE liefert keine Zeilen; das darf das Protokoll nicht abschalten
+    engine = create_engine(f"sqlite:///{tmp_path / 'db.sqlite'}")
+    jobs = JobLog(engine)
+    assert jobs._run("CREATE TABLE t (x int)", {}) is None
+    assert jobs._run("SELECT 7", {}) == 7
+    assert jobs.engine is engine

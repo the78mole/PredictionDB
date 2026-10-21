@@ -31,7 +31,8 @@ class JobLog:
             return None
         try:
             with self.engine.begin() as conn:
-                return conn.execute(text(sql), params).scalar()
+                result = conn.execute(text(sql), params)
+                return result.scalar() if result.returns_rows else None
         except SQLAlchemyError as exc:
             log.warning("backfill_job_log_failed", error=str(exc).splitlines()[0])
             if self.job_id is None:
