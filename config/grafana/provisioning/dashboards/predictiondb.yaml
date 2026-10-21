@@ -1,0 +1,9 @@
+# Dashboards aus dem Repo; Änderungen in der Oberfläche werden beim Neustart überschrieben.
+apiVersion: 1
+providers:
+  - name: PredictionDB
+    folder: PredictionDB
+    type: file
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana-dashboards

@@ -1,0 +1,25 @@
+# Datenquelle für alle Dashboards; Passwort und DB-Name kommen aus der Umgebung (compose.yaml).
+apiVersion: 1
+datasources:
+  - name: PredictionDB
+    uid: pdb-postgres
+    type: grafana-postgresql-datasource
+    url: postgres:5432
+    user: grafana_reader
+    isDefault: true
+    editable: false
+    jsonData:
+      database: ${POSTGRES_DB}
+      sslmode: disable
+      postgresVersion: 1700
+      timescaledb: true
+      maxOpenConns: 5
+    secureJsonData:
+      password: ${PDB_GRAFANA_DB_PASSWORD}
+  - name: Prometheus
+    uid: pdb-prometheus
+    type: prometheus
+    url: http://prometheus:9090
+    editable: false
+    jsonData:
+      timeInterval: 30s
