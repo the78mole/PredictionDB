@@ -6,6 +6,7 @@ Beispiele::
     wx-process gfs latest --watch 600              # Dienst, alle 10 min
     wx-process gfs run 2026102012 --force          # einen Lauf neu rechnen (Silber und Gold)
     wx-process gfs backfill 2026-10-01T00 2026-10-07T18 --clustering v2026Q4
+    wx-process gfs backfill 2021-03-22T12 --runs 0,12 --newest-first --watch 3600
     wx-process gfs run 2026102012 --silver-only    # nur Silber, ohne Datenbank
 """
 
@@ -14,13 +15,14 @@ from __future__ import annotations
 import argparse
 import json
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 from predictiondb_core.db import create_db_engine
 from predictiondb_core.log import configure_logging
 from predictiondb_core.s3 import s3_store
 from predictiondb_core.settings import get_settings
-from wx_ingest.cli import parse_run
+from wx_ingest.cli import add_backfill_args, parse_run
 from wx_ingest.config import GfsConfig
 from wx_process.config import ProcessConfig, WxProcessSettings
 from wx_process.pipeline import RunOutcome, WxPipeline
@@ -48,8 +50,13 @@ def build_parser() -> argparse.ArgumentParser:
         if name == "run":
             c.add_argument("run", type=parse_run)
         else:
-            c.add_argument("start", type=parse_run)
-            c.add_argument("end", type=parse_run)
+            add_backfill_args(c)
+            c.add_argument(
+                "--watch",
+                type=int,
+                metavar="SEK",
+                help="wiederholen im Abstand von SEK Sekunden (während wx-ingest nachlädt)",
+            )
         c.add_argument("--force", action="store_true", help="Silber und Features neu rechnen")
         c.add_argument("--clustering", help="Clusterversion (Standard: jüngste)")
         c.add_argument("--silver-only", action="store_true", help="ohne Datenbank, nur Silber")
@@ -80,9 +87,19 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "run":
         results = [pipeline.process(args.run, force=args.force, clustering=args.clustering)]
     elif args.cmd == "backfill":
-        results = pipeline.backfill(
-            args.start, args.end, force=args.force, clustering=args.clustering
-        )
+        while True:
+            results = pipeline.backfill(
+                args.start,
+                args.end or datetime.now(UTC),
+                force=args.force,
+                clustering=args.clustering,
+                hours=args.runs,
+                newest_first=args.newest_first,
+            )
+            if not args.watch:
+                break
+            _print([r for r in results if r.status not in ("skipped", "not_ready")], None)
+            time.sleep(args.watch)
     else:
         while True:
             results = pipeline.latest()
