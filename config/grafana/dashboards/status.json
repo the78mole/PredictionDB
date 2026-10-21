@@ -6,7 +6,7 @@
   ],
   "timezone": "",
   "schemaVersion": 41,
-  "version": 8,
+  "version": 9,
   "editable": false,
   "refresh": "5m",
   "time": {
@@ -771,7 +771,7 @@
       },
       "gridPos": {
         "h": 10,
-        "w": 10,
+        "w": 8,
         "x": 0,
         "y": 43
       },
@@ -811,7 +811,7 @@
       "gridPos": {
         "h": 10,
         "w": 8,
-        "x": 10,
+        "x": 8,
         "y": 43
       },
       "targets": [
@@ -849,8 +849,8 @@
       },
       "gridPos": {
         "h": 10,
-        "w": 6,
-        "x": 18,
+        "w": 8,
+        "x": 16,
         "y": 43
       },
       "targets": [
