@@ -161,9 +161,12 @@ class JobLog:
             return
         self._run(
             """INSERT INTO meta.backfill_run (job_id, run_time, queue_pos)
-               SELECT :id, r, (SELECT coalesce(max(queue_pos), 0) FROM meta.backfill_run
-                                WHERE job_id = :id) + n
-                 FROM unnest(CAST(:runs AS timestamptz[])) WITH ORDINALITY AS q(r, n)
+               SELECT :id, r, mx.m + row_number() OVER (ORDER BY n)
+                 FROM unnest(CAST(:runs AS timestamptz[])) WITH ORDINALITY AS q(r, n),
+                      (SELECT coalesce(max(queue_pos), 0) AS m FROM meta.backfill_run
+                        WHERE job_id = :id) mx
+                WHERE NOT EXISTS (SELECT 1 FROM meta.backfill_run b
+                                   WHERE b.job_id = :id AND b.run_time = q.r)
                ON CONFLICT (job_id, run_time) DO NOTHING""",
             {"id": self.job_id, "runs": runs},
         )
