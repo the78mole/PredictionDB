@@ -6,7 +6,7 @@
   ],
   "timezone": "",
   "schemaVersion": 41,
-  "version": 12,
+  "version": 13,
   "editable": false,
   "refresh": "5m",
   "time": {
@@ -1365,6 +1365,156 @@
       "description": "CPU in Prozent eines Kerns, RAM als Working Set (cAdvisor)."
     },
     {
+      "type": "timeseries",
+      "title": "Netzwerk der VM",
+      "id": 29,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "pdb-prometheus"
+      },
+      "description": "Host-Schnittstellen der VM (cAdvisor, Root-Cgroup): eth0 = LAN/Internet, eth1 = Proxy-Netz. Empfangen nach oben, gesendet nach unten.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 78
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "pdb-prometheus"
+          },
+          "expr": "sum by (interface) (rate(container_network_receive_bytes_total{id=\"/\",interface=~\"eth.*\"}[2m]))",
+          "legendFormat": "{{interface}} empfangen",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "pdb-prometheus"
+          },
+          "expr": "sum by (interface) (rate(container_network_transmit_bytes_total{id=\"/\",interface=~\"eth.*\"}[2m]))",
+          "legendFormat": "{{interface}} gesendet",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "custom": {
+            "fillOpacity": 15,
+            "axisLabel": "",
+            "axisCenteredZero": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*(gesendet|schreiben)$"
+            },
+            "properties": [
+              {
+                "id": "custom.transform",
+                "value": "negative-Y"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Storage der VM",
+      "id": 30,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "pdb-prometheus"
+      },
+      "description": "Durchsatz der virtuellen Platten (node-exporter): sda = System, sdb = Daten (/var/lib/docker). Lesen nach oben, Schreiben nach unten.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 78
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "pdb-prometheus"
+          },
+          "expr": "rate(node_disk_read_bytes_total{device=~\"sd[a-z]\"}[2m])",
+          "legendFormat": "{{device}} lesen",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "pdb-prometheus"
+          },
+          "expr": "rate(node_disk_written_bytes_total{device=~\"sd[a-z]\"}[2m])",
+          "legendFormat": "{{device}} schreiben",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "custom": {
+            "fillOpacity": 15,
+            "axisLabel": "",
+            "axisCenteredZero": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*(gesendet|schreiben)$"
+            },
+            "properties": [
+              {
+                "id": "custom.transform",
+                "value": "negative-Y"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
       "type": "row",
       "title": "Speicher",
       "id": 13,
@@ -1373,7 +1523,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 78
+        "y": 86
       },
       "panels": []
     },
@@ -1389,7 +1539,7 @@
         "h": 8,
         "w": 6,
         "x": 0,
-        "y": 79
+        "y": 87
       },
       "targets": [
         {
@@ -1432,7 +1582,7 @@
         "h": 8,
         "w": 18,
         "x": 6,
-        "y": 79
+        "y": 87
       },
       "targets": [
         {
