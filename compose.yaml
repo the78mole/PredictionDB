@@ -118,8 +118,48 @@ services:
       - grafana-data:/var/lib/grafana
     depends_on:
       migrate: {condition: service_completed_successfully}
+      prometheus: {condition: service_started}
     restart: unless-stopped
     networks: [backend, frontend]
+
+  # Systemmetriken für Grafana: Host (node-exporter) und je Container (cAdvisor), 30 Tage
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+    volumes:
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    restart: unless-stopped
+    networks: [backend]
+
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+    command: ["--path.rootfs=/host"]
+    pid: host
+    volumes: ["/:/host:ro,rslave"]
+    restart: unless-stopped
+    networks: [backend]
+
+  cadvisor:
+    image: ghcr.io/google/cadvisor:v0.60.6
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=30s
+      - --store_container_labels=false
+      - --whitelisted_container_labels=com.docker.compose.service
+    privileged: true
+    devices: ["/dev/kmsg"]
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    restart: unless-stopped
+    networks: [backend]
 
   # Weitere Dienste (ml-*, api, mlflow) kommen mit ihren Paketen dazu
   # und hängen von migrate und garage-init ab.
@@ -129,6 +169,7 @@ volumes:
   garage-meta: {}
   garage-data: {}
   grafana-data: {}
+  prometheus-data: {}
 
 networks:
   backend: {}
