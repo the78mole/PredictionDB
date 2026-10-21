@@ -6,7 +6,7 @@
   ],
   "timezone": "",
   "schemaVersion": 41,
-  "version": 14,
+  "version": 15,
   "editable": false,
   "refresh": "5m",
   "time": {
@@ -690,7 +690,7 @@
         "x": 0,
         "y": 38
       },
-      "description": "Laufende Läufe oben, darunter die nächsten 50 der Warteschlange (nächster zuerst). Lauf in UTC, Start in lokaler Zeit.",
+      "description": "Laufende Läufe oben, darunter die nächsten 50 der Warteschlange (nächster zuerst). Lauf in UTC, Start in lokaler Zeit. Der Job steht in der Tabelle der laufenden Jobs darüber.",
       "targets": [
         {
           "refId": "A",
@@ -701,11 +701,15 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT CASE r.status WHEN 'running' THEN 'läuft' ELSE 'wartet' END AS \"Status\",\n       r.queue_pos AS \"Pos\",\n       to_char(r.run_time AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') AS \"Lauf\",\n       CASE WHEN r.status = 'running'\n            THEN round(100.0 * r.steps_done / nullif(r.n_steps, 0), 1) END AS \"Fortschritt\",\n       CASE WHEN r.status = 'running' THEN r.steps_done || '/' || r.n_steps END AS \"Schritte\",\n       CASE WHEN r.status = 'running' THEN r.bytes_stored END AS \"Bronze\",\n       to_char(r.started_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Start\",\n       r.job_id AS \"Job\"\n  FROM meta.backfill_run r JOIN meta.backfill_job j USING (job_id)\n WHERE j.status = 'running' AND r.status IN ('running', 'queued')\n ORDER BY (r.status = 'running') DESC, r.queue_pos\n LIMIT 50"
+          "rawSql": "SELECT CASE r.status WHEN 'running' THEN 'läuft' ELSE 'wartet' END AS \"Status\",\n       r.queue_pos AS \"Pos\",\n       to_char(r.run_time AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') AS \"Lauf\",\n       CASE WHEN r.status = 'running'\n            THEN round(100.0 * r.steps_done / nullif(r.n_steps, 0), 1) END AS \"Fortschritt\",\n       CASE WHEN r.status = 'running' THEN r.steps_done || '/' || r.n_steps END AS \"Schritte\",\n       CASE WHEN r.status = 'running' THEN r.bytes_stored END AS \"Bronze\",\n       to_char(r.started_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Start\"\n  FROM meta.backfill_run r JOIN meta.backfill_job j USING (job_id)\n WHERE j.status = 'running' AND r.status IN ('running', 'queued')\n ORDER BY (r.status = 'running') DESC, r.queue_pos\n LIMIT 50"
         }
       ],
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "custom": {
+            "minWidth": 40
+          }
+        },
         "overrides": [
           {
             "matcher": {
@@ -715,7 +719,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 62
+                "value": 56
               }
             ]
           },
@@ -727,7 +731,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 50
+                "value": 44
               },
               {
                 "id": "custom.align",
@@ -743,7 +747,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 118
+                "value": 108
               }
             ]
           },
@@ -755,7 +759,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 78
+                "value": 70
               },
               {
                 "id": "custom.align",
@@ -771,7 +775,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 82
+                "value": 76
               },
               {
                 "id": "unit",
@@ -787,23 +791,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 96
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Job"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 48
-              },
-              {
-                "id": "custom.align",
-                "value": "center"
+                "value": 90
               }
             ]
           },
@@ -831,6 +819,10 @@
                   "type": "gauge",
                   "mode": "basic"
                 }
+              },
+              {
+                "id": "custom.minWidth",
+                "value": 80
               }
             ]
           }

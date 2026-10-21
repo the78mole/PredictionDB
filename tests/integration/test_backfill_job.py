@@ -112,7 +112,7 @@ def test_run_log_queue_and_dashboard(engine: Engine) -> None:
     with engine.connect() as c:
         queue = c.execute(text(panels[27]["targets"][0]["rawSql"])).mappings().all()
         done = c.execute(text(panels[28]["targets"][0]["rawSql"])).mappings().all()
-    mine = [r for r in queue if r["Job"] == jobs.job_id]
+    mine = [r for r in queue if r["Lauf"].endswith("2099 00Z") or r["Lauf"].endswith("2099 12Z")]
     assert [(r["Status"], r["Pos"]) for r in mine] == [("läuft", 1), ("wartet", 3)]
     assert float(mine[0]["Fortschritt"]) == 50.0
     assert done[0]["Job"] == jobs.job_id and done[0]["Ergebnis"] == "schon da"
