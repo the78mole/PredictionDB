@@ -6,7 +6,7 @@
   ],
   "timezone": "",
   "schemaVersion": 41,
-  "version": 18,
+  "version": 19,
   "editable": false,
   "refresh": "5m",
   "time": {
@@ -51,22 +51,118 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH ds AS (\n  SELECT source_id, dataset, min(chunk_start) AS erster\n    FROM meta.energy_fetch GROUP BY 1, 2)\nSELECT s.code AS \"Quelle\",\n       count(DISTINCT f.dataset) AS \"Datensätze\",\n       (SELECT max(erster) FROM ds WHERE ds.source_id = s.source_id) AS \"Alle Datensätze ab\",\n       min(f.chunk_start) AS \"Weitester Datensatz ab\",\n       max(f.chunk_end) AS \"Abgedeckt bis\",\n       sum(f.n_values) AS \"Werte geladen\",\n       max(f.fetched_at) AS \"Letzter Abruf\"\n  FROM meta.energy_fetch f JOIN meta.source s USING (source_id)\n GROUP BY s.source_id, s.code ORDER BY 1"
+          "rawSql": "WITH ds AS (\n  SELECT source_id, dataset, min(chunk_start) AS erster\n    FROM meta.energy_fetch GROUP BY 1, 2)\nSELECT s.code AS \"Quelle\",\n       count(DISTINCT f.dataset) AS \"Sätze\",\n       to_char((SELECT max(erster) FROM ds WHERE ds.source_id = s.source_id), 'DD.MM.YY') AS \"Alle ab\",\n       to_char(min(f.chunk_start), 'DD.MM.YY') AS \"Weitester ab\",\n       to_char(max(f.chunk_end), 'DD.MM.YY') AS \"Bis\",\n       sum(f.n_values) AS \"Werte\",\n       to_char(max(f.fetched_at) AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Letzter Abruf\"\n  FROM meta.energy_fetch f JOIN meta.source s USING (source_id)\n GROUP BY s.source_id, s.code ORDER BY 1"
         }
       ],
-      "description": "Aus meta.energy_fetch. Der Backfill arbeitet sich Datensatz für Datensatz zurück: „Alle Datensätze ab“ ist der Stand des langsamsten, „Weitester“ der des schnellsten.",
+      "description": "Aus meta.energy_fetch. Sätze = Datensätze der Quelle. Der Backfill arbeitet sich Datensatz für Datensatz zurück: „Alle ab“ ist der Stand des langsamsten, „Weitester ab“ der des schnellsten. Bis = neuester geladener Zeitpunkt.",
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "custom": {
+            "minWidth": 30
+          }
+        },
         "overrides": [
           {
             "matcher": {
               "id": "byName",
-              "options": "Werte geladen"
+              "options": "Quelle"
             },
             "properties": [
               {
+                "id": "custom.width",
+                "value": 112
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Sätze"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 56
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Alle ab"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Weitester ab"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 96
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Bis"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Werte"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 84
+              },
+              {
                 "id": "unit",
                 "value": "short"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Letzter Abruf"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 108
               }
             ]
           }
@@ -501,6 +597,10 @@
                   "type": "gauge",
                   "mode": "basic"
                 }
+              },
+              {
+                "id": "decimals",
+                "value": 1
               }
             ]
           },
@@ -762,6 +862,10 @@
                   "type": "gauge",
                   "mode": "basic"
                 }
+              },
+              {
+                "id": "decimals",
+                "value": 1
               }
             ]
           },
@@ -1059,7 +1163,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 110
+                "value": 400
               },
               {
                 "id": "unit",
@@ -1079,6 +1183,10 @@
                   "type": "gauge",
                   "mode": "basic"
                 }
+              },
+              {
+                "id": "decimals",
+                "value": 1
               }
             ]
           }
@@ -1272,7 +1380,7 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 11,
+        "w": 8,
         "x": 0,
         "y": 51
       },
@@ -1286,7 +1394,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT to_char(export_date, 'DD.MM.YY') AS \"Export\", version AS \"Release\", status AS \"Status\",\n       n_units AS \"Einheiten\", size_bytes AS \"ZIP\",\n       to_char(updated_at AT TIME ZONE 'Europe/Berlin', 'DD.MM.YY HH24:MI') AS \"Stand\"\n  FROM assets.snapshot ORDER BY export_date DESC"
+          "rawSql": "SELECT to_char(export_date, 'DD.MM.YY') AS \"Export\", version AS \"Release\", CASE status WHEN 'imported' THEN 'importiert' WHEN 'stored' THEN 'gesichert'\n            WHEN 'pruned' THEN 'bereinigt' ELSE 'Fehler' END AS \"Status\",\n       n_units AS \"Einheiten\", size_bytes AS \"ZIP\",\n       to_char(updated_at AT TIME ZONE 'Europe/Berlin', 'DD.MM.YY HH24:MI') AS \"Stand\"\n  FROM assets.snapshot ORDER BY export_date DESC"
         }
       ],
       "fieldConfig": {
@@ -1393,8 +1501,8 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 13,
-        "x": 11,
+        "w": 16,
+        "x": 8,
         "y": 51
       },
       "targets": [
@@ -1701,7 +1809,7 @@
         "uid": "pdb-prometheus"
       },
       "gridPos": {
-        "h": 10,
+        "h": 12,
         "w": 8,
         "x": 0,
         "y": 68
@@ -1740,7 +1848,7 @@
         "uid": "pdb-prometheus"
       },
       "gridPos": {
-        "h": 10,
+        "h": 12,
         "w": 8,
         "x": 8,
         "y": 68
@@ -1779,7 +1887,7 @@
         "uid": "pdb-prometheus"
       },
       "gridPos": {
-        "h": 10,
+        "h": 12,
         "w": 8,
         "x": 16,
         "y": 68
@@ -1893,7 +2001,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 78
+        "y": 80
       },
       "targets": [
         {
@@ -1968,7 +2076,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 78
+        "y": 80
       },
       "targets": [
         {
@@ -2039,7 +2147,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 86
+        "y": 88
       },
       "panels": []
     },
@@ -2055,7 +2163,7 @@
         "h": 8,
         "w": 6,
         "x": 0,
-        "y": 87
+        "y": 89
       },
       "targets": [
         {
@@ -2098,7 +2206,7 @@
         "h": 8,
         "w": 18,
         "x": 6,
-        "y": 87
+        "y": 89
       },
       "targets": [
         {
