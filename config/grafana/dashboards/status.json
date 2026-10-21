@@ -6,7 +6,7 @@
   ],
   "timezone": "",
   "schemaVersion": 41,
-  "version": 21,
+  "version": 22,
   "editable": false,
   "refresh": "5m",
   "time": {
@@ -792,7 +792,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT job_id AS \"Job\",\n       CASE mode WHEN 'live' THEN 'Live' ELSE 'Backfill' END AS \"Art\",\n       to_char(range_start AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') || ' – ' ||\n         to_char(range_end AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zeitraum\",\n       array_to_string(run_hours, '/') || 'Z' AS \"Läufe\",\n       round(100.0 * (n_complete + n_incomplete) / nullif(n_runs, 0), 1) AS \"Fortschritt\",\n       (n_complete + n_incomplete) || '/' || n_runs AS \"Bearbeitet\",\n       n_complete - n_skipped AS \"Neu\",\n       n_skipped AS \"Da\",\n       n_incomplete AS \"Unv.\",\n       n_failed_steps AS \"Fehler\",\n       bytes_stored AS \"Bronze\",\n       to_char(last_run AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zuletzt\",\n       to_char(started_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Start\",\n       to_char(finished_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Ende\",\n       floor(extract(epoch FROM finished_at - started_at) / 3600)::int || ':' || to_char(finished_at - started_at, 'MI') AS \"Dauer\",\n       CASE status WHEN 'done' THEN 'fertig' WHEN 'failed' THEN 'Fehler'\n                   ELSE 'abgebr.' END AS \"Status\"\n  FROM meta.backfill_job\n WHERE status <> 'running'\n ORDER BY finished_at DESC NULLS LAST\n LIMIT 10"
+          "rawSql": "SELECT job_id AS \"Job\",\n       CASE mode WHEN 'live' THEN 'Live' ELSE 'Backfill' END AS \"Art\",\n       to_char(range_start AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') || ' – ' ||\n         to_char(range_end AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zeitraum\",\n       array_to_string(run_hours, '/') || 'Z' AS \"Läufe\",\n       round(100.0 * (n_complete + n_incomplete) / nullif(n_runs, 0), 1) AS \"Fortschritt\",\n       (n_complete + n_incomplete) || '/' || n_runs AS \"Bearbeitet\",\n       n_complete - n_skipped AS \"Neu\",\n       n_skipped AS \"Da\",\n       n_incomplete AS \"Unv.\",\n       n_failed_steps AS \"Fehler\",\n       bytes_stored AS \"Bronze\",\n       to_char(last_run AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zuletzt\",\n       to_char(started_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Start\",\n       to_char(finished_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Ende\",\n       floor(extract(epoch FROM finished_at - started_at) / 3600)::int || ':' || to_char(finished_at - started_at, 'MI') AS \"Dauer\",\n       CASE WHEN status = 'done' THEN 'fertig' WHEN status = 'failed' THEN 'Fehler'\n            WHEN mode = 'live' THEN 'beendet' ELSE 'abgebr.' END AS \"Status\"\n  FROM meta.backfill_job\n WHERE status <> 'running'\n ORDER BY finished_at DESC NULLS LAST\n LIMIT 10"
         }
       ],
       "fieldConfig": {
