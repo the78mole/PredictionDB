@@ -106,6 +106,8 @@ services:
     <<: *app
     profiles: [backfill]
     restart: on-failure
+    # Zeit für den Abschluss im Backfill-Protokoll, bevor Docker hart beendet
+    stop_grace_period: 60s
     command:
       - wx-ingest
       - gfs
