@@ -6,7 +6,7 @@
   ],
   "timezone": "",
   "schemaVersion": 41,
-  "version": 16,
+  "version": 17,
   "editable": false,
   "refresh": "5m",
   "time": {
@@ -425,7 +425,7 @@
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "minWidth": 40
+            "minWidth": 30
           }
         },
         "overrides": [
@@ -437,7 +437,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 46
+                "value": 40
               },
               {
                 "id": "custom.align",
@@ -453,7 +453,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 178
+                "value": 196
               }
             ]
           },
@@ -465,7 +465,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 56
+                "value": 52
               },
               {
                 "id": "custom.align",
@@ -479,6 +479,10 @@
               "options": "Fortschritt"
             },
             "properties": [
+              {
+                "id": "custom.width",
+                "value": 110
+              },
               {
                 "id": "unit",
                 "value": "percent"
@@ -497,10 +501,6 @@
                   "type": "gauge",
                   "mode": "basic"
                 }
-              },
-              {
-                "id": "custom.minWidth",
-                "value": 80
               }
             ]
           },
@@ -512,7 +512,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 86
+                "value": 80
               },
               {
                 "id": "custom.align",
@@ -528,7 +528,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 54
+                "value": 46
               },
               {
                 "id": "custom.align",
@@ -544,7 +544,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 48
+                "value": 42
               },
               {
                 "id": "custom.align",
@@ -560,7 +560,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 50
+                "value": 46
               },
               {
                 "id": "custom.align",
@@ -576,7 +576,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 58
+                "value": 52
               },
               {
                 "id": "custom.align",
@@ -592,7 +592,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 80
+                "value": 74
               },
               {
                 "id": "unit",
@@ -608,7 +608,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 100
+                "value": 96
               }
             ]
           },
@@ -620,7 +620,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 90
+                "value": 88
               }
             ]
           },
@@ -632,7 +632,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 90
+                "value": 88
               }
             ]
           },
@@ -644,7 +644,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 62
+                "value": 72
               }
             ]
           }
@@ -669,7 +669,7 @@
         "x": 0,
         "y": 30
       },
-      "description": "Wie oben; Dauer in Stunden:Minuten. Meldung nur, wenn sie mehr sagt als der Status.",
+      "description": "Neu = neu geladene Läufe, Da = schon vorhanden, Unv. = unvollständig, Fehler = fehlgeschlagene Schritte, abgebr. = abgebrochen. Dauer in Stunden:Minuten. Fehlermeldungen stehen in meta.backfill_job.error.",
       "targets": [
         {
           "refId": "A",
@@ -680,13 +680,13 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT job_id AS \"Job\",\n       to_char(range_start AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') || ' – ' ||\n         to_char(range_end AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zeitraum\",\n       array_to_string(run_hours, '/') || 'Z' AS \"Läufe\",\n       round(100.0 * (n_complete + n_incomplete) / nullif(n_runs, 0), 1) AS \"Fortschritt\",\n       (n_complete + n_incomplete) || '/' || n_runs AS \"Bearbeitet\",\n       n_complete - n_skipped AS \"Neu\",\n       n_skipped AS \"Da\",\n       n_incomplete AS \"Unv.\",\n       n_failed_steps AS \"Fehler\",\n       bytes_stored AS \"Bronze\",\n       to_char(last_run AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zuletzt\",\n       to_char(started_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Start\",\n       to_char(finished_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Ende\",\n       floor(extract(epoch FROM finished_at - started_at) / 3600)::int || ':' || to_char(finished_at - started_at, 'MI') AS \"Dauer\",\n       CASE status WHEN 'done' THEN 'fertig' WHEN 'failed' THEN 'Fehler'\n                   ELSE 'abgebrochen' END AS \"Status\",\n       CASE WHEN error IS NULL OR error = 'abgebrochen' THEN '' ELSE error END AS \"Meldung\"\n  FROM meta.backfill_job\n WHERE status <> 'running'\n ORDER BY finished_at DESC NULLS LAST\n LIMIT 10"
+          "rawSql": "SELECT job_id AS \"Job\",\n       to_char(range_start AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') || ' – ' ||\n         to_char(range_end AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zeitraum\",\n       array_to_string(run_hours, '/') || 'Z' AS \"Läufe\",\n       round(100.0 * (n_complete + n_incomplete) / nullif(n_runs, 0), 1) AS \"Fortschritt\",\n       (n_complete + n_incomplete) || '/' || n_runs AS \"Bearbeitet\",\n       n_complete - n_skipped AS \"Neu\",\n       n_skipped AS \"Da\",\n       n_incomplete AS \"Unv.\",\n       n_failed_steps AS \"Fehler\",\n       bytes_stored AS \"Bronze\",\n       to_char(last_run AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zuletzt\",\n       to_char(started_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Start\",\n       to_char(finished_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Ende\",\n       floor(extract(epoch FROM finished_at - started_at) / 3600)::int || ':' || to_char(finished_at - started_at, 'MI') AS \"Dauer\",\n       CASE status WHEN 'done' THEN 'fertig' WHEN 'failed' THEN 'Fehler'\n                   ELSE 'abgebr.' END AS \"Status\"\n  FROM meta.backfill_job\n WHERE status <> 'running'\n ORDER BY finished_at DESC NULLS LAST\n LIMIT 10"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "minWidth": 40
+            "minWidth": 30
           }
         },
         "overrides": [
@@ -698,7 +698,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 46
+                "value": 40
               },
               {
                 "id": "custom.align",
@@ -714,7 +714,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 178
+                "value": 196
               }
             ]
           },
@@ -726,7 +726,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 56
+                "value": 52
               },
               {
                 "id": "custom.align",
@@ -740,6 +740,10 @@
               "options": "Fortschritt"
             },
             "properties": [
+              {
+                "id": "custom.width",
+                "value": 110
+              },
               {
                 "id": "unit",
                 "value": "percent"
@@ -758,10 +762,6 @@
                   "type": "gauge",
                   "mode": "basic"
                 }
-              },
-              {
-                "id": "custom.minWidth",
-                "value": 80
               }
             ]
           },
@@ -773,7 +773,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 86
+                "value": 80
               },
               {
                 "id": "custom.align",
@@ -789,7 +789,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 54
+                "value": 46
               },
               {
                 "id": "custom.align",
@@ -805,7 +805,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 48
+                "value": 42
               },
               {
                 "id": "custom.align",
@@ -821,7 +821,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 50
+                "value": 46
               },
               {
                 "id": "custom.align",
@@ -837,7 +837,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 58
+                "value": 52
               },
               {
                 "id": "custom.align",
@@ -853,7 +853,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 80
+                "value": 74
               },
               {
                 "id": "unit",
@@ -869,7 +869,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 100
+                "value": 96
               }
             ]
           },
@@ -881,7 +881,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 90
+                "value": 88
               }
             ]
           },
@@ -893,7 +893,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 90
+                "value": 88
               }
             ]
           },
@@ -905,7 +905,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 62
+                "value": 56
               },
               {
                 "id": "custom.align",
@@ -921,7 +921,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 86
+                "value": 72
               }
             ]
           }
@@ -963,7 +963,7 @@
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "minWidth": 40
+            "minWidth": 30
           }
         },
         "overrides": [
@@ -975,7 +975,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 56
+                "value": 52
               }
             ]
           },
@@ -987,7 +987,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 44
+                "value": 42
               },
               {
                 "id": "custom.align",
@@ -1003,7 +1003,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 108
+                "value": 118
               }
             ]
           },
@@ -1015,7 +1015,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 70
+                "value": 66
               },
               {
                 "id": "custom.align",
@@ -1031,7 +1031,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 76
+                "value": 72
               },
               {
                 "id": "unit",
@@ -1047,7 +1047,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 90
+                "value": 86
               }
             ]
           },
@@ -1057,6 +1057,10 @@
               "options": "Fortschritt"
             },
             "properties": [
+              {
+                "id": "custom.width",
+                "value": 110
+              },
               {
                 "id": "unit",
                 "value": "percent"
@@ -1075,10 +1079,6 @@
                   "type": "gauge",
                   "mode": "basic"
                 }
-              },
-              {
-                "id": "custom.minWidth",
-                "value": 80
               }
             ]
           }
