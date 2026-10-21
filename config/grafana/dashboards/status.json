@@ -6,7 +6,7 @@
   ],
   "timezone": "",
   "schemaVersion": 41,
-  "version": 13,
+  "version": 14,
   "editable": false,
   "refresh": "5m",
   "time": {
@@ -686,11 +686,11 @@
       },
       "gridPos": {
         "h": 12,
-        "w": 12,
+        "w": 14,
         "x": 0,
         "y": 38
       },
-      "description": "Laufende Läufe oben, darunter die nächsten 50 der Warteschlange (nächster zuerst).",
+      "description": "Laufende Läufe oben, darunter die nächsten 50 der Warteschlange (nächster zuerst). Lauf in UTC, Start in lokaler Zeit.",
       "targets": [
         {
           "refId": "A",
@@ -701,12 +701,112 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT CASE r.status WHEN 'running' THEN 'läuft' ELSE 'wartet' END AS \"Status\",\n       r.queue_pos AS \"Pos.\",\n       to_char(r.run_time AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') AS \"Lauf\",\n       CASE WHEN r.status = 'running'\n            THEN round(100.0 * r.steps_done / nullif(r.n_steps, 0), 1) END AS \"Fortschritt\",\n       CASE WHEN r.status = 'running' THEN r.steps_done || ' / ' || r.n_steps END AS \"Schritte\",\n       CASE WHEN r.status = 'running' THEN r.bytes_stored END AS \"Bronze\",\n       r.started_at AS \"Gestartet\",\n       r.job_id AS \"Job\"\n  FROM meta.backfill_run r JOIN meta.backfill_job j USING (job_id)\n WHERE j.status = 'running' AND r.status IN ('running', 'queued')\n ORDER BY (r.status = 'running') DESC, r.queue_pos\n LIMIT 50"
+          "rawSql": "SELECT CASE r.status WHEN 'running' THEN 'läuft' ELSE 'wartet' END AS \"Status\",\n       r.queue_pos AS \"Pos\",\n       to_char(r.run_time AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') AS \"Lauf\",\n       CASE WHEN r.status = 'running'\n            THEN round(100.0 * r.steps_done / nullif(r.n_steps, 0), 1) END AS \"Fortschritt\",\n       CASE WHEN r.status = 'running' THEN r.steps_done || '/' || r.n_steps END AS \"Schritte\",\n       CASE WHEN r.status = 'running' THEN r.bytes_stored END AS \"Bronze\",\n       to_char(r.started_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Start\",\n       r.job_id AS \"Job\"\n  FROM meta.backfill_run r JOIN meta.backfill_job j USING (job_id)\n WHERE j.status = 'running' AND r.status IN ('running', 'queued')\n ORDER BY (r.status = 'running') DESC, r.queue_pos\n LIMIT 50"
         }
       ],
       "fieldConfig": {
         "defaults": {},
         "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 62
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Pos"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 50
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Lauf"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 118
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Schritte"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 78
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Bronze"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 82
+              },
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Start"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 96
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Job"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 48
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
@@ -733,18 +833,6 @@
                 }
               }
             ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Bronze"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "bytes"
-              }
-            ]
           }
         ]
       },
@@ -766,11 +854,11 @@
       },
       "gridPos": {
         "h": 12,
-        "w": 12,
-        "x": 12,
+        "w": 10,
+        "x": 14,
         "y": 38
       },
-      "description": "Die letzten 50 abgeschlossenen Läufe aller Jobs, neueste oben.",
+      "description": "Die letzten 50 abgeschlossenen Läufe aller Jobs, neueste oben. Neu = neu geladene Schritte; Lauf in UTC, Fertig in lokaler Zeit.",
       "targets": [
         {
           "refId": "A",
@@ -781,7 +869,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT to_char(r.run_time AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') AS \"Lauf\",\n       CASE r.status WHEN 'complete' THEN 'geladen' WHEN 'skipped' THEN 'schon da'\n                     WHEN 'incomplete' THEN 'unvollständig' ELSE 'abgebrochen' END AS \"Ergebnis\",\n       r.steps_stored AS \"Schritte neu\",\n       r.steps_failed AS \"Fehler\",\n       r.bytes_stored AS \"Bronze\",\n       justify_interval(date_trunc('second', r.finished_at - r.started_at))::text AS \"Dauer\",\n       r.finished_at AS \"Fertig\",\n       r.job_id AS \"Job\"\n  FROM meta.backfill_run r\n WHERE r.finished_at IS NOT NULL\n ORDER BY r.finished_at DESC\n LIMIT 50"
+          "rawSql": "SELECT to_char(r.run_time AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') AS \"Lauf\",\n       CASE r.status WHEN 'complete' THEN 'geladen' WHEN 'skipped' THEN 'schon da'\n                     WHEN 'incomplete' THEN 'unvollst.' ELSE 'abgebr.' END AS \"Ergebnis\",\n       r.steps_stored AS \"Neu\",\n       r.steps_failed AS \"Fehler\",\n       r.bytes_stored AS \"Bronze\",\n       to_char(r.finished_at - r.started_at, 'HH24:MI:SS') AS \"Dauer\",\n       to_char(r.finished_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Fertig\",\n       r.job_id AS \"Job\"\n  FROM meta.backfill_run r\n WHERE r.finished_at IS NOT NULL\n ORDER BY r.finished_at DESC\n LIMIT 50"
         }
       ],
       "fieldConfig": {
@@ -790,12 +878,116 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "Lauf"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 118
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Ergebnis"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 82
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Neu"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 50
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Fehler"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 58
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "Bronze"
             },
             "properties": [
               {
+                "id": "custom.width",
+                "value": 82
+              },
+              {
                 "id": "unit",
                 "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Dauer"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 76
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Fertig"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 96
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Job"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 48
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
               }
             ]
           }
