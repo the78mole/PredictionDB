@@ -274,6 +274,7 @@ class GfsArchive:
         self.cache = cache / "gfs"
         self.sem = asyncio.Semaphore(24)
         self.missing: dict[str, int] = defaultdict(int)
+        self.interpolated: dict[str, int] = defaultdict(int)
 
     async def _get(self, url: str, **kw: Any) -> httpx.Response:
         for attempt in range(6):
@@ -318,13 +319,14 @@ class GfsArchive:
         f = await self.native(run, lead)
         if f is not None:
             return f
-        self.missing[period] += 1
         lo, hi = lead // 3 * 3, -(-lead // 3) * 3
-        if lo == hi:
-            return None
-        a, b = await asyncio.gather(self.native(run, lo), self.native(run, hi))
+        a, b = (None, None)
+        if lo != hi:
+            a, b = await asyncio.gather(self.native(run, lo), self.native(run, hi))
         if a is None or b is None:
+            self.missing[period] += 1
             return None
+        self.interpolated[period] += 1
         w = (lead - lo) / (hi - lo)
         return {
             k: replace(a[k], values=(1 - w) * a[k].values + w * b[k].values)
@@ -442,7 +444,13 @@ async def collect(cache: Path) -> dict[str, Any]:
             for i in range(0, len(jobs), 48):
                 await asyncio.gather(*(one(*j) for j in jobs[i : i + 48]))
             print(f"{period}: {len(jobs)} Schritte", flush=True)
-        return {"met": met, "sol": sol, "errors": errors, "missing": dict(gfs.missing)}
+        return {
+            "met": met,
+            "sol": sol,
+            "errors": errors,
+            "missing": dict(gfs.missing),
+            "interpolated": dict(gfs.interpolated),
+        }
 
 
 def summarize(errors: dict[tuple[str, str, int], list[tuple[float, str]]]) -> list[dict[str, Any]]:
@@ -533,7 +541,8 @@ def main() -> None:
         "horizonte_h": LEADS,
         "stationen_wetter": len(result["met"]),
         "stationen_strahlung": len(result["sol"]),
-        "zeitlich_interpolierte_schritte": result["missing"],
+        "schritte_nicht_im_archiv": result["missing"],
+        "schritte_zeitlich_interpoliert": result["interpolated"],
         "fehlerpaare": sum(len(v) for v in result["errors"].values()),
     }
     (OUT / "tabellen" / "lauf.json").write_text(json.dumps(info, indent=1, ensure_ascii=False))
