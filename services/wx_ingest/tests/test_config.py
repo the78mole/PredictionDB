@@ -25,7 +25,7 @@ def test_repo_config_matches_architecture() -> None:
     assert [e.name for e in cfg.endpoints_for(archive_only=True)] == ["aws", "gcs"]
     b = cfg.bbox.bbox()
     assert (b.north, b.south, b.west, b.east) == (58, 44, 0, 20)
-    assert len(cfg.specs()) == 13
+    assert len(cfg.specs()) == 22
 
 
 def test_runs_between_and_recent() -> None:
