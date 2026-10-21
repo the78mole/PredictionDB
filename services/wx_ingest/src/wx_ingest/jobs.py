@@ -200,9 +200,11 @@ class JobLog:
         )
         self._run(
             """UPDATE meta.backfill_job j
-                  SET n_complete = c.complete, n_failed_steps = c.failed,
+                  SET n_complete = c.complete, n_skipped = c.skipped, n_failed_steps = c.failed,
                       bytes_stored = c.bytes, last_run = :run, updated_at = now()
                  FROM (SELECT count(*) FILTER (WHERE status = 'complete') AS complete,
+                              count(*) FILTER (WHERE status = 'complete' AND steps_stored = 0)
+                                AS skipped,
                               coalesce(sum(steps_failed), 0) AS failed,
                               coalesce(sum(bytes_stored), 0) AS bytes
                          FROM meta.backfill_run WHERE job_id = :id) c
