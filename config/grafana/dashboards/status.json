@@ -6,7 +6,7 @@
   ],
   "timezone": "",
   "schemaVersion": 41,
-  "version": 4,
+  "version": 5,
   "editable": false,
   "refresh": "5m",
   "time": {
@@ -863,7 +863,7 @@
         "uid": "pdb-postgres"
       },
       "gridPos": {
-        "h": 4,
+        "h": 8,
         "w": 6,
         "x": 0,
         "y": 52
@@ -906,7 +906,7 @@
         "uid": "pdb-postgres"
       },
       "gridPos": {
-        "h": 4,
+        "h": 8,
         "w": 18,
         "x": 6,
         "y": 52
