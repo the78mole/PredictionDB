@@ -35,6 +35,16 @@ Konfiguration in `config/process/gfs_0p25.yaml`, Zustand in `meta.nwp_feature_ru
    | `tp` | mm/h | 0,001 | `APCP`, Intervallsumme je Stunde |
    | `csnow`, `csnow_mean` | 0–1 | 0,001 | `CSNOW` momentan bzw. Anteil im Intervall |
    | `prmsl` | Pa | 1 | `PRMSL` |
+   | `sp` | Pa | 1 | `PRES` am Boden |
+   | `dlwrf` | W/m² | 0,05 | `DLWRF`, Intervallmittel |
+   | `sunshine` | 0–1 | 0,0001 | `SUNSD`, Sonnenscheinanteil im Intervall (GFS meldet es als Momentanwert, summiert aber in 6-h-Eimern) |
+   | `weasd` | kg/m² | 0,1 | `WEASD` |
+   | `snod` | m | 0,001 | `SNOD` |
+   | `tsoil_0_10`, `tsoil_10_40` | K | 0,01 | `TSOIL` 0–0,1 m, 0,1–0,4 m (über Wasser leer) |
+   | `soilw_0_10`, `soilw_10_40` | 0–1 | 0,0001 | `SOILW` 0–0,1 m, 0,1–0,4 m (über Wasser leer) |
+
+   Fehlt eine Variable in Bronze (ältere Läufe vor einer Erweiterung der Quelle), fehlt sie auch
+   im Silber-Store dieses Laufs; fehlt sie nur in einzelnen Schritten, bleiben diese leer.
 
 4. **Gold.** Für jedes Cluster aus `assets.grid_weight` (Anteil der Clusterleistung je
    Gitterzelle) werden die Features als gewichtetes Mittel über die Zellen gerechnet.
@@ -107,7 +117,7 @@ Rückrechnung wieder die stündlichen Ausgangswerte ergibt.
 ## Offen
 
 - Bevölkerungsgewichtete Temperatur für die Last (braucht Regionsmasken, `config/regions`).
-- Luftdichte (`PRES:surface`) und Schneedecke (`WEASD`/`SNOD`) für Wind und PV, sobald
-  `wx-ingest` sie lädt.
+- Features aus den zusätzlichen Feldern: Luftdichte (`sp`, `t2m`) für Wind, Schneedecke
+  (`weasd`, `snod`) für PV, Boden für Wasserkraft und Wärme. Silber führt sie bereits.
 - Sonnenstand bzw. Clear-Sky-Normierung der Strahlung (mit `pvlib`, 7.6).
 - Weitere Modelle (ECMWF, ICON) über eigene Prozess-YAMLs und Gewichte je Gitter.

@@ -29,7 +29,7 @@ ValueFn = Callable[[str, int, F64, F64], F64]
 #: je Silber-Name genau ein Schlüssel (GFS-Varianten, Strahlung als NCEP 0/4/192)
 KEYS: dict[str, GribKey] = {}
 for _k, _v in VARIABLES.items():
-    if _k[:3] != (0, 4, 7):
+    if _k[:3] not in ((0, 4, 7), (0, 5, 3)):
         KEYS.setdefault(_v.name, _k)
 
 
@@ -46,6 +46,13 @@ def default_instant(name: str, step: int, lat: F64, lon: F64) -> F64:
         "tcc": 40.0,
         "csnow": 0.0,
         "prmsl": 101300.0,
+        "sp": 95000.0,
+        "weasd": 5.0,
+        "snod": 0.02,
+        "tsoil_0_10": 283.0,
+        "tsoil_10_40": 284.0,
+        "soilw_0_10": 0.30,
+        "soilw_10_40": 0.35,
     }[name]
     out: F64 = base + 0.01 * step + 0.1 * (lat - 50.0) + 0.0 * lon
     return out
@@ -55,6 +62,8 @@ def default_hourly(name: str, hour: int, lat: F64, lon: F64) -> F64:
     """Stundenwert: Strahlung als Tagesgang, Niederschlag und Rest je Stunde verschieden."""
     base = {
         "dswrf": 400.0 * max(0.0, np.sin((hour % 24 - 6) / 12 * np.pi)),
+        "dlwrf": 300.0 + hour % 3,
+        "sunshine": 600.0 * (hour % 6),  # Sekunden Sonnenschein in der Stunde
         "tp": 0.1 * (hour % 5),
         "tcc_mean": 30.0 + hour % 7,
         "csnow_mean": 0.0,
@@ -87,6 +96,12 @@ def _message(key: GribKey, lat: F64, lon: F64, values: F64, start: int, end: int
         if surface == 103:
             ec.codes_set(h, "scaleFactorOfFirstFixedSurface", 0)
             ec.codes_set(h, "scaledValueOfFirstFixedSurface", level)
+        if surface == 106:  # Bodenschicht wie bei GFS: Grenzen in cm (Skalierung 2)
+            ec.codes_set(h, "typeOfSecondFixedSurface", 106)
+            ec.codes_set(h, "scaleFactorOfFirstFixedSurface", 2)
+            ec.codes_set(h, "scaledValueOfFirstFixedSurface", level)
+            ec.codes_set(h, "scaleFactorOfSecondFixedSurface", 2)
+            ec.codes_set(h, "scaledValueOfSecondFixedSurface", {0: 10, 10: 40}[level])
         if step_type == "instant":
             ec.codes_set(h, "stepUnits", 1)
             ec.codes_set(h, "forecastTime", end)
@@ -116,12 +131,26 @@ def make_step(
     lon: F64,
     instant: ValueFn = default_instant,
     hourly: ValueFn = default_hourly,
+    names: set[str] | None = None,
 ) -> bytes:
-    """Eine GFS-artige Schrittdatei: Momentanwerte, Eimer-Mittel und -Summen."""
+    """Eine GFS-artige Schrittdatei: Momentanwerte, Eimer-Mittel und -Summen.
+
+    ``names`` begrenzt die Variablen (z. B. Läufe vor einer Erweiterung der Quelle).
+    """
     lat2, lon2 = np.meshgrid(lat, lon, indexing="ij")
     out = b""
     for name, key in KEYS.items():
+        if names is not None and name not in names:
+            continue
         kind = key[5]
+        if VARIABLES[key].bucket_hours and step > 0:  # SUNSD: Eimersumme als Momentanwert
+            a = ((step - 1) // 6) * 6
+            v = np.sum([hourly(name, h, lat2, lon2) for h in range(a + 1, step + 1)], axis=0)
+            out += _message(key, lat, lon, v, step, step)
+            continue
+        if VARIABLES[key].bucket_hours:
+            out += _message(key, lat, lon, np.zeros_like(lat2), step, step)
+            continue
         if kind == "instant":
             out += _message(key, lat, lon, instant(name, step, lat2, lon2), step, step)
             continue
@@ -147,13 +176,14 @@ def fill_bronze(
     complete: bool = True,
     instant: ValueFn = default_instant,
     hourly: ValueFn = default_hourly,
+    names: set[str] | None = None,
 ) -> Bronze:
     """Legt die Schritte (und bei ``complete`` das Laufmanifest) in Bronze ab."""
     if lat is None or lon is None:
         lat, lon = grid()
     bronze = Bronze(store)
     for s in steps:
-        obstore.put(store, bronze.step_key(run, s), make_step(s, lat, lon, instant, hourly))
+        obstore.put(store, bronze.step_key(run, s), make_step(s, lat, lon, instant, hourly, names))
     if complete:
         summary = {
             "model": "gfs",

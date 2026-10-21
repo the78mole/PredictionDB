@@ -78,16 +78,25 @@ def assemble(
         if var.name in data:
             continue
         kind = key[5]
-        if kind == "instant":
-            values: list[Array | None] = [by_step[s].instant.get(var.name) for s in steps]
+        if var.bucket_hours:
+            b = var.bucket_hours
+            pseudo = {
+                s: StepFields(s, stats={var.name: {((s - 1) // b) * b: f.instant[var.name]}})
+                for s, f in by_step.items()
+                if s > 0 and var.name in f.instant
+            }
+            pseudo |= {s: StepFields(s) for s in steps if s not in pseudo}
+            values: list[Array | None] = interval_values(steps, pseudo, var.name, "accum")
+        elif kind == "instant":
+            values = [by_step[s].instant.get(var.name) for s in steps]
         else:
             values = interval_values(steps, by_step, var.name, kind)
-            if var.per_hour:
-                hours = np.diff([steps[0], *steps])
-                values = [
-                    None if v is None else (v / h).astype(np.float32)
-                    for v, h in zip(values, hours, strict=True)
-                ]
+        if var.per_hour:
+            hours = np.diff([steps[0], *steps])
+            values = [
+                None if v is None else (v / h / var.divisor).astype(np.float32)
+                for v, h in zip(values, hours, strict=True)
+            ]
         if all(v is None for v in values):
             continue
         arr = np.full(shape, np.nan, dtype=np.float32)

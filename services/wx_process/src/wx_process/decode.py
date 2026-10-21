@@ -56,12 +56,20 @@ class StepFields:
 def _key(h: int) -> GribKey:
     import eccodes as ec
 
+    surface = ec.codes_get(h, "typeOfFirstFixedSurface", int)
+    if surface == 106:
+        # Bodenschichten: ``level`` ist für 0-10 cm und 10-40 cm gleich, daher Oberkante in cm
+        value = ec.codes_get(h, "scaledValueOfFirstFixedSurface", int)
+        factor = ec.codes_get(h, "scaleFactorOfFirstFixedSurface", int)
+        level = round(value * 10.0 ** (2 - factor))
+    else:
+        level = ec.codes_get(h, "level", int)
     return (
         ec.codes_get(h, "discipline", int),
         ec.codes_get(h, "parameterCategory", int),
         ec.codes_get(h, "parameterNumber", int),
-        ec.codes_get(h, "typeOfFirstFixedSurface", int),
-        ec.codes_get(h, "level", int),
+        surface,
+        level,
         str(ec.codes_get(h, "stepType")),
     )
 

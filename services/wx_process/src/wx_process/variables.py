@@ -19,7 +19,8 @@ from typing import Literal
 
 StepType = Literal["instant", "avg", "accum"]
 
-#: (discipline, parameterCategory, parameterNumber, typeOfFirstFixedSurface, level, stepType)
+#: (discipline, parameterCategory, parameterNumber, typeOfFirstFixedSurface, level, stepType);
+#: ``level`` ist bei Bodenschichten (Flächentyp 106) die Oberkante in cm, sonst ``level``
 GribKey = tuple[int, int, int, int, int, str]
 
 
@@ -35,6 +36,10 @@ class Variable:
     min_value: float | None = None
     #: ``accum``: Summe im Intervall geteilt durch dessen Länge (Rate je Stunde)
     per_hour: bool = False
+    #: als Momentanwert gemeldet, aber in Eimern dieser Länge (h) aufsummiert (GFS ``SUNSD``)
+    bucket_hours: int | None = None
+    #: Teiler nach ``per_hour`` (z. B. 3600 für Sekunden je Stunde → Anteil)
+    divisor: float = 1.0
 
     @property
     def lo(self) -> float:
@@ -66,6 +71,29 @@ VARIABLES: dict[GribKey, Variable] = {
     (0, 1, 195, 1, 0, "instant"): V("csnow", "1", "Schneefall (kategorisch)", 0.001, 0, 0),
     (0, 1, 195, 1, 0, "avg"): V("csnow_mean", "1", "Schneefall, Anteil im Intervall", 0.001, 0, 0),
     (0, 3, 1, 101, 0, "instant"): V("prmsl", "Pa", "Luftdruck auf Meereshöhe", 1.0, 100000.0),
+    (0, 3, 0, 1, 0, "instant"): V("sp", "Pa", "Luftdruck am Boden", 1.0, 87500.0),
+    # GFS meldet DLWRF als NCEP-Parameter 0/5/192, WMO-Standard ist 0/5/3
+    (0, 5, 192, 1, 0, "avg"): V("dlwrf", "W m-2", "Gegenstrahlung, Intervallmittel", 0.05, 0, 0),
+    (0, 5, 3, 1, 0, "avg"): V("dlwrf", "W m-2", "Gegenstrahlung, Intervallmittel", 0.05, 0, 0),
+    # SUNSD trägt "N hour fcst", summiert aber wie DSWRF in 6-h-Eimern (f001…f006 steigen bis
+    # 6 h Sonnenschein, f007 beginnt neu); gespeichert als Sonnenscheinanteil im Intervall
+    (0, 6, 201, 1, 0, "instant"): V(
+        "sunshine",
+        "1",
+        "Sonnenscheinanteil im Intervall",
+        0.0001,
+        0.0,
+        0.0,
+        per_hour=True,
+        bucket_hours=6,
+        divisor=3600.0,
+    ),
+    (0, 1, 13, 1, 0, "instant"): V("weasd", "kg m-2", "Schnee-Wasseräquivalent", 0.1, 0, 0),
+    (0, 1, 11, 1, 0, "instant"): V("snod", "m", "Schneehöhe", 0.001, 0.0, 0.0),
+    (2, 0, 2, 106, 0, "instant"): V("tsoil_0_10", "K", "Bodentemperatur 0-10 cm", 0.01, 273.15),
+    (2, 0, 2, 106, 10, "instant"): V("tsoil_10_40", "K", "Bodentemperatur 10-40 cm", 0.01, 273.15),
+    (2, 0, 192, 106, 0, "instant"): V("soilw_0_10", "1", "Bodenfeuchte 0-10 cm", 0.0001, 0, 0),
+    (2, 0, 192, 106, 10, "instant"): V("soilw_10_40", "1", "Bodenfeuchte 10-40 cm", 0.0001, 0, 0),
 }
 
 BY_NAME: dict[str, Variable] = {v.name: v for v in VARIABLES.values()}

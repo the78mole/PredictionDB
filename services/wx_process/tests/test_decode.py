@@ -53,6 +53,9 @@ def test_bucket_averages_become_interval_values(steps: list[int]) -> None:
         # Niederschlag als Rate je Stunde über das Intervall
         np.testing.assert_allclose(ds.data["tp"][i], _true_mean("tp", p, s), atol=1e-5)
         np.testing.assert_allclose(ds.data["tcc_mean"][i], _true_mean("tcc_mean", p, s), atol=1e-3)
+        # Sonnenschein: Eimersumme in Sekunden → Anteil der Stunde
+        sun = _true_mean("sunshine", p, s) / 3600
+        np.testing.assert_allclose(ds.data["sunshine"][i], sun, atol=1e-5)
 
 
 def test_gap_without_common_bucket_stays_empty() -> None:
@@ -67,3 +70,29 @@ def test_grid_across_greenwich() -> None:
     lat, lon = grid(west=-5, east=5)
     g, _ = decode_step(make_step(1, lat, lon), 1)
     assert g.lon[0] == -5 and g.lon[-1] == 5 and np.all(np.diff(g.lon) > 0)
+
+
+def test_soil_layers_are_distinct() -> None:
+    _, f = decode_step(make_step(3, LAT, LON), 3)
+    assert f.instant["tsoil_0_10"][0, 0] == pytest.approx(283.0 + 0.03 + 0.8, abs=1e-3)
+    assert f.instant["tsoil_10_40"][0, 0] == pytest.approx(284.0 + 0.03 + 0.8, abs=1e-3)
+    assert {"soilw_0_10", "soilw_10_40", "sp", "sunshine", "weasd", "snod"} <= set(f.instant)
+    assert set(f.stats["dlwrf"]) == {0}
+
+
+def test_runs_without_new_fields() -> None:
+    # Läufe vor der Erweiterung der Quelle: neue Variablen fehlen in Silber,
+    # Mischung innerhalb eines Laufs wird mit NaN aufgefüllt
+    old = {"t2m", "dswrf", "tp"}
+    ds = assemble(
+        "gfs",
+        "0p25",
+        RUN,
+        {s: decode_step(make_step(s, LAT, LON, names=old), s) for s in (0, 1, 2)},
+    )
+    assert set(ds.data) == old
+    mixed = {0: decode_step(make_step(0, LAT, LON, names=old), 0)}
+    mixed |= {s: decode_step(make_step(s, LAT, LON), s) for s in (1, 2)}
+    ds = assemble("gfs", "0p25", RUN, mixed)
+    assert np.isnan(ds.data["sp"][0]).all() and not np.isnan(ds.data["sp"][1:]).any()
+    assert np.isnan(ds.data["dlwrf"][0]).all() and not np.isnan(ds.data["dlwrf"][1:]).any()
