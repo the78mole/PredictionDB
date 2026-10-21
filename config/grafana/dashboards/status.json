@@ -6,7 +6,7 @@
   ],
   "timezone": "",
   "schemaVersion": 41,
-  "version": 4,
+  "version": 10,
   "editable": false,
   "refresh": "5m",
   "time": {
@@ -286,14 +286,12 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT max(run_time) AS \"Lauf\" FROM meta.nwp_feature_run"
+          "rawSql": "SELECT to_char(max(run_time) AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24:MI \"UTC\"') AS \"Lauf\"\n  FROM meta.nwp_feature_run"
         }
       ],
       "description": "Aus meta.nwp_feature_run (wx-process). Bronze-Downloads selbst stehen nur im Log von ingest-gfs.",
       "fieldConfig": {
-        "defaults": {
-          "unit": "dateTimeAsLocal"
-        },
+        "defaults": {},
         "overrides": []
       },
       "options": {
@@ -392,7 +390,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT run_time AS \"Lauf\", clustering_version AS \"Clusterung\", features_version AS \"Features\",\n       n_values AS \"Werte\", processed_at AS \"Verarbeitet\"\n  FROM meta.nwp_feature_run\n ORDER BY run_time DESC LIMIT 12"
+          "rawSql": "SELECT to_char(run_time AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24:MI \"UTC\"') AS \"Lauf\",\n       clustering_version AS \"Clusterung\", features_version AS \"Features\",\n       n_values AS \"Werte\", processed_at AS \"Verarbeitet\"\n  FROM meta.nwp_feature_run\n ORDER BY run_time DESC LIMIT 12"
         }
       ]
     },
@@ -772,8 +770,8 @@
         "uid": "pdb-prometheus"
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
+        "h": 10,
+        "w": 8,
         "x": 0,
         "y": 43
       },
@@ -811,9 +809,9 @@
         "uid": "pdb-prometheus"
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
+        "h": 10,
+        "w": 8,
+        "x": 8,
         "y": 43
       },
       "targets": [
@@ -842,6 +840,116 @@
       }
     },
     {
+      "type": "table",
+      "title": "Dienste aktuell",
+      "id": 24,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "pdb-prometheus"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 8,
+        "x": 16,
+        "y": 43
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "pdb-prometheus"
+          },
+          "expr": "sum by (container_label_com_docker_compose_service) (container_memory_working_set_bytes{container_label_com_docker_compose_service!=\"\"})",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "pdb-prometheus"
+          },
+          "expr": "sum by (container_label_com_docker_compose_service) (rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_service!=\"\"}[2m])) * 100",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "container_label_com_docker_compose_service": 0,
+              "Value #B": 1,
+              "Value #A": 2
+            },
+            "renameByName": {
+              "container_label_com_docker_compose_service": "Dienst",
+              "Value #A": "RAM",
+              "Value #B": "CPU"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "RAM"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CPU"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "RAM",
+            "desc": true
+          }
+        ]
+      },
+      "description": "CPU in Prozent eines Kerns, RAM als Working Set (cAdvisor)."
+    },
+    {
       "type": "row",
       "title": "Speicher",
       "id": 13,
@@ -850,7 +958,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 51
+        "y": 53
       },
       "panels": []
     },
@@ -863,10 +971,10 @@
         "uid": "pdb-postgres"
       },
       "gridPos": {
-        "h": 4,
+        "h": 8,
         "w": 6,
         "x": 0,
-        "y": 52
+        "y": 54
       },
       "targets": [
         {
@@ -906,10 +1014,10 @@
         "uid": "pdb-postgres"
       },
       "gridPos": {
-        "h": 4,
+        "h": 8,
         "w": 18,
         "x": 6,
-        "y": 52
+        "y": 54
       },
       "targets": [
         {
