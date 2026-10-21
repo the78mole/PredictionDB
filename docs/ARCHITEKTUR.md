@@ -1,6 +1,6 @@
 # Strompreisprognose – Architekturentwurf
 
-**Version:** 0.8 (Entwurf) · **Stand:** 2026-10-21 · **Status:** zur Diskussion
+**Version:** 0.9 (Entwurf) · **Stand:** 2026-10-21 · **Status:** zur Diskussion
 
 ---
 
@@ -513,7 +513,7 @@ CREATE TABLE energy.series (
   series_id serial PRIMARY KEY,
   source_id smallint, code text, unit text, resolution interval,
   UNIQUE (source_id, code)
-);   -- 'da_price_de_lu', 'load_actual', 'load_da_forecast', 'gen_wind_onshore', ...
+);   -- 'da_price_de_lu', 'load_actual', 'load_da_forecast', 'load_wa_forecast_min', 'gen_wind_onshore', ...
 
 CREATE TABLE energy.value (
   series_id  int NOT NULL,
@@ -1207,6 +1207,36 @@ CREATE TABLE meta.analysis_run (
 
 Analyse-Jobs sind bewusst einfach gehalten: eine YAML-Datei, ein Befehl, ein Ordner. Eine eigene Job-Queue oder ein Workflow-System ist erst nötig, wenn regelmäßig viele Jobs parallel laufen.
 
+### 7.10 Prognose-Dashboard (Last und Preis DE-LU)
+
+Neben dem Status-Dashboard (`config/grafana/dashboards/status.json`) gibt es ein eigenes Grafana-Dashboard `prognose.json` für Netzlast und Day-Ahead-Preis der Gebotszone DE-LU. Es zeigt in zwei Diagrammen, was kommt und wie gut die Prognosen gestern waren. Alle Zeiten gelten in Europe/Berlin, Tagesgrenzen liegen auf Mitternacht (Sommer- und Winterzeittage haben 23 bzw. 25 Stunden).
+
+**Diagramm 1: Ausblick von −2 bis +7 Tage.** Zeitachse fest von vorgestern 00:00 bis zum Ende des siebten Folgetags (Grafana `now-2d/d` bis `now+7d/d`), Last in GW auf der linken, Preis in €/MWh auf der rechten Achse, eine senkrechte Linie markiert „jetzt“.
+
+| Reihe | Quelle | Darstellung |
+|---|---|---|
+| Ist-Last | `energy.value` `load_actual` (ENTSO-E, Ausweich SMARD) | durchgezogene Linie bis jetzt |
+| Day-Ahead-Preis | `energy.value` `da_price_de_lu` | Stufenlinie; nach der Auktion (ca. 12:45 Uhr) auch für morgen, da dann Realdaten |
+| ENTSO-E-Lastprognose Day-Ahead | `load_da_forecast` | gestrichelte Linie für heute und morgen |
+| ENTSO-E-Lastprognose Week-Ahead | `load_wa_forecast_min`/`_max` (Tagesminimum und -maximum) | schmales Band je Tag bis +7 |
+| Eigene Prognose Last und Preis | `fcst.prediction`, jüngster Lauf des Champions | P50 als Linie über den gesamten Zeitraum, P10–P90 als Band; in der Vergangenheit der jeweils letzte Lauf vor dem Zeitpunkt |
+
+Weitere Prognosequellen (z. B. Wind/PV der ÜNB oder Prognosen anderer Anbieter, sofern frei) kommen als eigene Reihen hinzu, sobald sie in `energy.value` stehen; das Dashboard liest alle Reihen aus `energy.series`, deren Code `_forecast` enthält, und muss dafür nicht geändert werden.
+
+**Diagramm 2: Gestern, Ist gegen alle Prognosen.** Zeitachse fest gestern 00:00 bis 24:00 (`now-1d/d`). Das Panel wiederholt sich je Größe (Grafana-Repeat über die Variable `groesse` = Last, Preis), damit sich zwei Fehlerschläuche nicht überlagern.
+
+- **Echtdaten** als Linie.
+- **Vortagesprognose** als Linie: der letzte eigene Lauf vor Gebotsschluss am Vortag (vorgestern 12:00 Uhr), also die Prognose, auf deren Basis man für gestern hätte bieten können. Für die Last zusätzlich die ENTSO-E-Day-Ahead-Prognose als gestrichelte Linie.
+- **Fehlerschlauch** über alle Prognosen, die für gestern vorlagen: alle Läufe (`issue_time` bis zum jeweiligen Zeitpunkt, also Vorläufe von wenigen Stunden bis 16 Tagen), alle parallel inferierten Modellversionen (7.7) und die ENTSO-E-Prognosen. Gezeichnet wird das Minimum bis Maximum der P50-Werte als helles Band und das 10. bis 90. Perzentil dieser Werte als dunkleres Band.
+- Unter dem Diagramm stehen MAE und Bias der Vortagesprognose und der ENTSO-E-Prognose für gestern.
+
+**Umsetzung:**
+
+- Abfragen als Views im Schema `fcst`: `fcst.v_outlook` (Diagramm 1) und `fcst.v_yesterday_envelope` (Diagramm 2, je Größe und Zeitpunkt Ist, Vortagesprognose, Min, Max, P10, P90 und Anzahl der Prognosen). Grafana liest sie mit dem Lesebenutzer wie das Status-Dashboard.
+- `energy.value` hält je Reihe und Zeitpunkt nur den letzten Wert (Upsert in `energy_ingest`). Damit der Fehlerschlauch auch frühere ENTSO-E-Stände einschließt, schreibt `energy_ingest` bei Prognosereihen zusätzlich jeden neuen Stand in `energy.forecast_vintage (series_id, ts, published, value)`, Hypertable mit Primärschlüssel `(series_id, ts, published)`. Ist-Reihen brauchen das nicht.
+- Die Week-Ahead-Lastprognose von ENTSO-E (Tagesminimum und -maximum je Tag) wird als zusätzliche Reihe geladen.
+- Das Dashboard liegt als JSON unter `config/grafana/dashboards/prognose.json` und wird wie das Status-Dashboard provisioniert. Quellenvermerke (ENTSO-E, SMARD) stehen im Panel-Text.
+
 ---
 
 ## 8. Deployment auf der PVE-VM
@@ -1391,6 +1421,7 @@ Datenabfluss beachten: Bei S3-Diensten mit Egress-Kosten (AWS) sollten Training 
 - **Metriken:** Läufe pro Quelle vollständig/verspätet/fehlgeschlagen, Bytes je Lauf, Latenz zwischen Veröffentlichung und Ablage, Prognosefehler je Horizont.
 - **Alarme:** „Kein vollständiger GFS-Lauf seit 12 h“, „ENTSO-E-Daten älter als 2 h“, „Garage-Füllstand > 80 %“.
 - **Tests:** Unit-Tests für `.idx`-Parser und Range-Merging mit aufgezeichneten Fixtures; Integrationstest gegen echte Endpunkte als separater, manuell ausgelöster CI-Job (nicht in jedem Lauf, wegen Rate-Limits).
+- **Prognose-Dashboard:** Ausblick Last und Preis DE-LU von −2 bis +7 Tage und Vortagesvergleich mit Fehlerschlauch (7.10).
 - **Analysen:** Auswertungen laufen als Analyse-Jobs mit Ergebnisordner unter `docs/analysen/` (7.9).
 - **Lizenzen:** Quellenvermerke (DWD, ECMWF CC BY 4.0, SMARD/Energy-Charts CC BY 4.0, MaStR DL-DE BY 2.0) in API-Antworten und Dashboards mitführen.
 
