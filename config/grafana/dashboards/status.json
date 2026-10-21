@@ -6,7 +6,7 @@
   ],
   "timezone": "",
   "schemaVersion": 41,
-  "version": 6,
+  "version": 7,
   "editable": false,
   "refresh": "5m",
   "time": {
@@ -770,8 +770,8 @@
         "uid": "pdb-prometheus"
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
+        "h": 10,
+        "w": 10,
         "x": 0,
         "y": 43
       },
@@ -809,9 +809,9 @@
         "uid": "pdb-prometheus"
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
+        "h": 10,
+        "w": 8,
+        "x": 10,
         "y": 43
       },
       "targets": [
@@ -840,6 +840,80 @@
       }
     },
     {
+      "type": "table",
+      "title": "RAM je Dienst (aktuell)",
+      "id": 24,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "pdb-prometheus"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 6,
+        "x": 18,
+        "y": 43
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "pdb-prometheus"
+          },
+          "expr": "sum by (container_label_com_docker_compose_service) (container_memory_working_set_bytes{container_label_com_docker_compose_service!=\"\"})",
+          "legendFormat": "{{container_label_com_docker_compose_service}}",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "reduce",
+          "options": {
+            "mode": "seriesToRows",
+            "reducers": [
+              "lastNotNull"
+            ]
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "Field": "Dienst",
+              "Last *": "RAM",
+              "Last": "RAM"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "RAM",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
       "type": "row",
       "title": "Speicher",
       "id": 13,
@@ -848,7 +922,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 51
+        "y": 53
       },
       "panels": []
     },
@@ -864,7 +938,7 @@
         "h": 8,
         "w": 6,
         "x": 0,
-        "y": 52
+        "y": 54
       },
       "targets": [
         {
@@ -907,7 +981,7 @@
         "h": 8,
         "w": 18,
         "x": 6,
-        "y": 52
+        "y": 54
       },
       "targets": [
         {
