@@ -28,7 +28,7 @@ from predictiondb_core.s3 import s3_store
 from predictiondb_core.settings import get_settings
 from wx_ingest.bronze import Bronze
 from wx_ingest.config import GfsConfig
-from wx_ingest.ingest import GfsIngestor, RunResult, result_dict
+from wx_ingest.ingest import GfsIngestor, RunResult, StepResult, result_dict
 from wx_ingest.jobs import JobLog
 
 DEFAULT_CONFIG = Path(os.environ.get("WX_GFS_CONFIG", "config/sources/gfs_0p25.yaml"))
@@ -142,8 +142,14 @@ async def _backfill(
     runs = ingestor.backfill_runs(args.start, end, hours=hours, newest_first=args.newest_first)
     jobs = JobLog(None if args.no_job_log else create_db_engine())
     await asyncio.to_thread(
-        jobs.start, config.code, args.start, end, hours, args.newest_first, len(runs)
+        jobs.start, config.code, args.start, end, hours, args.newest_first, runs
     )
+
+    async def started(run: datetime, n_steps: int) -> None:
+        await asyncio.to_thread(jobs.run_started, run, n_steps)
+
+    async def step_done(run: datetime, step: StepResult) -> None:
+        await asyncio.to_thread(jobs.step_done, run, step)
 
     async def progress(r: RunResult) -> None:
         await asyncio.to_thread(jobs.progress, r)
@@ -156,6 +162,8 @@ async def _backfill(
             newest_first=args.newest_first,
             parallel_runs=args.parallel_runs,
             on_run=progress,
+            on_start=started,
+            on_step=step_done,
         )
     except (KeyboardInterrupt, asyncio.CancelledError):
         jobs.finish("aborted", "abgebrochen")

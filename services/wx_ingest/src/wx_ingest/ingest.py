@@ -121,13 +121,19 @@ class GfsIngestor:
         return StepResult(step, "failed" if errors else "pending", errors=errors)
 
     async def ingest_run(
-        self, run: datetime, steps: list[int] | None = None, *, stop_on_pending: bool = True
+        self,
+        run: datetime,
+        steps: list[int] | None = None,
+        *,
+        stop_on_pending: bool = True,
+        on_step: Callable[[datetime, StepResult], Awaitable[None]] | None = None,
     ) -> RunResult:
         """Lädt alle (bzw. die angegebenen) Schritte eines Laufs.
 
         GFS veröffentlicht die Schritte nacheinander. Mit ``stop_on_pending``
         werden nach dem ersten noch nicht veröffentlichten Schritt keine weiteren
         angefragt; sie bleiben ``pending`` und kommen im nächsten Zyklus dran.
+        ``on_step`` wird nach jedem bearbeiteten Schritt aufgerufen (Fortschrittsprotokoll).
         """
         run = run.astimezone(UTC)
         all_steps = self.config.step_list()
@@ -151,6 +157,8 @@ class GfsIngestor:
             try:
                 res = await self.ingest_step(run, step)
                 results[step] = res
+                if on_step is not None:
+                    await on_step(run, res)
                 if res.status == "pending" and stop_on_pending:
                     stop.set()
             finally:
@@ -215,20 +223,25 @@ class GfsIngestor:
         newest_first: bool = False,
         parallel_runs: int = 1,
         on_run: Callable[[RunResult], Awaitable[None]] | None = None,
+        on_start: Callable[[datetime, int], Awaitable[None]] | None = None,
+        on_step: Callable[[datetime, StepResult], Awaitable[None]] | None = None,
     ) -> list[RunResult]:
         """Archiv-Modus: alle (bzw. die in ``hours`` gewählten) Läufe im Zeitraum.
 
         Vollständige Läufe kosten nur den Abruf ihres ``run.json``, ein Abbruch kann also
         jederzeit mit demselben Aufruf fortgesetzt werden. ``parallel_runs`` lädt mehrere
         Läufe gleichzeitig; die Grenzen je Endpunkt gelten weiterhin für alle zusammen.
-        ``on_run`` wird nach jedem Lauf aufgerufen (Fortschrittsprotokoll).
+        ``on_start`` (Lauf, Schrittzahl), ``on_step`` und ``on_run`` melden Beginn, jeden
+        Schritt und das Ende eines Laufs (Fortschrittsprotokoll).
         """
         runs = self.backfill_runs(start, end, hours=hours, newest_first=newest_first)
         sem = asyncio.Semaphore(max(1, parallel_runs))
 
         async def one(run: datetime) -> RunResult:
             async with sem:
-                result = await self.ingest_run(run, stop_on_pending=False)
+                if on_start is not None:
+                    await on_start(run, len(self.config.step_list()))
+                result = await self.ingest_run(run, stop_on_pending=False, on_step=on_step)
                 if on_run is not None:
                     await on_run(result)
                 return result
