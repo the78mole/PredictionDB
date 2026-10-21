@@ -6,7 +6,7 @@
   ],
   "timezone": "",
   "schemaVersion": 41,
-  "version": 5,
+  "version": 6,
   "editable": false,
   "refresh": "5m",
   "time": {
@@ -286,14 +286,12 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT max(run_time) AS \"Lauf\" FROM meta.nwp_feature_run"
+          "rawSql": "SELECT to_char(max(run_time) AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24:MI \"UTC\"') AS \"Lauf\"\n  FROM meta.nwp_feature_run"
         }
       ],
       "description": "Aus meta.nwp_feature_run (wx-process). Bronze-Downloads selbst stehen nur im Log von ingest-gfs.",
       "fieldConfig": {
-        "defaults": {
-          "unit": "dateTimeAsLocal"
-        },
+        "defaults": {},
         "overrides": []
       },
       "options": {
@@ -392,7 +390,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT run_time AS \"Lauf\", clustering_version AS \"Clusterung\", features_version AS \"Features\",\n       n_values AS \"Werte\", processed_at AS \"Verarbeitet\"\n  FROM meta.nwp_feature_run\n ORDER BY run_time DESC LIMIT 12"
+          "rawSql": "SELECT to_char(run_time AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24:MI \"UTC\"') AS \"Lauf\",\n       clustering_version AS \"Clusterung\", features_version AS \"Features\",\n       n_values AS \"Werte\", processed_at AS \"Verarbeitet\"\n  FROM meta.nwp_feature_run\n ORDER BY run_time DESC LIMIT 12"
         }
       ]
     },
