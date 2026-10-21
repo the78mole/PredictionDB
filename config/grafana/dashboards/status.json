@@ -6,7 +6,7 @@
   ],
   "timezone": "",
   "schemaVersion": 41,
-  "version": 13,
+  "version": 23,
   "editable": false,
   "refresh": "5m",
   "time": {
@@ -51,22 +51,118 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "WITH ds AS (\n  SELECT source_id, dataset, min(chunk_start) AS erster\n    FROM meta.energy_fetch GROUP BY 1, 2)\nSELECT s.code AS \"Quelle\",\n       count(DISTINCT f.dataset) AS \"Datensätze\",\n       (SELECT max(erster) FROM ds WHERE ds.source_id = s.source_id) AS \"Alle Datensätze ab\",\n       min(f.chunk_start) AS \"Weitester Datensatz ab\",\n       max(f.chunk_end) AS \"Abgedeckt bis\",\n       sum(f.n_values) AS \"Werte geladen\",\n       max(f.fetched_at) AS \"Letzter Abruf\"\n  FROM meta.energy_fetch f JOIN meta.source s USING (source_id)\n GROUP BY s.source_id, s.code ORDER BY 1"
+          "rawSql": "WITH ds AS (\n  SELECT source_id, dataset, min(chunk_start) AS erster\n    FROM meta.energy_fetch GROUP BY 1, 2)\nSELECT s.code AS \"Quelle\",\n       count(DISTINCT f.dataset) AS \"Sätze\",\n       to_char((SELECT max(erster) FROM ds WHERE ds.source_id = s.source_id), 'DD.MM.YY') AS \"Alle ab\",\n       to_char(min(f.chunk_start), 'DD.MM.YY') AS \"Weitester ab\",\n       to_char(max(f.chunk_end), 'DD.MM.YY') AS \"Bis\",\n       sum(f.n_values) AS \"Werte\",\n       to_char(max(f.fetched_at) AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Letzter Abruf\"\n  FROM meta.energy_fetch f JOIN meta.source s USING (source_id)\n GROUP BY s.source_id, s.code ORDER BY 1"
         }
       ],
-      "description": "Aus meta.energy_fetch. Der Backfill arbeitet sich Datensatz für Datensatz zurück: „Alle Datensätze ab“ ist der Stand des langsamsten, „Weitester“ der des schnellsten.",
+      "description": "Aus meta.energy_fetch. Sätze = Datensätze der Quelle. Der Backfill arbeitet sich Datensatz für Datensatz zurück: „Alle ab“ ist der Stand des langsamsten, „Weitester ab“ der des schnellsten. Bis = neuester geladener Zeitpunkt.",
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "custom": {
+            "minWidth": 30
+          }
+        },
         "overrides": [
           {
             "matcher": {
               "id": "byName",
-              "options": "Werte geladen"
+              "options": "Quelle"
             },
             "properties": [
               {
+                "id": "custom.width",
+                "value": 112
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Sätze"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 56
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Alle ab"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Weitester ab"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 96
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Bis"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Werte"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 84
+              },
+              {
                 "id": "unit",
                 "value": "short"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Letzter Abruf"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 108
               }
             ]
           }
@@ -396,7 +492,7 @@
     },
     {
       "type": "table",
-      "title": "GFS-Backfill: laufende Jobs",
+      "title": "GFS-Downloads: laufende Jobs",
       "id": 25,
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -408,7 +504,7 @@
         "x": 0,
         "y": 25
       },
-      "description": "wx-ingest gfs backfill (meta.backfill_job). Fortschritt = bearbeitete Läufe / Läufe im Zeitraum; 'Schon da' waren vorher vollständig. 'hängt?' = seit 30 min kein Lauf fertig.",
+      "description": "Neu = neu geladene Läufe, Da = schon vorhanden, Unv. = unvollständig, Fehler = fehlgeschlagene Schritte. Zeitraum und Zuletzt in UTC, Start und Fertig ca. lokal.",
       "targets": [
         {
           "refId": "A",
@@ -419,18 +515,82 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT job_id AS \"Job\",\n       to_char(range_start AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') || ' – ' ||\n         to_char(range_end AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') AS \"Zeitraum\",\n       array_to_string(run_hours, '/') || 'Z' AS \"Läufe\",\n       round(100.0 * (n_complete + n_incomplete) / nullif(n_runs, 0), 1) AS \"Fortschritt\",\n       (n_complete + n_incomplete) || ' / ' || n_runs AS \"Bearbeitet\",\n       n_complete - n_skipped AS \"Neu geladen\",\n       n_skipped AS \"Schon da\",\n       n_incomplete AS \"Unvollständig\",\n       n_failed_steps AS \"Fehlerschritte\",\n       bytes_stored AS \"Bronze\",\n       to_char(last_run AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') AS \"Zuletzt\",\n       started_at AS \"Gestartet\",\n       CASE WHEN n_complete + n_incomplete > n_skipped\n            THEN now() + (now() - started_at) * (n_runs - n_complete - n_incomplete)\n                         / (n_complete + n_incomplete - n_skipped) END AS \"Voraussichtlich fertig\",\n       CASE WHEN updated_at < now() - interval '30 minutes' THEN 'hängt?' ELSE 'läuft' END AS \"Status\"\n  FROM meta.backfill_job\n WHERE status = 'running'\n ORDER BY started_at DESC"
+          "rawSql": "SELECT job_id AS \"Job\",\n       CASE mode WHEN 'live' THEN 'Live' ELSE 'Backfill' END AS \"Art\",\n       to_char(range_start AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') || ' – ' ||\n         to_char(range_end AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zeitraum\",\n       array_to_string(run_hours, '/') || 'Z' AS \"Läufe\",\n       round(100.0 * (n_complete + n_incomplete) / nullif(n_runs, 0), 1) AS \"Fortschritt\",\n       (n_complete + n_incomplete) || '/' || n_runs AS \"Bearbeitet\",\n       n_complete - n_skipped AS \"Neu\",\n       n_skipped AS \"Da\",\n       n_incomplete AS \"Unv.\",\n       n_failed_steps AS \"Fehler\",\n       bytes_stored AS \"Bronze\",\n       to_char(last_run AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zuletzt\",\n       to_char(started_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Start\",\n       CASE WHEN mode = 'backfill' AND n_complete + n_incomplete > n_skipped\n            THEN to_char((now() + (now() - started_at) * (n_runs - n_complete - n_incomplete)\n                          / (n_complete + n_incomplete - n_skipped)) AT TIME ZONE 'Europe/Berlin',\n                         'DD.MM. HH24:MI') END AS \"Fertig ca.\",\n       CASE WHEN updated_at < now() - interval '30 minutes' THEN 'hängt?' ELSE 'läuft' END AS \"Status\"\n  FROM meta.backfill_job\n WHERE status = 'running'\n ORDER BY started_at DESC"
         }
       ],
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "custom": {
+            "minWidth": 30
+          }
+        },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Job"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 40
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Art"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Zeitraum"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 196
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Läufe"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 78
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
               "options": "Fortschritt"
             },
             "properties": [
+              {
+                "id": "custom.width",
+                "value": 324
+              },
               {
                 "id": "unit",
                 "value": "percent"
@@ -451,24 +611,95 @@
                 }
               },
               {
-                "id": "custom.width",
-                "value": 160
+                "id": "decimals",
+                "value": 1
               },
               {
-                "id": "thresholds",
+                "id": "color",
                 "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "orange",
-                      "value": null
-                    },
-                    {
-                      "color": "green",
-                      "value": 99.9
-                    }
-                  ]
+                  "mode": "fixed",
+                  "fixedColor": "green"
                 }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Bearbeitet"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Neu"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 46
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Da"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 42
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Unv."
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 46
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Fehler"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 52
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
               }
             ]
           },
@@ -479,8 +710,48 @@
             },
             "properties": [
               {
+                "id": "custom.width",
+                "value": 74
+              },
+              {
                 "id": "unit",
                 "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Zuletzt"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 96
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Start"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 88
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Fertig ca."
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 88
               }
             ]
           },
@@ -491,40 +762,8 @@
             },
             "properties": [
               {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-text"
-                }
-              },
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "value",
-                    "options": {
-                      "läuft": {
-                        "color": "blue",
-                        "index": 0
-                      },
-                      "fertig": {
-                        "color": "green",
-                        "index": 1
-                      },
-                      "hängt?": {
-                        "color": "orange",
-                        "index": 2
-                      },
-                      "abgebrochen": {
-                        "color": "orange",
-                        "index": 3
-                      },
-                      "Fehler": {
-                        "color": "red",
-                        "index": 4
-                      }
-                    }
-                  }
-                ]
+                "id": "custom.width",
+                "value": 72
               }
             ]
           }
@@ -537,7 +776,7 @@
     },
     {
       "type": "table",
-      "title": "GFS-Backfill: letzte 10 abgeschlossene Jobs",
+      "title": "GFS-Downloads: letzte 10 abgeschlossene Jobs",
       "id": 26,
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -549,7 +788,7 @@
         "x": 0,
         "y": 30
       },
-      "description": "Beendete Aufrufe von wx-ingest gfs backfill, neueste zuerst. 'abgebrochen' = gestoppt oder ohne Abschluss beendet.",
+      "description": "Neu = neu geladene Läufe, Da = schon vorhanden, Unv. = unvollständig, Fehler = fehlgeschlagene Schritte, abgebr. = abgebrochen. Dauer in Stunden:Minuten. Fehlermeldungen stehen in meta.backfill_job.error.",
       "targets": [
         {
           "refId": "A",
@@ -560,18 +799,82 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT job_id AS \"Job\",\n       to_char(range_start AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') || ' – ' ||\n         to_char(range_end AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') AS \"Zeitraum\",\n       array_to_string(run_hours, '/') || 'Z' AS \"Läufe\",\n       round(100.0 * (n_complete + n_incomplete) / nullif(n_runs, 0), 1) AS \"Fortschritt\",\n       (n_complete + n_incomplete) || ' / ' || n_runs AS \"Bearbeitet\",\n       n_complete - n_skipped AS \"Neu geladen\",\n       n_skipped AS \"Schon da\",\n       n_incomplete AS \"Unvollständig\",\n       n_failed_steps AS \"Fehlerschritte\",\n       bytes_stored AS \"Bronze\",\n       to_char(last_run AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') AS \"Zuletzt\",\n       started_at AS \"Gestartet\",\n       finished_at AS \"Beendet\",\n       justify_interval(date_trunc('minute', finished_at - started_at))::text AS \"Dauer\",\n       CASE status WHEN 'done' THEN 'fertig' WHEN 'failed' THEN 'Fehler'\n                   ELSE 'abgebrochen' END AS \"Status\",\n       coalesce(error, '') AS \"Meldung\"\n  FROM meta.backfill_job\n WHERE status <> 'running'\n ORDER BY finished_at DESC NULLS LAST\n LIMIT 10"
+          "rawSql": "SELECT job_id AS \"Job\",\n       CASE mode WHEN 'live' THEN 'Live' ELSE 'Backfill' END AS \"Art\",\n       to_char(range_start AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') || ' – ' ||\n         to_char(range_end AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zeitraum\",\n       array_to_string(run_hours, '/') || 'Z' AS \"Läufe\",\n       round(100.0 * (n_complete + n_incomplete) / nullif(n_runs, 0), 1) AS \"Fortschritt\",\n       (n_complete + n_incomplete) || '/' || n_runs AS \"Bearbeitet\",\n       n_complete - n_skipped AS \"Neu\",\n       n_skipped AS \"Da\",\n       n_incomplete AS \"Unv.\",\n       n_failed_steps AS \"Fehler\",\n       bytes_stored AS \"Bronze\",\n       to_char(last_run AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zuletzt\",\n       to_char(started_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Start\",\n       to_char(finished_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Ende\",\n       floor(extract(epoch FROM finished_at - started_at) / 3600)::int || ':' || to_char(finished_at - started_at, 'MI') AS \"Dauer\",\n       CASE WHEN status = 'done' THEN 'fertig' WHEN status = 'failed' THEN 'Fehler'\n            WHEN mode = 'live' THEN 'beendet' ELSE 'abgebr.' END AS \"Status\"\n  FROM meta.backfill_job\n WHERE status <> 'running'\n ORDER BY finished_at DESC NULLS LAST\n LIMIT 10"
         }
       ],
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "custom": {
+            "minWidth": 30
+          }
+        },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Job"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 40
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Art"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Zeitraum"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 196
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Läufe"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 78
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
               "options": "Fortschritt"
             },
             "properties": [
+              {
+                "id": "custom.width",
+                "value": 324
+              },
               {
                 "id": "unit",
                 "value": "percent"
@@ -592,24 +895,95 @@
                 }
               },
               {
-                "id": "custom.width",
-                "value": 160
+                "id": "decimals",
+                "value": 1
               },
               {
-                "id": "thresholds",
+                "id": "color",
                 "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "orange",
-                      "value": null
-                    },
-                    {
-                      "color": "green",
-                      "value": 99.9
-                    }
-                  ]
+                  "mode": "fixed",
+                  "fixedColor": "green"
                 }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Bearbeitet"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Neu"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 46
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Da"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 42
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Unv."
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 46
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Fehler"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 52
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
               }
             ]
           },
@@ -620,8 +994,64 @@
             },
             "properties": [
               {
+                "id": "custom.width",
+                "value": 74
+              },
+              {
                 "id": "unit",
                 "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Zuletzt"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 96
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Start"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 88
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Ende"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 88
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Dauer"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 56
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
               }
             ]
           },
@@ -632,40 +1062,8 @@
             },
             "properties": [
               {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-text"
-                }
-              },
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "value",
-                    "options": {
-                      "läuft": {
-                        "color": "blue",
-                        "index": 0
-                      },
-                      "fertig": {
-                        "color": "green",
-                        "index": 1
-                      },
-                      "hängt?": {
-                        "color": "orange",
-                        "index": 2
-                      },
-                      "abgebrochen": {
-                        "color": "orange",
-                        "index": 3
-                      },
-                      "Fehler": {
-                        "color": "red",
-                        "index": 4
-                      }
-                    }
-                  }
-                ]
+                "id": "custom.width",
+                "value": 72
               }
             ]
           }
@@ -678,7 +1076,7 @@
     },
     {
       "type": "table",
-      "title": "GFS-Backfill: laufende und anstehende Läufe",
+      "title": "GFS-Downloads: laufende und anstehende Läufe",
       "id": 27,
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -686,11 +1084,11 @@
       },
       "gridPos": {
         "h": 12,
-        "w": 12,
+        "w": 14,
         "x": 0,
         "y": 38
       },
-      "description": "Laufende Läufe oben, darunter die nächsten 50 der Warteschlange (nächster zuerst).",
+      "description": "Laufende Läufe oben, darunter wartende: zuerst Live (warten auf NOAA), dann die nächsten der Backfill-Warteschlange. Lauf in UTC, Start in lokaler Zeit.",
       "targets": [
         {
           "refId": "A",
@@ -701,18 +1099,122 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT CASE r.status WHEN 'running' THEN 'läuft' ELSE 'wartet' END AS \"Status\",\n       r.queue_pos AS \"Pos.\",\n       to_char(r.run_time AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') AS \"Lauf\",\n       CASE WHEN r.status = 'running'\n            THEN round(100.0 * r.steps_done / nullif(r.n_steps, 0), 1) END AS \"Fortschritt\",\n       CASE WHEN r.status = 'running' THEN r.steps_done || ' / ' || r.n_steps END AS \"Schritte\",\n       CASE WHEN r.status = 'running' THEN r.bytes_stored END AS \"Bronze\",\n       r.started_at AS \"Gestartet\",\n       r.job_id AS \"Job\"\n  FROM meta.backfill_run r JOIN meta.backfill_job j USING (job_id)\n WHERE j.status = 'running' AND r.status IN ('running', 'queued')\n ORDER BY (r.status = 'running') DESC, r.queue_pos\n LIMIT 50"
+          "rawSql": "SELECT CASE j.mode WHEN 'live' THEN 'Live' ELSE 'Backfill' END AS \"Art\",\n       CASE r.status WHEN 'running' THEN 'läuft' ELSE 'wartet' END AS \"Status\",\n       r.queue_pos AS \"Pos\",\n       to_char(r.run_time AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') AS \"Lauf\",\n       CASE WHEN r.status = 'running'\n            THEN round(100.0 * r.steps_done / nullif(r.n_steps, 0), 1) END AS \"Fortschritt\",\n       CASE WHEN r.status = 'running' THEN r.steps_done || '/' || r.n_steps END AS \"Schritte\",\n       CASE WHEN r.status = 'running' THEN r.bytes_stored END AS \"Bronze\",\n       to_char(r.started_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Start\"\n  FROM meta.backfill_run r JOIN meta.backfill_job j USING (job_id)\n WHERE j.status = 'running' AND r.status IN ('running', 'queued')\n ORDER BY (r.status = 'running') DESC, (j.mode = 'live') DESC, r.queue_pos\n LIMIT 50"
         }
       ],
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "custom": {
+            "minWidth": 30
+          }
+        },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Art"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 52
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Pos"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 42
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Lauf"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 118
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Schritte"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 66
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Bronze"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 72
+              },
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Start"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 86
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
               "options": "Fortschritt"
             },
             "properties": [
+              {
+                "id": "custom.width",
+                "value": 330
+              },
               {
                 "id": "unit",
                 "value": "percent"
@@ -731,18 +1233,17 @@
                   "type": "gauge",
                   "mode": "basic"
                 }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Bronze"
-            },
-            "properties": [
+              },
               {
-                "id": "unit",
-                "value": "bytes"
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
               }
             ]
           }
@@ -758,7 +1259,7 @@
     },
     {
       "type": "table",
-      "title": "GFS-Backfill: zuletzt abgeschlossene Läufe",
+      "title": "GFS-Downloads: zuletzt abgeschlossene Läufe",
       "id": 28,
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -766,11 +1267,11 @@
       },
       "gridPos": {
         "h": 12,
-        "w": 12,
-        "x": 12,
+        "w": 10,
+        "x": 14,
         "y": 38
       },
-      "description": "Die letzten 50 abgeschlossenen Läufe aller Jobs, neueste oben.",
+      "description": "Die letzten 50 abgeschlossenen Läufe aller Jobs, neueste oben. Neu = neu geladene Schritte; Lauf in UTC, Fertig in lokaler Zeit.",
       "targets": [
         {
           "refId": "A",
@@ -781,7 +1282,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT to_char(r.run_time AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') AS \"Lauf\",\n       CASE r.status WHEN 'complete' THEN 'geladen' WHEN 'skipped' THEN 'schon da'\n                     WHEN 'incomplete' THEN 'unvollständig' ELSE 'abgebrochen' END AS \"Ergebnis\",\n       r.steps_stored AS \"Schritte neu\",\n       r.steps_failed AS \"Fehler\",\n       r.bytes_stored AS \"Bronze\",\n       justify_interval(date_trunc('second', r.finished_at - r.started_at))::text AS \"Dauer\",\n       r.finished_at AS \"Fertig\",\n       r.job_id AS \"Job\"\n  FROM meta.backfill_run r\n WHERE r.finished_at IS NOT NULL\n ORDER BY r.finished_at DESC\n LIMIT 50"
+          "rawSql": "SELECT to_char(r.run_time AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') AS \"Lauf\",\n       CASE WHEN r.status = 'complete' AND r.steps_stored = 0 THEN 'schon da'\n                     ELSE CASE r.status WHEN 'complete' THEN 'geladen' WHEN 'skipped' THEN 'schon da'\n                     WHEN 'incomplete' THEN 'unvollst.' ELSE 'abgebr.' END END AS \"Ergebnis\",\n       r.steps_stored AS \"Neu\",\n       r.steps_failed AS \"Fehler\",\n       r.bytes_stored AS \"Bronze\",\n       to_char(r.finished_at - r.started_at, 'HH24:MI:SS') AS \"Dauer\",\n       to_char(r.finished_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Fertig\",\n       CASE j.mode WHEN 'live' THEN 'Live' ELSE 'Backfill' END AS \"Art\"\n  FROM meta.backfill_run r JOIN meta.backfill_job j USING (job_id)\n WHERE r.finished_at IS NOT NULL\n ORDER BY r.finished_at DESC\n LIMIT 50"
         }
       ],
       "fieldConfig": {
@@ -790,12 +1291,112 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "Lauf"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 118
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Ergebnis"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 82
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Neu"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 50
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Fehler"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 58
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "Bronze"
             },
             "properties": [
               {
+                "id": "custom.width",
+                "value": 82
+              },
+              {
                 "id": "unit",
                 "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Dauer"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Fertig"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Art"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
               }
             ]
           }
@@ -832,7 +1433,7 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 9,
+        "w": 8,
         "x": 0,
         "y": 51
       },
@@ -846,12 +1447,72 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT export_date AS \"Export\", version AS \"Release\", status AS \"Status\",\n       n_units AS \"Einheiten\", size_bytes AS \"ZIP\", updated_at AS \"Stand\"\n  FROM assets.snapshot ORDER BY export_date DESC"
+          "rawSql": "SELECT to_char(export_date, 'DD.MM.YY') AS \"Export\", version AS \"Release\", CASE status WHEN 'imported' THEN 'importiert' WHEN 'stored' THEN 'gesichert'\n            WHEN 'pruned' THEN 'bereinigt' ELSE 'Fehler' END AS \"Status\",\n       n_units AS \"Einheiten\", size_bytes AS \"ZIP\",\n       to_char(updated_at AT TIME ZONE 'Europe/Berlin', 'DD.MM.YY HH24:MI') AS \"Stand\"\n  FROM assets.snapshot ORDER BY export_date DESC"
         }
       ],
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "custom": {
+            "minWidth": 30
+          }
+        },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Export"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 72
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Release"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 62
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 76
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Einheiten"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 84
+              },
+              {
+                "id": "unit",
+                "value": "locale"
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
@@ -859,8 +1520,24 @@
             },
             "properties": [
               {
+                "id": "custom.width",
+                "value": 72
+              },
+              {
                 "id": "unit",
                 "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Stand"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 108
               }
             ]
           }
@@ -877,8 +1554,8 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 15,
-        "x": 9,
+        "w": 16,
+        "x": 8,
         "y": 51
       },
       "targets": [
@@ -1185,7 +1862,7 @@
         "uid": "pdb-prometheus"
       },
       "gridPos": {
-        "h": 10,
+        "h": 14,
         "w": 8,
         "x": 0,
         "y": 68
@@ -1224,7 +1901,7 @@
         "uid": "pdb-prometheus"
       },
       "gridPos": {
-        "h": 10,
+        "h": 14,
         "w": 8,
         "x": 8,
         "y": 68
@@ -1263,7 +1940,7 @@
         "uid": "pdb-prometheus"
       },
       "gridPos": {
-        "h": 10,
+        "h": 14,
         "w": 8,
         "x": 16,
         "y": 68
@@ -1377,7 +2054,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 78
+        "y": 82
       },
       "targets": [
         {
@@ -1452,7 +2129,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 78
+        "y": 82
       },
       "targets": [
         {
@@ -1523,7 +2200,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 86
+        "y": 90
       },
       "panels": []
     },
@@ -1539,7 +2216,7 @@
         "h": 8,
         "w": 6,
         "x": 0,
-        "y": 87
+        "y": 91
       },
       "targets": [
         {
@@ -1582,7 +2259,7 @@
         "h": 8,
         "w": 18,
         "x": 6,
-        "y": 87
+        "y": 91
       },
       "targets": [
         {

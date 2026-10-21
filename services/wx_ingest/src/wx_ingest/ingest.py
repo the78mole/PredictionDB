@@ -198,10 +198,28 @@ class GfsIngestor:
             },
         )
 
-    async def ingest_recent(self, now: datetime | None = None) -> list[RunResult]:
-        """Live-Modus: alle konfigurierten Läufe im Rückblickfenster, älteste zuerst."""
+    async def ingest_recent(
+        self,
+        now: datetime | None = None,
+        *,
+        on_start: Callable[[datetime, int], Awaitable[None]] | None = None,
+        on_step: Callable[[datetime, StepResult], Awaitable[None]] | None = None,
+        on_run: Callable[[RunResult], Awaitable[None]] | None = None,
+    ) -> list[RunResult]:
+        """Live-Modus: alle konfigurierten Läufe im Rückblickfenster, älteste zuerst.
+
+        Die Rückmeldungen entsprechen denen von :meth:`backfill` (Fortschrittsprotokoll).
+        """
         now = now or datetime.now(UTC)
-        return [await self.ingest_run(run) for run in self.config.recent_runs(now)]
+        results = []
+        for run in self.config.recent_runs(now):
+            if on_start is not None:
+                await on_start(run, len(self.config.step_list()))
+            result = await self.ingest_run(run, on_step=on_step)
+            if on_run is not None:
+                await on_run(result)
+            results.append(result)
+        return results
 
     def backfill_runs(
         self,

@@ -112,11 +112,32 @@ def test_run_log_queue_and_dashboard(engine: Engine) -> None:
     with engine.connect() as c:
         queue = c.execute(text(panels[27]["targets"][0]["rawSql"])).mappings().all()
         done = c.execute(text(panels[28]["targets"][0]["rawSql"])).mappings().all()
-    mine = [r for r in queue if r["Job"] == jobs.job_id]
-    assert [(r["Status"], r["Pos."]) for r in mine] == [("läuft", 1), ("wartet", 3)]
+    mine = [r for r in queue if r["Lauf"].endswith("2099 00Z") or r["Lauf"].endswith("2099 12Z")]
+    assert [(r["Status"], r["Pos"]) for r in mine] == [("läuft", 1), ("wartet", 3)]
     assert float(mine[0]["Fortschritt"]) == 50.0
-    assert done[0]["Job"] == jobs.job_id and done[0]["Ergebnis"] == "schon da"
+    assert done[0]["Lauf"].startswith("01.01.2099") and done[0]["Ergebnis"] == "schon da"
 
     jobs.finish("aborted", "abgebrochen")
     runs = _runs(engine, jobs.job_id)
     assert (runs[newest]["status"], runs[oldest]["status"]) == ("aborted", "queued")
+
+
+def test_live_job(engine: Engine) -> None:
+    jobs = JobLog(engine)
+    jobs.start("gfs_0p25", RUN, RUN, [0, 12], False, RUNS[:2], "live")
+    assert jobs.job_id is not None
+    jobs.live_window(RUN, RUNS[2], RUNS)  # neuer Lauf kommt hinten dazu
+    jobs.run_started(RUNS[0], 2)
+    jobs.step_done(RUNS[0], StepResult(0, "stored", "nomads", 50))
+    jobs.live_progress(RunResult(RUNS[0], [StepResult(0, "stored"), StepResult(3, "pending")]))
+    jobs.live_progress(RunResult(RUNS[1], [StepResult(0, "skipped")], complete=True))
+    runs = _runs(engine, jobs.job_id)
+    assert [runs[r]["queue_pos"] for r in RUNS] == [1, 2, 3]
+    assert (runs[RUNS[0]]["status"], runs[RUNS[0]]["steps_done"]) == ("queued", 1)
+    assert runs[RUNS[1]]["status"] == "complete"
+    row = _job(engine, jobs.job_id)
+    assert (row["mode"], row["n_runs"], row["n_complete"]) == ("live", 3, 1)
+    assert row["bytes_stored"] == 50
+
+    jobs.live_window(RUNS[1], RUNS[2], RUNS[1:])  # RUNS[0] fällt aus dem Fenster
+    assert _runs(engine, jobs.job_id)[RUNS[0]]["status"] == "incomplete"

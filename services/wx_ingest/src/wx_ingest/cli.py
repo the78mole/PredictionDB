@@ -17,7 +17,7 @@ import json
 import os
 import signal
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -100,12 +100,23 @@ def build_parser() -> argparse.ArgumentParser:
     bf.add_argument(
         "--parallel-runs", type=int, default=1, metavar="N", help="Läufe gleichzeitig (Standard 1)"
     )
+    bf.add_argument(
+        "--archive-concurrency",
+        type=int,
+        metavar="N",
+        help="gleichzeitige Anfragen je Archiv-Endpunkt (Standard aus der Konfiguration)",
+    )
     bf.add_argument("--no-job-log", action="store_true", help="ohne Protokoll in meta.backfill_job")
     return p
 
 
 async def _main(args: argparse.Namespace) -> int:
     config = GfsConfig.from_yaml(args.config)
+    if getattr(args, "archive_concurrency", None):
+        # Die Grenze gilt für alle parallelen Läufe zusammen; mehr Läufe brauchen mehr Anfragen
+        for ep in config.endpoints:
+            if ep.archive:
+                ep.concurrency = args.archive_concurrency
     settings = get_settings()
     bronze = Bronze(s3_store(settings.buckets.bronze, settings), config.model, config.resolution)
     timeout = httpx.Timeout(60.0, connect=15.0)
@@ -123,21 +134,61 @@ async def _main(args: argparse.Namespace) -> int:
         elif args.cmd == "backfill":
             results = await _backfill(args, config, ingestor)
         else:
-            while True:
-                results = await ingestor.ingest_recent()
-                if not args.watch:
-                    break
-                print(json.dumps([result_dict(r) for r in results]), flush=True)
-                await asyncio.sleep(args.watch)
+            results = await _latest(args, config, ingestor)
     print(json.dumps([result_dict(r) for r in results], indent=1))
     return 1 if any(s.status == "failed" for r in results for s in r.steps) else 0
+
+
+async def _latest(
+    args: argparse.Namespace, config: GfsConfig, ingestor: GfsIngestor
+) -> list[RunResult]:
+    """Live-Modus mit Protokoll in ``meta.backfill_job`` (mode 'live') für das Dashboard."""
+    jobs = JobLog(create_db_engine() if args.watch else None)
+    now = datetime.now(UTC)
+    start = now - timedelta(hours=config.lookback_hours)
+    await asyncio.to_thread(
+        jobs.start, config.code, start, now, config.runs, False, config.recent_runs(now), "live"
+    )
+
+    async def started(run: datetime, n_steps: int) -> None:
+        await asyncio.to_thread(jobs.run_started, run, n_steps)
+
+    async def step_done(run: datetime, step: StepResult) -> None:
+        if step.status == "stored":
+            await asyncio.to_thread(jobs.step_done, run, step)
+
+    async def progress(r: RunResult) -> None:
+        await asyncio.to_thread(jobs.live_progress, r)
+
+    try:
+        while True:
+            now = datetime.now(UTC)
+            runs = config.recent_runs(now)
+            await asyncio.to_thread(
+                jobs.live_window, now - timedelta(hours=config.lookback_hours), now, runs
+            )
+            results = await ingestor.ingest_recent(
+                now, on_start=started, on_step=step_done, on_run=progress
+            )
+            if not args.watch:
+                return results
+            print(json.dumps([result_dict(r) for r in results]), flush=True)
+            await asyncio.sleep(args.watch)
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        jobs.finish("aborted", "beendet")
+        raise
+    except Exception as exc:
+        jobs.finish("failed", f"{type(exc).__name__}: {exc}")
+        raise
 
 
 async def _backfill(
     args: argparse.Namespace, config: GfsConfig, ingestor: GfsIngestor
 ) -> list[RunResult]:
     """Backfill mit Protokoll in ``meta.backfill_job`` (für das Status-Dashboard)."""
-    end = args.end or datetime.now(UTC)
+    # Ohne Ende nur bis vor das Fenster des Live-Modus: jüngere Läufe erscheinen noch und
+    # gehören ``wx-ingest gfs latest``; der Backfill würde sie sonst als unvollständig abhaken.
+    end = args.end or datetime.now(UTC) - timedelta(hours=config.lookback_hours)
     hours = args.runs or config.runs
     runs = ingestor.backfill_runs(args.start, end, hours=hours, newest_first=args.newest_first)
     jobs = JobLog(None if args.no_job_log else create_db_engine())
