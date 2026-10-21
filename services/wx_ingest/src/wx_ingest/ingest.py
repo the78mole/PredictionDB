@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -195,6 +195,17 @@ class GfsIngestor:
         now = now or datetime.now(UTC)
         return [await self.ingest_run(run) for run in self.config.recent_runs(now)]
 
+    def backfill_runs(
+        self,
+        start: datetime,
+        end: datetime,
+        *,
+        hours: Iterable[int] | None = None,
+        newest_first: bool = False,
+    ) -> list[datetime]:
+        runs = self.config.runs_between(start, end, hours)
+        return runs[::-1] if newest_first else runs
+
     async def backfill(
         self,
         start: datetime,
@@ -203,21 +214,24 @@ class GfsIngestor:
         hours: Iterable[int] | None = None,
         newest_first: bool = False,
         parallel_runs: int = 1,
+        on_run: Callable[[RunResult], Awaitable[None]] | None = None,
     ) -> list[RunResult]:
         """Archiv-Modus: alle (bzw. die in ``hours`` gewählten) Läufe im Zeitraum.
 
         Vollständige Läufe kosten nur den Abruf ihres ``run.json``, ein Abbruch kann also
         jederzeit mit demselben Aufruf fortgesetzt werden. ``parallel_runs`` lädt mehrere
         Läufe gleichzeitig; die Grenzen je Endpunkt gelten weiterhin für alle zusammen.
+        ``on_run`` wird nach jedem Lauf aufgerufen (Fortschrittsprotokoll).
         """
-        runs = self.config.runs_between(start, end, hours)
-        if newest_first:
-            runs.reverse()
+        runs = self.backfill_runs(start, end, hours=hours, newest_first=newest_first)
         sem = asyncio.Semaphore(max(1, parallel_runs))
 
         async def one(run: datetime) -> RunResult:
             async with sem:
-                return await self.ingest_run(run, stop_on_pending=False)
+                result = await self.ingest_run(run, stop_on_pending=False)
+                if on_run is not None:
+                    await on_run(result)
+                return result
 
         return list(await asyncio.gather(*(one(r) for r in runs)))
 

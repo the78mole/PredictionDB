@@ -113,6 +113,7 @@ services:
       - --parallel-runs=${GFS_BACKFILL_PARALLEL:-2}
     depends_on:
       garage-init: {condition: service_completed_successfully}
+      migrate: {condition: service_completed_successfully}
 
   # Rechnet die nachgeladenen Läufe stündlich nach Silber und Features (wx-process latest
   # schaut nur 48 h zurück).
