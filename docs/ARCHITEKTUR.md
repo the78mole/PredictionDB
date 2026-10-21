@@ -1116,53 +1116,78 @@ flowchart LR
     Q["Fragestellung<br/>im Projekt"] --> J["job.yaml<br/>docs/analysen/slug/"]
     J --> R["pdb-analysis run<br/>Container, Profil analysis"]
     D[("Bronze, Silber, Gold,<br/>Beobachtungen")] -- "Lese-Schicht<br/>mit Interpolation" --> R
-    R --> E["Ergebnisordner<br/>README.md, Tabellen,<br/>Grafiken, run.json"]
+    R --> E["Ergebnisordner<br/>README.md, tabellen/,<br/>grafiken/, lauf.json"]
     E --> PR["PR ins Repo"]
     R --> REG[("meta.analysis_run")]
 ```
 
 1. **Auftrag:** Die Frage wird als `job.yaml` im künftigen Ergebnisordner `docs/analysen/<slug>/` festgehalten (Beispiel unten). So ist schon vor dem Lauf klar und prüfbar, was verglichen wird.
 2. **Lauf:** `pdb-analysis run docs/analysen/<slug>/job.yaml` im gemeinsamen Image (Compose-Profil `analysis`, `restart: "no"`), lokal, auf der VM oder als portabler Job wie in 7.7. Der Lauf liest nur und schreibt nichts in Produktionstabellen außer seinem Eintrag in `meta.analysis_run`.
-3. **Ergebnis:** `README.md` mit Fragestellung, Methode, Ergebnis und Einschränkungen, dazu `tables/*.csv`, `figures/*.png` bzw. `.svg`, die unveränderte `job.yaml` und `run.json` (Git-Commit, Image-Version, Zeitpunkt, verwendete Läufe und Stationen samt Hashes der Eingangsobjekte). Große Zwischenergebnisse (z. B. Paare Prognose/Messung je Station) liegen als Parquet in Garage `analysis/<slug>/<run_id>/`, nicht im Repo.
+3. **Ergebnis:** `README.md` mit Fragestellung, Ergebnis in Kürze, Daten und Methode, Unsicherheit und Einschränkungen, dazu `tabellen/*.csv` (Fehlerwerte, verwendete Stationen), `grafiken/*.png` bzw. `.svg`, die unveränderte `job.yaml` und `tabellen/lauf.json`. `lauf.json` hält Zeiträume, Läufe, Horizonte, Umfang (Stationen, Fehlerpaare), fehlende und zeitlich interpolierte Schritte sowie Git-Commit, Image-Version und Hashes der Eingangsobjekte fest. Braucht ein Job eigene Logik (`kind: custom`), liegt sie als `auswertung.py` im Ordner und nutzt die gemeinsamen Helfer. Große Zwischenergebnisse (z. B. Paare Prognose/Messung je Station) liegen als Parquet in Garage `analysis/<slug>/<run_id>/`, nicht im Repo.
 4. **Übergabe:** Der Ergebnisordner kommt per PR ins Repo. Wiederkehrende Jobs (`schedule`) laufen über `maintenance` und aktualisieren ihren Ordner bzw. ein Grafana-Dashboard.
 
 **Job-Definition** (Schema per Pydantic geprüft):
 
 ```yaml
-id: gfs-v15-v16-verifikation
-title: GFS v15 gegen v16, Fehler je Vorlauf
-question: Wie groß sind Bias, MAE und RMSE gegenüber Stationsmessungen je Vorlauf, getrennt nach Modellversion?
+id: gfs-v15-v16
+title: GFS v15 gegen v16, Prognosefehler an DWD-Stationen
+question: Wie stark unterscheiden sich die Fehler von v15 und v16 gegenüber Messungen, von der Analyse bis 10 Tage?
 requested_by: Maulwurf
 kind: verification             # verification | comparison | backtest | data_quality | custom
 inputs:
   forecast:
     source: gfs_0p25
-    versions: [v15, v16]       # aus meta.model_version, siehe unten
-    periods:
-      - {version: v15, from: 2021-01-01, to: 2021-03-22T06}
-      - {version: v16, from: 2022-01-01, to: 2022-03-22T06}   # gleiche Jahreszeit
-    runs: [0, 6, 12, 18]
-    variables: [t2m, d2m, u10, v10, prmsl, tp]
+    periods:                   # Version je Lauf aus meta.model_version
+      - {label: v15 2021, from: 2021-01-01, to: 2021-03-22}
+      - {label: v16 2022, from: 2022-01-01, to: 2022-03-22}   # gleiche Kalendertage
+      - {label: v16 2023, from: 2023-01-01, to: 2023-03-22}   # Kontrolle: Jahresschwankung
+    runs: [0, 12]
+    variables: [t2m, d2m, ff10, prmsl, dswrf]
   observations:
-    source: noaa_isd           # oder dwd_cdc
-    stations: {country: DE, min_completeness: 0.9}
+    source: dwd_cdc            # Ausweichquelle: noaa_isd
+    stations: {country: DE, min_completeness: 0.8, in_all_periods: true}
 method:
   horizons_h: [0, 6, 12, 24, 36, 72, 96, 240]
-  time_interpolation: linear   # erst beim Lesen; none | linear | solar (Strahlung)
+  time_interpolation: linear   # nur für fehlende Schritte, erst beim Lesen; none | linear | solar
   space_interpolation: bilinear
+  corrections: {t2m: lapse_rate_0.0065}       # Modellhöhe -> Stationshöhe
+  windows: {dswrf: mean_6h_ending, skip_night: true}
   metrics: [bias, mae, rmse, n]
-  group_by: [version, variable, horizon]
+  uncertainty: {rmse: bootstrap_over_runs, level: 0.95}
+  group_by: [period, variable, horizon]
 outputs:
   figures: [error_by_horizon]
 schedule: once                 # once | monthly | on_new_model_version
 ```
 
+Das Beispiel entspricht der ersten Analyse ([`docs/analysen/gfs-v15-v16/`](analysen/gfs-v15-v16/README.md)). Sie lief noch als eigenständiges Skript mit Parametern als Konstanten; die Job-Definition oben ist daraus abgeleitet und gilt für künftige Jobs.
+
 **Grundsätze, die sich aus der ersten Analyse ergeben haben:**
 
 - **Speichern in nativer Zeitauflösung, interpolieren beim Lesen.** Bronze und Silber halten die Schritte so, wie die Quelle sie liefert (GFS v16: stündlich bis 120 h, danach dreistündlich; ältere Archive teils nur dreistündlich). Zeitliche Interpolation geschieht ausschließlich in der Lese-Schicht (`wxread`, gemeinsam für Analyse, Features und API) und nur auf Anforderung (`time_interpolation`). Momentanwerte werden linear interpoliert. Intervallmittel und -summen werden auf die Teilintervalle verteilt, nicht linear zwischen Stützstellen gezogen. Strahlung wird nach dem Sonnenstand verteilt. Jedes Ergebnis vermerkt, welche Werte interpoliert sind, damit Fehler bei interpolierten Vorläufen nicht mit echten Stundenwerten vermischt werden.
 - **Modellversionen explizit führen.** NCEP ändert Modell, Gitter und Archivpfade mit jeder GFS-Version (v15 bis 2021-03-22 06Z unter `gfs.JJJJMMTT/HH/`, v16 ab 12Z desselben Tages unter `.../HH/atmos/`). Eine Tabelle `meta.model_version` (Quelle, Version, gültig ab bis, Archivpfad, Schrittraster) ordnet jeden Lauf einer Version zu. Feature-Pipelines, Training und Analysen können so nach Version filtern bzw. die Version als Feature nutzen.
-- **Versionsvergleiche über Zeiträume, nicht über Paare.** Im AWS-Archiv gibt es keinen Lauf, der in beiden Versionen vorliegt. Ein Vergleich läuft daher über Fehlerstatistiken gleicher Jahreszeit in verschiedenen Jahren und ist entsprechend vorsichtig zu lesen (Wetterlagen unterscheiden sich von Jahr zu Jahr).
-- **Beobachtungen sind eine eigene Quelle.** Für Verifikation braucht es Messwerte als „Wahrheit“: DWD CDC (Stationen DE, stündlich) und als Ausweichquelle NOAA ISD bzw. Global Hourly (SYNOP-Stationen weltweit, frei auf AWS). Sie landen im Schema `obs` (`obs.station`, `obs.value` als Hypertable mit Station, Variable, Zeit, Wert, Qualitätskennung), mit Quelle und Rang wie bei `energy.*`. Bis dahin lädt ein Analyse-Job sie selbst.
+- **Versionsvergleiche über Zeiträume, nicht über Paare.** Im AWS-Archiv gibt es keinen Lauf, der in beiden Versionen vorliegt. Ein Vergleich läuft daher über Fehlerstatistiken gleicher Kalendertage in verschiedenen Jahren. Mindestens zwei Jahre der neuen Version dienen als Kontrolle: Nur was in beiden gleich vom alten Wert abweicht, gilt als Versionseffekt. Die RMSE bekommt ein Bootstrap-Intervall über die Läufe.
+- **Feste Stationsmenge.** Verglichen wird nur an Stationen mit ausreichender Vollständigkeit in allen Zeiträumen (erste Analyse: mindestens 80 % der Stunden), damit sich die Stichprobe zwischen den Zeiträumen nicht ändert.
+- **Variablengerecht vergleichen.** 2-m-Temperatur wird mit 0,0065 K/m auf die Stationshöhe korrigiert. Intervallgrößen wie Strahlung werden als Fenstermittel verglichen (GFS-6-h-Mittel gegen das Mittel der DWD-Stundenwerte desselben Fensters), reine Nachtfenster zählen nicht.
+- **Beobachtungen sind eine eigene Quelle.** Für Verifikation braucht es Messwerte als „Wahrheit“: DWD CDC (Stationen DE, stündlich: Temperatur, Taupunkt, Wind, Druck, Globalstrahlung) und als Ausweichquelle NOAA ISD bzw. Global Hourly (SYNOP-Stationen weltweit, frei auf AWS). Sie landen im Schema `obs` (`obs.station`, `obs.value` als Hypertable mit Station, Variable, Zeit, Wert, Qualitätskennung), mit Quelle und Rang wie bei `energy.*`. Die erste Analyse hat die DWD-Daten noch selbst geladen und nur lokal zwischengespeichert.
+
+**Erkenntnisse aus der ersten Analyse (GFS v15 gegen v16):**
+
+| Größe | Befund | Folge |
+|---|---|---|
+| Temperatur, Taupunkt | v16 etwas besser (RMSE −0,1 bis −0,2 K bis 36 h), im Rahmen der Jahresschwankung, kein Bias-Sprung | keine |
+| Wind 10 m | v16 Bias +0,3 bis +0,45 statt +0,15 m/s, in beiden v16-Jahren gleich; einziger klarer Versionsbruch | Windstrom-Features je Version biaskorrigieren oder Version als Merkmal |
+| Luftdruck | praktisch gleich (beide etwa 0,3 hPa unter den Stationen) | keine |
+| Globalstrahlung | v16 Bias +7 bis +13 statt +17 W/m², RMSE vergleichbar | keine bis gering |
+
+Daraus folgt für das Training (7.7): v15-Läufe (etwa aus NCAR RDA d084001 ab 2015) sind brauchbar, aber nicht nahtlos. Kommen sie in die Trainingshistorie, läuft die Modellversion aus `meta.model_version` als Merkmal mit oder der Wind wird je Version korrigiert. Für den Backfill ab v16 ändert sich nichts. Eine erneute Verifikation (`schedule: on_new_model_version`) ist bei jeder neuen GFS-Version fällig.
+
+**Was der erste Lauf vermisst hat und deshalb Teil der Architektur ist:**
+
+- Beobachtungen in der DB (`obs`, siehe oben) statt eigener Zwischenspeicher je Analyse.
+- Eine gemeinsame Lese-Schicht `wxread`: Gitter auf Station (bilinear), Höhenkorrektur, Zeitinterpolation mit Vermerk, Fenstermittel für Intervallgrößen.
+- Ablage für Analyse-Zwischenstände in Garage (`analysis/<slug>/<run_id>/`, eigener Schlüssel mit Schreibrecht nur dort).
+- Wiederverwendbare Statistik-Helfer im Paket `pdb_analysis` (Bias, MAE, RMSE, Bootstrap-Intervalle, Standardgrafik Fehler je Vorlauf).
 
 **Ergänzende Tabellen:**
 
