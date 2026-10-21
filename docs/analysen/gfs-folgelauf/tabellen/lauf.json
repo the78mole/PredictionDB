@@ -1,0 +1,39 @@
+{
+ "job": "gfs-folgelauf",
+ "job_sha256": "789c65d09b27282d2a77ca8abb3fa997805c473b0bb376a14eca5d3370b060f9",
+ "git_commit": "9c5d8b6f4ec320caae8619e3ef0d615ca0dbe438",
+ "gestartet": "2026-10-21T16:10:30+00:00",
+ "beendet": "2026-10-21T16:14:23+00:00",
+ "zeitraum": [
+  "2025-09-20T00:00:00+00:00",
+  "2026-09-19T18:00:00+00:00"
+ ],
+ "laeufe_utc": [
+  0,
+  6,
+  12,
+  18
+ ],
+ "horizonte_h": [
+  0,
+  6,
+  12,
+  18,
+  24,
+  30,
+  36,
+  42,
+  48,
+  60,
+  72,
+  96,
+  120
+ ],
+ "versatz_h": 6,
+ "stationen_wetter": 173,
+ "stationen_strahlung": 40,
+ "laufpaare_mal_horizonte": 18980,
+ "schritte_nicht_im_archiv": {},
+ "schritte_zeitlich_interpoliert": {},
+ "fehlerpaare": 13548120
+}
