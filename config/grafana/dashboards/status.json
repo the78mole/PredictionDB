@@ -4,9 +4,9 @@
   "tags": [
     "predictiondb"
   ],
-  "timezone": "browser",
+  "timezone": "",
   "schemaVersion": 41,
-  "version": 2,
+  "version": 3,
   "editable": false,
   "refresh": "5m",
   "time": {
@@ -292,7 +292,7 @@
       "description": "Aus meta.nwp_feature_run (wx-process). Bronze-Downloads selbst stehen nur im Log von ingest-gfs.",
       "fieldConfig": {
         "defaults": {
-          "unit": "dateTimeAsIso"
+          "unit": "dateTimeAsLocal"
         },
         "overrides": []
       },
