@@ -6,7 +6,7 @@
   ],
   "timezone": "",
   "schemaVersion": 41,
-  "version": 7,
+  "version": 8,
   "editable": false,
   "refresh": "5m",
   "time": {
@@ -841,7 +841,7 @@
     },
     {
       "type": "table",
-      "title": "RAM je Dienst (aktuell)",
+      "title": "Dienste aktuell",
       "id": 24,
       "datasource": {
         "type": "prometheus",
@@ -861,29 +861,42 @@
             "uid": "pdb-prometheus"
           },
           "expr": "sum by (container_label_com_docker_compose_service) (container_memory_working_set_bytes{container_label_com_docker_compose_service!=\"\"})",
-          "legendFormat": "{{container_label_com_docker_compose_service}}",
           "instant": true,
           "range": false,
-          "format": "time_series"
+          "format": "table"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "pdb-prometheus"
+          },
+          "expr": "sum by (container_label_com_docker_compose_service) (rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_service!=\"\"}[2m])) * 100",
+          "instant": true,
+          "range": false,
+          "format": "table"
         }
       ],
       "transformations": [
         {
-          "id": "reduce",
-          "options": {
-            "mode": "seriesToRows",
-            "reducers": [
-              "lastNotNull"
-            ]
-          }
+          "id": "merge",
+          "options": {}
         },
         {
           "id": "organize",
           "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "container_label_com_docker_compose_service": 0,
+              "Value #B": 1,
+              "Value #A": 2
+            },
             "renameByName": {
-              "Field": "Dienst",
-              "Last *": "RAM",
-              "Last": "RAM"
+              "container_label_com_docker_compose_service": "Dienst",
+              "Value #A": "RAM",
+              "Value #B": "CPU"
             }
           }
         },
@@ -900,10 +913,37 @@
         }
       ],
       "fieldConfig": {
-        "defaults": {
-          "unit": "bytes"
-        },
-        "overrides": []
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "RAM"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CPU"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "showHeader": true,
@@ -911,7 +951,8 @@
         "footer": {
           "show": false
         }
-      }
+      },
+      "description": "CPU in Prozent eines Kerns, RAM als Working Set (cAdvisor)."
     },
     {
       "type": "row",
