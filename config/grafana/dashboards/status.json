@@ -6,7 +6,7 @@
   ],
   "timezone": "",
   "schemaVersion": 41,
-  "version": 17,
+  "version": 18,
   "editable": false,
   "refresh": "5m",
   "time": {
@@ -481,7 +481,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 110
+                "value": 420
               },
               {
                 "id": "unit",
@@ -742,7 +742,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 110
+                "value": 420
               },
               {
                 "id": "unit",
@@ -1272,7 +1272,7 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 9,
+        "w": 11,
         "x": 0,
         "y": 51
       },
@@ -1286,12 +1286,72 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT export_date AS \"Export\", version AS \"Release\", status AS \"Status\",\n       n_units AS \"Einheiten\", size_bytes AS \"ZIP\", updated_at AS \"Stand\"\n  FROM assets.snapshot ORDER BY export_date DESC"
+          "rawSql": "SELECT to_char(export_date, 'DD.MM.YY') AS \"Export\", version AS \"Release\", status AS \"Status\",\n       n_units AS \"Einheiten\", size_bytes AS \"ZIP\",\n       to_char(updated_at AT TIME ZONE 'Europe/Berlin', 'DD.MM.YY HH24:MI') AS \"Stand\"\n  FROM assets.snapshot ORDER BY export_date DESC"
         }
       ],
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "custom": {
+            "minWidth": 30
+          }
+        },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Export"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 72
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Release"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 62
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 76
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Einheiten"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 84
+              },
+              {
+                "id": "unit",
+                "value": "locale"
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
@@ -1299,8 +1359,24 @@
             },
             "properties": [
               {
+                "id": "custom.width",
+                "value": 72
+              },
+              {
                 "id": "unit",
                 "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Stand"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 108
               }
             ]
           }
@@ -1317,8 +1393,8 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 15,
-        "x": 9,
+        "w": 13,
+        "x": 11,
         "y": 51
       },
       "targets": [
