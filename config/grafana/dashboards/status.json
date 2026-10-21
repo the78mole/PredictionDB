@@ -6,7 +6,7 @@
   ],
   "timezone": "",
   "schemaVersion": 41,
-  "version": 23,
+  "version": 24,
   "editable": false,
   "refresh": "5m",
   "time": {
@@ -199,7 +199,7 @@
       "description": "Mittel über alle Datensätze einer Quelle: Anteil der Zeitspanne 2015 bis heute, die schon geladen ist.",
       "options": {
         "orientation": "horizontal",
-        "displayMode": "gradient",
+        "displayMode": "basic",
         "showUnfilled": true,
         "reduceOptions": {
           "values": true,
@@ -207,7 +207,10 @@
             "lastNotNull"
           ],
           "fields": ""
-        }
+        },
+        "valueMode": "color",
+        "namePlacement": "top",
+        "sizing": "auto"
       },
       "fieldConfig": {
         "defaults": {
@@ -226,7 +229,8 @@
                 "value": 99
               }
             ]
-          }
+          },
+          "decimals": 1
         },
         "overrides": []
       }
