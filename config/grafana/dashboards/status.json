@@ -6,7 +6,7 @@
   ],
   "timezone": "",
   "schemaVersion": 41,
-  "version": 3,
+  "version": 4,
   "editable": false,
   "refresh": "5m",
   "time": {
@@ -51,10 +51,10 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT s.code AS \"Quelle\",\n       count(DISTINCT f.dataset) AS \"Datensätze\",\n       min(f.chunk_start) AS \"Backfill bis\",\n       max(f.chunk_end) AS \"Abgedeckt bis\",\n       sum(f.n_values) AS \"Werte geladen\",\n       max(f.fetched_at) AS \"Letzter Abruf\"\n  FROM meta.energy_fetch f JOIN meta.source s USING (source_id)\n GROUP BY 1 ORDER BY 1"
+          "rawSql": "WITH ds AS (\n  SELECT source_id, dataset, min(chunk_start) AS erster\n    FROM meta.energy_fetch GROUP BY 1, 2)\nSELECT s.code AS \"Quelle\",\n       count(DISTINCT f.dataset) AS \"Datensätze\",\n       (SELECT max(erster) FROM ds WHERE ds.source_id = s.source_id) AS \"Alle Datensätze ab\",\n       min(f.chunk_start) AS \"Weitester Datensatz ab\",\n       max(f.chunk_end) AS \"Abgedeckt bis\",\n       sum(f.n_values) AS \"Werte geladen\",\n       max(f.fetched_at) AS \"Letzter Abruf\"\n  FROM meta.energy_fetch f JOIN meta.source s USING (source_id)\n GROUP BY s.source_id, s.code ORDER BY 1"
         }
       ],
-      "description": "Aus meta.energy_fetch: jeder geladene Abschnitt je Quelle und Datensatz.",
+      "description": "Aus meta.energy_fetch. Der Backfill arbeitet sich Datensatz für Datensatz zurück: „Alle Datensätze ab“ ist der Stand des langsamsten, „Weitester“ der des schnellsten.",
       "fieldConfig": {
         "defaults": {},
         "overrides": [
@@ -97,10 +97,10 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT s.code AS \"Quelle\",\n       round((100 * extract(epoch FROM now() - min(f.chunk_start))\n                  / extract(epoch FROM now() - timestamptz '2015-01-01'))::numeric, 1) AS \"Fortschritt\"\n  FROM meta.energy_fetch f JOIN meta.source s USING (source_id)\n GROUP BY 1 ORDER BY 1"
+          "rawSql": "WITH ds AS (\n  SELECT source_id, dataset, min(chunk_start) AS erster\n    FROM meta.energy_fetch GROUP BY 1, 2)\nSELECT s.code AS \"Quelle\",\n       round((100 * avg(extract(epoch FROM now() - ds.erster)\n                        / extract(epoch FROM now() - timestamptz '2015-01-01')))::numeric, 1) AS \"Fortschritt\"\n  FROM ds JOIN meta.source s USING (source_id)\n GROUP BY 1 ORDER BY 1"
         }
       ],
-      "description": "Anteil der Zeitspanne 2015 bis heute, die der Backfill je Quelle schon erreicht hat.",
+      "description": "Mittel über alle Datensätze einer Quelle: Anteil der Zeitspanne 2015 bis heute, die schon geladen ist.",
       "options": {
         "orientation": "horizontal",
         "displayMode": "gradient",
