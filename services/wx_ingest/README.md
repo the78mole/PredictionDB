@@ -32,7 +32,33 @@ uv run wx-ingest gfs latest                  # unvollständige Läufe der letzte
 uv run wx-ingest gfs latest --watch 600      # dauerhaft alle 10 min
 uv run wx-ingest gfs run 2026102006 --steps 0-6
 uv run wx-ingest gfs backfill 2026-10-01T00 2026-10-07T18   # nur Archiv-Endpunkte (AWS, Google)
+uv run wx-ingest gfs backfill 2021-03-22T12 --runs 0,12 --newest-first --parallel-runs 2
 ```
+
+## Historie (Backfill)
+
+`backfill START [ENDE]` lädt alle konfigurierten Läufe im Zeitraum nur von Archiv-Endpunkten.
+Ohne `ENDE` gilt „jetzt“. `--runs` wählt Laufzeiten (z. B. `0,12`), `--newest-first` beginnt mit
+den jüngsten Läufen, `--parallel-runs N` lädt mehrere Läufe gleichzeitig (die Grenzen je Endpunkt
+gelten für alle zusammen). Vollständige Läufe kosten nur einen Blick auf `run.json`; ein
+abgebrochener Backfill wird mit demselben Aufruf fortgesetzt. Läufe, die im Archiv fehlen,
+bleiben `pending` und werden nicht als Fehler gewertet.
+
+Für den Dauerbetrieb gibt es das Compose-Profil `backfill` (`gfs-backfill` und
+`wx-process-backfill`, Zeitraum und Läufe über `GFS_BACKFILL_START`, `GFS_BACKFILL_RUNS`,
+`GFS_BACKFILL_PARALLEL`).
+
+Stand AWS-Archiv `noaa-gfs-bdp-pds` (geprüft 2026-10-21):
+
+| Zeitraum | Modell | Pfad | Vollständigkeit |
+|---|---|---|---|
+| ab 2021-03-22 12Z | GFS v16 | `gfs.JJJJMMTT/HH/atmos/` | alle 8154 Läufe bis 2026-10-20 vollständig mit `.idx` |
+| 2021-02-26 – 2021-03-22 06Z | GFS v15 | `gfs.JJJJMMTT/HH/` | vollständig, f000 ohne `TCDC`; wird nicht unterstützt |
+| 2021-01-01 – 2021-02-25 | GFS v15 | `gfs.JJJJMMTT/HH/` | häufig nur 3-stündlich |
+
+Je Lauf werden mit 22 Feldern rund 3,3 GB in 3341 Range-Anfragen übertragen. Ab Bronze bleiben
+davon rund 22 MB, und das Zuschneiden kostet rund 0,6 CPU-Sekunden je Schritt (gemessen an 0Z-Läufen
+im Oktober 2026).
 
 | Variable | Standard |
 |---|---|

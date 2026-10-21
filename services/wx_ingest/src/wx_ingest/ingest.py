@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import Counter
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -194,11 +195,31 @@ class GfsIngestor:
         now = now or datetime.now(UTC)
         return [await self.ingest_run(run) for run in self.config.recent_runs(now)]
 
-    async def backfill(self, start: datetime, end: datetime) -> list[RunResult]:
-        return [
-            await self.ingest_run(run, stop_on_pending=False)
-            for run in self.config.runs_between(start, end)
-        ]
+    async def backfill(
+        self,
+        start: datetime,
+        end: datetime,
+        *,
+        hours: Iterable[int] | None = None,
+        newest_first: bool = False,
+        parallel_runs: int = 1,
+    ) -> list[RunResult]:
+        """Archiv-Modus: alle (bzw. die in ``hours`` gewählten) Läufe im Zeitraum.
+
+        Vollständige Läufe kosten nur den Abruf ihres ``run.json``, ein Abbruch kann also
+        jederzeit mit demselben Aufruf fortgesetzt werden. ``parallel_runs`` lädt mehrere
+        Läufe gleichzeitig; die Grenzen je Endpunkt gelten weiterhin für alle zusammen.
+        """
+        runs = self.config.runs_between(start, end, hours)
+        if newest_first:
+            runs.reverse()
+        sem = asyncio.Semaphore(max(1, parallel_runs))
+
+        async def one(run: datetime) -> RunResult:
+            async with sem:
+                return await self.ingest_run(run, stop_on_pending=False)
+
+        return list(await asyncio.gather(*(one(r) for r in runs)))
 
 
 def result_dict(r: RunResult) -> dict[str, Any]:

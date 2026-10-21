@@ -6,6 +6,7 @@ Beispiele::
     wx-ingest gfs latest --watch 600             # dauerhaft, alle 10 min
     wx-ingest gfs run 2026102012 --steps 0-12    # ein Lauf, optional nur Teilbereich
     wx-ingest gfs backfill 2026-10-01T00 2026-10-07T18   # nur Archiv-Endpunkte
+    wx-ingest gfs backfill 2021-03-22T12 --runs 0,12 --newest-first --parallel-runs 2
 """
 
 from __future__ import annotations
@@ -50,6 +51,24 @@ def parse_steps(text: str) -> list[int]:
     return sorted(steps)
 
 
+def parse_hours(text: str) -> list[int]:
+    try:
+        hours = sorted({int(h) for h in text.split(",")})
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"Laufzeiten {text!r} nicht lesbar (z. B. 0,12)") from None
+    if any(h not in (0, 6, 12, 18) for h in hours):
+        raise argparse.ArgumentTypeError("GFS-Läufe nur 0, 6, 12, 18 UTC")
+    return hours
+
+
+def add_backfill_args(p: argparse.ArgumentParser) -> None:
+    """Zeitraum und Laufauswahl, gemeinsam für ``wx-ingest`` und ``wx-process``."""
+    p.add_argument("start", type=parse_run)
+    p.add_argument("end", type=parse_run, nargs="?", help="Standard: jetzt")
+    p.add_argument("--runs", type=parse_hours, metavar="HH,…", help="nur diese Läufe, z. B. 0,12")
+    p.add_argument("--newest-first", action="store_true", help="jüngste Läufe zuerst")
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="wx-ingest", description="Wettermodell-Ingest nach Garage (Bronze)"
@@ -74,8 +93,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     bf = cmd.add_parser("backfill", help="Zeitraum aus Archiv-Endpunkten nachladen")
-    bf.add_argument("start", type=parse_run)
-    bf.add_argument("end", type=parse_run)
+    add_backfill_args(bf)
+    bf.add_argument(
+        "--parallel-runs", type=int, default=1, metavar="N", help="Läufe gleichzeitig (Standard 1)"
+    )
     return p
 
 
@@ -96,7 +117,13 @@ async def _main(args: argparse.Namespace) -> int:
                 steps = [s for s in steps if s in valid]
             results = [await ingestor.ingest_run(args.run, steps, stop_on_pending=False)]
         elif args.cmd == "backfill":
-            results = await ingestor.backfill(args.start, args.end)
+            results = await ingestor.backfill(
+                args.start,
+                args.end or datetime.now(UTC),
+                hours=args.runs,
+                newest_first=args.newest_first,
+                parallel_runs=args.parallel_runs,
+            )
         else:
             while True:
                 results = await ingestor.ingest_recent()

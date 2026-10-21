@@ -10,6 +10,7 @@ quantisierten Silber-Werten, sodass eine spätere Neuberechnung aus Silber dasse
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -224,12 +225,19 @@ class WxPipeline:
         return [self._safe(r) for r in self.source.runs_between(start, now)]
 
     def backfill(
-        self, start: datetime, end: datetime, *, force: bool = False, clustering: str | None = None
+        self,
+        start: datetime,
+        end: datetime,
+        *,
+        force: bool = False,
+        clustering: str | None = None,
+        hours: Iterable[int] | None = None,
+        newest_first: bool = False,
     ) -> list[RunOutcome]:
-        return [
-            self._safe(r, force=force, clustering=clustering)
-            for r in self.source.runs_between(start, end)
-        ]
+        runs = self.source.runs_between(start, end, hours)
+        if newest_first:
+            runs.reverse()
+        return [self._safe(r, force=force, clustering=clustering) for r in runs]
 
 
 def _rows(

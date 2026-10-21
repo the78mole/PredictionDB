@@ -1,5 +1,6 @@
 import hashlib
 import json
+from datetime import timedelta
 from typing import Any
 
 import httpx
@@ -151,6 +152,33 @@ async def test_backfill_uses_archive_endpoints_only(bronze: Bronze) -> None:
     async with make_client(aws) as client:
         results = await ingestor(bronze, client, cfg=cfg, archive_only=True).backfill(RUN, RUN)
     assert len(results) == 1 and results[0].complete
+
+
+async def test_backfill_selects_runs_newest_first(bronze: Bronze) -> None:
+    aws = FakeGfsHost("aws.test", ALL_STEPS)
+    async with make_client(aws) as client:
+        ing = ingestor(bronze, client, archive_only=True)
+        results = await ing.backfill(
+            RUN - timedelta(hours=12), RUN, hours=[0, 6], newest_first=True
+        )
+    assert [f"{r.run:%d%H}" for r in results] == ["2006", "2000"]
+    assert results[0].complete
+    # Älterer Lauf fehlt im Archiv: bleibt offen statt fehlerhaft
+    assert not results[1].complete and results[1].counts() == {"pending": len(ALL_STEPS)}
+    assert f"/gfs.{RUN:%Y%m%d}/06/" in aws.requests[0].url.path
+
+
+async def test_backfill_parallel_runs_and_resume(bronze: Bronze) -> None:
+    aws = FakeGfsHost("aws.test", ALL_STEPS)
+    async with make_client(aws) as client:
+        ing = ingestor(bronze, client, archive_only=True)
+        first = await ing.backfill(RUN - timedelta(hours=18), RUN, parallel_runs=3)
+        n = len(aws.requests)
+        again = await ing.backfill(RUN - timedelta(hours=18), RUN, parallel_runs=3)
+    assert [r.run for r in first] == [RUN - timedelta(hours=h) for h in (18, 12, 6, 0)]
+    assert first[-1].complete and again[-1].complete
+    # vollständiger Lauf: keine Anfrage mehr an den Spiegel
+    assert len(aws.requests) - n == 3 * len(ALL_STEPS)
 
 
 async def test_nomads_filter(bronze: Bronze) -> None:

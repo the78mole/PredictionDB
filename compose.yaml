@@ -96,6 +96,41 @@ services:
       garage-init: {condition: service_completed_successfully}
       migrate: {condition: service_completed_successfully}
 
+  # GFS-Historie aus dem AWS-Archiv (nur bei Bedarf: docker compose --profile backfill up -d).
+  # Ab GFS v16 (2021-03-22 12Z), jüngste Läufe zuerst; ein Neustart setzt dort fort, wo er stand.
+  # Läufe per GFS_BACKFILL_RUNS wählbar (Standard 0,12), danach z. B. 6,18 nachziehen.
+  gfs-backfill:
+    <<: *app
+    profiles: [backfill]
+    restart: on-failure
+    command:
+      - wx-ingest
+      - gfs
+      - backfill
+      - ${GFS_BACKFILL_START:-2021-03-22T12}
+      - --runs=${GFS_BACKFILL_RUNS:-0,12}
+      - --newest-first
+      - --parallel-runs=${GFS_BACKFILL_PARALLEL:-2}
+    depends_on:
+      garage-init: {condition: service_completed_successfully}
+
+  # Rechnet die nachgeladenen Läufe stündlich nach Silber und Features (wx-process latest
+  # schaut nur 48 h zurück).
+  wx-process-backfill:
+    <<: *app
+    profiles: [backfill]
+    command:
+      - wx-process
+      - gfs
+      - backfill
+      - ${GFS_BACKFILL_START:-2021-03-22T12}
+      - --runs=${GFS_BACKFILL_RUNS:-0,12}
+      - --newest-first
+      - --watch=3600
+    depends_on:
+      garage-init: {condition: service_completed_successfully}
+      migrate: {condition: service_completed_successfully}
+
   # Status-Dashboards (config/grafana). Liest über die Rolle grafana_reader (Migration 0004).
   # Port wird erst im Override veröffentlicht (VM: Proxy-Netz, lokal: localhost).
   grafana:

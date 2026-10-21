@@ -161,3 +161,13 @@ def test_latest_and_failures(setup) -> None:  # type: ignore[no-untyped-def]
     assert by_run[RUN] == "processed"
     assert by_run[RUN + timedelta(hours=6)] == "failed"  # Manifest ohne Schritte
     assert by_run[RUN - timedelta(hours=6)] == "not_ready"
+
+
+def test_backfill_run_selection(setup) -> None:  # type: ignore[no-untyped-def]
+    pipeline, bronze, _ = setup
+    fill_bronze(bronze, STEPS)
+    out = pipeline.backfill(RUN - timedelta(hours=12), RUN, hours=[0, 6], newest_first=True)
+    assert [(o.run, o.status) for o in out] == [
+        (RUN, "processed"),
+        (RUN - timedelta(hours=6), "not_ready"),
+    ]
