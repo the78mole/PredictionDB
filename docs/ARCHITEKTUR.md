@@ -341,7 +341,7 @@ Ausschnitt: **44–58° N, 0–20° E** (DE plus Nachbarn, relevant für Kuppelf
 | Stufe | Format | Ort | Inhalt | Zweck |
 |---|---|---|---|---|
 | **Bronze** | GRIB2 (Original-Codierung, zugeschnitten) | Garage `wx-bronze` | eine Datei je `modell/lauf/schritt` | Unveränderliche Quelle, Neuberechnung, Audit |
-| **Silber** | Zarr v3, Chunks `(lauf, schritt, var, lat, lon)`, float16 bzw. Int16 mit Scale/Offset, Zstd | Garage `wx-silver` | ein Zarr-Store je Modell, Läufe angehängt | Schneller Zugriff für Training, Regridding auf gemeinsames Gitter |
+| **Silber** | Zarr v3, je Variable `(schritt, lat, lon)`, Int16 mit Scale/Offset, Blosc/Zstd mit Shuffle | Garage `wx-silver` | ein Zarr-Store je Modell und Lauf | Schneller Zugriff für Training, Regridding auf gemeinsames Gitter |
 | **Gold** | TimescaleDB-Hypertables, native Kompression | Postgres | Features je Region × Lauf × Gültigkeitszeit, Energiedaten, Prognosen | ML-Eingang, API, Grafana |
 
 ```mermaid
@@ -352,6 +352,8 @@ flowchart LR
     G[("Gold<br/>Features je Region × Lauf × Zeit<br/>TimescaleDB feat.*")] --> ML["Training / Inferenz"]
     SI -- "Punktabfrage" --> API["api"]
 ```
+
+Umgesetzt in `services/wx_process` (Revision `0003_wx_features`): Silber liegt als ein Store je Lauf unter `wx-silver/gfs/0p25/JJJJ/MM/TT/HH.zarr` (statt eines wachsenden Stores je Modell), damit Neuberechnung und Aufräumen auf einen Lauf beschränkt bleiben; Int16 mit CF-Attributen `scale_factor`/`add_offset`, lesbar mit `xarray.open_zarr`. Mittel und Summen stehen dort als Werte für das Intervall seit dem vorherigen Schritt (die 6-h-Eimer von GFS sind zurückgerechnet). Einen vollständigen Lauf erkennt `wx-process` vorerst am Laufmanifest `run.json` in Bronze (Abfrage alle 10 min), nicht über `NOTIFY nwp_run_complete`; danach setzt es `meta.nwp_run` auf `processed` und sendet `NOTIFY features_ready`.
 
 Objekt-Schlüssel (Bronze), sprechend und partitionierbar:
 
@@ -813,6 +815,7 @@ flowchart TB
 
 - Für jedes Cluster eine Gewichtsmatrix „Leistung je Gitterzelle“ pro Wettermodellgitter (GFS 0,25°, ECMWF 0,25°, ICON-EU 0,0625°). `wx-process` multipliziert jede Prognose mit dieser Matrix und schreibt je Cluster, Lauf und Gültigkeitszeit Kennzahlen nach `feat.nwp_value` (Leistungsindex in MW, mittlere Windgeschwindigkeit bzw. Einstrahlung).
 - Region-Codes in `meta.region` erhalten dafür die Form `wind_on:v2025Q4:c07`; Gitter-Gewichte liegen in der Tabelle `assets.grid_weight` (je Gitter, Cluster und Zelle Leistung und Anteil; wenige tausend Zeilen), daraus baut `wx-process` die dichte Matrix.
+- Umgesetzt in `services/wx_process`: je Cluster gewichtetes Mittel über die Zellen, nichtlineare Größen (Wind in Nabenhöhe nach Potenzgesetz mit Exponent aus 10 m/100 m und der mittleren MaStR-Nabenhöhe, generische Leistungskurve, einfaches PV-Modell aus Globalstrahlung und Temperatur) erst je Zelle. Features `wind_speed_*`, `wind_cf`, `wind_power` (MW mit `assets.capacity_daily`), `ghi`, `pv_cf`, `pv_power`, `cloud_cover`, `snow_fraction`, `precip`, `t2m`; Aggregation `cluster_cap_weighted`, Zustand je Lauf, Clusterung und Feature-Version in `meta.nwp_feature_run`. Details: `services/wx_process/README.md`.
 
 **Ergänzende Tabellen:**
 
@@ -929,7 +932,7 @@ Viele Genehmigungen schreiben Abschaltungen zum Artenschutz vor. Diese Zeiten fe
 **Physikalisches Modell:**
 
 - **Wetter am Standort:** `wx-process` bzw. `ml-predict` liest je Lauf die benötigten Variablen aus Silber und interpoliert bilinear auf den Standort. Das ist eine kleine Zeitreihe je Anlage und Lauf und kostet kaum Rechenzeit. Standorte außerhalb des Ausschnitts (4.3) werden beim Anlegen abgelehnt, bis der Ausschnitt erweitert ist.
-- **PV** (Bibliothek `pvlib`): Globalstrahlung (`DSWRF` bzw. `ssrd`) zerlegen in Direkt- und Diffusanteil (Erbs bzw. DISC, bei ICON direkt `aswdir_s`/`aswdifd_s`), Transposition auf jede Teilfläche (Perez), Einfallswinkelverluste, Zelltemperatur aus 2-m-Temperatur, 10-m-Wind und Montageart, dann DC-Leistung, Wechselrichter, Clipping und Einspeisebegrenzung. Wichtig: GFS liefert `DSWRF` als Mittel über wechselnde Intervalle (Rücksetzen alle 6 h); `gribkit` wandelt das in echte Stundenmittel um, bevor es nach Silber geht. Für 15 min wird mit dem Sonnenstand interpoliert, nicht linear.
+- **PV** (Bibliothek `pvlib`): Globalstrahlung (`DSWRF` bzw. `ssrd`) zerlegen in Direkt- und Diffusanteil (Erbs bzw. DISC, bei ICON direkt `aswdir_s`/`aswdifd_s`), Transposition auf jede Teilfläche (Perez), Einfallswinkelverluste, Zelltemperatur aus 2-m-Temperatur, 10-m-Wind und Montageart, dann DC-Leistung, Wechselrichter, Clipping und Einspeisebegrenzung. Wichtig: GFS liefert `DSWRF` als Mittel über wechselnde Intervalle (Rücksetzen alle 6 h); `wx-process` wandelt das in echte Stundenmittel um, bevor es nach Silber geht. Für 15 min wird mit dem Sonnenstand interpoliert, nicht linear.
 - **Wind** (Bibliothek `windpowerlib`): Windgeschwindigkeit auf Nabenhöhe aus 10 m und 100 m (bei GFS zusätzlich 80 m) über das gemessene Höhenprofil (Potenzgesetz mit Exponent aus den beiden Niveaus, ersatzweise logarithmisches Profil mit Rauigkeitslänge), Luftdichtekorrektur aus Temperatur und Bodendruck (`PRES:surface` kommt dafür in die Variablenliste 4.3), dann Leistungskurve. Bei Parks ein einfacher Wake-Abschlag als Parameter.
 - **Wasserkraft:** Die Leistung hängt am Abfluss, nicht direkt am Wetter. Gerechnet wird `P = ρ · g · Q_T · H(Q) · η(Q_T)` mit `Q_T = min(Q − Q_Rest, Q_Ausbau)`. Unter dem Mindestdurchfluss ist `P = 0`, über dem Abschaltdurchfluss ebenfalls. Der Abfluss `Q` kommt je nach verfügbaren Daten aus einer von drei Quellen, in dieser Rangfolge:
   1. **Abflussprognose eines Dienstes** für den Pegel, soweit kostenfrei verfügbar: Hochwasser- und Abflussvorhersagen der Landesportale sowie GloFAS (Copernicus, global, bis 30 Tage, kostenlos mit Registrierung). EFAS ist für Europa genauer, Echtzeitprognosen gibt es dort aber nur für Partnerbehörden. Für kleine Bäche gibt es meist keine Prognose.

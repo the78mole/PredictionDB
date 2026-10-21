@@ -87,7 +87,16 @@ services:
       garage-init: {condition: service_completed_successfully}
       migrate: {condition: service_completed_successfully}
 
-  # Weitere Dienste (wx-process, ml-*, api, mlflow, grafana)
+  # Bronze → Silber (Zarr) → Wetter-Features je MaStR-Cluster (services/wx_process).
+  # Rechnet alle 10 min die vollständigen Läufe der letzten 48 h, die noch fehlen.
+  wx-process:
+    <<: *app
+    command: ["wx-process", "gfs", "latest", "--watch", "600"]
+    depends_on:
+      garage-init: {condition: service_completed_successfully}
+      migrate: {condition: service_completed_successfully}
+
+  # Weitere Dienste (ml-*, api, mlflow, grafana)
   # kommen mit ihren Paketen dazu und hängen von migrate und garage-init ab.
 
 volumes:
