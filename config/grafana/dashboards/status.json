@@ -6,7 +6,7 @@
   ],
   "timezone": "",
   "schemaVersion": 41,
-  "version": 25,
+  "version": 26,
   "editable": false,
   "refresh": "5m",
   "time": {
@@ -1092,7 +1092,7 @@
         "x": 0,
         "y": 38
       },
-      "description": "Laufende Läufe oben, darunter wartende: zuerst Live (warten auf NOAA), dann die nächsten der Backfill-Warteschlange. Lauf in UTC, Start in lokaler Zeit.",
+      "description": "Oben die Live-Läufe (ingest-gfs, eigener Dienst mit eigener Quelle NOMADS, unabhängig vom Backfill): „NOAA ab hh:mm“ = Lauf noch nicht veröffentlicht, frühestens ab dieser lokalen Zeit; „wartet (NOAA)“ = teilweise veröffentlicht. Darunter laufende Backfill-Läufe und die nächsten der Warteschlange. Lauf in UTC, Start lokal.",
       "targets": [
         {
           "refId": "A",
@@ -1103,7 +1103,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT CASE j.mode WHEN 'live' THEN 'Live' ELSE 'Backfill' END AS \"Art\",\n       CASE r.status WHEN 'running' THEN 'läuft' ELSE 'wartet' END AS \"Status\",\n       r.queue_pos AS \"Pos\",\n       to_char(r.run_time AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') AS \"Lauf\",\n       CASE WHEN r.status = 'running'\n            THEN round(100.0 * r.steps_done / nullif(r.n_steps, 0), 1) END AS \"Fortschritt\",\n       CASE WHEN r.status = 'running' THEN r.steps_done || '/' || r.n_steps END AS \"Schritte\",\n       CASE WHEN r.status = 'running' THEN r.bytes_stored END AS \"Bronze\",\n       to_char(r.started_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Start\"\n  FROM meta.backfill_run r JOIN meta.backfill_job j USING (job_id)\n WHERE j.status = 'running' AND r.status IN ('running', 'queued')\n ORDER BY (r.status = 'running') DESC, (j.mode = 'live') DESC, r.queue_pos\n LIMIT 50"
+          "rawSql": "SELECT CASE j.mode WHEN 'live' THEN 'Live' ELSE 'Backfill' END AS \"Art\",\n       CASE WHEN r.status = 'running' THEN 'läuft'\n            WHEN j.mode = 'live' AND r.steps_done = 0\n              THEN 'NOAA ab ' || to_char((r.run_time + interval '3 hours 30 minutes')\n                                         AT TIME ZONE 'Europe/Berlin', 'HH24:MI')\n            WHEN j.mode = 'live' THEN 'wartet (NOAA)'\n            ELSE 'wartet' END AS \"Status\",\n       r.queue_pos AS \"Pos\",\n       to_char(r.run_time AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') AS \"Lauf\",\n       CASE WHEN r.status = 'running'\n            THEN round(100.0 * r.steps_done / nullif(r.n_steps, 0), 1) END AS \"Fortschritt\",\n       CASE WHEN r.status = 'running' THEN r.steps_done || '/' || r.n_steps END AS \"Schritte\",\n       CASE WHEN r.status = 'running' THEN r.bytes_stored END AS \"Bronze\",\n       to_char(r.started_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Start\"\n  FROM meta.backfill_run r JOIN meta.backfill_job j USING (job_id)\n WHERE j.status = 'running' AND r.status IN ('running', 'queued')\n ORDER BY (j.mode = 'live') DESC, (r.status = 'running') DESC, r.queue_pos\n LIMIT 50"
         }
       ],
       "fieldConfig": {
@@ -1133,7 +1133,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 52
+                "value": 108
               }
             ]
           },
@@ -1217,7 +1217,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 330
+                "value": 274
               },
               {
                 "id": "unit",
