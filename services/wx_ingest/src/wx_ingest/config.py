@@ -5,6 +5,7 @@ S3-Zugang und Logging kommen aus ``predictiondb_core`` (Umgebungsvariablen ``PDB
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal
@@ -94,13 +95,19 @@ class GfsConfig(BaseModel):
     def endpoints_for(self, archive_only: bool) -> list[EndpointConfig]:
         return [e for e in self.endpoints if e.archive or not archive_only]
 
-    def runs_between(self, start: datetime, end: datetime) -> list[datetime]:
-        """Alle konfigurierten Läufe im Intervall ``[start, end]`` (UTC)."""
+    def runs_between(
+        self, start: datetime, end: datetime, hours: Iterable[int] | None = None
+    ) -> list[datetime]:
+        """Alle konfigurierten Läufe im Intervall ``[start, end]`` (UTC).
+
+        ``hours`` schränkt auf eine Teilmenge der konfigurierten Laufzeiten ein (z. B. 0, 12).
+        """
+        wanted = set(self.runs) if hours is None else set(self.runs) & set(hours)
         t = start.astimezone(UTC).replace(minute=0, second=0, microsecond=0)
         t -= timedelta(hours=t.hour % 6)
         out = []
         while t <= end:
-            if t >= start and t.hour in self.runs:
+            if t >= start and t.hour in wanted:
                 out.append(t)
             t += timedelta(hours=6)
         return out

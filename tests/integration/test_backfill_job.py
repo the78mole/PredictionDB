@@ -1,0 +1,80 @@
+"""Backfill-Protokoll (``meta.backfill_job``) und die Dashboard-Abfragen dazu.
+
+Läuft nur mit ``PDB_INTEGRATION=1`` nach ``migrate``. Angelegte Jobs werden wieder entfernt.
+"""
+
+import json
+import os
+from collections.abc import Iterator
+from datetime import UTC, datetime
+from pathlib import Path
+
+import pytest
+from sqlalchemy import Engine, text
+
+from predictiondb_core.db import create_db_engine
+from predictiondb_core.settings import Settings
+from wx_ingest.ingest import RunResult, StepResult
+from wx_ingest.jobs import JobLog
+
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(os.environ.get("PDB_INTEGRATION") != "1", reason="PDB_INTEGRATION != 1"),
+]
+
+DASHBOARD = Path(__file__).parents[2] / "config/grafana/dashboards/status.json"
+RUN = datetime(2099, 1, 1, tzinfo=UTC)
+
+
+@pytest.fixture
+def engine() -> Iterator[Engine]:
+    eng = create_db_engine(Settings())
+    yield eng
+    with eng.begin() as c:
+        c.execute(text("DELETE FROM meta.backfill_job WHERE range_start >= '2099-01-01'"))
+
+
+def _job(eng: Engine, job_id: int) -> dict[str, object]:
+    with eng.connect() as c:
+        row = c.execute(
+            text("SELECT * FROM meta.backfill_job WHERE job_id = :id"), {"id": job_id}
+        ).mappings()
+        return dict(row.one())
+
+
+def test_job_log_lifecycle(engine: Engine) -> None:
+    jobs = JobLog(engine)
+    jobs.start("gfs_0p25", RUN, RUN, [0, 12], True, 3)
+    assert jobs.job_id is not None
+    jobs.progress(RunResult(RUN, [StepResult(0, "stored", "aws", 100)], complete=True))
+    jobs.progress(RunResult(RUN, [StepResult(0, "skipped")], complete=True))
+    jobs.progress(RunResult(RUN, [StepResult(0, "failed", errors=["x"])]))
+    row = _job(engine, jobs.job_id)
+    assert (row["n_complete"], row["n_skipped"], row["n_incomplete"]) == (2, 1, 1)
+    assert (row["n_failed_steps"], row["bytes_stored"], row["status"]) == (1, 100, "running")
+
+    panels = {p["id"]: p for p in json.loads(DASHBOARD.read_text())["panels"]}
+    with engine.connect() as c:
+        running = c.execute(text(panels[25]["targets"][0]["rawSql"])).mappings().all()
+    assert any(r["Job"] == jobs.job_id and float(r["Fortschritt"]) == 100.0 for r in running)
+
+    jobs.finish("done")
+    with engine.connect() as c:
+        done = c.execute(text(panels[26]["targets"][0]["rawSql"])).mappings().all()
+    assert done[0]["Job"] == jobs.job_id and done[0]["Status"] == "fertig"
+
+
+def test_stale_job_is_marked_aborted(engine: Engine) -> None:
+    old = JobLog(engine)
+    old.start("gfs_0p25", RUN, RUN, [0], False, 1)
+    assert old.job_id is not None
+    with engine.begin() as c:
+        c.execute(
+            text(
+                "UPDATE meta.backfill_job SET updated_at = now() - interval '2 hours' "
+                "WHERE job_id = :id"
+            ),
+            {"id": old.job_id},
+        )
+    JobLog(engine).start("gfs_0p25", RUN, RUN, [0], False, 1)
+    assert _job(engine, old.job_id)["status"] == "aborted"

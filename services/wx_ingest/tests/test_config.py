@@ -36,6 +36,9 @@ def test_runs_between_and_recent() -> None:
     assert [f"{r:%d%H}" for r in runs] == ["1912", "2000", "2012"]
     recent = cfg.recent_runs(datetime(2026, 10, 20, 13, 30, tzinfo=UTC))
     assert [f"{r:%d%H}" for r in recent] == ["1912", "2000", "2012"]
+    # Teilmenge der konfigurierten Läufe; nicht konfigurierte Stunden fallen weg
+    only = cfg.runs_between(runs[0], runs[-1], hours=[12, 18])
+    assert [f"{r:%d%H}" for r in only] == ["1912", "2012"]
 
 
 @pytest.mark.parametrize(

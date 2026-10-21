@@ -1,5 +1,6 @@
 import hashlib
 import json
+from datetime import timedelta
 from typing import Any
 
 import httpx
@@ -9,7 +10,7 @@ import obstore
 from gribkit import BBox, iter_messages
 from wx_ingest.bronze import Bronze
 from wx_ingest.gfs import nomads_params
-from wx_ingest.ingest import GfsIngestor
+from wx_ingest.ingest import GfsIngestor, RunResult
 from wx_ingest.testing import RUN, FakeGfsHost, make_client, make_config
 
 ALL_STEPS = {0, 1, 2, 3, 6, 9, 12}
@@ -153,6 +154,33 @@ async def test_backfill_uses_archive_endpoints_only(bronze: Bronze) -> None:
     assert len(results) == 1 and results[0].complete
 
 
+async def test_backfill_selects_runs_newest_first(bronze: Bronze) -> None:
+    aws = FakeGfsHost("aws.test", ALL_STEPS)
+    async with make_client(aws) as client:
+        ing = ingestor(bronze, client, archive_only=True)
+        results = await ing.backfill(
+            RUN - timedelta(hours=12), RUN, hours=[0, 6], newest_first=True
+        )
+    assert [f"{r.run:%d%H}" for r in results] == ["2006", "2000"]
+    assert results[0].complete
+    # Älterer Lauf fehlt im Archiv: bleibt offen statt fehlerhaft
+    assert not results[1].complete and results[1].counts() == {"pending": len(ALL_STEPS)}
+    assert f"/gfs.{RUN:%Y%m%d}/06/" in aws.requests[0].url.path
+
+
+async def test_backfill_parallel_runs_and_resume(bronze: Bronze) -> None:
+    aws = FakeGfsHost("aws.test", ALL_STEPS)
+    async with make_client(aws) as client:
+        ing = ingestor(bronze, client, archive_only=True)
+        first = await ing.backfill(RUN - timedelta(hours=18), RUN, parallel_runs=3)
+        n = len(aws.requests)
+        again = await ing.backfill(RUN - timedelta(hours=18), RUN, parallel_runs=3)
+    assert [r.run for r in first] == [RUN - timedelta(hours=h) for h in (18, 12, 6, 0)]
+    assert first[-1].complete and again[-1].complete
+    # vollständiger Lauf: keine Anfrage mehr an den Spiegel
+    assert len(aws.requests) - n == 3 * len(ALL_STEPS)
+
+
 async def test_nomads_filter(bronze: Bronze) -> None:
     from gribkit.testing import make_global_message
 
@@ -221,3 +249,17 @@ async def test_manifest_is_json(bronze: Bronze) -> None:
         ).bytes_async()
     )
     assert json.loads(raw)["bbox"] == {"north": 58, "south": 44, "west": 0, "east": 20}
+
+
+async def test_backfill_reports_each_run(bronze: Bronze) -> None:
+    aws = FakeGfsHost("aws.test", ALL_STEPS)
+    seen: list[RunResult] = []
+
+    async def on_run(r: RunResult) -> None:
+        seen.append(r)
+
+    async with make_client(aws) as client:
+        ing = ingestor(bronze, client, archive_only=True)
+        await ing.backfill(RUN - timedelta(hours=6), RUN, on_run=on_run, newest_first=True)
+    assert [r.run for r in seen] == [RUN, RUN - timedelta(hours=6)]
+    assert seen[0].complete and not seen[1].complete
