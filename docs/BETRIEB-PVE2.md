@@ -1,6 +1,6 @@
 # Betrieb auf PVE2
 
-Stand: 2026-10-21, deployt von `main` (1e5755f).
+Stand: 2026-10-22, aktualisiert sich per systemd-Timer selbst von `main` (siehe Aktualisieren).
 
 ## VM
 
@@ -18,7 +18,7 @@ damit sich die Adressen nicht ändern.
 
 ## Stack
 
-Verzeichnis `/opt/predictiondb` (Git-Checkout von `main`, Remote `git@github.com:the78mole/PredictionDB.git`).
+Verzeichnis `/opt/predictiondb` (Git-Checkout von `main`; das Selbst-Update holt per HTTPS aus dem öffentlichen Repo).
 
 - `.env` (chmod 600) enthält alle Geheimnisse, zufällig erzeugt: Postgres-Passwort, Garage RPC-Secret
   und Admin-Token, S3-Schlüssel. Noch nicht in OpenBao; Zielbild siehe ARCHITEKTUR.md, Kapitel 8.3.
@@ -72,7 +72,32 @@ AWS_ACCESS_KEY_ID=<KEY> AWS_SECRET_ACCESS_KEY=<SECRET> \
 
 ## Aktualisieren
 
-Das Repo ist privat; die VM hat noch keinen GitHub-Zugang. Neuen Stand vom Laptop übertragen:
+Die VM aktualisiert sich selbst: Der systemd-Timer `predictiondb-update.timer` ruft alle
+15 Minuten `scripts/vm-update.sh` auf. Das Skript holt `main` per HTTPS aus dem öffentlichen
+Repo und rollt nur aus, wenn es einen neuen Commit gibt (`git reset --hard`, Image bauen,
+`garage-init`, `migrate`, `docker compose up -d`). Der zuletzt erfolgreich ausgerollte
+Commit steht in `.git/pdb-deployed`. Schlägt ein Schritt fehl, versucht es der nächste Lauf
+erneut, und die Container bleiben auf dem alten Stand. `.env` und `compose.vm.yaml` sind
+nicht versioniert und bleiben unberührt.
+
+```sh
+systemctl list-timers predictiondb-update.timer        # nächster Lauf
+journalctl -u predictiondb-update -n 50                # letzte Läufe
+cat /opt/predictiondb/.git/pdb-deployed                # ausgerollter Commit
+/opt/predictiondb/scripts/vm-update.sh --force         # sofort ausrollen (als daniel)
+sudo systemctl disable --now predictiondb-update.timer # Selbst-Update abschalten
+```
+
+Einrichtung (einmalig, als `daniel` auf der VM):
+
+```sh
+cd /opt/predictiondb
+sudo cp deploy/systemd/predictiondb-update.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now predictiondb-update.timer
+```
+
+Ohne Internetzugang der VM geht es weiter per Bundle vom Laptop:
 
 ```sh
 git fetch origin && git bundle create /tmp/pdb.bundle origin/main
@@ -82,5 +107,3 @@ ssh daniel@172.22.7.162 'cd /opt/predictiondb && git fetch /tmp/pdb.bundle refs/
   && docker build -f docker/Dockerfile -t ghcr.io/the78mole/predictiondb:local . \
   && docker compose run --rm garage-init && docker compose run --rm migrate && docker compose up -d'
 ```
-
-Mit einem Read-only-Deploy-Key auf GitHub ginge das direkt per `git pull` auf der VM.
