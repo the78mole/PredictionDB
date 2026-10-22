@@ -1,0 +1,5 @@
+szenario,aufschlag_ct,mittel_ct,h0_mittel_ct,solarstunden_mittel_ct,uebrige_mittel_ct,negative_stunden
+2027 Solar 0 ct,9.44,14.49,14.34,-0.55,19.55,362
+2027 Solar wie 2025,7.15,14.22,14.34,1.64,17.28,365
+2025,,8.96,9.34,1.64,10.14,482
+2025 +5 ct gleichmäßig,,13.96,14.34,6.64,15.14,33
