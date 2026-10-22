@@ -712,6 +712,14 @@ Ehrliche Erwartung: Für D+1 lässt sich ein guter Preis erreichen; jenseits von
 2. **Neuronales Netz:** Multi-Horizont-Encoder-Decoder für Zeitreihen mit bekannten Zukunftskovariaten. Kandidaten: TFT (Temporal Fusion Transformer), TiDE, N-HiTS mit exogenen Variablen. Quantile-Loss, gemeinsames Modell für Last, Wind, PV und Preis (Multi-Task) oder zweistufig: Stufe 1 Last/Wind/PV, Stufe 2 Preis mit Residuallast als Eingang. Empfehlung: zweistufig, weil sich Fehler so besser zuordnen lassen.
 3. Später optional: räumliches Modell, das direkt auf den Silber-Gittern arbeitet (CNN-Encoder über das Europa-Gitter), falls die Regionen-Aggregation Information verschenkt.
 
+**Umsetzungsstand (10/2026):** Das erste Modell ist die LightGBM-Stufe aus Punkt 1, zweistufig
+wie unten, als Dienst `ml-train` (`services/ml_train`, Konfiguration `config/ml/de_lu_v1.yaml`):
+Quantile P10/P50/P90 je Stunde für D+1 bis D+7, Ausgabe täglich 08 UTC, Wind und PV als
+Kapazitätsfaktor, Preis relativ zum letzten bekannten Liefertag. Ohne Wetter schlägt es bei der
+Last bereits die ENTSO-E-Day-Ahead-Prognose (MAE D+1 1,73 gegen 1,98 GW, 2024–10/2026), beim
+Preis ab D+2 Vortag und Vorwoche. Die Variante mit GFS-Features wird nach dem Backfill bewertet.
+Backtest und Befunde: [`docs/analysen/prognose-de-lu-v1/`](analysen/prognose-de-lu-v1/README.md).
+
 Zweistufiger Aufbau:
 
 ```mermaid

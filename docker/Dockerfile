@@ -8,6 +8,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --all-packages
 
 FROM python:3.14-slim-trixie AS runtime
+# LightGBM (ml-train) braucht OpenMP
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
 RUN useradd --system --uid 10001 --home-dir /app app
 WORKDIR /app
 COPY --from=build --chown=app:app /app /app

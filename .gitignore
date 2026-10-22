@@ -54,3 +54,6 @@ htmlcov/
 
 # OpenBao-Zugang (direnv), nie committen
 .env.bao
+
+# ML-Snapshots und Backtest-Läufe (groß, gehören nach Garage)
+.ml-data/

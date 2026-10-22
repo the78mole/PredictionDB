@@ -138,6 +138,38 @@ services:
       garage-init: {condition: service_completed_successfully}
       migrate: {condition: service_completed_successfully}
 
+  # Prognosemodell Last/Preis DE-LU (services/ml_train, config/ml/de_lu_v1.yaml). Einmalige Jobs:
+  #   docker compose --profile ml run --rm ml-train snapshot --out /data/snap
+  #   docker compose --profile ml run --rm ml-train backtest --snapshot /data/snap --out /data/bt
+  #   docker compose --profile ml run --rm ml-train fit --snapshot /data/snap --variant kalender \
+  #     --backtest /data/bt --role champion
+  # Feste CPU-Grenze, damit Ingest und Verarbeitung nebenher weiterlaufen.
+  ml-train:
+    <<: *app
+    profiles: [ml]
+    restart: "no"
+    cpus: ${ML_TRAIN_CPUS:-4}
+    entrypoint: ["ml-train"]
+    command: ["--help"]
+    environment:
+      <<: *app-env
+      PDB_ML_REGISTRY: s3://ml-artifacts/models
+    volumes:
+      - ml-data:/data
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+
+  # Inferenz aller aktiven Modellversionen stündlich nach fcst.prediction
+  ml-predict:
+    <<: *app
+    profiles: [ml]
+    command: ["ml-train", "predict", "--watch", "3600"]
+    environment:
+      <<: *app-env
+      PDB_ML_REGISTRY: s3://ml-artifacts/models
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+
   # Status-Dashboards (config/grafana). Liest über die Rolle grafana_reader (Migration 0004).
   # Port wird erst im Override veröffentlicht (VM: Proxy-Netz, lokal: localhost).
   grafana:
@@ -222,6 +254,7 @@ volumes:
   garage-data: {}
   grafana-data: {}
   prometheus-data: {}
+  ml-data: {}
 
 networks:
   backend: {}

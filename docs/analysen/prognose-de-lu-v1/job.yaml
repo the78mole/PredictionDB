@@ -1,0 +1,33 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; ausgeführt mit ml-train backtest, Auswertung auswertung.py
+id: prognose-de-lu-v1
+title: Erstes Prognosemodell Last DE und Day-Ahead-Preis DE-LU, Backtest
+question: >
+  Wie gut sagt ein zweistufiges LightGBM-Quantilmodell Netzlast und Day-Ahead-Preis DE-LU für
+  D+1 bis D+7 vorher, verglichen mit der Day-Ahead-Lastprognose von ENTSO-E und einfachen
+  Vergleichsverfahren (Vortag, Vorwoche)? Was bringen die GFS-Features je MaStR-Cluster?
+requested_by: Maulwurf
+kind: backtest
+inputs:
+  snapshot: {command: "ml-train snapshot --from 2015-01-01 --weather-from 2026-08-01"}
+  energy: [load_actual, da_price_de_lu, gen_wind_onshore, gen_wind_offshore, gen_solar,
+           residual_load]
+  benchmarks: [load_da_forecast, gen_da_forecast_wind_onshore, gen_da_forecast_wind_offshore,
+               gen_da_forecast_solar]
+  forecast: {source: gfs_0p25, runs: [0, 12], clustering: v2026Q4}
+  config: config/ml/de_lu_v1.yaml
+method:
+  issue: {hour_utc: 8, lead_days: [1, 2, 3, 4, 5, 6, 7]}
+  runs:
+    - label: haupt                 # ohne Wetter, Expanding Window in Halbjahren
+      command: ml-train backtest --variant kalender
+      test: {from: 2024-01-01, fold_months: 6}
+    - label: wetter                # Wetterhistorie erst ab 2026-08-05 vorhanden
+      command: >
+        ml-train backtest --variant kalender --variant wetter --test-from 2026-09-10
+        --fold-months 1 --stride 1
+  time_interpolation: linear       # GFS ab 120 h dreistündlich, erst beim Lesen
+  metrics: [mae, rmse, bias, pinball_p10_p50_p90, coverage80, rank_corr_day]
+  group_by: [method, target, lead_day, season, year]
+outputs:
+  figures: [mae_by_lead, example_weeks]
+schedule: on_new_model_version

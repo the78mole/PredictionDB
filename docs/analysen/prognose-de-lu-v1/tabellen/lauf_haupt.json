@@ -1,0 +1,55 @@
+{
+  "snapshot_id": "566fdb79d88a4b8d",
+  "config_sha256": "aab30b183c1c53dd2573887dda9944575dd7f954ec60523fcddac85813efd890",
+  "config": "de_lu_v1",
+  "folds": [
+    {
+      "no": 0,
+      "test_from": "2024-01-01",
+      "test_to": "2024-06-30",
+      "train_to": "2023-12-24"
+    },
+    {
+      "no": 1,
+      "test_from": "2024-07-01",
+      "test_to": "2024-12-31",
+      "train_to": "2024-06-23"
+    },
+    {
+      "no": 2,
+      "test_from": "2025-01-01",
+      "test_to": "2025-06-30",
+      "train_to": "2024-12-24"
+    },
+    {
+      "no": 3,
+      "test_from": "2025-07-01",
+      "test_to": "2025-12-31",
+      "train_to": "2025-06-23"
+    },
+    {
+      "no": 4,
+      "test_from": "2026-01-01",
+      "test_to": "2026-06-30",
+      "train_to": "2025-12-24"
+    },
+    {
+      "no": 5,
+      "test_from": "2026-07-01",
+      "test_to": "2026-10-21",
+      "train_to": "2026-06-23"
+    }
+  ],
+  "timings_s": {
+    "features_s": 18.9,
+    "fold0_kalender_s": 125.6,
+    "fold1_kalender_s": 135.4,
+    "fold2_kalender_s": 138.8,
+    "fold3_kalender_s": 156.4,
+    "fold4_kalender_s": 160.8,
+    "fold5_kalender_s": 165.2
+  },
+  "rows": 2625391,
+  "git_commit": "d7d7d8cbe9e6",
+  "finished": "2026-10-22T09:44:03+00:00"
+}
