@@ -55,7 +55,7 @@ files = ["."]
 exclude = ["^\\.venv/", "^build/", "^docs/analysen/"]
 
 [[tool.mypy.overrides]]
-module = ["obstore.*", "eccodes.*", "gribapi.*", "lxml.*", "matplotlib.*"]
+module = ["obstore.*", "eccodes.*", "gribapi.*", "lxml.*", "matplotlib.*", "pandas.*", "scipy.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

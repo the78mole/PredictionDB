@@ -35,7 +35,7 @@ from scipy.sparse import lil_matrix
 
 HIER = Path(__file__).resolve().parent
 TZ = "Europe/Berlin"
-KWP = 10.0
+Reihen = dict[tuple[int, str], pd.DataFrame]
 
 
 @dataclass(frozen=True)
@@ -115,7 +115,7 @@ def plane(
     kosten[E] = -preis
     kosten[D] = -preis + verschleiss
     kosten[G] = preis
-    grenzen = [(0, None)] * nv
+    grenzen: list[tuple[float, float | None]] = [(0, None)] * nv
     smin = sp.soc_min * sp.kwh
     for h in range(n):
         grenzen[C[h]] = (0, sp.kw)
@@ -246,9 +246,9 @@ def direkt(df: pd.DataFrame, abregeln: bool = True) -> pd.Series:
 # ---------------------------------------------------------------------------------------------
 
 
-def jahre_auswerten(df: pd.DataFrame, jahre: list[int], label: str) -> tuple[pd.DataFrame, dict]:
+def jahre_auswerten(df: pd.DataFrame, jahre: list[int], label: str) -> tuple[pd.DataFrame, Reihen]:
     zeilen = []
-    reihen: dict = {}
+    reihen: Reihen = {}
     for j in jahre:
         # 13-Uhr-Fenster des Vorjahres-Silvesters mitnehmen, damit der 1.1. voll geplant ist
         von = pd.Timestamp(f"{j - 1}-12-31 00:00", tz=TZ)
@@ -295,7 +295,7 @@ def varianten(df: pd.DataFrame, jahre: list[int]) -> pd.DataFrame:
         for sp in SPEICHER:
 
             def mehr(erg: pd.DataFrame, j: int = j, basis: float = basis) -> float:
-                return erg[erg.index.tz_convert(TZ).year == j].erloes.sum() - basis
+                return float(erg[erg.index.tz_convert(TZ).year == j].erloes.sum() - basis)
 
             schlecht = Speicher(sp.name, sp.kwh, sp.kw, 0.92, 0.92, 0.05)
             zeilen.append(
@@ -314,7 +314,7 @@ def varianten(df: pd.DataFrame, jahre: list[int]) -> pd.DataFrame:
     return pd.DataFrame(zeilen)
 
 
-def grafiken(tab: pd.DataFrame, reihen: dict, df: pd.DataFrame, ziel: Path) -> None:
+def grafiken(tab: pd.DataFrame, reihen: Reihen, df: pd.DataFrame, ziel: Path) -> None:
     import matplotlib
 
     matplotlib.use("Agg")
