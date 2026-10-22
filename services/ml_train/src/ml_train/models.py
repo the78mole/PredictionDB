@@ -146,6 +146,10 @@ class TwoStageModel:
     def _model(self, t: StageTarget, features: list[str], frame: FeatureFrame) -> QuantileModel:
         normalize = [c for c in t.normalize_by if c in frame.X.columns]
         center = t.center if t.center and t.center in frame.X.columns else None
+        if normalize:
+            # Bestand wirkt sonst wie ein Zeitindex: Außerhalb der Trainingsspanne landet jede
+            # Prognose im Blatt der letzten Trainingsmonate (gemessen: +6 GW Bias Wind 2024)
+            features = [f for f in features if not f.startswith("cap_")]
         return QuantileModel(t.code, self.cfg.quantiles, features, self.cfg.lgbm, normalize, center)
 
     @property
@@ -193,7 +197,7 @@ class TwoStageModel:
             m = QuantileModel(
                 t.code,
                 [0.5],
-                base,
+                [f for f in base if not (t.normalize_by and f.startswith("cap_"))],
                 median_only,
                 [c for c in t.normalize_by if c in frame.X.columns],
                 t.center if t.center and t.center in frame.X.columns else None,

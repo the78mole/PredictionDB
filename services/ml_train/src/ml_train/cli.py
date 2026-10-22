@@ -81,6 +81,7 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--test-from", type=parse_date)
     b.add_argument("--test-to", type=parse_date)
     b.add_argument("--fold-months", type=int)
+    b.add_argument("--stride", type=int, help="nur jeden n-ten Ausgabetag trainieren")
 
     f = cmd.add_parser("fit", help="Variante mit allen Daten trainieren und registrieren")
     f.add_argument("--snapshot", required=True, type=Path)
@@ -168,6 +169,8 @@ def cmd_backtest(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace) -> int:
         cfg.backtest.test_to = a.test_to
     if a.fold_months:
         cfg.backtest.fold_months = a.fold_months
+    if a.stride:
+        cfg.backtest.train_issue_stride = a.stride
     snap = load_snapshot(a.snapshot)
     fb = FeatureBuilder(snap, cfg)
     res = run_backtest(fb, cfg, a.variant)

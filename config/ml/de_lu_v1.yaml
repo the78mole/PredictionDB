@@ -29,11 +29,12 @@ stage1:
     normalize_by: [cap_pv]
     benchmarks: [gen_da_forecast_solar]
 
-# Stufe 2: Preis mit Stufe-1-Prognosen und Residuallast, relativ zum 7-Tage-Mittel
+# Stufe 2: Preis mit Stufe-1-Prognosen und Residuallast, relativ zum Mittel des letzten bekannten
+# Liefertags (im Backtest H2 2025 besser als das 7-Tage-Mittel: MAE D+1 21,4 statt 22,3 EUR/MWh)
 stage2:
   - code: da_price_de_lu
     role: price
-    center: lag_da_price_de_lu_mean_7d
+    center: lag_da_price_de_lu_mean_day
 
 lag_series: [residual_load]
 
