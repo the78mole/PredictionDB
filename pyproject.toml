@@ -58,7 +58,7 @@ exclude = ["^\\.venv/", "^build/", "^docs/analysen/"]
 [[tool.mypy.overrides]]
 module = [
     "obstore.*", "eccodes.*", "gribapi.*", "lxml.*", "matplotlib.*", "lightgbm.*", "holidays.*",
-    "pandas.*", "pyarrow.*",
+    "pandas.*", "pyarrow.*", "scipy.*",
 ]
 ignore_missing_imports = true
 
