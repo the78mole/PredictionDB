@@ -37,6 +37,18 @@ PDB_INTEGRATION=1 uv run pytest tests/integration  # gegen den laufenden Stack
 
 Neue Datenbankänderungen kommen als neue Alembic-Revision (`uv run alembic revision -m "..."`).
 
+## Versionen und Releases
+
+Nach jeder grünen CI auf `main` legt der Workflow „Release“ ein Tag `vX.Y.Z` mit GitHub-Release an.
+Die Stufe ergibt sich aus den Commits seit dem letzten Tag nach
+[Conventional Commits](https://www.conventionalcommits.org/de/) (bei Squash-Merges zählt der
+PR-Titel): `feat:` hebt die Minor-Stelle, `typ!:` oder `BREAKING CHANGE:` die Major-Stelle
+(solange 0.x: Minor), alles andere die Patch-Stelle (`scripts/naechste-version.sh`).
+
+An jedes Release hängt der Workflow „Analysen als PDF“ die Analysen aus `docs/analysen/`, gerendert
+von `scripts/analysen-pdf.sh` (Pandoc und Chrome/Chromium). Bei PRs, die Analysen ändern, liegen
+die PDFs als Artefakt `analysen-pdf` bereit.
+
 ## Beiträge
 
 Beiträge setzen die Annahme der [Beitragsbedingungen](CONTRIBUTING.md) voraus,

@@ -1,0 +1,64 @@
+name: Analysen als PDF
+
+# Rendert docs/analysen/*/README.md samt Grafiken zu je einem PDF
+# (scripts/analysen-pdf.sh). Mit Tag hängen die PDFs als Assets am Release;
+# sonst liegen sie als Workflow-Artefakt bereit. Der Release-Workflow ruft
+# diesen Workflow nach jedem neuen Release auf (workflow_call).
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Release-Tag, an das die PDFs gehängt werden
+        type: string
+        required: true
+  release:
+    types: [published]  # von Hand angelegte Releases
+  pull_request:
+    paths:
+      - docs/analysen/**
+      - scripts/analysen-pdf*
+      - .github/workflows/analysen-pdf.yml
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release-Tag, an das die PDFs gehängt werden (leer = nur Artefakt)
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  pdf:
+    name: Analysen-PDFs
+    runs-on: ubuntu-latest
+    concurrency:
+      group: analysen-pdf-${{ inputs.tag || github.ref }}
+      cancel-in-progress: true
+    permissions:
+      contents: write  # gh release upload
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag || github.sha }}
+          fetch-depth: 0  # Stand je Analyse aus git log, Version aus git describe
+      - name: Pandoc und Schriften
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends pandoc fonts-dejavu-core
+      - name: PDFs rendern
+        env:
+          PDF_VERSION: ${{ env.TAG }}
+          PDF_REF: ${{ env.TAG || github.sha }}
+        run: scripts/analysen-pdf.sh dist/analysen
+      - uses: actions/upload-artifact@v7
+        with:
+          name: analysen-pdf
+          path: dist/analysen/*.pdf
+          if-no-files-found: error
+      - name: An das Release hängen
+        if: env.TAG != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" dist/analysen/*.pdf --clobber
