@@ -2,7 +2,7 @@
 
 Aufruf nach ``ml-train backtest`` (siehe job.yaml)::
 
-    uv run --extra plots python docs/analysen/prognose-de-lu-v1/auswertung.py \\
+    uv run --with matplotlib python docs/analysen/prognose-de-lu-v1/auswertung.py \\
         .ml-data/bt-main .ml-data/bt-wx
 
 Liest ``predictions.parquet`` und ``lauf.json`` beider Läufe und schreibt nach ``tabellen/``
@@ -25,6 +25,9 @@ import pandas as pd
 from ml_train.metrics import add_context, common_rows, daily_rank_corr, score
 
 HERE = Path(__file__).resolve().parent
+#: Energiedaten fehlen in der DB vom 18.09. bis 16.10.2026 (alle Quellen); spätere Ausgaben haben
+#: keine Lags, daher endet die Wetter-Vorschau mit der Ausgabe am 17.09.2026
+WETTER_BIS = pd.Timestamp("2026-09-18", tz="UTC")
 TAB, FIG = HERE / "tabellen", HERE / "grafiken"
 
 LABEL = {
@@ -149,6 +152,8 @@ def main(dirs: list[str]) -> None:
     runs = {}
     for name, d in zip(["haupt", "wetter"], dirs, strict=False):
         pred = pd.read_parquet(Path(d) / "predictions.parquet")
+        if name == "wetter":
+            pred = pred[pred["issue_time"] < WETTER_BIS]
         shutil.copy(Path(d) / "lauf.json", TAB / f"lauf_{name}.json")
         tables(name, pred)
         plot_lead(name, pred, ["load_actual", "da_price_de_lu"])
@@ -158,7 +163,7 @@ def main(dirs: list[str]) -> None:
             plot_example(pred, "kalender", "2026-01-12", 7, "haupt_beispiel_winter.png")
             plot_example(pred, "kalender", "2026-06-15", 7, "haupt_beispiel_sommer.png")
         else:
-            plot_example(pred, "wetter", "2026-10-05", 7, "wetter_beispiel_oktober.png")
+            plot_example(pred, "wetter", "2026-09-11", 7, "wetter_beispiel_september.png")
     print(json.dumps({k: v.get("rows") for k, v in runs.items()}))
 
 

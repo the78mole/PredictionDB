@@ -1,0 +1,29 @@
+{
+  "snapshot_id": "566fdb79d88a4b8d",
+  "config_sha256": "aab30b183c1c53dd2573887dda9944575dd7f954ec60523fcddac85813efd890",
+  "config": "de_lu_v1",
+  "folds": [
+    {
+      "no": 0,
+      "test_from": "2026-09-10",
+      "test_to": "2026-09-30",
+      "train_to": "2026-09-02"
+    },
+    {
+      "no": 1,
+      "test_from": "2026-10-01",
+      "test_to": "2026-10-21",
+      "train_to": "2026-09-23"
+    }
+  ],
+  "timings_s": {
+    "features_s": 18.9,
+    "fold0_kalender_s": 278.1,
+    "fold0_wetter_s": 18.9,
+    "fold1_kalender_s": 282.0,
+    "fold1_wetter_s": 28.8
+  },
+  "rows": 84568,
+  "git_commit": "d7d7d8cbe9e6",
+  "finished": "2026-10-22T09:54:40+00:00"
+}
