@@ -27,7 +27,8 @@ SEASONS = {
 
 def pinball(y: np.ndarray, pred: np.ndarray, q: float) -> np.ndarray:
     d = y - pred
-    return np.maximum(q * d, (q - 1) * d)
+    out: np.ndarray = np.maximum(q * d, (q - 1) * d)
+    return out
 
 
 def add_context(pred: pd.DataFrame) -> pd.DataFrame:

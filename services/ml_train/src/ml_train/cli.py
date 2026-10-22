@@ -46,6 +46,10 @@ def parse_date(s: str) -> date:
     return date.fromisoformat(s)
 
 
+def to_dt(d: date) -> datetime:
+    return datetime(d.year, d.month, d.day, tzinfo=UTC)
+
+
 def git_commit() -> str | None:
     try:
         out = subprocess.run(
@@ -114,7 +118,6 @@ def cmd_snapshot(cfg: ModelConfig, a: argparse.Namespace) -> int:
     codes = list(dict.fromkeys(cfg.targets + cfg.lag_series))
     codes += sorted({b for t in cfg.stage1 + cfg.stage2 for b in t.benchmarks})
     codes += [c for c in a.extra_codes.split(",") if c]
-    to_dt = lambda d: datetime(d.year, d.month, d.day, tzinfo=UTC)  # noqa: E731
     snap = export_snapshot(
         create_db_engine(),
         list(dict.fromkeys(codes)),

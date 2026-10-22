@@ -143,7 +143,7 @@ WEATHER_SQL = text("""
     WHERE n.run_time >= :a AND n.run_time < :b
       AND extract(hour FROM n.run_time AT TIME ZONE 'UTC') = ANY(:hours)
       AND n.valid_time <= n.run_time + make_interval(hours => :max_lead)
-    GROUP BY 1, 2, 3""")
+    GROUP BY n.run_time, n.valid_time, w.technology, f.code""")
 
 CAPACITY_SQL = text("""
     SELECT day, technology, sum(capacity_mw) AS capacity_mw

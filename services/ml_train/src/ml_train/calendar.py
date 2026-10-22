@@ -91,7 +91,8 @@ def daily_calendar(start: date, end: date) -> pd.DataFrame:
         },
         index=days.date,
     )
-    return df.loc[start:end]  # type: ignore[misc]
+    out: pd.DataFrame = df.loc[start:end]
+    return out
 
 
 def calendar_features(ts_utc: pd.DatetimeIndex | pd.Series) -> pd.DataFrame:

@@ -238,7 +238,8 @@ class FeatureBuilder:
     def _lookup(self, code: str, ts: pd.Series | pd.DatetimeIndex) -> np.ndarray:
         if code not in self.energy.columns:
             return np.full(len(ts), np.nan)
-        return self.energy[code].reindex(pd.DatetimeIndex(ts)).to_numpy(dtype=np.float64)
+        out: np.ndarray = self.energy[code].reindex(pd.DatetimeIndex(ts)).to_numpy(np.float64)
+        return out
 
     def _capacity(self, meta: pd.DataFrame) -> pd.DataFrame:
         if self.capacity.empty:

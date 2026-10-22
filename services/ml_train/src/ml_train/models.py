@@ -67,7 +67,8 @@ class QuantileModel:
     def _offset(self, X: pd.DataFrame) -> np.ndarray:
         if self.center is None:
             return np.zeros(len(X))
-        return X[self.center].to_numpy(dtype=np.float64)
+        out: np.ndarray = X[self.center].to_numpy(dtype=np.float64)
+        return out
 
     def fit(self, X: pd.DataFrame, y: pd.Series | np.ndarray) -> QuantileModel:
         yy = (np.asarray(y, dtype=np.float64) - self._offset(X)) / self._scale(X)
@@ -123,7 +124,8 @@ def blocked_folds(issue_times: pd.Series, k: int) -> np.ndarray:
     for b, ix in enumerate(edges):
         for i in ix:
             block[uniq[i]] = b
-    return issue_times.map(block).to_numpy()
+    out: np.ndarray = issue_times.map(block).to_numpy()
+    return out
 
 
 class TwoStageModel:
