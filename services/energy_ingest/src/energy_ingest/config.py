@@ -1,4 +1,8 @@
-"""Einstellungen des Energie-Ingests (Präfix ``PDB_ENERGY_``, Token ``PDB_ENTSOE_TOKEN``)."""
+"""Einstellungen des Energie-Ingests (Präfix ``PDB_ENERGY_``).
+
+Zugangsdaten: ``PDB_ENTSOE_TOKEN``, ``PDB_NETZTRANSPARENZ_CLIENT_ID`` und
+``PDB_NETZTRANSPARENZ_CLIENT_SECRET``.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +11,7 @@ from datetime import UTC, datetime
 from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-ALL_SOURCES = ["entsoe", "smard", "energy_charts"]
+ALL_SOURCES = ["entsoe", "smard", "energy_charts", "netztransparenz"]
 
 
 class EnergySettings(BaseSettings):
@@ -19,6 +23,18 @@ class EnergySettings(BaseSettings):
     entsoe_token: SecretStr = Field(
         default=SecretStr(""),
         validation_alias=AliasChoices("PDB_ENTSOE_TOKEN", "PDB_ENERGY_ENTSOE_TOKEN"),
+    )
+    netztransparenz_client_id: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "PDB_NETZTRANSPARENZ_CLIENT_ID", "PDB_ENERGY_NETZTRANSPARENZ_CLIENT_ID"
+        ),
+    )
+    netztransparenz_client_secret: SecretStr = Field(
+        default=SecretStr(""),
+        validation_alias=AliasChoices(
+            "PDB_NETZTRANSPARENZ_CLIENT_SECRET", "PDB_ENERGY_NETZTRANSPARENZ_CLIENT_SECRET"
+        ),
     )
     # Laufender Abgleich: Fenster [heute - lookback, heute + horizon)
     lookback_days: int = 3

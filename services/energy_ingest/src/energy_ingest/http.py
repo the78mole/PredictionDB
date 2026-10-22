@@ -38,15 +38,22 @@ class Http:
             reraise=True,
         )(self._get_once)
 
-    def _get_once(self, url: str, params: dict[str, Any] | None) -> httpx.Response:
-        r = self.client.get(url, params=params)
+    def _get_once(
+        self, url: str, params: dict[str, Any] | None, headers: dict[str, str] | None = None
+    ) -> httpx.Response:
+        r = self.client.get(url, params=params, headers=headers)
         if r.status_code == httpx.codes.TOO_MANY_REQUESTS or r.status_code >= 500:
             r.raise_for_status()
         return r
 
-    def get(self, url: str, params: dict[str, Any] | None = None) -> httpx.Response:
+    def get(
+        self,
+        url: str,
+        params: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> httpx.Response:
         """GET mit Wiederholung; andere 4xx-Antworten gehen ohne Ausnahme zurück."""
-        return self._get(url, params)
+        return self._get(url, params, headers)
 
     def get_json(self, url: str, params: dict[str, Any] | None = None) -> Any:
         r = self.get(url, params)

@@ -95,6 +95,7 @@ Konfiguration in `config/sources/`. Übersicht und Lizenzen in A 3.
 | ENTSO-E Transparency (Token), SMARD, Energy-Charts | Day-Ahead-Preis, Last, Residuallast, Erzeugung je Träger, ÜNB-Prognosen | umgesetzt (`energy-ingest`), Historie ab 2015 |
 | MaStR-Gesamtdatenexport | Wind, PV, Biomasse, Wasser mit Leistung, Datum, Ort, Technik | umgesetzt (`mastr-ingest`), quartalsweise |
 | ECMWF IFS/AIFS Open Data, DWD ICON-EU/-D2, GEFS, GEM | weitere Wettermodelle, Ensembles | geplant (Phase 7) |
+| Netztransparenz.de (OAuth-Client) | Monats- und Jahresmarktwerte Solar, Wind an Land/auf See, Base | umgesetzt (`energy-ingest`), ab 2012 |
 | Netztransparenz.de | Wind-/PV-Prognosen der ÜNB | geplant |
 | PEGELONLINE, Pegelportale der Länder, GloFAS | Wasserstand, Abfluss, Abflussprognosen | geplant (A 7.5, 7.6) |
 | DWD RADOLAN, DWD CDC | beobachteter Niederschlag, Stationsdaten | geplant |

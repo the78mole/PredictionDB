@@ -88,6 +88,14 @@ def test_sync_isolates_failures() -> None:
     assert good.calls[0][1:] == day_window(NOW, 3, 2)
 
 
+def test_sync_lookback_per_dataset() -> None:
+    src = FakeSource("monthly")
+    src.sync_lookback = {"b": timedelta(days=95)}  # type: ignore[attr-defined]
+    EnergyIngestor([src], FakeStore(), EnergySettings()).sync(NOW)
+    start, end = day_window(NOW, 3, 2)
+    assert [c[1:] for c in src.calls] == [(start, end), (start - timedelta(days=95), end)]
+
+
 def test_backfill_marks_only_final_full_chunks() -> None:
     src = FakeSource("s")
     store = FakeStore()
