@@ -1,0 +1,59 @@
+name: Release
+
+# Nach jeder grünen CI auf main: nächste Version nach Semantic Versioning
+# berechnen (scripts/naechste-version.sh), Tag und GitHub-Release anlegen und
+# die Analyse-PDFs daran hängen. Releases, die mit dem GITHUB_TOKEN entstehen,
+# lösen keine weiteren Workflows aus; deshalb wird der PDF-Workflow hier
+# direkt aufgerufen.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    name: Version und Release
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      - name: Nächste Version
+        id: version
+        run: scripts/naechste-version.sh "${{ github.event.workflow_run.head_sha }}"
+      - name: Tag und Release anlegen
+        if: steps.version.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          VORHER: ${{ steps.version.outputs.vorher }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          gh release create "$VERSION" --target "$SHA" --title "$VERSION" \
+            --generate-notes ${VORHER:+--notes-start-tag "$VORHER"}
+
+  analysen-pdf:
+    name: Analysen-PDFs
+    needs: version
+    if: needs.version.outputs.version != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/analysen-pdf.yml
+    with:
+      tag: ${{ needs.version.outputs.version }}
