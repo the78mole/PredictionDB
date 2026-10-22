@@ -37,6 +37,10 @@ PDB_INTEGRATION=1 uv run pytest tests/integration  # gegen den laufenden Stack
 
 Neue Datenbankänderungen kommen als neue Alembic-Revision (`uv run alembic revision -m "..."`).
 
+Die Analysen unter `docs/analysen/` rendert `scripts/analysen-pdf.sh` (Pandoc und Chrome/Chromium)
+zu je einem PDF in `dist/analysen/`. Der Workflow „Analysen als PDF“ hängt sie an jedes
+veröffentlichte Release; bei PRs und auf `main` liegen sie als Artefakt `analysen-pdf` bereit.
+
 ## Beiträge
 
 Beiträge setzen die Annahme der [Beitragsbedingungen](CONTRIBUTING.md) voraus,
