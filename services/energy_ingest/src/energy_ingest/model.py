@@ -17,6 +17,12 @@ BERLIN = ZoneInfo("Europe/Berlin")
 
 QUARTER_HOUR = timedelta(minutes=15)
 HOUR = timedelta(hours=1)
+# Nominelle Auflösung von Monats- und Jahreswerten (energy.series.resolution); die
+# Zeitstempel selbst liegen exakt am Monats- bzw. Jahresbeginn (Ortszeit)
+MONTH = timedelta(days=30)
+YEAR = timedelta(days=365)
+# Monats- und Jahresmarktwerte erscheinen spätestens zehn Werktage nach Periodenende
+MARKET_VALUE_DELAY = timedelta(days=14)
 
 UNIT_MW = "MW"
 UNIT_EUR_MWH = "EUR/MWh"
@@ -29,6 +35,8 @@ class Kind(StrEnum):
     ACTUAL = "actual"  # Ist-Wert (Last, Erzeugung)
     LOAD_DA_FORECAST = "load_da_forecast"  # Lastprognose der ÜNB für den Folgetag
     GEN_DA_FORECAST = "gen_da_forecast"  # Wind-/PV-Prognose der ÜNB für den Folgetag
+    MARKET_VALUE_MONTH = "market_value_month"  # Monatsmarktwert nach EEG (ÜNB)
+    MARKET_VALUE_YEAR = "market_value_year"  # Jahresmarktwert nach EEG (ÜNB)
 
 
 @dataclass(frozen=True)
@@ -87,6 +95,13 @@ SERIES: dict[str, SeriesInfo] = {
             SeriesInfo(f"gen_da_forecast_{t}", Kind.GEN_DA_FORECAST, UNIT_MW)
             for t in ["wind_onshore", "wind_offshore", "solar", "wind_solar", "total", "other"]
         ),
+        # Marktwerte nach Anlage 1 EEG: mw_* je Monat, jw_* je Kalenderjahr; *_base ist der
+        # Mittelwert des Spotpreises (MW-EPEX bzw. JW), die übrigen sind mengengewichtet
+        *(
+            SeriesInfo(f"{p}_{t}", kind, UNIT_EUR_MWH)
+            for p, kind in [("mw", Kind.MARKET_VALUE_MONTH), ("jw", Kind.MARKET_VALUE_YEAR)]
+            for t in ["base", "wind_onshore", "wind_offshore", "solar"]
+        ),
     ]
 }
 
@@ -101,6 +116,13 @@ def _at_berlin(day: datetime, hour: int) -> datetime:
     return datetime.combine(local_day, time(hour), tzinfo=BERLIN).astimezone(UTC)
 
 
+def next_period(ts: datetime, months: int) -> datetime:
+    """Beginn der Folgeperiode (``months`` Monate) in Ortszeit, als UTC."""
+    local = ts.astimezone(BERLIN)
+    n = local.year * 12 + local.month - 1 + months
+    return datetime(n // 12, n % 12 + 1, 1, tzinfo=BERLIN).astimezone(UTC)
+
+
 def estimate_published(kind: Kind, ts: datetime, resolution: timedelta) -> datetime:
     """Spätester regulärer Veröffentlichungszeitpunkt eines Werts (Leakage-Schutz, 7.4).
 
@@ -108,6 +130,7 @@ def estimate_published(kind: Kind, ts: datetime, resolution: timedelta) -> datet
     - Lastprognose Folgetag: bis 10:00 Ortszeit am Vortag (VO 543/2013 Art. 6.1 b).
     - Wind-/PV-Prognose Folgetag: bis 18:00 Ortszeit am Vortag (Art. 14.1 d).
     - Ist-Werte: bis eine Stunde nach Ende des Intervalls (Art. 6.1 a, 16.1 b).
+    - Monats- und Jahresmarktwerte: zwei Wochen nach Ende des Monats bzw. Jahres.
     """
     match kind:
         case Kind.PRICE_DA:
@@ -118,6 +141,10 @@ def estimate_published(kind: Kind, ts: datetime, resolution: timedelta) -> datet
             return _at_berlin(ts, 18)
         case Kind.ACTUAL:
             return ts + resolution + HOUR
+        case Kind.MARKET_VALUE_MONTH:
+            return next_period(ts, 1) + MARKET_VALUE_DELAY
+        case Kind.MARKET_VALUE_YEAR:
+            return next_period(ts, 12) + MARKET_VALUE_DELAY
 
 
 def published_at(kind: Kind, ts: datetime, resolution: timedelta, fetched: datetime) -> datetime:

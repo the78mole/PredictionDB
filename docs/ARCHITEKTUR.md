@@ -212,6 +212,7 @@ Für das **Training** wird Historie benötigt. Archiv-Optionen:
 | Netzlast ist und Prognose (Day-Ahead) | ENTSO-E; SMARD | wie oben | 15 min | wie oben |
 | Erzeugung je Energieträger (ist) | ENTSO-E; SMARD; Energy-Charts | wie oben | 15 min | wie oben |
 | Wind-/PV-Prognosen der ÜNB | Netztransparenz.de; ENTSO-E | Netztransparenz: kostenlose OAuth-Registrierung | 15 min | frei |
+| Marktwerte nach EEG (Solar, Wind an Land, Wind auf See, Base) | Netztransparenz.de | OAuth-Client (Client-ID/-Secret) | Monat, Jahr | Veröffentlichung der ÜNB |
 | Grenzkuppelflüsse, Nachbar-Preise | ENTSO-E | Token | 15/60 min | – |
 | Installierte Leistung je Standort | Marktstammdatenregister (MaStR), Gesamtdatenexport | offen | Stichtag | DL-DE BY 2.0 |
 | Kraftwerksnichtverfügbarkeiten | ENTSO-E (Unavailability) | Token | Ereignis | – |

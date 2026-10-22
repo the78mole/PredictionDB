@@ -1,7 +1,8 @@
 # energy-ingest
 
-Lädt Day-Ahead-Preise (DE-LU), Netzlast, Residuallast, Erzeugung je Energieträger und die
-Folgetag-Prognosen der ÜNB für Deutschland aus allen kostenfreien Quellen nach TimescaleDB
+Lädt Day-Ahead-Preise (DE-LU), Netzlast, Residuallast, Erzeugung je Energieträger, die
+Folgetag-Prognosen der ÜNB sowie die Monats- und Jahresmarktwerte nach EEG für Deutschland
+aus allen kostenfreien Quellen nach TimescaleDB
 (Schema `energy`, Kapitel 3.2, 3.3 und 5.3 in `docs/ARCHITEKTUR.md`).
 
 | Quelle | Zugang | Datensätze | Rang |
@@ -9,9 +10,13 @@ Folgetag-Prognosen der ÜNB für Deutschland aus allen kostenfreien Quellen nach
 | ENTSO-E Transparency (`entsoe`) | kostenloser Token, `PDB_ENTSOE_TOKEN` | `price`, `load`, `load_forecast`, `generation`, `wind_solar_forecast` | 10 |
 | SMARD, Bundesnetzagentur (`smard`) | offen | je Reihe ein Datensatz (`da_price_de_lu`, `load_actual`, …) | 20 |
 | Energy-Charts, Fraunhofer ISE (`energy_charts`) | offen | `price`, `public_power`, `forecast_solar`, `forecast_wind_onshore`, `forecast_wind_offshore`, `forecast_load` | 30 |
+| Netztransparenz.de, ÜNB (`netztransparenz`) | kostenloser OAuth-Client, `PDB_NETZTRANSPARENZ_CLIENT_ID` und `_CLIENT_SECRET` | `market_value_month`, `market_value_year` | 15 |
 
-Ohne Token läuft der Dienst mit SMARD und Energy-Charts; ENTSO-E kommt dazu, sobald der
-Token in der `.env` steht. Token beantragen: Konto auf
+Ohne Token läuft der Dienst mit SMARD und Energy-Charts; ENTSO-E und Netztransparenz kommen
+dazu, sobald ihre Zugangsdaten in der `.env` stehen (Quelle der Wahrheit: OpenBao
+`it-infra`, `secret/netztransparenz`, Felder `api-client-id` und `api-client-token`).
+Netztransparenz-Client anlegen: Konto im [API-Portal](https://api-portal.netztransparenz.de/),
+dort einen Client erzeugen. Token beantragen: Konto auf
 [transparency.entsoe.eu](https://transparency.entsoe.eu) anlegen, dann Mail an
 `transparency@entsoe.eu` mit Betreff „Restful API access“ und der Konto-Adresse.
 
@@ -29,6 +34,13 @@ Token in der `.env` steht. Token beantragen: Konto auf
   Intervallende + 1 h). Beim Überschreiben bleibt der früheste Zeitpunkt erhalten.
 - Prognosen der ÜNB werden je Zeitpunkt überschrieben, es bleibt also die zuletzt
   veröffentlichte Folgetag-Prognose.
+
+- Marktwerte (`mw_*` je Monat, `jw_*` je Kalenderjahr; `*_base`, `*_solar`,
+  `*_wind_onshore`, `*_wind_offshore`) stehen am Periodenbeginn (00:00 Ortszeit) in
+  EUR/MWh; Netztransparenz liefert ct/kWh. Als Veröffentlichung gilt Periodenende plus zwei
+  Wochen. Der laufende Abgleich schaut für sie 95 bzw. 400 Tage zurück, damit nachgereichte
+  Werte ankommen. Monatswerte gibt es ab 1/2012, Jahreswerte ab 2013; vor 2015 nur per
+  `energy-ingest --source netztransparenz backfill 2011-12-01 2015-01-01`.
 
 Wichtige Codes: `da_price_de_lu`, `load_actual`, `load_da_forecast`, `residual_load`,
 `gen_<träger>` (z. B. `gen_wind_onshore`, `gen_solar`, `gen_lignite`),
@@ -52,7 +64,8 @@ bis `PDB_ENERGY_BACKFILL_FROM` (Vorgabe 2015-01-01) erreicht ist. Vollständig g
 mindestens sieben Tage alte Blöcke stehen in `meta.energy_fetch` und werden nicht erneut
 abgerufen (`--force` erzwingt es).
 
-Einstellungen (Umgebung bzw. `.env`): `PDB_ENTSOE_TOKEN`, `PDB_ENERGY_SOURCES`
+Einstellungen (Umgebung bzw. `.env`): `PDB_ENTSOE_TOKEN`, `PDB_NETZTRANSPARENZ_CLIENT_ID`,
+`PDB_NETZTRANSPARENZ_CLIENT_SECRET`, `PDB_ENERGY_SOURCES`
 (JSON-Liste), `PDB_ENERGY_LOOKBACK_DAYS`, `PDB_ENERGY_HORIZON_DAYS`,
 `PDB_ENERGY_BACKFILL_FROM`, `PDB_ENERGY_BACKFILL_CHUNKS_PER_CYCLE`,
 `PDB_ENERGY_CHECK_REL_THRESHOLD`.
@@ -60,5 +73,6 @@ Einstellungen (Umgebung bzw. `.env`): `PDB_ENTSOE_TOKEN`, `PDB_ENERGY_SOURCES`
 ## Lizenzen der Daten
 
 SMARD: CC BY 4.0, Bundesnetzagentur | SMARD.de. Energy-Charts: CC BY 4.0, Fraunhofer ISE.
-ENTSO-E: Nutzungsbedingungen der Transparency Platform. Die Vermerke stehen in
+ENTSO-E: Nutzungsbedingungen der Transparency Platform. Netztransparenz: Veröffentlichungen
+der ÜNB nach EEG/EnFG, Nutzungsbedingungen von netztransparenz.de. Die Vermerke stehen in
 `meta.source.license`.

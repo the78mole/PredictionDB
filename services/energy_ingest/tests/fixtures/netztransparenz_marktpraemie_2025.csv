@@ -1,0 +1,13 @@
+Monat;MW-EPEX in ct/kWh;MW Wind Onshore in ct/kWh;PM Wind Onshore fernsteuerbar in ct/kWh;MW Wind Offshore in ct/kWh;PM Wind Offshore fernsteuerbar in ct/kWh;MW Solar in ct/kWh;PM Solar fernsteuerbar in ct/kWh;MW steuerbar in ct/kWh;PM steuerbar in ct/kWh;Negative Preise (6H);Negative Preise (4H);Negative Preise (3H);Negative Preise (2H);Negative Preise (1H);Negative Preise (15MIN);Negative Preise (2CT)
+1/2025;11,414;8,506;;9,702;;11,511;;11,414;;Ja;Ja;Ja;;Ja;;
+2/2025;12,852;11,591;;11,741;;11,099;;12,852;;Nein;Nein;Nein;;Nein;;
+3/2025;9,473;7,513;;8,136;;5,027;;9,473;;Ja;Ja;Ja;;Ja;;
+4/2025;7,794;7,314;;7,318;;3,041;;7,794;;Ja;Ja;Ja;;Ja;;
+5/2025;6,734;6,171;;6,338;;1,997;;6,734;;Ja;Ja;Ja;;Ja;;
+6/2025;6,399;5,141;;5,823;;1,843;;6,399;;Ja;Ja;Ja;;Ja;;
+7/2025;8,780;8,171;;8,294;;5,923;;8,780;;Ja;Ja;Ja;;Ja;;
+8/2025;7,699;6,824;;6,689;;3,832;;7,699;;Ja;Ja;Ja;;Ja;;
+9/2025;8,351;6,267;;6,748;;4,307;;8,351;;Ja;Ja;Ja;;Ja;;
+10/2025;8,440;5,579;;6,867;;6,980;;8,440;;Ja;Ja;Ja;;Ja;Ja;Ja
+11/2025;10,188;8,930;;9,091;;9,102;;10,188;;Nein;Nein;Nein;;Nein;Nein;Ja
+12/2025;9,347;8,349;;8,608;;9,373;;9,347;;Nein;Nein;Nein;;Nein;Nein;Ja

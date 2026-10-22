@@ -70,6 +70,13 @@ def day_window(now: datetime, back: int, ahead: int) -> tuple[datetime, datetime
     return day - timedelta(days=back), day + timedelta(days=ahead)
 
 
+def sync_lookback(source: Source, dataset: str) -> timedelta:
+    """Zusätzlicher Rückblick im Abgleich für Datensätze, die erst lange nach der Periode
+    erscheinen (z. B. Monatsmarktwerte); Quellen geben ihn optional in ``sync_lookback`` an."""
+    extra: dict[str, timedelta] = getattr(source, "sync_lookback", {})
+    return extra.get(dataset, timedelta(0))
+
+
 class EnergyIngestor:
     def __init__(self, sources: list[Source], store: Store, settings: EnergySettings) -> None:
         self.sources = sources
@@ -108,7 +115,9 @@ class EnergyIngestor:
         now = now or datetime.now(UTC)
         start, end = day_window(now, self.settings.lookback_days, self.settings.horizon_days)
         return [
-            self.fetch(src, ds, start, end, now) for src in self.sources for ds in src.datasets()
+            self.fetch(src, ds, start - sync_lookback(src, ds), end, now)
+            for src in self.sources
+            for ds in src.datasets()
         ]
 
     def pending(
