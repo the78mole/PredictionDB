@@ -20,13 +20,15 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 
 import httpx
+from sqlalchemy import Engine
 
-from energy_ingest.config import ALL_SOURCES, EnergySettings
+from energy_ingest.config import ALL_SOURCES, UNFREE_SOURCES, EnergySettings
 from energy_ingest.http import Http
 from energy_ingest.ingest import DatasetResult, EnergyIngestor
 from energy_ingest.sources import Source
 from energy_ingest.sources.energy_charts import EnergyCharts
 from energy_ingest.sources.entsoe import Entsoe
+from energy_ingest.sources.marktwert import Marktwert
 from energy_ingest.sources.netztransparenz import Netztransparenz
 from energy_ingest.sources.smard import Smard
 from energy_ingest.store import EnergyStore
@@ -79,9 +81,18 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def build_sources(codes: list[str], settings: EnergySettings, http: Http) -> list[Source]:
+def build_sources(
+    codes: list[str], settings: EnergySettings, http: Http, engine: Engine
+) -> list[Source]:
     sources: list[Source] = []
     for code in codes:
+        if not settings.allowed(code):
+            log.info(
+                "energy.source_not_allowed",
+                source=code,
+                reason=f"unfreie Quelle, Freigabe mit PDB_{UNFREE_SOURCES[code].upper()}=true",
+            )
+            continue
         if code == "smard":
             sources.append(Smard(http))
         elif code == "energy_charts":
@@ -102,8 +113,13 @@ def build_sources(codes: list[str], settings: EnergySettings, http: Http) -> lis
                 )
                 continue
             sources.append(Netztransparenz(http, cid, secret))
+        elif code == "pdb_marktwert":
+            continue  # unten, nur als Ersatz für netztransparenz
         else:
             raise ValueError(f"unbekannte Quelle {code!r}")
+    # Eigene Marktwerte, solange die amtlichen von Netztransparenz nicht geladen werden
+    if "pdb_marktwert" in codes and not any(s.code == "netztransparenz" for s in sources):
+        sources.append(Marktwert(engine))
     return sources
 
 
@@ -120,13 +136,16 @@ def run(args: argparse.Namespace, settings: EnergySettings) -> int:
         "User-Agent": "PredictionDB energy-ingest (+https://github.com/the78mole/PredictionDB)"
     }
     with httpx.Client(timeout=timeout, follow_redirects=True, headers=headers) as client:
-        sources = build_sources(args.source or settings.sources, settings, Http(client))
+        engine = create_db_engine(get_settings())
+        sources = build_sources(args.source or settings.sources, settings, Http(client), engine)
         if args.cmd == "sources":
             for s in sources:
-                print(f"{s.code:14} Rang {s.priority:3}  {', '.join(s.datasets())}")
+                kind = "frei" if s.free else "unfrei, freigegeben"
+                print(f"{s.code:14} Rang {s.priority:3}  {kind:20} {', '.join(s.datasets())}")
             return 0
 
-        store = EnergyStore(create_db_engine(get_settings()))
+        store = EnergyStore(engine)
+        store.set_enabled({code: settings.allowed(code) for code in UNFREE_SOURCES})
         ingestor = EnergyIngestor(sources, store, settings)
 
         if args.cmd == "check":
