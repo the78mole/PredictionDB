@@ -1,6 +1,6 @@
 # Strompreisprognose – Architekturentwurf
 
-**Version:** 0.9 (Entwurf) · **Stand:** 2026-10-21 · **Status:** zur Diskussion
+**Version:** 0.10 (Entwurf) · **Stand:** 2026-10-23 · **Status:** zur Diskussion
 
 ---
 
@@ -11,6 +11,7 @@
   1. **Bronze:** zugeschnittene Original-GRIB2-Ausschnitte (Europa/DE-Box, nur benötigte Variablen) in **Garage (S3)**. Quelle der Wahrheit, jederzeit neu auswertbar.
   2. **Silber:** einheitliches Gitter je Lauf als **Zarr** (float16/Scale-Offset + Zstd) in Garage. Grundlage für Training und Regionen-Aggregation.
   3. **Gold:** aggregierte Feature-Zeitreihen (DE-weit und je Regelzone/Bundesland, kapazitäts- bzw. bevölkerungsgewichtet) plus Energie-Marktdaten in **PostgreSQL + TimescaleDB** (komprimierte Hypertables).
+- **Datenaustausch:** Verdichtete Wetterdaten (Silber, optional Bronze) werden als OCI-Artefakte in GHCR veröffentlicht; weitere Instanzen importieren sie, statt GFS selbst zu laden. Ohne Bronze verlieren sie für Features, Training und Anlagenprognose nichts, nur den eigenen Neuaufbau von Silber (5.5).
 - **Gitterdaten gehören nicht zeilenweise in die Datenbank.** Eine Zeile pro Gitterpunkt × Variable × Zeitschritt × Lauf (wie im bestehenden PredictionDB-Entwurf) würde allein für GFS über Deutschland mehrere Milliarden Zeilen pro Jahr erzeugen (Rechnung in 5.4).
 - **Prognose eigener Anlagen:** Über die API lassen sich einzelne PV-, Windkraft- und Wasserkraftanlagen mit Stammdaten und optional einem Jahr Messwerten anlegen; sie bekommen eine Erzeugungsprognose aus denselben Wetterdaten, physikalisch gerechnet und mit den Messwerten kalibriert (7.6).
 - **Repository:** `the78mole/PredictionDB` (Nachfolger der dortigen `SPECIFICATION.md` v0.1).
@@ -548,6 +549,94 @@ GFS, Ausschnitt 4 617 Punkte, 10 Variablen, 209 Schritte (0–120 h stündlich =
 | Gold Features (z. B. 40 Features × 10 Regionen × 209 Schritte × 4 Läufe) | 120 Mio. Zeilen, komprimiert ~2–4 B/Wert | **~0,5 GB** |
 
 Mit ECMWF, ICON-EU (höhere Auflösung, aber kürzerer Horizont) und GEFS-Mittel/Streuung liegt die Gesamtmenge realistisch bei **100–200 GB pro Jahr**. Eine VM-Platte von 500 GB reicht für die ersten zwei Jahre. Die Werte sind Abschätzungen und werden nach dem ersten Betriebsmonat durch Messung ersetzt (`meta.nwp_run.bytes_stored`).
+
+### 5.5 Datenaustausch zwischen Instanzen über GHCR (geplant)
+
+Eine neue Instanz müsste für die GFS-Historie ab 2021-03 heute rund 8 000 Läufe selbst laden: je Lauf etwa 3,3 GB Transfer und 3 300 Range-Anfragen, zusammen rund 27 TB und 27 Mio. Anfragen gegen AWS. Die verdichteten Silber-Stores derselben Läufe sind zusammen nur gut 100 GB groß. Deshalb veröffentlicht die Hauptinstanz ihre verdichteten Wetterdaten als **OCI-Artefakte in der GitHub Container Registry** (`ghcr.io/the78mole/predictiondb-data/…`), und andere Instanzen importieren sie dort, statt GFS selbst herunterzuladen.
+
+#### 5.5.1 Datenqualität ohne Bronze
+
+Silber ist kein vergröbertes Abbild, sondern dasselbe native 0,25°-Gitter mit allen Variablen aus `wx_process.variables.VARIABLES`, ohne räumliche Interpolation und mit den Zeitschritten der Quelle. Alles Nachgelagerte wird aus Silber gerechnet. Eine Instanz, die nur Silber importiert, verliert daher für den laufenden Betrieb nichts:
+
+| Aufgabe | braucht | ohne Bronze möglich |
+|---|---|---|
+| Features je Cluster, neue Clusterung, neue `FEATURES_VERSION`, neuer MaStR-Stand | Silber | ja |
+| Zeitliche Interpolation beim Abruf, Analyse-Jobs (7.9), Punktabfragen und Anlagenprognose (7.6) | Silber | ja |
+| Training und Inferenz | Gold, aus Silber gerechnet | ja |
+| Neue Silber-Kodierung (`SILVER_VERSION`), z. B. feinere Quantisierung, anderer Wertebereich, Korrektur der Eimer-Rückrechnung | Bronze | nein, neues Silber-Release des Herausgebers nötig |
+| Variable, die in Bronze liegt, aber nicht in `VARIABLES` steht | Bronze | nein |
+| Abgleich mit dem Original (Audit, Fehlersuche im Decoder) | Bronze | nein |
+| Variable, die gar nicht geladen wurde | Quelle | bei keiner Instanz, nur Download aus dem AWS-Archiv |
+
+Zur Quantisierung: Silber speichert Int16 mit festen Stufen (0,01 K, 0,01 m/s, 0,05 W/m², 1 Pa, 0,001 mm/h). Das liegt in der Größenordnung der Packungsgenauigkeit von GFS selbst und weit unter dem Prognosefehler; für die Modelle ist das kein messbarer Verlust (Vorbehalt: an echten Bronze-Dateien gegenprüfen, Aufgabe in 11). Grenzwerte werden abgeschnitten, z. B. Niederschlag oberhalb von rund 62 mm/h.
+
+Ein fehlendes Bronze ist nicht endgültig: Das AWS-Archiv hält GFS v16 ab 2021-03-22 vollständig vor, einzelne Läufe lassen sich jederzeit nachladen (`wx-ingest gfs run`), und der Herausgeber behält Bronze ohnehin. Für Instanzen, die selbst Silber neu bauen wollen, wird Bronze zusätzlich als eigenes, optionales Artefakt veröffentlicht (5.5.2).
+
+#### 5.5.2 Was veröffentlicht wird
+
+| Artefakt-Repository | Inhalt | Größe | Stufe |
+|---|---|---|---|
+| `predictiondb-data/gfs-0p25-silver` | Zarr-Store je Lauf, unverändert aus `wx-silver` | ~13 MB/Lauf, ~19 GB/Jahr | Pflicht |
+| `predictiondb-data/gfs-0p25-bronze` | zugeschnittene GRIB2 je Schritt plus `run.json`, `fSSS.json` | ~22 MB/Lauf, ~32 GB/Jahr | optional, später |
+| `predictiondb-data/feat-gfs` | Gold-Features als Parquet je Monat, nur zusammen mit `clustering_version` und `FEATURES_VERSION` | < 1 GB/Jahr | optional; nur nutzbar bei identischer Clusterung |
+
+Nicht veröffentlicht werden Energie- und Marktdaten (ENTSO-E, SMARD, Energy-Charts, Netztransparenz): Sie sind klein, jede Instanz ruft sie per API selbst ab, und ihre Nutzungsbedingungen regeln die Weitergabe unterschiedlich. Ebenso wenig Prognosen und Modelle (Lizenz, 12.1), Geheimnisse oder Inhalte von `assets.*` zu Anlagen von Nutzern.
+
+#### 5.5.3 Format und Adressierung
+
+- **Werkzeug:** ORAS (`oras` CLI bzw. `oras-py`), kein Container-Image. Jedes Artefakt ist ein OCI-Manifest mit eigenem `artifactType`, Layer sind normale Blobs.
+- **Ein Manifest je Monat, ein Layer je Lauf.** Tag `JJJJ-MM` (z. B. `2026-10`). Ein Layer ist das Tar des Zarr-Stores `HH.zarr` eines Laufs, ohne weitere Kompression (die Chunks sind schon Zstd). Bei 4 Läufen am Tag hat ein Monat bis zu 124 Layer.
+- **Medientypen:** `artifactType: application/vnd.predictiondb.wx-silver.v1`, Layer `application/vnd.predictiondb.zarr.v3.tar`. Bronze analog `…wx-bronze.v1` mit einem Tar je Lauf.
+- **Annotationen je Layer:** `org.predictiondb.run` (ISO-Zeit des Laufs), `org.predictiondb.model` (`gfs`), `org.predictiondb.grid` (`0p25`), `org.predictiondb.bbox`, `org.predictiondb.silver_version`, Anzahl der Schritte und Variablen, Hash des Bronze-Laufmanifests. Damit kann ein Importeur einzelne Läufe gezielt ziehen (`oras pull` mit Layer-Filter bzw. Blob-Abruf per Digest), ohne den Monat ganz zu laden.
+- **Annotationen je Manifest:** `org.opencontainers.image.source` (Repo), `org.opencontainers.image.created`, `org.opencontainers.image.licenses` (Datenlizenz, 12.9), `org.predictiondb.attribution` (Quellenvermerk, 5.5.6), Liste der enthaltenen Läufe.
+- **Integrität:** Layer sind über ihren SHA-256-Digest adressiert. Zusätzlich signiert der Herausgeber jedes Manifest mit `cosign`; der Import prüft die Signatur, bevor er schreibt.
+
+#### 5.5.4 Versionierung und Inkremente
+
+- **Laufender Monat:** Nach jedem verarbeiteten Lauf schiebt `wx-publish` ein neues Monatsmanifest mit dem zusätzlichen Layer. Bereits hochgeladene Layer werden nicht erneut übertragen (inhaltsadressiert, die Registry kennt den Blob), das Inkrement ist also ein Lauf von ~13 MB. Der Tag `JJJJ-MM` wandert mit; jede Fassung bleibt über ihren Digest abrufbar.
+- **Abgeschlossener Monat:** Sind alle Läufe da (oder als endgültig fehlend markiert), bekommt das Manifest zusätzlich den unveränderlichen Tag `JJJJ-MM.final`. Fehlende Läufe stehen in einer Manifest-Annotation, damit Importeure sie nicht als Lücke suchen.
+- **Formatwechsel:** Eine neue `SILVER_VERSION` erzeugt ein neues Artefakt-Repository mit Suffix (`gfs-0p25-silver-v2`), das der Herausgeber aus seinem Bronze neu aufbaut. Alte Versionen bleiben stehen; ein Importeur entscheidet über die Konfiguration, welche Version er bezieht. Ein Lauf darf in einer Instanz nur in einer Silber-Version liegen.
+- **Index:** Der Tag `index` zeigt auf ein kleines JSON-Artefakt mit allen Monaten, ihren Digests und dem Stand. Ein Importeur liest nur den Index und lädt die Monate nach, deren Digest sich geändert hat.
+- **Nichts wird gelöscht.** Fehlerhafte Läufe werden durch ein neues Manifest ohne bzw. mit korrigiertem Layer ersetzt, alte Digests bleiben gültig.
+
+#### 5.5.5 Ablauf
+
+```mermaid
+flowchart LR
+    subgraph PUB["Hauptinstanz"]
+        S1[("wx-silver")] --> WP["wx-publish<br/>nach features_ready"]
+        B1[("wx-bronze")] -. optional .-> WP
+    end
+    WP -- "oras push<br/>+ cosign sign" --> GHCR[("ghcr.io/the78mole/<br/>predictiondb-data/*")]
+    subgraph IMP["Weitere Instanz"]
+        WI["wx-import<br/>Index lesen, fehlende Läufe ziehen"] --> S2[("wx-silver")]
+        WI --> M[("meta.nwp_run<br/>origin = ghcr")]
+        S2 --> WPR["wx-process<br/>nur Gold, lokale Clusterung"]
+        WI -. "Lauf fehlt nach Frist" .-> WXI["wx-ingest<br/>eigener Download"]
+    end
+    GHCR --> WI
+```
+
+- **Herausgeber (`wx-publish`, neuer Compose-Dienst):** Lauscht auf `features_ready` bzw. pollt `meta.nwp_run`, packt den fertigen Silber-Store, schiebt den Layer und das neue Monatsmanifest und setzt `meta.nwp_run.published_at`. Er läuft auf der VM, weil dort die Daten liegen; das Schreibrecht auf GHCR kommt aus einem Token mit `write:packages` in OpenBao (8.3). Ein `backfill`-Modus veröffentlicht die Historie monatsweise.
+- **Importeur (`wx-import`, neuer Modus von `wx-ingest`):** Quelle `ghcr` in `config/sources/gfs_0p25.yaml` vor `nomads`/`aws`. Liest den Index, zieht fehlende Läufe, prüft Signatur und Digests, schreibt den Store nach `wx-silver` und setzt `meta.nwp_run` auf `silver_ready` mit `origin = ghcr`. `wx-process` rechnet danach wie gewohnt nur die Gold-Features, mit der lokalen Clusterung. Bronze bleibt leer; Jobs, die Bronze brauchen, erkennen das am Ursprung und überspringen den Lauf oder laden ihn gezielt nach.
+- **Aktualität:** Der Herausgeber veröffentlicht einen Lauf erst nach der Verarbeitung, also gut 5,5 h nach Laufzeit (GFS f384 kommt nach ~5:15 h). Für Backfill und Training spielt das keine Rolle. Für den Live-Betrieb einer importierenden Instanz gilt eine Frist (Vorschlag 7 h nach Laufzeit): Ist der Lauf bis dahin nicht in GHCR, lädt sie ihn selbst. Wer Day-Ahead mit dem 06Z-Teillauf rechnen will (3.1, Analyse `gfs-folgelauf`), lädt diesen Teil weiterhin selbst.
+
+#### 5.5.6 Grenzen, Kosten und Lizenz
+
+- **GHCR:** Für öffentliche Pakete berechnet GitHub weder Speicher noch Transfer. Ein Layer darf höchstens 10 GB groß sein, ein Upload darf höchstens 10 min dauern; mit einem Lauf je Layer (~13 bzw. ~22 MB) liegt das weit darunter. Die Pakete werden mit dem öffentlichen Repo verknüpft und erben dessen Sichtbarkeit, Abruf geht anonym. Vor der Umsetzung prüfen: aktuelle Grenzen und eine etwaige Fair-Use-Regel für Datenmengen im dreistelligen GB-Bereich.
+- **Mengen:** Silber ab 2021-03 ≈ 105 GB, Bronze ≈ 180 GB (Stand 2026-10, je mit 4 Läufen/Tag), danach ~19 bzw. ~32 GB/Jahr.
+- **Quellen und Weitergabe:**
+
+| Quelle | Weitergabe | Auflage |
+|---|---|---|
+| NOAA GFS/GEFS | erlaubt, gemeinfrei (Werk der US-Regierung) | keine Pflicht; Quellenvermerk „NOAA/NCEP GFS“ wird mitgeführt |
+| ECMWF Open Data (IFS/AIFS) | erlaubt, CC BY 4.0 | Quellenvermerk und Hinweis auf Veränderung |
+| DWD Open Data (ICON) | erlaubt | Quellenvermerk „Deutscher Wetterdienst“ (GeoNutzV), Hinweis auf Veränderung |
+| MSC GEM | vor Aufnahme prüfen (Open Government Licence – Canada) | Quellenvermerk |
+| Open-Meteo, Energie- und Marktdaten | nicht vorgesehen | — |
+
+  Jedes Manifest trägt den Quellenvermerk in `org.predictiondb.attribution`, zusätzlich liegt ein `ATTRIBUTION.md` als eigener Layer im Index-Artefakt. Weitere Modelle bekommen eigene Artefakt-Repositories (`ecmwf-ifs-0p25-silver` usw.), damit Lizenzen nicht gemischt werden.
+- **Lizenz der Daten selbst:** Die BSL 1.1 gilt für den Code; die veröffentlichten Silber-Daten sind aufbereitete Quelldaten und brauchen eine eigene Datenlizenz (offener Punkt 12.9).
 
 ---
 
@@ -1449,6 +1538,7 @@ Datenabfluss beachten: Bei S3-Diensten mit Egress-Kosten (AWS) sollten Training 
 | **5 – Baseline-ML** | LightGBM für Last und Preis, Evaluierungs-Framework, MLflow | Referenzwerte |
 | **6 – NN** | TFT/TiDE zweistufig, Quantile, Inferenzdienst, Grafana | erste produktive Prognose |
 | **7 – Weitere Quellen** | ECMWF IFS/AIFS, ICON-EU/D2, GEFS, GEM; Redundanz-Features | robuster Betrieb |
+| **7b – Datenaustausch** | `wx-publish` (Silber nach GHCR, Backfill monatsweise, cosign), `wx-import` als Quelle `ghcr` mit Fallback auf eigenen Download; vorher Quantisierung Silber gegen Bronze prüfen und GHCR-Grenzen verifizieren (5.5) | neue Instanzen ohne GFS-Download |
 | **8 – API & Härtung** | FastAPI, Auth, Alarme, Backups, Cloud-Probelauf | betriebsbereit |
 | **später – Wärme/Kälte** | Wärme-/Kältelast für Gebäude und Netze, Strombedarf von Wärmepumpen, Betriebsoptimierung (7.8); Architektur noch offen | geplant |
 
@@ -1460,6 +1550,7 @@ flowchart LR
     P3 --> P4
     P4 --> P5["5 Baseline-ML"] --> P6["6 NN"]
     P4 --> P4B["4b Anlagenprognose<br/>PV/Wind/Wasser"]
+    P4 --> P7B["7b Datenaustausch<br/>GHCR"]
     P2 --> P7["7 Weitere Quellen"]
     P7 --> P6
     P6 --> P8["8 API & Härtung"]
@@ -1477,3 +1568,4 @@ flowchart LR
 6. **GPU:** Steht auf einem PVE-Host eine GPU für Passthrough bereit (bekannt für PVE2: 12 Threads, 62 GB RAM, GPU unbekannt)? Ohne lokale GPU startet das Training auf CPU, Hyperparameter-Suchen laufen auf stundenweise gemieteten GPUs (7.7).
 7. Zu verifizierende Detailwerte vor der Implementierung: exakte NOMADS-Rate-Limits, aktuelle Vorhaltezeiten auf opendata.dwd.de und data.ecmwf.int, Beginn der Archive auf AWS, aktuelle Garage- und TimescaleDB-Versionen, Zugang und Lizenz von GloFAS/EFAS sowie Schnittstellen der Pegelportale der Länder.
 8. **Anlagen-API (7.6):** Nur eigene Anlagen oder auch Anlagen weiterer Nutzer? Mehrere Nutzer bzw. fremde Anlagen fallen nicht unter den Additional Use Grant (nur intern). Lizenz der Turbinen-Leistungskurven (oedb) vor Übernahme prüfen.
+9. **Datenlizenz der GHCR-Artefakte (5.5):** Die BSL gilt für den Code, nicht für veröffentlichte Daten. Vorschlag: CC BY 4.0 für die aufbereiteten Daten (Silber, Features), mit Weitergabe der Quellenvermerke; Alternative CC0, passend zur Gemeinfreiheit der NOAA-Daten. Ebenfalls offen: Namensraum `predictiondb-data/*` unter dem Nutzerkonto oder unter einer Organisation (z. B. für einen späteren Übergang auf die Bizzmark UG).
