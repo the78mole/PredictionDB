@@ -1361,7 +1361,7 @@ Bemerkungen:
 - Ingest je Quellfamilie als eigener Container: Ausfall oder Sperre einer Quelle betrifft die anderen nicht; einzeln skalier- und neu startbar.
 - Geheimnisse (ENTSO-E-Token, Garage-Keys, DB-Passwort) in `.env` bzw. Docker Secrets; nie im Repo. Ablage und Zugriff siehe 8.3.
 - Provisionierung der VM selbst: Cloud-Init-Template auf PVE oder Ansible-Rolle (Docker installieren, Repo/Compose-Datei ausrollen, `docker compose up -d`). Passt ggf. zu bestehenden Repos wie `it-infra` oder `portainers`, die ich nicht angesehen habe.
-- Der aktuelle Betriebsstand (VM 108 auf PVE2, Adressen, Befehle) steht in [BETRIEB-PVE2.md](BETRIEB-PVE2.md).
+- Die Betriebsdoku der konkreten Installation (Adressen, Zugänge, Befehle) liegt bewusst nicht im Repository.
 
 ### 8.3 Geheimnisse und OpenBao
 
