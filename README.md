@@ -14,6 +14,7 @@ Monorepo als [uv](https://docs.astral.sh/uv/)-Workspace (Kapitel 6.1 der Archite
 | `migrations/` | Alembic-Migrationen (SQL inkl. TimescaleDB-Befehle) |
 | `compose.yaml` | Stack für die VM: TimescaleDB, Garage (Single Node), `garage-init`, `migrate` |
 | `docker/Dockerfile` | ein Image für alle Python-Dienste |
+| `deploy/systemd/`, `scripts/vm-update.sh` | Auto-Update des Stacks auf der VM |
 
 ## Lokal starten
 
@@ -25,6 +26,30 @@ docker compose run --rm migrate       # alembic upgrade head
 ```
 
 Auf der VM ohne Entwicklungs-Override: `docker compose -f compose.yaml ...`.
+
+## Auto-Update des Stacks
+
+Nach jeder grünen CI auf `main` baut der Workflow „Image“ das App-Image und legt es in GHCR ab
+(`ghcr.io/the78mole/predictiondb:<commit-sha>` und `:latest`). Auf der VM prüft ein systemd-Timer
+alle 15 Minuten, ob `main` einen neuen Commit hat. Ist das Image dazu schon gebaut, rollt
+`scripts/vm-update.sh` ihn aus: Checkout auf den Commit, Image ziehen und lokal als `deployed`
+markieren, `garage-init`, `migrate`, `docker compose up -d`. Auf der VM wird nichts gebaut. Schlägt
+ein Schritt fehl, bleibt der alte Stand laufen und der nächste Lauf versucht es erneut; der zuletzt
+ausgerollte Commit steht in `.git/pdb-deployed`.
+
+Einrichtung auf der VM (Checkout unter `/opt/predictiondb`, Benutzer in der Gruppe `docker`):
+
+```sh
+# in der .env: TAG=deployed
+sudo cp deploy/systemd/predictiondb-update@.* /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now predictiondb-update@<benutzer>.timer
+```
+
+Bedienung: `systemctl list-timers 'predictiondb-update*'`, Protokoll mit
+`journalctl -u 'predictiondb-update@*'`, sofort ausrollen mit
+`sudo systemctl start predictiondb-update@<benutzer>.service` oder von Hand
+`scripts/vm-update.sh --force`.
 
 ## Entwicklung
 
