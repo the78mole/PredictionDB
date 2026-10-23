@@ -9,8 +9,8 @@ name: Analysen als PDF
 # Release (bei PRs: seit dem Basis-Commit) geändert hat, oder alle, wenn sich
 # der Renderer geändert hat (scripts/analysen-pdf-auswahl.sh). Die übrigen PDFs
 # übernimmt der schlanke Job "auswahl" aus dem vorherigen Release, damit jedes
-# Release alle PDFs trägt. Pandoc und Chrome braucht nur der Job "pdf", der
-# entfällt, wenn nichts zu rendern ist.
+# Release alle PDFs trägt. Pandoc und Chrome braucht nur der Job "pdf" (Container
+# ghcr.io/the78mole/pandoc-chromium), der entfällt, wenn nichts zu rendern ist.
 on:
   workflow_call:
     inputs:
@@ -98,6 +98,8 @@ jobs:
     needs: auswahl
     if: needs.auswahl.outputs.rendern != ''
     runs-on: ubuntu-latest
+    # Pandoc, Chromium, git und gh fertig installiert (the78mole/docker-images).
+    container: ghcr.io/the78mole/pandoc-chromium:latest
     concurrency:
       group: analysen-pdf-${{ github.event.release.tag_name || inputs.tag || github.ref }}
       cancel-in-progress: true
@@ -108,10 +110,8 @@ jobs:
         with:
           ref: ${{ github.event.release.tag_name || inputs.tag || github.sha }}
           fetch-depth: 0  # Stand je Analyse aus git log, Version aus git describe
-      - name: Pandoc und Schriften
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends pandoc fonts-dejavu-core
+      - name: Workspace für git freigeben  # Container läuft als root
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: PDFs rendern
         env:
           PDF_VERSION: ${{ env.TAG }}
