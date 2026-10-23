@@ -3,7 +3,8 @@
 # <ziel>/analyse-<name>.pdf. Markdown -> HTML mit Pandoc (Bilder eingebettet),
 # HTML -> PDF mit Chromium im Headless-Modus.
 #
-#   scripts/analysen-pdf.sh [ziel]          Standardziel: dist/analysen
+#   scripts/analysen-pdf.sh [ziel] [name...]   Standardziel: dist/analysen,
+#                                              ohne Namen alle Analysen
 #
 # Umgebung: CHROME (Pfad zu Chrome/Chromium, sonst Suche im PATH),
 #           PDF_VERSION (Text in der Fußzeile, sonst git describe),
@@ -13,6 +14,7 @@ set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 ziel=$(mkdir -p "${1:-$root/dist/analysen}" && cd "${1:-$root/dist/analysen}" && pwd)
+shift || true
 css="$root/scripts/analysen-pdf.css"
 
 chrome=${CHROME:-}
@@ -29,8 +31,15 @@ ref=${PDF_REF:-$(git -C "$root" rev-parse HEAD 2>/dev/null || echo main)}
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
+readmes=("$root"/docs/analysen/*/README.md)
+if [[ $# -gt 0 ]]; then
+  readmes=()
+  for name in "$@"; do readmes+=("$root/docs/analysen/$name/README.md"); done
+fi
+
 anzahl=0
-for readme in "$root"/docs/analysen/*/README.md; do
+for readme in "${readmes[@]}"; do
+  [[ -f $readme ]] || { echo "Keine Analyse: $readme" >&2; exit 1; }
   dir=$(dirname "$readme")
   name=$(basename "$dir")
   titel=$(grep -m1 '^# ' "$readme" | sed 's/^# //')

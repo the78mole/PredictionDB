@@ -71,8 +71,11 @@ PR-Titel): `feat:` hebt die Minor-Stelle, `typ!:` oder `BREAKING CHANGE:` die Ma
 (solange 0.x: Minor), alles andere die Patch-Stelle (`scripts/naechste-version.sh`).
 
 An jedes Release hängt der Workflow „Analysen als PDF“ die Analysen aus `docs/analysen/`, gerendert
-von `scripts/analysen-pdf.sh` (Pandoc und Chrome/Chromium). Bei PRs, die Analysen ändern, liegen
-die PDFs als Artefakt `analysen-pdf` bereit.
+von `scripts/analysen-pdf.sh` (Pandoc und Chrome/Chromium). Neu gerendert werden nur Analysen,
+deren Ordner sich seit dem vorherigen Release geändert hat (oder alle, wenn sich der Renderer
+geändert hat, `scripts/analysen-pdf-auswahl.sh`); die übrigen PDFs werden aus dem vorherigen
+Release übernommen, sodass jedes Release alle PDFs trägt. Bei PRs, die Analysen ändern, liegen die
+geänderten PDFs als Artefakt `analysen-pdf` bereit.
 
 ## Beiträge
 
