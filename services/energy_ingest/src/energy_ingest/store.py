@@ -174,6 +174,25 @@ class EnergyStore:
                 {"s": source_id, "d": dataset, "start": start, "end": end, "n": n_values},
             )
 
+    def record_status(
+        self, source_id: int, dataset: str, status: str, n_values: int, error: str | None
+    ) -> None:
+        """Letzter Ausgang je Quelle und Datensatz (``meta.energy_status``, für Alarme)."""
+        with self.engine.begin() as conn:
+            conn.execute(
+                text("""
+                    INSERT INTO meta.energy_status
+                      (source_id, dataset, status, n_values, error, checked_at, last_ok_at)
+                    VALUES (:s, :d, :status, :n, :error, now(),
+                            CASE WHEN :status IN ('ok', 'empty') THEN now() END)
+                    ON CONFLICT (source_id, dataset) DO UPDATE
+                       SET status = EXCLUDED.status, n_values = EXCLUDED.n_values,
+                           error = EXCLUDED.error, checked_at = EXCLUDED.checked_at,
+                           last_ok_at = COALESCE(EXCLUDED.last_ok_at,
+                                                 meta.energy_status.last_ok_at)"""),
+                {"s": source_id, "d": dataset, "status": status, "n": n_values, "error": error},
+            )
+
     def compare(self, start: datetime, end: datetime) -> list[Deviation]:
         with self.engine.connect() as conn:
             rows = conn.execute(text(_COMPARE), {"start": start, "end": end}).all()

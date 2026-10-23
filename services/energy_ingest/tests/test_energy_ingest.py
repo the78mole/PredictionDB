@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 from energy_ingest.config import EnergySettings
 from energy_ingest.ingest import ANCHOR, EnergyIngestor, chunks, day_window
 from energy_ingest.model import QUARTER_HOUR, SeriesData, series
-from energy_ingest.sources import SourceMeta
+from energy_ingest.sources import FormatError, SourceMeta
 from energy_ingest.store import Deviation
 
 NOW = datetime(2026, 10, 20, 23, 0, tzinfo=UTC)
@@ -13,10 +13,13 @@ class FakeSource:
     license = "test"
     free = True
 
-    def __init__(self, code: str, priority: int = 50, fail: bool = False) -> None:
+    def __init__(
+        self, code: str, priority: int = 50, fail: bool = False, bad_format: bool = False
+    ) -> None:
         self.code = code
         self.priority = priority
         self.fail = fail
+        self.bad_format = bad_format
         self.calls: list[tuple[str, datetime, datetime]] = []
 
     def datasets(self) -> list[str]:
@@ -29,6 +32,8 @@ class FakeSource:
         self.calls.append((dataset, start, end))
         if self.fail:
             raise RuntimeError("kaputt")
+        if self.bad_format:
+            raise FormatError("Spalte fehlt")
         return [SeriesData(series("load_actual"), QUARTER_HOUR, [(start, 1.0)])]
 
 
@@ -38,6 +43,7 @@ class FakeStore:
         self.written: list[tuple[int, int]] = []
         self.done: dict[tuple[int, str], set[datetime]] = {}
         self.deviations: list[Deviation] = []
+        self.status: dict[tuple[int, str], tuple[str, int, str | None]] = {}
 
     def source_id(self, source: SourceMeta) -> int:
         return self.ids.setdefault(source.code, len(self.ids) + 1)
@@ -57,6 +63,11 @@ class FakeStore:
 
     def compare(self, start: datetime, end: datetime) -> list[Deviation]:
         return self.deviations
+
+    def record_status(
+        self, source_id: int, dataset: str, status: str, n_values: int, error: str | None
+    ) -> None:
+        self.status[(source_id, dataset)] = (status, n_values, error)
 
 
 def test_chunks_follow_fixed_grid() -> None:
@@ -140,3 +151,23 @@ def test_check_returns_deviations() -> None:
     store.deviations = [Deviation("load_actual", "smard", "entsoe", 48, 900.0, 0.02)]
     devs = EnergyIngestor([], store, EnergySettings()).check(NOW)
     assert devs == store.deviations
+
+
+def test_status_recorded_per_dataset() -> None:
+    good, bad = FakeSource("good"), FakeSource("bad", fail=True)
+    store = FakeStore()
+    EnergyIngestor([good, bad], store, EnergySettings()).sync(NOW)
+    g, b = store.ids["good"], store.ids["bad"]
+    assert store.status[(g, "a")] == ("ok", 1, None)
+    assert store.status[(b, "a")] == ("failed", 0, "kaputt")
+
+
+def test_format_error_reported_and_chunk_not_marked() -> None:
+    src = FakeSource("x", bad_format=True)
+    store = FakeStore()
+    results = EnergyIngestor([src], store, EnergySettings()).backfill(
+        ANCHOR, ANCHOR + timedelta(days=20), now=NOW
+    )
+    assert {r.status for r in results} == {"format"}
+    assert store.done == {}
+    assert store.status[(store.ids["x"], "a")][0] == "format"

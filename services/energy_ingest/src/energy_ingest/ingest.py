@@ -3,7 +3,8 @@
 Jede Quelle schreibt in eigene Reihen (``energy.series`` je Quelle und Code); so bleibt
 die Redundanz erhalten und ``energy.value_best`` wählt je Zeitpunkt die bevorzugte Quelle.
 Fehler einer Quelle oder eines Datensatzes werden protokolliert und halten die übrigen
-nicht auf.
+nicht auf. Der Ausgang jedes Abrufs landet in ``meta.energy_status``; Grafana alarmiert bei
+Formatabweichungen und anhaltenden Fehlern.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from typing import Any, Literal, Protocol
 
 from energy_ingest.config import EnergySettings
 from energy_ingest.model import SeriesData
-from energy_ingest.sources import Source, SourceMeta
+from energy_ingest.sources import FormatError, Source, SourceMeta
 from energy_ingest.store import Deviation
 from predictiondb_core.log import get_logger
 
@@ -24,7 +25,8 @@ log = get_logger(__name__)
 # Fester Ursprung des Blockrasters, damit Backfill-Blöcke immer gleich geschnitten sind
 ANCHOR = datetime(2015, 1, 1, tzinfo=UTC)
 
-Status = Literal["ok", "empty", "failed"]
+# format: Aufbau der Antwort weicht ab (Spalten, Einheiten), es wurde nichts geschrieben
+Status = Literal["ok", "empty", "failed", "format"]
 
 
 class Store(Protocol):
@@ -35,6 +37,9 @@ class Store(Protocol):
         self, source_id: int, dataset: str, start: datetime, end: datetime, n_values: int
     ) -> None: ...
     def compare(self, start: datetime, end: datetime) -> list[Deviation]: ...
+    def record_status(
+        self, source_id: int, dataset: str, status: str, n_values: int, error: str | None
+    ) -> None: ...
 
 
 @dataclass
@@ -90,15 +95,18 @@ class EnergyIngestor:
             batch = source.fetch(dataset, start, end)
             n = self.store.write(self.store.source_id(source), batch, now)
         except Exception as exc:
+            status: Status = "format" if isinstance(exc, FormatError) else "failed"
             log.warning(
-                "energy.fetch_failed",
+                "energy.format_changed" if status == "format" else "energy.fetch_failed",
                 source=source.code,
                 dataset=dataset,
                 start=start.isoformat(),
                 end=end.isoformat(),
                 error=f"{type(exc).__name__}: {exc}",
             )
-            return DatasetResult(source.code, dataset, start, end, "failed", error=str(exc))
+            res = DatasetResult(source.code, dataset, start, end, status, error=str(exc))
+            self._record(source, res)
+            return res
         log.info(
             "energy.fetched",
             source=source.code,
@@ -108,7 +116,17 @@ class EnergyIngestor:
             series=len(batch),
             values=n,
         )
-        return DatasetResult(source.code, dataset, start, end, "ok" if n else "empty", n)
+        res = DatasetResult(source.code, dataset, start, end, "ok" if n else "empty", n)
+        self._record(source, res)
+        return res
+
+    def _record(self, source: Source, res: DatasetResult) -> None:
+        try:
+            self.store.record_status(
+                self.store.source_id(source), res.dataset, res.status, res.n_values, res.error
+            )
+        except Exception as exc:  # Status ist Beiwerk, der Abruf zählt
+            log.warning("energy.status_failed", source=source.code, error=str(exc))
 
     def sync(self, now: datetime | None = None) -> list[DatasetResult]:
         """Laufender Abgleich des Fensters um heute (Ist-Werte, Preise, Folgetag-Prognosen)."""
@@ -175,7 +193,8 @@ class EnergyIngestor:
             results.append(res)
             # Nur vollständige, abgeschlossene Rasterblöcke gelten als erledigt
             full = chunks(src.max_chunk(ds), a, b)
-            if res.status != "failed" and len(full) == 1 and full[0] == (a, b) and b <= final:
+            complete = len(full) == 1 and full[0] == (a, b) and b <= final
+            if res.status in ("ok", "empty") and complete:
                 self.store.mark_chunk(self.store.source_id(src), ds, a, b, res.n_values)
         return results
 

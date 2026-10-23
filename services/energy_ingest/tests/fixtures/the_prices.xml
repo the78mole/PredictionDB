@@ -1,0 +1,36 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<PricesEnergyImbalance xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <PricesEnergyImbalance>
+    <Gasday>2026-10-22</Gasday>
+    <PositiveEnergyImbalancePrice>86.6</PositiveEnergyImbalancePrice>
+    <NegativeEnergyImbalancePrice>90.788</NegativeEnergyImbalancePrice>
+    <VTPDailyAveragePrice>89.008</VTPDailyAveragePrice>
+    <VTPDailyAveragePriceSmallAdjPlus>90.78816</VTPDailyAveragePriceSmallAdjPlus>
+    <VTPDailyAveragePriceSmallAdjMinus>87.22784</VTPDailyAveragePriceSmallAdjMinus>
+    <MarginalPriceSystemBuy>89.25</MarginalPriceSystemBuy>
+    <MarginalPriceSystemSell>86.6</MarginalPriceSystemSell>
+    <Unit>EUR/MWh</Unit>
+  </PricesEnergyImbalance>
+  <PricesEnergyImbalance>
+    <Gasday>2026-10-21</Gasday>
+    <PositiveEnergyImbalancePrice>86.5</PositiveEnergyImbalancePrice>
+    <NegativeEnergyImbalancePrice>90.86</NegativeEnergyImbalancePrice>
+    <VTPDailyAveragePrice>89.078</VTPDailyAveragePrice>
+    <VTPDailyAveragePriceSmallAdjPlus>90.85956</VTPDailyAveragePriceSmallAdjPlus>
+    <VTPDailyAveragePriceSmallAdjMinus>87.29644</VTPDailyAveragePriceSmallAdjMinus>
+    <MarginalPriceSystemBuy>88.75</MarginalPriceSystemBuy>
+    <MarginalPriceSystemSell>86.5</MarginalPriceSystemSell>
+    <Unit>EUR/MWh</Unit>
+  </PricesEnergyImbalance>
+  <PricesEnergyImbalance>
+    <Gasday>2026-10-20</Gasday>
+    <PositiveEnergyImbalancePrice>87.907</PositiveEnergyImbalancePrice>
+    <NegativeEnergyImbalancePrice>91.495</NegativeEnergyImbalancePrice>
+    <VTPDailyAveragePrice>89.701</VTPDailyAveragePrice>
+    <VTPDailyAveragePriceSmallAdjPlus>91.49502</VTPDailyAveragePriceSmallAdjPlus>
+    <VTPDailyAveragePriceSmallAdjMinus>87.90698</VTPDailyAveragePriceSmallAdjMinus>
+    <MarginalPriceSystemBuy>90.975</MarginalPriceSystemBuy>
+    <MarginalPriceSystemSell>88</MarginalPriceSystemSell>
+    <Unit>EUR/MWh</Unit>
+  </PricesEnergyImbalance>
+</PricesEnergyImbalance>
