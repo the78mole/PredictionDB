@@ -96,26 +96,6 @@ services:
       garage-init: {condition: service_completed_successfully}
       migrate: {condition: service_completed_successfully}
 
-  # Selbst-Update der VM (nur mit Profil "updater", auf der VM per COMPOSE_PROFILES=updater
-  # in der .env): prüft alle 15 min, ob main auf GitHub einen neuen Commit hat, und rollt
-  # ihn dann aus (scripts/vm-update.sh). Steuert Docker über den Socket des Hosts; das
-  # Repo ist unter demselben Pfad eingebunden wie auf dem Host, damit relative Pfade
-  # (Build-Kontext, Bind-Mounts) für den Docker-Daemon stimmen.
-  updater:
-    profiles: [updater]
-    build: {context: docker, dockerfile: updater.Dockerfile}
-    image: predictiondb-updater:local
-    restart: unless-stopped
-    user: "${PDB_UPDATER_UID:-1000}:${PDB_UPDATER_GID:-1000}"
-    group_add: ["${PDB_DOCKER_GID:-999}"]
-    environment:
-      HOME: /tmp
-    working_dir: ${PDB_HOST_DIR:-/opt/predictiondb}
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ${PDB_HOST_DIR:-/opt/predictiondb}:${PDB_HOST_DIR:-/opt/predictiondb}
-    command: ["bash", "scripts/vm-update.sh", "--watch", "${PDB_UPDATE_INTERVAL:-900}"]
-
   # GFS-Historie aus dem AWS-Archiv (nur bei Bedarf: docker compose --profile backfill up -d).
   # Ab GFS v16 (2021-03-22 12Z) bis vor das 30-h-Fenster von ingest-gfs, jüngste Läufe zuerst;
   # ein Neustart setzt dort fort, wo er stand.
