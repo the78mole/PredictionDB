@@ -11,6 +11,7 @@
   1. **Bronze:** zugeschnittene Original-GRIB2-Ausschnitte (Europa/DE-Box, nur benötigte Variablen) in **Garage (S3)**. Quelle der Wahrheit, jederzeit neu auswertbar.
   2. **Silber:** einheitliches Gitter je Lauf als **Zarr** (float16/Scale-Offset + Zstd) in Garage. Grundlage für Training und Regionen-Aggregation.
   3. **Gold:** aggregierte Feature-Zeitreihen (DE-weit und je Regelzone/Bundesland, kapazitäts- bzw. bevölkerungsgewichtet) plus Energie-Marktdaten in **PostgreSQL + TimescaleDB** (komprimierte Hypertables).
+- **Modell-Releases:** Trainierte Modelle werden mit Modellkarte als eigene Artefakte in GHCR veröffentlicht. Sie lernen dafür nur aus Quellen, deren Bedingungen das zulassen (NOAA, DWD, ECMWF, MaStR, SMARD); Energy-Charts (EPEX-Preise, nicht-kommerziell) und vorerst Netztransparenz bleiben außen vor (7.11).
 - **Datenaustausch:** Verdichtete Wetterdaten (Silber, optional Bronze) werden als OCI-Artefakte in GHCR veröffentlicht; weitere Instanzen importieren sie, statt GFS selbst zu laden. Ohne Bronze verlieren sie für Features, Training und Anlagenprognose nichts, nur den eigenen Neuaufbau von Silber (5.5).
 - **Gitterdaten gehören nicht zeilenweise in die Datenbank.** Eine Zeile pro Gitterpunkt × Variable × Zeitschritt × Lauf (wie im bestehenden PredictionDB-Entwurf) würde allein für GFS über Deutschland mehrere Milliarden Zeilen pro Jahr erzeugen (Rechnung in 5.4).
 - **Prognose eigener Anlagen:** Über die API lassen sich einzelne PV-, Windkraft- und Wasserkraftanlagen mit Stammdaten und optional einem Jahr Messwerten anlegen; sie bekommen eine Erzeugungsprognose aus denselben Wetterdaten, physikalisch gerechnet und mit den Messwerten kalibriert (7.6).
@@ -1335,6 +1336,52 @@ Weitere Prognosequellen (z. B. Wind/PV der ÜNB oder Prognosen anderer Anbieter,
 - Die Week-Ahead-Lastprognose von ENTSO-E (Tagesminimum und -maximum je Tag) wird als zusätzliche Reihe geladen.
 - Das Dashboard liegt als JSON unter `config/grafana/dashboards/prognose.json` und wird wie das Status-Dashboard provisioniert. Quellenvermerke (ENTSO-E, SMARD) stehen im Panel-Text.
 
+### 7.11 Veröffentlichung trainierter Modelle (geplant)
+
+Fertig trainierte Modelle (zuerst `de_lu_v1`: Last DE und Day-Ahead-Preis DE-LU, 7.3/7.7) sollen andere Instanzen ohne eigenes Training nutzen können. Sie werden als **eigene Modell-Releases in GHCR** veröffentlicht, getrennt von den Code-Releases, weil sich Modelle häufiger und unabhängig vom Code ändern (neuer Datenstand, Fine-Tuning, Champion-Wechsel).
+
+#### 7.11.1 Darf ein Modell veröffentlicht werden? Nutzungsbedingungen der Quellen
+
+Geprüft am 2026-10-23 anhand der Bedingungen der Anbieter. Das ist eine technische Einordnung und keine Rechtsberatung.
+
+| Quelle | Bedingungen | Weitergabe der Daten | Modell daraus veröffentlichen |
+|---|---|---|---|
+| NOAA GFS/GEFS | gemeinfrei (Werk der US-Regierung) | frei | frei |
+| DWD Open Data | CC BY 4.0 (Nutzungsbedingungen, Stand Mai 2024) | mit Quellenvermerk | frei, Quellenvermerk in der Modellkarte |
+| ECMWF Open Data | CC BY 4.0 | mit Quellenvermerk | frei, Quellenvermerk |
+| MaStR | Datenlizenz Deutschland – Namensnennung 2.0 | mit Quellenvermerk, auch kommerziell | frei, Quellenvermerk |
+| SMARD (Bundesnetzagentur) | CC BY 4.0, Quellenvermerk „Bundesnetzagentur \| SMARD.de“, gilt für den ganzen Marktdatenbereich einschließlich Großhandelspreisen | mit Quellenvermerk | frei, Quellenvermerk |
+| ENTSO-E Transparency Platform | Nutzungsbedingungen (Fassung 2023): frei nur für Daten auf der „List of Data available for free re-use“, diese seit 2022 unter CC BY 4.0; für andere Daten ist vorher der Rechteinhaber (TSO bzw. Strombörse) zu fragen; Nennung „ENTSO-E Transparency Platform“ als Quelle | nur Daten der Liste | nur, wenn alle genutzten Datensätze auf der Liste stehen; **Day-Ahead-Preise (12.1.D, Rechteinhaber Börsen/TSOs) noch nicht bestätigt** |
+| Energy-Charts (Fraunhofer ISE) | Diagrammdaten frei für nicht-kommerzielle und journalistische Zwecke mit Nennung „Energy-Charts / Fraunhofer ISE“; Spot- und Terminpreise sind von EPEX SPOT/EEX lizenziert und **dürfen nicht weitergegeben werden**. Der API-Endpunkt `/price` gibt selbst „CC BY 4.0 from Bundesnetzagentur \| SMARD.de“ an | nein | nicht für Modelle, die Dritte frei nutzen dürfen |
+| Netztransparenz.de | weder auf der Website noch in der WebAPI-Doku (v1.14) eine Lizenz gefunden | ungeklärt | erst nach Klärung mit den ÜNB |
+
+**Einordnung:** Ein trainiertes Modell (Bäume bzw. Gewichte) enthält die Trainingsdaten nicht als Kopie. Seine Veröffentlichung ist daher keine Weitergabe der Zeitreihen. Das Training selbst ist Text- und Data-Mining, das § 44b UrhG für rechtmäßig zugängliche Daten erlaubt, sofern der Rechteinhaber keinen maschinenlesbaren Nutzungsvorbehalt erklärt hat; das gilt über § 87c auch für Datenbanken. Vertragliche Bedingungen eines Portals, etwa „nicht-kommerziell“ oder „vorher fragen“, bleiben trotzdem bestehen. Deshalb gilt hier die vorsichtige Regel:
+
+1. **Ein veröffentlichtes Modell darf nur aus freigegebenen Quellen lernen.** Freigegeben sind NOAA, DWD, ECMWF Open Data, MaStR und SMARD. ENTSO-E nur für Datensätze, die nachweislich auf der Liste stehen. Energy-Charts und Netztransparenz bleiben vorerst außen vor.
+2. **Mit dem Modell wird keine Datenreihe ausgeliefert**, die nicht frei weitergegeben werden darf. Das betrifft vor allem die Backtest-Datei: In die Veröffentlichung kommen nur Kennzahlen (MAE, Pinball-Loss je Ziel, Vorlauf und Jahreszeit), nicht `backtest.parquet` mit Ist-Preisen.
+3. **Jede Modellkarte nennt alle Quellen mit Lizenz und Quellenvermerk** sowie den Hinweis, dass die Daten verändert (aggregiert, abgeleitet) wurden.
+
+Umsetzung im Code: `meta.source` bekommt neben `license` ein Feld `publishable` (bool). `ml-train` baut für ein Veröffentlichungsmodell einen eigenen Snapshot mit der Option `--publishable-only`: Reihen werden dann nur aus freigegebenen Quellen genommen, statt aus `energy.value_best` mit ENTSO-E vorn. Bei `de_lu_v1` reicht das: Last, Wind, PV und Day-Ahead-Preis liefert SMARD vollständig. Die TSO-Prognosen (`benchmarks`) dienen nur dem Vergleich und gehen nicht in das Modell ein. `pdb-model publish` bricht ab, wenn das Snapshot-Manifest eine nicht freigegebene Quelle enthält.
+
+Offen vor der ersten Veröffentlichung: in der ENTSO-E-Liste prüfen, welche der genutzten Datensätze (6.1.A Last, 12.1.D Preise, 16.1 Erzeugung) frei sind; bei Netztransparenz (ÜNB) die Nutzungsbedingungen erfragen. Die Liste liegt auf `transparency.entsoe.eu`, das in der Cloud-Umgebung gesperrt ist.
+
+#### 7.11.2 Format und Versionierung
+
+- **Ort:** `ghcr.io/the78mole/predictiondb-models/<konfiguration>` (z. B. `…/de_lu_v1`), ORAS-Artefakt mit `artifactType: application/vnd.predictiondb.model.v1`, cosign-signiert wie in 5.5.3.
+- **Layer:** Modelldateien wie in der Registry (`model.json` und LightGBM-Texte, später ONNX), `manifest.json`, die Konfiguration (`config/ml/<name>.yaml`), das Feature-Schema (Spaltennamen, Einheiten, Normierung) und die Modellkarte (`MODEL_CARD.md` und `model_card.json`).
+- **Tags:** unveränderliche Version `JJJJ.MM.TT-<kurzer Konfig-Hash>` (z. B. `2026.10.23-3fa1c2`), dazu die wandernden Tags `champion` und `baseline` wie die Rollen in der Registry (7.7). Ein Champion-Wechsel verschiebt nur den Tag.
+- **Modellkarte**, aus `manifest.json` erzeugt: Ziele und Quantile, Ausgabezeitpunkt und Vorläufe; Datenstand (Trainingszeitraum, Snapshot-Hash, letzter Ist-Wert); `FEATURES_VERSION`, `clustering_version`, `SILVER_VERSION` und Wetterquelle; Code-Version (Git-Commit, Image-Digest); Backtest-Kennzahlen gegen Baseline und TSO-Prognosen; Quellen mit Lizenz und Quellenvermerk; bekannte Grenzen (z. B. Viertelstunden-Preise erst ab Okt. 2025, 7.3).
+- **Kompatibilität:** Ein Modell braucht dieselben Features wie beim Training. Wetter-Features hängen von der Clusterung ab (MaStR-Stand, 7.5). Eine importierende Instanz muss daher entweder dieselbe `clustering_version` haben, die mit den Gold-Features in GHCR liegt (5.5.2), oder ihre Features aus importiertem Silber mit der veröffentlichten Clusterung rechnen. `ml-predict` prüft die Versionen aus der Modellkarte und lehnt ein Modell bei Abweichung ab.
+
+#### 7.11.3 Ablauf
+
+1. Champion-Wechsel in der Registry (7.7) bzw. manuell: `pdb-model publish de_lu_v1 --version <v>`.
+2. Prüfung: Snapshot nur aus freigegebenen Quellen, Modellkarte vollständig, Backtest besser als die Baseline.
+3. `oras push` mit cosign-Signatur; Tag `champion` versetzen.
+4. Auf einer importierenden Instanz holt `pdb-model pull de_lu_v1:champion` das Modell in die lokale Registry als Rolle `imported`; `ml-predict` rechnet damit wie mit einem eigenen Champion. Eigene Fine-Tuning-Läufe (7.7) können darauf aufsetzen.
+
+**Lizenz der Modelle:** offen (12.10). Die Daten in GHCR stehen unter CC BY 4.0 (12.9). Ein Modell ist aber ein Prognosewerkzeug und fällt damit unter den Zweck der BSL-Einschränkungen (kein Verkauf von Prognosen, keine SaaS für Dritte).
+
 ---
 
 ## 8. Deployment auf der PVE-VM
@@ -1539,6 +1586,7 @@ Datenabfluss beachten: Bei S3-Diensten mit Egress-Kosten (AWS) sollten Training 
 | **6 – NN** | TFT/TiDE zweistufig, Quantile, Inferenzdienst, Grafana | erste produktive Prognose |
 | **7 – Weitere Quellen** | ECMWF IFS/AIFS, ICON-EU/D2, GEFS, GEM; Redundanz-Features | robuster Betrieb |
 | **7b – Datenaustausch** | `wx-publish` (Silber nach GHCR, Backfill monatsweise, cosign), `wx-import` als Quelle `ghcr` mit Fallback auf eigenen Download; vorher Quantisierung Silber gegen Bronze prüfen und GHCR-Grenzen verifizieren (5.5) | neue Instanzen ohne GFS-Download |
+| **7c – Modell-Releases** | `meta.source.publishable`, Snapshot `--publishable-only`, `pdb-model publish/pull`, Modellkarte aus `manifest.json` (7.11) | Modelle ohne eigenes Training nutzbar |
 | **8 – API & Härtung** | FastAPI, Auth, Alarme, Backups, Cloud-Probelauf | betriebsbereit |
 | **später – Wärme/Kälte** | Wärme-/Kältelast für Gebäude und Netze, Strombedarf von Wärmepumpen, Betriebsoptimierung (7.8); Architektur noch offen | geplant |
 
@@ -1551,6 +1599,7 @@ flowchart LR
     P4 --> P5["5 Baseline-ML"] --> P6["6 NN"]
     P4 --> P4B["4b Anlagenprognose<br/>PV/Wind/Wasser"]
     P4 --> P7B["7b Datenaustausch<br/>GHCR"]
+    P6 --> P7C["7c Modell-Releases"]
     P2 --> P7["7 Weitere Quellen"]
     P7 --> P6
     P6 --> P8["8 API & Härtung"]
@@ -1568,4 +1617,5 @@ flowchart LR
 6. **GPU:** Steht auf einem PVE-Host eine GPU für Passthrough bereit (bekannt für PVE2: 12 Threads, 62 GB RAM, GPU unbekannt)? Ohne lokale GPU startet das Training auf CPU, Hyperparameter-Suchen laufen auf stundenweise gemieteten GPUs (7.7).
 7. Zu verifizierende Detailwerte vor der Implementierung: exakte NOMADS-Rate-Limits, aktuelle Vorhaltezeiten auf opendata.dwd.de und data.ecmwf.int, Beginn der Archive auf AWS, aktuelle Garage- und TimescaleDB-Versionen, Zugang und Lizenz von GloFAS/EFAS sowie Schnittstellen der Pegelportale der Länder.
 8. **Anlagen-API (7.6):** Nur eigene Anlagen oder auch Anlagen weiterer Nutzer? Mehrere Nutzer bzw. fremde Anlagen fallen nicht unter den Additional Use Grant (nur intern). Lizenz der Turbinen-Leistungskurven (oedb) vor Übernahme prüfen.
-9. ~~Datenlizenz der GHCR-Artefakte~~ **Entschieden (2026-10-23):** Die aufbereiteten Daten in GHCR (Silber, Bronze, Features, 5.5) stehen unter CC BY 4.0, mit Weitergabe der Quellenvermerke; die BSL gilt nur für den Code. Offen: Namensraum `predictiondb-data/*` unter dem Nutzerkonto oder unter einer Organisation (z. B. für einen späteren Übergang auf die Bizzmark UG).
+9. ~~Datenlizenz der GHCR-Artefakte~~ **Entschieden (2026-10-23):** Die aufbereiteten Daten in GHCR (Silber, Bronze, Features, 5.5) stehen unter CC BY 4.0, mit Weitergabe der Quellenvermerke; die BSL gilt nur für den Code. Namensraum: unter dem Konto `the78mole` (`ghcr.io/the78mole/predictiondb-data/*` und `…/predictiondb-models/*`), nicht unter der Bizzmark UG.
+10. **Lizenz veröffentlichter Modelle (7.11):** offen. Optionen: BSL 1.1 wie der Code (Nutzung nur im Rahmen des Additional Use Grant), CC BY 4.0 wie die Daten, oder CC BY-NC 4.0. Vorher außerdem klären: ENTSO-E-Liste der frei nutzbaren Daten und Bedingungen von Netztransparenz.
