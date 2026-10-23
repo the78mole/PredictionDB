@@ -20,6 +20,9 @@ class SourceMeta(Protocol):
     code: str  # meta.source.code
     license: str
     priority: int  # kleiner = bevorzugt in energy.value_best
+    #: Nutzungsbedingungen erlauben freie Weitergabe (meta.source.free); unfreie Quellen
+    #: laufen nur mit Freigabe (``EnergySettings.allowed``)
+    free: bool
 
 
 class Source(SourceMeta, Protocol):

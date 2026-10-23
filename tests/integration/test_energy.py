@@ -27,6 +27,7 @@ T0 = datetime(2020, 3, 2, 12, 0, tzinfo=UTC)
 
 class Src:
     license = "test"
+    free = True
 
     def __init__(self, priority: int) -> None:
         self.code = f"test_{uuid.uuid4().hex[:8]}"
@@ -105,6 +106,24 @@ def test_value_best_and_compare(engine: Engine) -> None:
     assert len(devs) == 1
     assert devs[0].n == 2
     assert devs[0].mae == pytest.approx(10.0)
+
+
+def test_value_best_skips_disabled_sources(engine: Engine) -> None:
+    store = EnergyStore(engine)
+    a, b = Src(priority=1), Src(priority=2)
+    fetched = T0 + timedelta(days=1)
+    store.write(store.source_id(a), [load([100.0] * 4)], fetched)
+    store.write(store.source_id(b), [load([110.0] * 4)], fetched)
+    store.set_enabled({a.code: False})
+
+    with engine.connect() as conn:
+        best = conn.execute(
+            text("""
+                SELECT value, source FROM energy.value_best
+                 WHERE code = 'load_actual' AND ts = :ts AND source IN (:a, :b)"""),
+            {"ts": T0, "a": a.code, "b": b.code},
+        ).one()
+    assert (best.value, best.source) == (110.0, b.code)
 
 
 def test_fetch_log(engine: Engine) -> None:
