@@ -588,7 +588,7 @@ Nicht veröffentlicht werden Energie- und Marktdaten (ENTSO-E, SMARD, Energy-Cha
 - **Ein Manifest je Monat, ein Layer je Lauf.** Tag `JJJJ-MM` (z. B. `2026-10`). Ein Layer ist das Tar des Zarr-Stores `HH.zarr` eines Laufs, ohne weitere Kompression (die Chunks sind schon Zstd). Bei 4 Läufen am Tag hat ein Monat bis zu 124 Layer.
 - **Medientypen:** `artifactType: application/vnd.predictiondb.wx-silver.v1`, Layer `application/vnd.predictiondb.zarr.v3.tar`. Bronze analog `…wx-bronze.v1` mit einem Tar je Lauf.
 - **Annotationen je Layer:** `org.predictiondb.run` (ISO-Zeit des Laufs), `org.predictiondb.model` (`gfs`), `org.predictiondb.grid` (`0p25`), `org.predictiondb.bbox`, `org.predictiondb.silver_version`, Anzahl der Schritte und Variablen, Hash des Bronze-Laufmanifests. Damit kann ein Importeur einzelne Läufe gezielt ziehen (`oras pull` mit Layer-Filter bzw. Blob-Abruf per Digest), ohne den Monat ganz zu laden.
-- **Annotationen je Manifest:** `org.opencontainers.image.source` (Repo), `org.opencontainers.image.created`, `org.opencontainers.image.licenses` (Datenlizenz, 12.9), `org.predictiondb.attribution` (Quellenvermerk, 5.5.6), Liste der enthaltenen Läufe.
+- **Annotationen je Manifest:** `org.opencontainers.image.source` (Repo), `org.opencontainers.image.created`, `org.opencontainers.image.licenses` (`CC-BY-4.0`, 12.9), `org.predictiondb.attribution` (Quellenvermerk, 5.5.6), Liste der enthaltenen Läufe.
 - **Integrität:** Layer sind über ihren SHA-256-Digest adressiert. Zusätzlich signiert der Herausgeber jedes Manifest mit `cosign`; der Import prüft die Signatur, bevor er schreibt.
 
 #### 5.5.4 Versionierung und Inkremente
@@ -636,7 +636,7 @@ flowchart LR
 | Open-Meteo, Energie- und Marktdaten | nicht vorgesehen | — |
 
   Jedes Manifest trägt den Quellenvermerk in `org.predictiondb.attribution`, zusätzlich liegt ein `ATTRIBUTION.md` als eigener Layer im Index-Artefakt. Weitere Modelle bekommen eigene Artefakt-Repositories (`ecmwf-ifs-0p25-silver` usw.), damit Lizenzen nicht gemischt werden.
-- **Lizenz der Daten selbst:** Die BSL 1.1 gilt für den Code; die veröffentlichten Silber-Daten sind aufbereitete Quelldaten und brauchen eine eigene Datenlizenz (offener Punkt 12.9).
+- **Lizenz der Daten selbst:** Die BSL 1.1 gilt für den Code. Die veröffentlichten Daten stehen unter **CC BY 4.0** (`org.opencontainers.image.licenses: CC-BY-4.0`), Namensnennung: „PredictionDB (the78mole)“ plus die Quellenvermerke der Tabelle oben (12.9).
 
 ---
 
@@ -1568,4 +1568,4 @@ flowchart LR
 6. **GPU:** Steht auf einem PVE-Host eine GPU für Passthrough bereit (bekannt für PVE2: 12 Threads, 62 GB RAM, GPU unbekannt)? Ohne lokale GPU startet das Training auf CPU, Hyperparameter-Suchen laufen auf stundenweise gemieteten GPUs (7.7).
 7. Zu verifizierende Detailwerte vor der Implementierung: exakte NOMADS-Rate-Limits, aktuelle Vorhaltezeiten auf opendata.dwd.de und data.ecmwf.int, Beginn der Archive auf AWS, aktuelle Garage- und TimescaleDB-Versionen, Zugang und Lizenz von GloFAS/EFAS sowie Schnittstellen der Pegelportale der Länder.
 8. **Anlagen-API (7.6):** Nur eigene Anlagen oder auch Anlagen weiterer Nutzer? Mehrere Nutzer bzw. fremde Anlagen fallen nicht unter den Additional Use Grant (nur intern). Lizenz der Turbinen-Leistungskurven (oedb) vor Übernahme prüfen.
-9. **Datenlizenz der GHCR-Artefakte (5.5):** Die BSL gilt für den Code, nicht für veröffentlichte Daten. Vorschlag: CC BY 4.0 für die aufbereiteten Daten (Silber, Features), mit Weitergabe der Quellenvermerke; Alternative CC0, passend zur Gemeinfreiheit der NOAA-Daten. Ebenfalls offen: Namensraum `predictiondb-data/*` unter dem Nutzerkonto oder unter einer Organisation (z. B. für einen späteren Übergang auf die Bizzmark UG).
+9. ~~Datenlizenz der GHCR-Artefakte~~ **Entschieden (2026-10-23):** Die aufbereiteten Daten in GHCR (Silber, Bronze, Features, 5.5) stehen unter CC BY 4.0, mit Weitergabe der Quellenvermerke; die BSL gilt nur für den Code. Offen: Namensraum `predictiondb-data/*` unter dem Nutzerkonto oder unter einer Organisation (z. B. für einen späteren Übergang auf die Bizzmark UG).
