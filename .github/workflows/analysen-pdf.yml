@@ -4,6 +4,13 @@ name: Analysen als PDF
 # (scripts/analysen-pdf.sh). Mit Tag hängen die PDFs als Assets am Release;
 # sonst liegen sie als Workflow-Artefakt bereit. Der Release-Workflow ruft
 # diesen Workflow nach jedem neuen Release auf (workflow_call).
+#
+# Neu gerendert werden nur Analysen, deren Ordner sich seit dem vorherigen
+# Release (bei PRs: seit dem Basis-Commit) geändert hat, oder alle, wenn sich
+# der Renderer geändert hat (scripts/analysen-pdf-auswahl.sh). Die übrigen PDFs
+# übernimmt der schlanke Job "auswahl" aus dem vorherigen Release, damit jedes
+# Release alle PDFs trägt. Pandoc und Chrome braucht nur der Job "pdf" (Container
+# ghcr.io/the78mole/pandoc-chromium), der entfällt, wenn nichts zu rendern ist.
 on:
   workflow_call:
     inputs:
@@ -21,37 +28,101 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release-Tag, an das die PDFs gehängt werden (leer = nur Artefakt)
+        description: Release-Tag, an das die PDFs gehängt werden (leer = alle als Artefakt)
         required: false
 
 permissions:
   contents: read
 
+env:
+  TAG: ${{ github.event.release.tag_name || inputs.tag }}
+
 jobs:
-  pdf:
-    name: Analysen-PDFs
+  auswahl:
+    name: Analysen-PDFs auswählen und übernehmen
     runs-on: ubuntu-latest
     concurrency:
-      group: analysen-pdf-${{ inputs.tag || github.ref }}
+      group: analysen-pdf-auswahl-${{ github.event.release.tag_name || inputs.tag || github.ref }}
       cancel-in-progress: true
     permissions:
       contents: write  # gh release upload
-    env:
-      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    outputs:
+      rendern: ${{ steps.uebernehmen.outputs.rendern }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag || github.sha }}
+          fetch-depth: 0  # vorheriger Tag und Diff je Analyse
+      - name: Basis bestimmen
+        id: basis
+        env:
+          PR_BASIS: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [[ -n $TAG ]]; then
+            basis=$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' "$TAG^" 2>/dev/null || true)
+          else
+            basis=$PR_BASIS  # leer bei workflow_dispatch ohne Tag: alles rendern
+          fi
+          echo "basis=$basis" | tee -a "$GITHUB_OUTPUT"
+      - name: Geänderte Analysen
+        id: auswahl
+        run: scripts/analysen-pdf-auswahl.sh "${{ steps.basis.outputs.basis }}"
+      - name: Unveränderte PDFs aus dem vorherigen Release übernehmen
+        id: uebernehmen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASIS: ${{ steps.basis.outputs.basis }}
+          RENDERN: ${{ steps.auswahl.outputs.rendern }}
+          UEBERNEHMEN: ${{ steps.auswahl.outputs.uebernehmen }}
+        run: |
+          rendern=$RENDERN
+          if [[ -n $TAG ]]; then
+            mkdir -p dist/analysen
+            for name in $UEBERNEHMEN; do
+              # Fehlt das PDF im vorherigen Release, wird es doch gerendert.
+              gh release download "$BASIS" -p "analyse-$name.pdf" -D dist/analysen --clobber \
+                || rendern="$rendern $name"
+            done
+            shopt -s nullglob
+            pdfs=(dist/analysen/*.pdf)
+            if [[ ${#pdfs[@]} -gt 0 ]]; then
+              gh release upload "$TAG" "${pdfs[@]}" --clobber
+            fi
+          fi
+          # Ohne Tag (PR) gibt es nichts zu übernehmen; das Artefakt enthält
+          # nur die geänderten Analysen.
+          echo "rendern=${rendern# }" | tee -a "$GITHUB_OUTPUT"
+
+  pdf:
+    name: Analysen-PDFs rendern
+    needs: auswahl
+    if: needs.auswahl.outputs.rendern != ''
+    runs-on: ubuntu-latest
+    # Pandoc, Chromium, git und gh fertig installiert (the78mole/docker-images).
+    container: ghcr.io/the78mole/pandoc-chromium:latest
+    defaults:
+      run:
+        shell: bash  # im Container wäre sonst sh die Vorgabe
+    concurrency:
+      group: analysen-pdf-${{ github.event.release.tag_name || inputs.tag || github.ref }}
+      cancel-in-progress: true
+    permissions:
+      contents: write  # gh release upload
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.release.tag_name || inputs.tag || github.sha }}
           fetch-depth: 0  # Stand je Analyse aus git log, Version aus git describe
-      - name: Pandoc und Schriften
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends pandoc fonts-dejavu-core
+      - name: Workspace für git freigeben  # Container läuft als root
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: PDFs rendern
         env:
           PDF_VERSION: ${{ env.TAG }}
           PDF_REF: ${{ env.TAG || github.sha }}
-        run: scripts/analysen-pdf.sh dist/analysen
+          RENDERN: ${{ needs.auswahl.outputs.rendern }}
+        run: |
+          read -ra namen <<<"$RENDERN"
+          scripts/analysen-pdf.sh dist/analysen "${namen[@]}"
       - uses: actions/upload-artifact@v7
         with:
           name: analysen-pdf
