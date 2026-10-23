@@ -2,7 +2,9 @@
 
 Zugang: Konto im API-Portal (api-portal.netztransparenz.de), dort einen Client anlegen;
 Client-ID und -Secret in ``PDB_NETZTRANSPARENZ_CLIENT_ID`` und
-``PDB_NETZTRANSPARENZ_CLIENT_SECRET``. Ohne beide bleibt die Quelle abgeschaltet.
+``PDB_NETZTRANSPARENZ_CLIENT_SECRET``. Ohne beide bleibt die Quelle abgeschaltet. Eine Lizenz
+für die Daten ist nicht veröffentlicht; die Quelle läuft deshalb nur mit
+``PDB_ALLOW_NETZTRANSPARENZ=true``, sonst rechnet ``pdb_marktwert`` die Marktwerte selbst.
 
 Genutzte Endpunkte (Antwort CSV, Semikolon, Dezimalkomma, Werte in ct/kWh)::
 
@@ -108,6 +110,7 @@ class Netztransparenz:
     code = "netztransparenz"
     license = "Netztransparenz.de (50Hertz, Amprion, TenneT, TransnetBW), Nutzungsbedingungen"
     priority = 15
+    free = False
 
     # Werte erscheinen erst nach Periodenende; der laufende Abgleich schaut entsprechend
     # weit zurück, damit nachgereichte Monate und Jahre ankommen

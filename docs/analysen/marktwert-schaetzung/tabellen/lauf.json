@@ -1,0 +1,103 @@
+{
+ "analyse": "marktwert-schaetzung",
+ "git_commit": "801abd23646f52509fb9de12daea1c79061ab623",
+ "gestartet": "2026-10-23T06:27:50.827744+00:00",
+ "beendet": "2026-10-23T06:28:02.366527+00:00",
+ "eingaben_sha256": {
+  "amtlich.csv.gz": "9b9c66a2795cc4c864bc4f082219ccef9e8ff7257cc3d8a71e5d895cedcced0f",
+  "stunden.csv.gz": "00e34156a80a363e95877c2fb160ee953983f689f690b4735407ee5c435bd7f2",
+  "viertelstunden.csv.gz": "e136733ef90ca540bcf9406ab0d6457c0a02a1a00d6f2e80bd5f47b52b6974f3"
+ },
+ "abdeckung_stunden": [
+  {
+   "source": "energy_charts",
+   "code": "da_price_de_lu",
+   "min": "2018-09-30 22:00:00+00:00",
+   "max": "2026-10-23 21:00:00+00:00",
+   "count": "69984"
+  },
+  {
+   "source": "energy_charts",
+   "code": "gen_solar",
+   "min": "2015-01-01 00:00:00+00:00",
+   "max": "2026-10-23 04:00:00+00:00",
+   "count": "102821"
+  },
+  {
+   "source": "energy_charts",
+   "code": "gen_wind_offshore",
+   "min": "2015-01-01 00:00:00+00:00",
+   "max": "2026-10-23 04:00:00+00:00",
+   "count": "102821"
+  },
+  {
+   "source": "energy_charts",
+   "code": "gen_wind_onshore",
+   "min": "2015-01-01 00:00:00+00:00",
+   "max": "2026-10-23 04:00:00+00:00",
+   "count": "102821"
+  },
+  {
+   "source": "entsoe",
+   "code": "da_price_de_lu",
+   "min": "2018-09-30 22:00:00+00:00",
+   "max": "2026-10-23 21:00:00+00:00",
+   "count": "69960"
+  },
+  {
+   "source": "entsoe",
+   "code": "gen_solar",
+   "min": "2015-01-01 00:00:00+00:00",
+   "max": "2026-10-23 05:00:00+00:00",
+   "count": "102798"
+  },
+  {
+   "source": "entsoe",
+   "code": "gen_wind_offshore",
+   "min": "2015-01-01 00:00:00+00:00",
+   "max": "2026-10-23 05:00:00+00:00",
+   "count": "102798"
+  },
+  {
+   "source": "entsoe",
+   "code": "gen_wind_onshore",
+   "min": "2015-01-01 00:00:00+00:00",
+   "max": "2026-10-23 05:00:00+00:00",
+   "count": "102798"
+  },
+  {
+   "source": "smard",
+   "code": "da_price_de_lu",
+   "min": "2018-09-30 22:00:00+00:00",
+   "max": "2026-10-23 21:00:00+00:00",
+   "count": "69960"
+  },
+  {
+   "source": "smard",
+   "code": "gen_solar",
+   "min": "2015-01-01 00:00:00+00:00",
+   "max": "2026-10-23 05:00:00+00:00",
+   "count": "102798"
+  },
+  {
+   "source": "smard",
+   "code": "gen_wind_offshore",
+   "min": "2015-01-01 00:00:00+00:00",
+   "max": "2026-10-23 05:00:00+00:00",
+   "count": "102798"
+  },
+  {
+   "source": "smard",
+   "code": "gen_wind_onshore",
+   "min": "2015-01-01 00:00:00+00:00",
+   "max": "2026-10-23 05:00:00+00:00",
+   "count": "102798"
+  }
+ ],
+ "paare_je_variante": {
+  "entsoe": 408,
+  "smard": 408,
+  "smard_15min": 44
+ },
+ "min_abdeckung": 0.98
+}

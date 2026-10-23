@@ -80,7 +80,8 @@ def _from_ms(ms: int) -> datetime:
 class Smard:
     code = "smard"
     license = "CC BY 4.0, Bundesnetzagentur | SMARD.de"
-    priority = 20
+    priority = 10
+    free = True
 
     def __init__(self, http: Http, base_url: str = BASE_URL) -> None:
         self.http = http

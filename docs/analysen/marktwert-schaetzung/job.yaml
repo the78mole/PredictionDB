@@ -1,0 +1,22 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; ausgeführt von auswertung.py im selben Ordner
+id: marktwert-schaetzung
+title: Eigene Marktwerte aus freien Daten gegen die amtlichen von Netztransparenz
+question: >
+  Wie weit weichen die Monats- und Jahresmarktwerte, die pdb_marktwert aus SMARD-Daten rechnet,
+  von den amtlichen Werten der ÜNB (Netztransparenz.de) ab, und was verliert eine Instanz, die
+  Netztransparenz nicht freigibt?
+requested_by: Maulwurf
+kind: custom
+inputs:
+  hourly: {table: energy.value, sources: [smard, entsoe, energy_charts],
+           codes: [da_price_de_lu, gen_solar, gen_wind_onshore, gen_wind_offshore]}
+  quarter_hourly: {from: 2025-09-30, sources: [smard, entsoe]}
+  reference: {source: netztransparenz, codes: [mw_*, jw_*]}
+method:
+  estimate: energy_ingest.sources.marktwert.market_values   # identisch zum Betrieb
+  variants: [smard, entsoe, smard_15min]
+  metrics: [bias, mae, rmse, max_abs, bias_prozent, mae_prozent, n]
+  group_by: [variante, periode, typ, jahr]
+outputs:
+  figures: [verlauf_monate, fehler_monate]
+schedule: once

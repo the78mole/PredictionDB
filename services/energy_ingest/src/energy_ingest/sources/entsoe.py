@@ -4,6 +4,10 @@ Den Token gibt es nach Registrierung auf transparency.entsoe.eu und einer E-Mail
 transparency@entsoe.eu mit dem Betreff „Restful API access“. Ohne ``PDB_ENTSOE_TOKEN``
 bleibt die Quelle abgeschaltet.
 
+Frei weiterverwendbar (CC BY 4.0) ist nur die „List of Data available for free re-use“; Ist-Last,
+Preise, Erzeugung und Wind-/PV-Prognosen gehören nicht dazu. Die Quelle läuft deshalb nur mit
+``PDB_ALLOW_ENTSO_E=true``.
+
 Antworten sind XML-Dokumente (``Publication_MarketDocument`` bzw. ``GL_MarketDocument``)
 mit ``TimeSeries/Period/Point``. Bei Kurventyp A03 fehlen Punkte, deren Wert sich nicht
 ändert; sie werden mit dem vorigen Wert aufgefüllt. Liegen keine Daten vor, kommt ein
@@ -166,7 +170,8 @@ def merge(
 class Entsoe:
     code = "entsoe"
     license = "ENTSO-E Transparency Platform, Nutzungsbedingungen von ENTSO-E"
-    priority = 10
+    priority = 20
+    free = False
 
     def __init__(self, http: Http, token: str, base_url: str = BASE_URL) -> None:
         if not token:

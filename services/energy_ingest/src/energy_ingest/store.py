@@ -71,14 +71,31 @@ class EnergyStore:
             with self.engine.begin() as conn:
                 sid = conn.execute(
                     text("""
-                        INSERT INTO meta.source (code, kind, license, priority)
-                        VALUES (:code, 'energy', :license, :priority)
-                        ON CONFLICT (code) DO UPDATE SET license = EXCLUDED.license
+                        INSERT INTO meta.source (code, kind, license, priority, free)
+                        VALUES (:code, 'energy', :license, :priority, :free)
+                        ON CONFLICT (code) DO UPDATE
+                           SET license = EXCLUDED.license, priority = EXCLUDED.priority,
+                               free = EXCLUDED.free
                         RETURNING source_id"""),
-                    {"code": source.code, "license": source.license, "priority": source.priority},
+                    {
+                        "code": source.code,
+                        "license": source.license,
+                        "priority": source.priority,
+                        "free": source.free,
+                    },
                 ).scalar_one()
             self._sources[source.code] = int(sid)
         return self._sources[source.code]
+
+    def set_enabled(self, flags: dict[str, bool]) -> None:
+        """Freigabe je Quelle nach ``meta.source.enabled``; ``energy.value_best`` liest nur
+        freigegebene Quellen. Noch unbekannte Quellen werden übergangen."""
+        with self.engine.begin() as conn:
+            for code, enabled in flags.items():
+                conn.execute(
+                    text("UPDATE meta.source SET enabled = :e WHERE code = :c"),
+                    {"c": code, "e": enabled},
+                )
 
     def _series_id(self, conn: Any, source_id: int, data: SeriesData) -> int:
         key = (source_id, data.code)
