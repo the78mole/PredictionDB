@@ -1361,7 +1361,7 @@ Geprüft am 2026-10-23 anhand der Bedingungen der Anbieter. Das ist eine technis
 2. **Mit dem Modell wird keine Datenreihe ausgeliefert**, die nicht frei weitergegeben werden darf. Das betrifft vor allem die Backtest-Datei: In die Veröffentlichung kommen nur Kennzahlen (MAE, Pinball-Loss je Ziel, Vorlauf und Jahreszeit), nicht `backtest.parquet` mit Ist-Preisen.
 3. **Jede Modellkarte nennt alle Quellen mit Lizenz und Quellenvermerk** sowie den Hinweis, dass die Daten verändert (aggregiert, abgeleitet) wurden.
 
-Umsetzung im Code: `meta.source` bekommt neben `license` ein Feld `publishable` (bool). `ml-train` baut für ein Veröffentlichungsmodell einen eigenen Snapshot mit der Option `--publishable-only`: Reihen werden dann nur aus freigegebenen Quellen genommen, statt aus `energy.value_best` mit ENTSO-E vorn. Bei `de_lu_v1` reicht das: Last, Wind, PV und Day-Ahead-Preis liefert SMARD vollständig. Die TSO-Prognosen (`benchmarks`) dienen nur dem Vergleich und gehen nicht in das Modell ein. `pdb-model publish` bricht ab, wenn das Snapshot-Manifest eine nicht freigegebene Quelle enthält.
+Umsetzung im Code (PR #36): `meta.source` hat die Felder `free` (Bedingungen erlauben freie Weitergabe) und `enabled` (im Betrieb freigegeben). Unfreie Quellen laufen nur mit `PDB_ALLOW_ENTSO_E`, `PDB_ALLOW_ENERGY_CHARTS` bzw. `PDB_ALLOW_NETZTRANSPARENZ=true`; Vorgabe und Einstellung der VM ist `false`. `energy.value_best` liest nur freigegebene Quellen, SMARD hat Rang 1. Ohne Netztransparenz rechnet die Quelle `pdb_marktwert` die Monats- und Jahresmarktwerte aus SMARD selbst. Auf einer Instanz mit Standardeinstellung ist damit jedes trainierte Modell veröffentlichbar. `pdb-model publish` prüft das trotzdem und bricht ab, wenn das Snapshot-Manifest eine Quelle mit `free = false` enthält.
 
 Geprüft am 2026-10-23 anhand der Liste vom 18.10.2023: Von den genutzten ENTSO-E-Reihen ist nur die Day-Ahead-Lastprognose (6.1.b, Benchmark `load_da_forecast`) frei. Offen vor der ersten Veröffentlichung bleibt, bei Netztransparenz (ÜNB) die Nutzungsbedingungen zu erfragen.
 
@@ -1380,7 +1380,7 @@ Geprüft am 2026-10-23 anhand der Liste vom 18.10.2023: Von den genutzten ENTSO-
 3. `oras push` mit cosign-Signatur; Tag `champion` versetzen.
 4. Auf einer importierenden Instanz holt `pdb-model pull de_lu_v1:champion` das Modell in die lokale Registry als Rolle `imported`; `ml-predict` rechnet damit wie mit einem eigenen Champion. Eigene Fine-Tuning-Läufe (7.7) können darauf aufsetzen.
 
-**Lizenz der Modelle:** offen (12.10). Die Daten in GHCR stehen unter CC BY 4.0 (12.9). Ein Modell ist aber ein Prognosewerkzeug und fällt damit unter den Zweck der BSL-Einschränkungen (kein Verkauf von Prognosen, keine SaaS für Dritte).
+**Lizenz der Modelle:** CC BY 4.0 wie die Daten (12.10, entschieden). Namensnennung: „PredictionDB (the78mole)“ plus die Quellenvermerke aus der Modellkarte.
 
 ---
 
@@ -1586,7 +1586,7 @@ Datenabfluss beachten: Bei S3-Diensten mit Egress-Kosten (AWS) sollten Training 
 | **6 – NN** | TFT/TiDE zweistufig, Quantile, Inferenzdienst, Grafana | erste produktive Prognose |
 | **7 – Weitere Quellen** | ECMWF IFS/AIFS, ICON-EU/D2, GEFS, GEM; Redundanz-Features | robuster Betrieb |
 | **7b – Datenaustausch** | `wx-publish` (Silber nach GHCR, Backfill monatsweise, cosign), `wx-import` als Quelle `ghcr` mit Fallback auf eigenen Download; vorher Quantisierung Silber gegen Bronze prüfen und GHCR-Grenzen verifizieren (5.5) | neue Instanzen ohne GFS-Download |
-| **7c – Modell-Releases** | `meta.source.publishable`, Snapshot `--publishable-only`, `pdb-model publish/pull`, Modellkarte aus `manifest.json` (7.11) | Modelle ohne eigenes Training nutzbar |
+| **7c – Modell-Releases** | Prüfung `meta.source.free` beim Veröffentlichen, `pdb-model publish/pull`, Modellkarte aus `manifest.json` (7.11) | Modelle ohne eigenes Training nutzbar |
 | **8 – API & Härtung** | FastAPI, Auth, Alarme, Backups, Cloud-Probelauf | betriebsbereit |
 | **später – Wärme/Kälte** | Wärme-/Kältelast für Gebäude und Netze, Strombedarf von Wärmepumpen, Betriebsoptimierung (7.8); Architektur noch offen | geplant |
 
@@ -1618,4 +1618,4 @@ flowchart LR
 7. Zu verifizierende Detailwerte vor der Implementierung: exakte NOMADS-Rate-Limits, aktuelle Vorhaltezeiten auf opendata.dwd.de und data.ecmwf.int, Beginn der Archive auf AWS, aktuelle Garage- und TimescaleDB-Versionen, Zugang und Lizenz von GloFAS/EFAS sowie Schnittstellen der Pegelportale der Länder.
 8. **Anlagen-API (7.6):** Nur eigene Anlagen oder auch Anlagen weiterer Nutzer? Mehrere Nutzer bzw. fremde Anlagen fallen nicht unter den Additional Use Grant (nur intern). Lizenz der Turbinen-Leistungskurven (oedb) vor Übernahme prüfen.
 9. ~~Datenlizenz der GHCR-Artefakte~~ **Entschieden (2026-10-23):** Die aufbereiteten Daten in GHCR (Silber, Bronze, Features, 5.5) stehen unter CC BY 4.0, mit Weitergabe der Quellenvermerke; die BSL gilt nur für den Code. Namensraum: unter dem Konto `the78mole` (`ghcr.io/the78mole/predictiondb-data/*` und `…/predictiondb-models/*`), nicht unter der Bizzmark UG.
-10. **Lizenz veröffentlichter Modelle (7.11):** offen. Optionen: BSL 1.1 wie der Code (Nutzung nur im Rahmen des Additional Use Grant), CC BY 4.0 wie die Daten, oder CC BY-NC 4.0. Vorher außerdem klären: Bedingungen von Netztransparenz (ENTSO-E geprüft, 7.11.1).
+10. ~~Lizenz veröffentlichter Modelle~~ **Entschieden (2026-10-23):** CC BY 4.0, wie die Daten. Die Modelle sollen frei sein; Voraussetzung ist das Training nur aus freien Quellen (7.11.1). Offen bleiben die Bedingungen von Netztransparenz; bis dahin rechnet `pdb_marktwert` die Marktwerte selbst.
