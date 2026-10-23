@@ -27,6 +27,7 @@ class JobLog:
     def __init__(self, engine: Engine | None) -> None:
         self.engine = engine
         self.job_id: int | None = None
+        self.mode = "backfill"
 
     def _run(self, sql: str, params: dict[str, object]) -> object | None:
         if self.engine is None:
@@ -52,15 +53,19 @@ class JobLog:
         mode: str = "backfill",
     ) -> None:
         """Legt den Job und seine Läufe in Warteschlangen-Reihenfolge an."""
+        self.mode = mode
         self._run(
             f"""WITH stale AS (
                   UPDATE meta.backfill_job SET status = 'aborted', finished_at = updated_at,
                          error = 'ohne Abschluss beendet'
                    WHERE status = 'running' AND updated_at < now() - interval '{STALE}'
-                  RETURNING job_id)
-                UPDATE meta.backfill_run SET status = 'aborted', finished_at = now(),
-                       updated_at = now()
-                 WHERE job_id IN (SELECT job_id FROM stale) AND status = 'running'""",
+                  RETURNING job_id, mode)
+                UPDATE meta.backfill_run r
+                   SET status = CASE s.mode WHEN 'live' THEN 'handed_over' ELSE 'aborted' END,
+                       finished_at = now(), updated_at = now()
+                  FROM stale s
+                 WHERE r.job_id = s.job_id
+                   AND (r.status = 'running' OR (s.mode = 'live' AND r.status = 'queued'))""",
             {},
         )
         job_id = self._run(
@@ -180,7 +185,9 @@ class JobLog:
         self._run(
             """UPDATE meta.backfill_job
                   SET range_start = :start, range_end = :end, updated_at = now(),
-                      n_runs = (SELECT count(*) FROM meta.backfill_run WHERE job_id = :id)
+                      n_runs = (SELECT count(*) FROM meta.backfill_run WHERE job_id = :id),
+                      n_incomplete = (SELECT count(*) FROM meta.backfill_run
+                                       WHERE job_id = :id AND status = 'incomplete')
                 WHERE job_id = :id""",
             {"id": self.job_id, "start": start, "end": end},
         )
@@ -221,6 +228,16 @@ class JobLog:
                 WHERE job_id = :id""",
             {"id": self.job_id, "status": status, "error": error},
         )
+        if self.mode == "live":
+            # Offene Läufe (meist der jüngste, bei NOAA noch nicht vollständig) lädt der nächste
+            # Live-Job; sie zählen beim beendeten Job weder als fertig noch als fehlend.
+            self._run(
+                """UPDATE meta.backfill_run SET status = 'handed_over', finished_at = now(),
+                          updated_at = now()
+                    WHERE job_id = :id AND status IN ('queued', 'running')""",
+                {"id": self.job_id},
+            )
+            return
         # Läufe, die mitten im Download standen, gelten als abgebrochen; wartende bleiben
         # liegen und werden vom nächsten Job neu eingeplant.
         self._run(

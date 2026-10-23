@@ -141,3 +141,15 @@ def test_live_job(engine: Engine) -> None:
 
     jobs.live_window(RUNS[1], RUNS[2], RUNS[1:])  # RUNS[0] fällt aus dem Fenster
     assert _runs(engine, jobs.job_id)[RUNS[0]]["status"] == "incomplete"
+    assert _job(engine, jobs.job_id)["n_incomplete"] == 1
+
+    # Neustart des Containers: der noch offene Lauf geht an den nächsten Live-Job
+    jobs.finish("aborted", "beendet")
+    runs = _runs(engine, jobs.job_id)
+    assert (runs[RUNS[1]]["status"], runs[RUNS[2]]["status"]) == ("complete", "handed_over")
+    panels = {p["id"]: p for p in json.loads(DASHBOARD.read_text())["panels"]}
+    with engine.connect() as c:
+        done = c.execute(text(panels[26]["targets"][0]["rawSql"])).mappings().all()
+    mine = next(r for r in done if r["Job"] == jobs.job_id)
+    assert (mine["Bearbeitet"], mine["Überg."], mine["Status"]) == ("2/2", 1, "beendet")
+    assert float(mine["Fortschritt"]) == 100.0
