@@ -15,7 +15,6 @@ Wochen) und fehlende Historie geladen. Die Marktwerte nach EEG rechnet der Diens
 from __future__ import annotations
 
 import json
-import time
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -64,9 +63,6 @@ REFRESH: dict[Kind, timedelta] = {
     Kind.PRICE_WEEKLY: timedelta(days=28),
     Kind.PRICE_MONTHLY: timedelta(days=70),
 }
-#: Mindestabstand zwischen zwei Abrufen je Quelle in Sekunden; Energy-Charts antwortet beim
-#: Kaltstart (viele Nachbarzonen nacheinander) sonst mit 429
-PACE_S: dict[str, float] = {"energy_charts": 2.0}
 
 
 def routes() -> dict[str, list[tuple[str, str]]]:
@@ -123,7 +119,6 @@ class EnergyCache:
     """Hält die Reihen eines Modellpakets aktuell und liefert sie im Snapshot-Format."""
 
     def __init__(self, root: Path, sources: Mapping[str, Source]) -> None:
-        self._last_call: dict[str, float] = {}
         self.root = root / "energy"
         self.root.mkdir(parents=True, exist_ok=True)
         self.sources = sources
@@ -177,20 +172,12 @@ class EnergyCache:
             out.append(Window(recent, need.end))
         return out
 
-    def _pace(self, src: str) -> None:
-        gap = PACE_S.get(src, 0.0)
-        wait = self._last_call.get(src, 0.0) + gap - time.monotonic()
-        if wait > 0:
-            time.sleep(wait)
-        self._last_call[src] = time.monotonic()
-
-    def _fetch(self, src: str, source: Source, dataset: str, w: Window) -> list[SeriesData]:
+    def _fetch(self, source: Source, dataset: str, w: Window) -> list[SeriesData]:
         out: list[SeriesData] = []
         step = source.max_chunk(dataset)
         t = w.start
         while t < w.end:
             nxt = min(t + step, w.end)
-            self._pace(src)
             out.extend(source.fetch(dataset, t, nxt))
             t = nxt
         return out
@@ -261,7 +248,7 @@ class EnergyCache:
                     failed.update(codes)
                     continue
                 try:
-                    batch = self._fetch(src, source, dataset, Window(a, b))
+                    batch = self._fetch(source, dataset, Window(a, b))
                     got = self._store(batch, src, now, codes)
                 except Exception as e:  # eine Quelle darf die anderen nicht aufhalten
                     log.warning("energy.fetch_failed", source=src, dataset=dataset, error=str(e))
