@@ -1,0 +1,15 @@
+method,lead_day,rank_corr_day
+wetter,1,0.9329
+wetter,2,0.9235
+wetter,3,0.9191
+wetter,4,0.9118
+wetter,5,0.9048
+wetter,6,0.8979
+wetter,7,0.8918
+wetter_frei,1,0.9331
+wetter_frei,2,0.9263
+wetter_frei,3,0.9194
+wetter_frei,4,0.9128
+wetter_frei,5,0.9016
+wetter_frei,6,0.8988
+wetter_frei,7,0.8884
