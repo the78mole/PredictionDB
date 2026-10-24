@@ -24,11 +24,9 @@ jobs:
           enable-cache: true
           save-cache: false  # nur der Job test speichert den gemeinsamen Cache
       - run: uv sync --locked --all-packages
-      - run: uv run ruff check .
-      - run: uv run ruff format --check .
-      - run: uv run mypy
-      - name: mypy für die Analyse-Skripte (je Ordner einzeln, alle heißen auswertung.py)
-        run: for f in docs/analysen/*/auswertung.py; do uv run mypy "$f" || exit 1; done
+      # Ruff (check, format) und mypy wie in .pre-commit-config.yaml, damit
+      # lokal mit pre-commit und in der CI genau dasselbe geprüft wird.
+      - run: uv run pre-commit run --all-files --show-diff-on-failure
 
   test:
     name: Unit-Tests

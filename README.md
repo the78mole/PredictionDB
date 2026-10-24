@@ -58,10 +58,15 @@ Bedienung: `systemctl list-timers 'predictiondb-update*'`, Protokoll mit
 
 ```sh
 uv sync --all-packages
-uv run ruff check . && uv run ruff format --check . && uv run mypy
+uv run pre-commit install                       # einmalig: Prüfungen vor jedem Commit
+uv run pre-commit run --all-files               # Ruff (check, format) und mypy, wie die CI
 uv run pytest                                   # Unit-Tests
 PDB_INTEGRATION=1 uv run pytest tests/integration  # gegen den laufenden Stack
 ```
+
+Die Hooks in `.pre-commit-config.yaml` rufen Ruff und mypy über `uv run` mit den Versionen aus
+`uv.lock` auf; der CI-Job „Lint und Typen“ führt genau diese Hooks aus. `ruff format` korrigiert
+die Formatierung dabei selbst, die geänderten Dateien müssen danach nur neu gestaged werden.
 
 Neue Datenbankänderungen kommen als neue Alembic-Revision (`uv run alembic revision -m "..."`).
 

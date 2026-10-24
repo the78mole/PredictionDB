@@ -1371,20 +1371,61 @@ Geprüft am 2026-10-23 anhand der Liste vom 18.10.2023: Von den genutzten ENTSO-
 
 #### 7.11.2 Format und Versionierung
 
-- **Ort:** `ghcr.io/the78mole/predictiondb-models/<konfiguration>` (z. B. `…/de_lu_v1`), ORAS-Artefakt mit `artifactType: application/vnd.predictiondb.model.v1`, cosign-signiert wie in 5.5.3.
+- **Ort:** ein Repository je Zielmarkt, `ghcr.io/the78mole/predictiondb-models/<markt>` (z. B. `…/de_lu` für Last DE und Preis DE-LU), ORAS-Artefakt mit `artifactType: application/vnd.predictiondb.model.v1`, cosign-signiert wie in 5.5.3. Alle Konfigurationen eines Marktes (`de_lu_v1`, `de_lu_v2`, Varianten) liegen im selben Repository, damit es dort genau einen `champion` gibt und Challenger und Champion im selben Ring stehen.
 - **Layer:** Modelldateien wie in der Registry (`model.json` und LightGBM-Texte, später ONNX), `manifest.json`, die Konfiguration (`config/ml/<name>.yaml`), das Feature-Schema (Spaltennamen, Einheiten, Normierung) und die Modellkarte (`MODEL_CARD.md` und `model_card.json`).
-- **Tags:** unveränderliche Version `JJJJ.MM.TT-<kurzer Konfig-Hash>` (z. B. `2026.10.23-3fa1c2`), dazu die wandernden Tags `champion` und `baseline` wie die Rollen in der Registry (7.7). Ein Champion-Wechsel verschiebt nur den Tag.
-- **Modellkarte**, aus `manifest.json` erzeugt: Ziele und Quantile, Ausgabezeitpunkt und Vorläufe; Datenstand (Trainingszeitraum, Snapshot-Hash, letzter Ist-Wert); `FEATURES_VERSION`, `clustering_version`, `SILVER_VERSION` und Wetterquelle; Code-Version (Git-Commit, Image-Digest); Backtest-Kennzahlen gegen Baseline und TSO-Prognosen; Quellen mit Lizenz und Quellenvermerk; bekannte Grenzen (z. B. Viertelstunden-Preise erst ab Okt. 2025, 7.3).
+- **Tags:** unveränderliche Version `<konfiguration>-<variante>-JJJJ.MM.TT-<kurzer Konfig-Hash>` (z. B. `de_lu_v2-frei-2026.10.24-3fa1c2`), dazu sprechende Tags für den Lebenslauf im Ring (Challenger, Champion, Ehrenplatz), siehe 7.11.3.
+- **Modellkarte** (`MODEL_CARD.md`, Beschreibungs-Markdown des Modells), aus `manifest.json` erzeugt: Ziele und Quantile, Ausgabezeitpunkt und Vorläufe; Datenstand (Trainingszeitraum, Snapshot-Hash, letzter Ist-Wert); `FEATURES_VERSION`, `clustering_version`, `SILVER_VERSION` und Wetterquelle; Code-Version (Git-Commit, Image-Digest); Backtest-Kennzahlen gegen Baseline und TSO-Prognosen; Quellen mit Lizenz und Quellenvermerk; bekannte Grenzen (z. B. Viertelstunden-Preise erst ab Okt. 2025, 7.3). Am Ende steht die Champion-Zeitleiste des Marktes zum Zeitpunkt des Pushs (7.11.4).
 - **Kompatibilität:** Ein Modell braucht dieselben Features wie beim Training. Wetter-Features hängen von der Clusterung ab (MaStR-Stand, 7.5). Eine importierende Instanz muss daher entweder dieselbe `clustering_version` haben, die mit den Gold-Features in GHCR liegt (5.5.2), oder ihre Features aus importiertem Silber mit der veröffentlichten Clusterung rechnen. `ml-predict` prüft die Versionen aus der Modellkarte und lehnt ein Modell bei Abweichung ab.
 
-#### 7.11.3 Ablauf
+#### 7.11.3 Tags: Challenger, Champion, Ehrenplatz
 
-1. Champion-Wechsel in der Registry (7.7) bzw. manuell: `pdb-model publish de_lu_v1 --version <v>`.
-2. Prüfung: Snapshot nur aus freigegebenen Quellen, Modellkarte vollständig, Backtest besser als die Baseline.
-3. `oras push` mit cosign-Signatur; Tag `champion` versetzen.
-4. Auf einer importierenden Instanz holt `pdb-model pull de_lu_v1:champion` das Modell in die lokale Registry als Rolle `imported`; `ml-predict` rechnet damit wie mit einem eigenen Champion. Eigene Fine-Tuning-Läufe (7.7) können darauf aufsetzen.
+Nutzer sollen an den Tags direkt sehen, welches Modell gerade Champion ist und wie die Geschichte verlief. Feste Rangnummern als Tags gibt es nicht, weil bei jedem Wechsel alle umgehängt werden müssten. Stattdessen bekommt jedes Modell **bleibende Datums-Tags** für jedes Ereignis und genau ein Tag wandert:
+
+| Tag | Art | Wann gesetzt | Bedeutung |
+|---|---|---|---|
+| `<konfiguration>-<variante>-JJJJ.MM.TT-<hash>` | bleibt | beim ersten Push | feste Version, wird nie verschoben |
+| `challenger-JJJJ-MM-TT` | bleibt | Tag, an dem das fertig trainierte Modell in den Ring steigt (Rolle Challenger in der Registry) | Teilnahmedatum |
+| `challenger-JJJJ-MM-TT-<konfiguration>-<variante>` | bleibt | wie oben, wenn am selben Tag mehrere Challenger einsteigen | alle Challenger dieses Tages bekommen den Zusatz, z. B. `challenger-2026-10-24-de_lu_v2-frei` |
+| `champion` | **wandert** | bei jeder Krönung auf das neue Modell | wer immer das beste Modell will, zieht `…/de_lu:champion` |
+| `champion-JJJJ-MM-TT` | bleibt | Tag der Krönung | wird ein Ex-Champion erneut Champion, bekommt er einen weiteren `champion-…`-Tag; so bleibt jede Amtszeit sichtbar |
+| `honor-JJJJ-MM-TT` | bleibt | Tag, an dem ein Champion seinen Titel verliert | Ehrenplatz, nur für Ex-Champions; bei mehreren Amtszeiten auch mehrfach |
+| `retired-JJJJ-MM-TT` | bleibt | Tag, an dem ein Challenger ausscheidet, ohne je Champion gewesen zu sein | ausgeschieden; steigt dasselbe Modell später erneut ein, bekommt es einen neuen `challenger-…`-Tag |
+| `baseline` | wandert | wie die Rolle in der Registry (7.7) | fester Maßstab ohne Wetter |
+
+Beispiel für ein Modell mit zwei Amtszeiten:
+
+```text
+de_lu_v2-frei-2026.10.24-3fa1c2
+challenger-2026-10-24
+champion-2026-11-07     # erste Krönung
+honor-2027-01-16        # von einem Wetter-Modell abgelöst
+champion-2027-03-06     # Rückkehr nach Winter
+champion                # aktuell
+```
+
+Die Datums-Tags sind in UTC und nennen den Tag, an dem die Registry den Wechsel vollzogen hat (`registry promote`, 7.7 und `docs/PROGNOSEMODELLE.md` Kap. 7). Eine Krönung setzt in einem Schritt `champion` und `champion-JJJJ-MM-TT` am Neuen und `honor-JJJJ-MM-TT` am Abgelösten, beide mit demselben Datum. Ein mit `--force` erzwungener Wechsel bekommt dieselben Tags; der Grund steht in der Zeitleiste (7.11.4). Alle Tags erfüllen die OCI-Regeln (`[A-Za-z0-9_.-]`, höchstens 128 Zeichen). Die vollständige Geschichte eines Marktes lässt sich jederzeit aus der Tag-Liste rekonstruieren (`oras repo tags ghcr.io/the78mole/predictiondb-models/de_lu`), der Abgleich mit der Registry ist damit prüfbar.
+
+#### 7.11.4 Beschreibung, Kennzahlen und Champion-Zeitleiste
+
+- **Kurzbeschreibung als Annotation:** Jedes Manifest trägt `org.opencontainers.image.description`, die GHCR auf der Paketseite anzeigt (höchstens 512 Zeichen). Inhalt: Konfiguration und Variante, Rolle beim Push, MAE Preis und Last für D+1 und D+2, MAE des Vortagespreises (naive Prognose) zum Vergleich, Trainingszeitraum und die Lizenz CC BY 4.0. Beispiel: `de_lu_v2/frei · Challenger seit 2026-10-24 · Preis MAE D+1 26,4 €/MWh (Vortag 28,7), D+2 … · Last MAE D+1 … GW, D+2 … GW · Training 2018-10-08–2026-10-23 · CC BY 4.0, Quellen siehe MODEL_CARD.md`.
+- **Maschinenlesbare Annotationen:** dieselben Kennzahlen einzeln unter `io.predictiondb.metric.<ziel>.<vorlauf>.mae` (z. B. `io.predictiondb.metric.da_price_de_lu.d1.mae`), dazu `io.predictiondb.baseline.<ziel>.<vorlauf>.mae` für den Vortagespreis bzw. die ENTSO-E-Lastprognose, `io.predictiondb.train.from`/`.to`, `io.predictiondb.sources` (Liste mit Lizenz) sowie die Standardfelder `org.opencontainers.image.licenses=CC-BY-4.0`, `…source`, `…revision` und `…created`. So kann `pdb-model pull` oder ein Dashboard die Kennzahlen ohne Download der Gewichte lesen.
+- **Modellkarte im Artefakt:** `MODEL_CARD.md` und `model_card.json` wie in 7.11.2, mit allen Quellen, Lizenzen und Quellenvermerken.
+- **Champion-Zeitleiste:** Ein Manifest ist inhaltsadressiert; nachträgliche Änderungen an Annotationen oder Modellkarte würden den Digest und damit die Signatur ändern. Die Zeitleiste lebt deshalb an zwei Stellen:
+  1. **Eigenes Artefakt `…/de_lu:history`** (`artifactType: application/vnd.predictiondb.model-history.v1`), das bei jedem Ereignis neu gepusht wird. Es enthält `CHAMPIONS.md` und `champions.json` mit einer Zeile je Ereignis: Datum, Ereignis (Einstieg, Krönung, Ehrenplatz, Ausscheiden), Version, Kennzahlen zum Zeitpunkt des Wechsels und bei `--force` den Grund. `CHAMPIONS.md` ist eine Markdown-Tabelle plus Mermaid-Gantt-Diagramm der Amtszeiten.
+  2. **Schnappschuss in jeder neuen Modellkarte:** Beim Push hängt `pdb-model publish` die Zeitleiste bis zu diesem Tag an `MODEL_CARD.md` an. Ältere Artefakte bleiben unverändert, die aktuelle Fassung steht immer in `:history`.
+- **Verlauf außerhalb von GHCR:** Jeder Champion-Wechsel erscheint zusätzlich im Release-Log des Repositorys (als Eintrag mit Link auf den Digest) und im Prognose-Dashboard (7.10) über `meta.model_event`.
+
+#### 7.11.5 Ablauf
+
+
+1. Ereignis in der Registry (7.7): neuer Challenger, Krönung oder Ausscheiden; manuell: `pdb-model publish de_lu --version <v>`.
+2. Prüfung: Snapshot nur aus freigegebenen Quellen, Modellkarte vollständig, Backtest besser als die Baseline (für Champions; Challenger dürfen auch schlechter sein).
+3. `oras push` mit cosign-Signatur beim ersten Auftreten der Version, danach nur noch Tags setzen bzw. versetzen wie in 7.11.3 und `:history` neu pushen (7.11.4).
+4. Auf einer importierenden Instanz holt `pdb-model pull de_lu:champion` das Modell in die lokale Registry als Rolle `imported`; `ml-predict` rechnet damit wie mit einem eigenen Champion. Eigene Fine-Tuning-Läufe (7.7) können darauf aufsetzen.
 
 **Lizenz der Modelle:** CC BY 4.0 wie die Daten (12.10, entschieden). Namensnennung: „PredictionDB (the78mole)“ plus die Quellenvermerke aus der Modellkarte.
+
+**Zeitpunkt der Umsetzung (Entscheidung 2026-10-24):** Veröffentlichung auf GHCR und automatisches wöchentliches Neutraining mit Challenger/Champion-Wechsel werden erst eingerichtet, wenn eine belastbare GFS-Basis von mindestens drei Jahren Trainingsdaten vorliegt. Bis dahin beschreibt 7.11 nur das vereinbarte Schema; die Tags werden erst ab der ersten Veröffentlichung vergeben, frühere Wechsel in der lokalen Registry werden nicht nachgetragen.
 
 ---
 
@@ -1590,7 +1631,7 @@ Datenabfluss beachten: Bei S3-Diensten mit Egress-Kosten (AWS) sollten Training 
 | **6 – NN** | TFT/TiDE zweistufig, Quantile, Inferenzdienst, Grafana | erste produktive Prognose |
 | **7 – Weitere Quellen** | ECMWF IFS/AIFS, ICON-EU/D2, GEFS, GEM; Redundanz-Features | robuster Betrieb |
 | **7b – Datenaustausch** | `wx-publish` (Silber nach GHCR, Backfill monatsweise, cosign), `wx-import` als Quelle `ghcr` mit Fallback auf eigenen Download; vorher Quantisierung Silber gegen Bronze prüfen und GHCR-Grenzen verifizieren (5.5) | neue Instanzen ohne GFS-Download |
-| **7c – Modell-Releases** | Prüfung `meta.source.free` beim Veröffentlichen, `pdb-model publish/pull`, Modellkarte aus `manifest.json` (7.11) | Modelle ohne eigenes Training nutzbar |
+| **7c – Modell-Releases** | Prüfung `meta.source.free` beim Veröffentlichen, `pdb-model publish/pull`, Modellkarte aus `manifest.json`, Tags und Champion-Zeitleiste (7.11); erst ab drei Jahren GFS-Trainingsdaten | Modelle ohne eigenes Training nutzbar |
 | **8 – API & Härtung** | FastAPI, Auth, Alarme, Backups, Cloud-Probelauf | betriebsbereit |
 | **später – Wärme/Kälte** | Wärme-/Kältelast für Gebäude und Netze, Strombedarf von Wärmepumpen, Betriebsoptimierung (7.8); Architektur noch offen | geplant |
 
@@ -1621,5 +1662,5 @@ flowchart LR
 6. **GPU:** Steht auf einem PVE-Host eine GPU für Passthrough bereit (bekannt für PVE2: 12 Threads, 62 GB RAM, GPU unbekannt)? Ohne lokale GPU startet das Training auf CPU, Hyperparameter-Suchen laufen auf stundenweise gemieteten GPUs (7.7).
 7. Zu verifizierende Detailwerte vor der Implementierung: exakte NOMADS-Rate-Limits, aktuelle Vorhaltezeiten auf opendata.dwd.de und data.ecmwf.int, Beginn der Archive auf AWS, aktuelle Garage- und TimescaleDB-Versionen, Zugang und Lizenz von GloFAS/EFAS sowie Schnittstellen der Pegelportale der Länder.
 8. **Anlagen-API (7.6):** Nur eigene Anlagen oder auch Anlagen weiterer Nutzer? Mehrere Nutzer bzw. fremde Anlagen fallen nicht unter den Additional Use Grant (nur intern). Lizenz der Turbinen-Leistungskurven (oedb) vor Übernahme prüfen.
-9. ~~Datenlizenz der GHCR-Artefakte~~ **Entschieden (2026-10-23):** Die aufbereiteten Daten in GHCR (Silber, Bronze, Features, 5.5) stehen unter CC BY 4.0, mit Weitergabe der Quellenvermerke; die BSL gilt nur für den Code. Namensraum: unter dem Konto `the78mole` (`ghcr.io/the78mole/predictiondb-data/*` und `…/predictiondb-models/*`), nicht unter der Bizzmark UG.
+9. ~~Datenlizenz der GHCR-Artefakte~~ **Entschieden (2026-10-23):** Die aufbereiteten Daten in GHCR (Silber, Bronze, Features, 5.5) stehen unter CC BY 4.0, mit Weitergabe der Quellenvermerke; die BSL gilt nur für den Code. Namensraum: unter dem Konto `the78mole` (`ghcr.io/the78mole/predictiondb-data/*` und `…/predictiondb-models/<markt>`), nicht unter der Bizzmark UG.
 10. ~~Lizenz veröffentlichter Modelle~~ **Entschieden (2026-10-23):** CC BY 4.0, wie die Daten. Die Modelle sollen frei sein; Voraussetzung ist das Training nur aus freien Quellen (7.11.1). Offen bleiben die Bedingungen von Netztransparenz; bis dahin rechnet `pdb_marktwert` die Marktwerte selbst.
