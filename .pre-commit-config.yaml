@@ -1,0 +1,39 @@
+# pre-commit: dieselben Prüfungen wie der CI-Job "Lint und Typen".
+# Alle Hooks laufen lokal über uv mit den Versionen aus uv.lock (kein eigenes
+# rev je Hook), damit lokal und in der CI dieselben Ruff- und mypy-Versionen
+# prüfen. Voraussetzung: uv sync --all-packages (mypy braucht alle Pakete).
+#
+#   uv run pre-commit install           # Hook in .git/hooks einrichten
+#   uv run pre-commit run --all-files   # alles prüfen, wie die CI
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run --no-sync ruff check --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      - id: ruff-format
+        name: ruff format
+        entry: uv run --no-sync ruff format --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      - id: mypy
+        name: mypy
+        # Prüft immer das ganze Projekt (files in pyproject.toml), weil
+        # Typfehler auch in nicht geänderten Dateien entstehen können.
+        entry: uv run --no-sync mypy
+        language: system
+        types_or: [python, pyi]
+        pass_filenames: false
+        require_serial: true
+      - id: mypy-analysen
+        name: mypy (Analyse-Skripte, je Ordner einzeln)
+        # Alle Skripte heißen auswertung.py und werden deshalb einzeln geprüft.
+        entry: bash -c 'for f in docs/analysen/*/auswertung.py; do uv run --no-sync mypy "$f" || exit 1; done'
+        language: system
+        files: ^docs/analysen/.*\.py$
+        pass_filenames: false
+        require_serial: true

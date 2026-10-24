@@ -92,7 +92,8 @@ laufen sollen, steht in der [README](README.md#entwicklung). Kurz gefasst:
 
 ```sh
 uv sync --all-packages
-uv run ruff check . && uv run ruff format --check . && uv run mypy
+uv run pre-commit install          # Ruff und mypy vor jedem Commit
+uv run pre-commit run --all-files  # dieselben Prüfungen wie die CI
 uv run pytest
 ```
 
