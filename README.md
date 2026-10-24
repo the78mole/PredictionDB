@@ -17,6 +17,7 @@ Monorepo als [uv](https://docs.astral.sh/uv/)-Workspace (Kapitel 6.1 der Archite
 | `compose.yaml` | Stack für die VM: TimescaleDB, Garage (Single Node), `garage-init`, `migrate` |
 | `docker/Dockerfile` | ein Image für alle Python-Dienste |
 | `deploy/systemd/`, `scripts/vm-update.sh` | Auto-Update des Stacks auf der VM |
+| `predict/` | schlanker Prognose-Stack für Nutzer der Prognosen: ein Container mit Modellpaket, Eingänge direkt von freien Quellen, Ausgabe als Dateien und HTTP, eigene `compose.yaml` ([README](predict/README.md)) |
 
 ## Lokal starten
 
@@ -78,6 +79,11 @@ deren Ordner sich seit dem vorherigen Release geändert hat (oder alle, wenn sic
 geändert hat, `scripts/analysen-pdf-auswahl.sh`); die übrigen PDFs werden aus dem vorherigen
 Release übernommen, sodass jedes Release alle PDFs trägt. Bei PRs, die Analysen ändern, liegen die
 geänderten PDFs als Artefakt `analysen-pdf` bereit.
+
+Der Prognose-Stack `predict/` hat eine eigene Reihe `predict/vX.Y.Z` (Workflow „Predict“) mit
+dem Image `ghcr.io/the78mole/predictiondb-predict`. Sie zählt nur Commits, die den Stack oder die
+von ihm genutzten Pakete ändern, und berührt die Tags `vX.Y.Z` nicht (`naechste-version.sh
+--prefix predict/ -- <pfade>`). Ihre Releases tragen keine Analyse-PDFs.
 
 ## Beiträge
 

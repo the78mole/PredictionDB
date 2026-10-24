@@ -40,6 +40,8 @@ env:
 jobs:
   auswahl:
     name: Analysen-PDFs auswählen und übernehmen
+    # Releases des Prognose-Stacks (predict/v*, predict.yml) tragen keine Analysen
+    if: ${{ !startsWith(github.event.release.tag_name || inputs.tag || '', 'predict/') }}
     runs-on: ubuntu-latest
     concurrency:
       group: analysen-pdf-auswahl-${{ github.event.release.tag_name || inputs.tag || github.ref }}

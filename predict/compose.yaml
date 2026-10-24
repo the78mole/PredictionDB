@@ -1,0 +1,22 @@
+# Schlanker Prognose-Stack: ein Container, kein Training, keine Datenbank.
+# Siehe predict/README.md. Start im Ordner predict/:
+#   cp .env.example .env && mkdir -p models data && docker compose up -d
+name: predictiondb-predict
+
+services:
+  predict:
+    image: ghcr.io/the78mole/predictiondb-predict:${PREDICT_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: predict/Dockerfile
+    restart: unless-stopped
+    # Dateien in ./data gehören dem Nutzer auf dem Host (id -u, id -g)
+    user: "${PREDICT_UID:-1000}:${PREDICT_GID:-1000}"
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ./models:/models:ro
+      - ./data:/data
+    ports:
+      - "${PREDICT_BIND:-0.0.0.0}:${PREDICT_PORT:-8080}:8080"

@@ -380,6 +380,12 @@ Rollen in der Registry:
   `fcst.prediction_error` stellt jede gespeicherte P50-Prognose dem Ist-Wert gegenüber; daraus
   zeigt das Status-Dashboard den Prognosefehler im Betrieb.
 
+- **Prognosepaket für den schlanken Stack:** `ml-train bundle <version> --out <ordner>` legt
+  eine Version mit Konfiguration, Bestand aus dem MaStR und bei Wetter-Varianten den
+  Gitter-Gewichten der Cluster als Ordner ab (ohne Backtest-Prognosen). Der Stack
+  [`predict/`](../predict/README.md) rechnet damit ohne Datenbank und holt die Eingänge selbst
+  bei den freien Quellen; später lädt er dasselbe Paket als ORAS-Artefakt aus GHCR.
+
 | Umgebungsvariable | Vorgabe |
 |---|---|
 | `PDB_ML_CONFIG` | `config/ml/de_lu_v1.yaml` |

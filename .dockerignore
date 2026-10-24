@@ -8,3 +8,6 @@
 .env
 docs
 data
+predict/data
+predict/models
+predict/.env

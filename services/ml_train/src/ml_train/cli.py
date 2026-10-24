@@ -12,6 +12,7 @@ Beispiele::
     ml-train registry sync                                     # Spiegel für Grafana
     ml-train predict                                           # aktive Versionen, jetzt
     ml-train predict --watch 3600
+    ml-train bundle de_lu_v2-frei-202610241200-ab12cd --out /data/pakete/de_lu_v2-frei
 """
 
 from __future__ import annotations
@@ -110,6 +111,13 @@ def build_parser() -> argparse.ArgumentParser:
     pr.add_argument("--version", action="append", help="statt der aktiven Versionen")
     pr.add_argument("--dry-run", action="store_true", help="nur ausgeben, nicht schreiben")
     pr.add_argument("--watch", type=int, default=0, help="Sekunden zwischen Läufen")
+
+    bu = cmd.add_parser("bundle", help="Prognosepaket einer Version für den Stack predict/")
+    bu.add_argument("version")
+    bu.add_argument("--out", required=True, type=Path)
+    bu.add_argument("--registry", default=DEFAULT_REGISTRY)
+    bu.add_argument("--snapshot", type=Path, help="Bestand aus dem Snapshot statt der Datenbank")
+    bu.add_argument("--wx-config", type=Path, default=Path("config/process/gfs_0p25.yaml"))
     return p
 
 
@@ -287,6 +295,24 @@ def cmd_predict(cfg: ModelConfig, a: argparse.Namespace) -> int:
         time.sleep(a.watch)
 
 
+def cmd_bundle(cfg: ModelConfig, a: argparse.Namespace) -> int:
+    from ml_train.bundle import export_package
+
+    reg = Registry(a.registry, cfg)
+    snap = load_snapshot(a.snapshot) if a.snapshot else None
+    pkg = export_package(
+        reg,
+        a.version,
+        a.out,
+        config_path=Path(a.config),
+        snapshot=snap,
+        wx_process_config=a.wx_config,
+        cache=Path(DEFAULT_CACHE),
+    )
+    print(json.dumps({"out": str(a.out), **{k: pkg[k] for k in ("version", "variant", "codes")}}))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     a = build_parser().parse_args(argv)
     configure_logging()
@@ -301,6 +327,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_registry(cfg, a)
     if a.cmd == "predict":
         return cmd_predict(cfg, a)
+    if a.cmd == "bundle":
+        return cmd_bundle(cfg, a)
     return 2
 
 
