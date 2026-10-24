@@ -8,6 +8,7 @@ Beispiele::
     energy-ingest backfill 2015-01-01 2026-10-01       # Historie gezielt nachladen
     energy-ingest --source smard backfill 2024-01-01 2024-02-01 --dataset da_price_de_lu
     energy-ingest check --days 14                      # Quellen gegeneinander prüfen
+    energy-ingest --source worldbank backfill 1960-01-01 2026-10-01   # Brennstoffe ab 1960
 """
 
 from __future__ import annotations
@@ -26,17 +27,24 @@ from energy_ingest.config import ALL_SOURCES, UNFREE_SOURCES, EnergySettings
 from energy_ingest.http import Http
 from energy_ingest.ingest import DatasetResult, EnergyIngestor
 from energy_ingest.sources import Source
+from energy_ingest.sources.ecb import Ecb
+from energy_ingest.sources.eia import Eia, EiaBulk, EiaReuters
 from energy_ingest.sources.energy_charts import EnergyCharts
 from energy_ingest.sources.entsoe import Entsoe
 from energy_ingest.sources.marktwert import Marktwert
 from energy_ingest.sources.netztransparenz import Netztransparenz
+from energy_ingest.sources.oil_bulletin import OilBulletin
 from energy_ingest.sources.smard import Smard
+from energy_ingest.sources.the import The
+from energy_ingest.sources.worldbank import WorldBank
 from energy_ingest.store import EnergyStore
 from predictiondb_core.db import create_db_engine
 from predictiondb_core.log import configure_logging, get_logger
 from predictiondb_core.settings import get_settings
 
 log = get_logger(__name__)
+
+FAILED = ("failed", "format")
 
 
 def parse_time(text: str) -> datetime:
@@ -85,6 +93,8 @@ def build_sources(
     codes: list[str], settings: EnergySettings, http: Http, engine: Engine
 ) -> list[Source]:
     sources: list[Source] = []
+    eia_key = settings.eia_api_key.get_secret_value()
+    eia_bulk = EiaBulk(http)  # gemeinsam für eia und eia_reuters, falls ohne Schlüssel
     for code in codes:
         if not settings.allowed(code):
             log.info(
@@ -115,6 +125,18 @@ def build_sources(
             sources.append(Netztransparenz(http, cid, secret))
         elif code == "pdb_marktwert":
             continue  # unten, nur als Ersatz für netztransparenz
+        elif code == "eia":
+            sources.append(Eia(http, eia_key, eia_bulk))
+        elif code == "eia_reuters":
+            sources.append(EiaReuters(http, eia_key, eia_bulk))
+        elif code == "ecb":
+            sources.append(Ecb(http))
+        elif code == "worldbank":
+            sources.append(WorldBank(http, settings.worldbank_url))
+        elif code == "oil_bulletin":
+            sources.append(OilBulletin(http, settings.oil_bulletin_url))
+        elif code == "the":
+            sources.append(The(http))
         else:
             raise ValueError(f"unbekannte Quelle {code!r}")
     # Eigene Marktwerte, solange die amtlichen von Netztransparenz nicht geladen werden
@@ -158,7 +180,7 @@ def run(args: argparse.Namespace, settings: EnergySettings) -> int:
                 args.start, args.end, datasets=args.dataset, force=args.force
             )
             print(json.dumps([r.as_dict() for r in results], indent=1))
-            return 1 if any(r.status == "failed" for r in results) else 0
+            return 1 if any(r.status in FAILED for r in results) else 0
 
         while True:
             started = time.monotonic()
@@ -166,7 +188,7 @@ def run(args: argparse.Namespace, settings: EnergySettings) -> int:
             log.info("energy.sync_done", **_summary(results))
             if not args.watch:
                 print(json.dumps([r.as_dict() for r in results], indent=1))
-                return 1 if any(r.status == "failed" for r in results) else 0
+                return 1 if any(r.status in FAILED for r in results) else 0
             try:
                 ingestor.check(days=2)
                 if not args.no_backfill:

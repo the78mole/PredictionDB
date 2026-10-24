@@ -91,18 +91,33 @@ def _codes(settings: EnergySettings) -> list[str]:
 
 
 def test_unfree_sources_need_allow(monkeypatch: pytest.MonkeyPatch) -> None:
-    for name in ["ALLOW_ENTSO_E", "ALLOW_ENERGY_CHARTS", "ALLOW_NETZTRANSPARENZ"]:
+    for name in [
+        "ALLOW_ENTSO_E",
+        "ALLOW_ENERGY_CHARTS",
+        "ALLOW_NETZTRANSPARENZ",
+        "ALLOW_EIA_REUTERS",
+        "ALLOW_THE",
+    ]:
         monkeypatch.delenv(f"PDB_{name}", raising=False)
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("PDB_ENTSOE_TOKEN", "t")
     monkeypatch.setenv("PDB_NETZTRANSPARENZ_CLIENT_ID", "id")
     monkeypatch.setenv("PDB_NETZTRANSPARENZ_CLIENT_SECRET", "s")
     settings = EnergySettings(_env_file=None)
-    assert _codes(settings) == ["smard", "pdb_marktwert"]
+    assert _codes(settings) == [
+        "smard",
+        "energy_charts",
+        "eia",
+        "ecb",
+        "worldbank",
+        "oil_bulletin",
+        "pdb_marktwert",
+    ]
 
     monkeypatch.setenv("PDB_ALLOW_ENTSO_E", "true")
     monkeypatch.setenv("ALLOW_NETZTRANSPARENZ", "true")
     monkeypatch.setenv("PDB_ALLOW_ENERGY_CHARTS", "true")
     settings = EnergySettings(_env_file=None)
     # Mit amtlichen Marktwerten entfällt die eigene Rechnung
-    assert _codes(settings) == ["entsoe", "smard", "energy_charts", "netztransparenz"]
+    assert _codes(settings)[:4] == ["entsoe", "smard", "energy_charts", "netztransparenz"]
+    assert "pdb_marktwert" not in _codes(settings)

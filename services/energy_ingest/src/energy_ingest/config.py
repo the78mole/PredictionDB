@@ -1,13 +1,15 @@
 """Einstellungen des Energie-Ingests (Präfix ``PDB_ENERGY_``).
 
-Zugangsdaten: ``PDB_ENTSOE_TOKEN``, ``PDB_NETZTRANSPARENZ_CLIENT_ID`` und
-``PDB_NETZTRANSPARENZ_CLIENT_SECRET``.
+Zugangsdaten: ``PDB_ENTSOE_TOKEN``, ``PDB_NETZTRANSPARENZ_CLIENT_ID``,
+``PDB_NETZTRANSPARENZ_CLIENT_SECRET`` und ``PDB_EIA_API_KEY`` (ohne Schlüssel lädt die EIA-Quelle
+die Bulk-Dateien).
 
-Quellen, deren Nutzungsbedingungen die Weitergabe einschränken (ENTSO-E, Energy-Charts,
-Netztransparenz; ``docs/ARCHITEKTUR.md`` 7.11.1), laufen nur mit ausdrücklicher Freigabe
-``PDB_ALLOW_ENTSO_E``, ``PDB_ALLOW_ENERGY_CHARTS`` bzw. ``PDB_ALLOW_NETZTRANSPARENZ`` (Vorgabe
-``false``). Ohne Freigabe liefern freie Quellen alles Nötige; die Marktwerte rechnet dann
-``pdb_marktwert`` selbst.
+Quellen, deren Nutzungsbedingungen die Weitergabe einschränken (ENTSO-E, Netztransparenz,
+Thomson-Reuters-Reihen der EIA, THE; ``docs/ARCHITEKTUR.md`` 7.11.1), laufen nur mit
+ausdrücklicher Freigabe ``PDB_ALLOW_ENTSO_E``, ``PDB_ALLOW_NETZTRANSPARENZ``,
+``PDB_ALLOW_EIA_REUTERS`` bzw. ``PDB_ALLOW_THE`` (Vorgabe ``false``). Energy-Charts steht
+laut API-Dokumentation unter CC BY 4.0 und ist frei. Ohne Freigabe liefern freie Quellen alles
+Nötige; die Marktwerte rechnet dann ``pdb_marktwert`` selbst.
 """
 
 from __future__ import annotations
@@ -18,13 +20,30 @@ from typing import Any
 from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-ALL_SOURCES = ["entsoe", "smard", "energy_charts", "netztransparenz", "pdb_marktwert"]
+from energy_ingest.sources.oil_bulletin import URL as OIL_BULLETIN_URL
+from energy_ingest.sources.worldbank import URL as WORLDBANK_URL
+
+ALL_SOURCES = [
+    "entsoe",
+    "smard",
+    "energy_charts",
+    "netztransparenz",
+    "pdb_marktwert",
+    # Brennstoffpreise und Wechselkurs
+    "eia",
+    "eia_reuters",
+    "ecb",
+    "worldbank",
+    "oil_bulletin",
+    "the",
+]
 
 #: Unfreie Quellen und das Feld ihrer Freigabe in ``EnergySettings``
 UNFREE_SOURCES = {
     "entsoe": "allow_entso_e",
-    "energy_charts": "allow_energy_charts",
     "netztransparenz": "allow_netztransparenz",
+    "eia_reuters": "allow_eia_reuters",
+    "the": "allow_the",
 }
 
 
@@ -55,8 +74,16 @@ class EnergySettings(BaseSettings):
         ),
     )
     allow_entso_e: bool = _allow("ALLOW_ENTSO_E")
-    allow_energy_charts: bool = _allow("ALLOW_ENERGY_CHARTS")
     allow_netztransparenz: bool = _allow("ALLOW_NETZTRANSPARENZ")
+    allow_eia_reuters: bool = _allow("ALLOW_EIA_REUTERS")
+    allow_the: bool = _allow("ALLOW_THE")
+    eia_api_key: SecretStr = Field(
+        default=SecretStr(""),
+        validation_alias=AliasChoices("PDB_EIA_API_KEY", "PDB_ENERGY_EIA_API_KEY"),
+    )
+    # Download-Adressen mit Dokument-ID, die sich ändern kann (dann Grafana-Alarm)
+    worldbank_url: str = WORLDBANK_URL
+    oil_bulletin_url: str = OIL_BULLETIN_URL
     # Laufender Abgleich: Fenster [heute - lookback, heute + horizon)
     lookback_days: int = 3
     horizon_days: int = 2
