@@ -206,6 +206,16 @@ class TwoStageModel:
             out[test] = m.predict(frame.X[test])["q50"].to_numpy()
         return out
 
+    def features(self) -> list[str]:
+        """Alle Merkmalsspalten, die das Modell aus dem FeatureFrame liest (ohne ``s1_*``)."""
+        own = set(self.stage1_columns())
+        cols = [
+            c
+            for m in [*self.stage1.values(), *self.stage2.values()]
+            for c in [*m.features, *m.normalize_by, *([m.center] if m.center else [])]
+        ]
+        return [c for c in dict.fromkeys(cols) if c not in own]
+
     def predict(self, frame: FeatureFrame) -> dict[str, pd.DataFrame]:
         res: dict[str, pd.DataFrame] = {}
         s1: dict[str, np.ndarray] = {}

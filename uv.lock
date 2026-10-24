@@ -19,6 +19,7 @@ members = [
     "gribkit",
     "mastr-ingest",
     "ml-train",
+    "pdb-predict",
     "predictiondb",
     "predictiondb-core",
     "wx-ingest",
@@ -1230,6 +1231,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+bundle = [
+    { name = "wx-process" },
+]
 plots = [
     { name = "matplotlib" },
 ]
@@ -1247,8 +1251,9 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.10" },
     { name = "pyyaml", specifier = ">=6" },
     { name = "sqlalchemy", specifier = ">=2.0" },
+    { name = "wx-process", marker = "extra == 'bundle'", editable = "services/wx_process" },
 ]
-provides-extras = ["plots"]
+provides-extras = ["plots", "bundle"]
 
 [[package]]
 name = "msgspec"
@@ -1644,6 +1649,41 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/5a/82/42f767fc1c1143d6fd36efb827202a2d997a375e160a71eb2888a925aac1/pathspec-1.1.1.tar.gz", hash = "sha256:17db5ecd524104a120e173814c90367a96a98d07c45b2e10c2f3919fff91bf5a", size = 135180, upload-time = "2026-04-27T01:46:08.907Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f1/d9/7fb5aa316bc299258e68c73ba3bddbc499654a07f151cba08f6153988714/pathspec-1.1.1-py3-none-any.whl", hash = "sha256:a00ce642f577bf7f473932318056212bc4f8bfdf53128c78bbd5af0b9b20b189", size = 57328, upload-time = "2026-04-27T01:46:07.06Z" },
+]
+
+[[package]]
+name = "pdb-predict"
+version = "0.1.0"
+source = { editable = "predict" }
+dependencies = [
+    { name = "energy-ingest" },
+    { name = "gribkit" },
+    { name = "httpx" },
+    { name = "ml-train" },
+    { name = "pandas" },
+    { name = "predictiondb-core" },
+    { name = "pyarrow" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "pyyaml" },
+    { name = "wx-ingest" },
+    { name = "wx-process" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "energy-ingest", editable = "services/energy_ingest" },
+    { name = "gribkit", editable = "packages/gribkit" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "ml-train", editable = "services/ml_train" },
+    { name = "pandas", specifier = ">=2.2" },
+    { name = "predictiondb-core", editable = "packages/core" },
+    { name = "pyarrow", specifier = ">=18" },
+    { name = "pydantic", specifier = ">=2.10" },
+    { name = "pydantic-settings", specifier = ">=2.7" },
+    { name = "pyyaml", specifier = ">=6" },
+    { name = "wx-ingest", editable = "services/wx_ingest" },
+    { name = "wx-process", editable = "services/wx_process" },
 ]
 
 [[package]]

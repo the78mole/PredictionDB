@@ -1,0 +1,144 @@
+name: Predict
+
+# Schlanker Prognose-Stack (predict/): eigenes Image und eigene Release-Reihe
+# predict/vX.Y.Z, getrennt von den Releases vX.Y.Z des Gesamtprojekts (release.yml).
+#
+# - Pull Request: Image bauen und im Container kurz prüfen (Unit-Tests und Lint laufen in ci.yml).
+# - Nach grüner CI auf main: nächste Version aus den Commits seit dem letzten predict/v*-Tag,
+#   die den Stack oder die von ihm genutzten Pakete ändern (scripts/naechste-version.sh mit
+#   --prefix und Pfaden). Gibt es eine, wird das Image mit X.Y.Z, X.Y, latest und dem Commit
+#   nach GHCR geschoben und das Release angelegt (nie als "Latest" des Repositorys).
+on:
+  pull_request:
+    paths:
+      - predict/**
+      - services/**
+      - packages/**
+      - config/sources/gfs_0p25.yaml
+      - pyproject.toml
+      - uv.lock
+      - scripts/naechste-version.sh
+      - .github/workflows/predict.yml
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: predict-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/the78mole/predictiondb-predict
+  # Was ins Image eingeht; nur Commits hier lösen ein neues predict-Release aus
+  PFADE: >-
+    predict services/ml_train services/energy_ingest services/wx_ingest services/wx_process
+    packages config/sources/gfs_0p25.yaml pyproject.toml uv.lock
+
+jobs:
+  pruefen:
+    name: Image bauen und prüfen
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: predict/Dockerfile
+          load: true
+          tags: predictiondb-predict:pr
+          cache-from: type=gha,scope=predict
+      - name: Im Container starten
+        run: |
+          docker run --rm predictiondb-predict:pr pdb-predict --help
+          docker run --rm predictiondb-predict:pr python -c \
+            "import pdb_predict.cli, lightgbm, eccodes, zarr; print('ok')"
+          docker compose -f predict/compose.yaml config --quiet
+          docker images predictiondb-predict:pr --format 'Größe: {{.Size}}'
+
+  release:
+    name: Release und Image
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.SHA }}
+          fetch-depth: 0
+      - name: Nächste Version
+        id: version
+        run: |
+          # shellcheck disable=SC2086 # PFADE ist bewusst eine Liste
+          scripts/naechste-version.sh "$SHA" --prefix predict/ -- $PFADE
+      - uses: docker/setup-buildx-action@v3
+        if: steps.version.outputs.version != ''
+      - uses: docker/login-action@v3
+        if: steps.version.outputs.version != ''
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Image-Tags
+        id: tags
+        if: steps.version.outputs.version != ''
+        env:
+          NUMMER: ${{ steps.version.outputs.nummer }}
+        run: |
+          {
+            echo "tags<<EOF"
+            echo "$IMAGE:$NUMMER"
+            echo "$IMAGE:${NUMMER%.*}"
+            echo "$IMAGE:latest"
+            echo "$IMAGE:$SHA"
+            echo "EOF"
+          } >>"$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@v6
+        if: steps.version.outputs.version != ''
+        with:
+          context: .
+          file: predict/Dockerfile
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ env.SHA }}
+            org.opencontainers.image.version=${{ steps.version.outputs.nummer }}
+            org.opencontainers.image.title=PredictionDB Prognose-Stack
+            org.opencontainers.image.description=Schlanker Prognose-Dienst: Last DE und Day-Ahead-Preis DE-LU aus einem Modellpaket, Eingänge von freien Quellen
+            org.opencontainers.image.licenses=BUSL-1.1
+          cache-from: type=gha,scope=predict
+          cache-to: type=gha,scope=predict,mode=max
+      - name: Release anlegen
+        if: steps.version.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          VORHER: ${{ steps.version.outputs.vorher }}
+          NUMMER: ${{ steps.version.outputs.nummer }}
+        run: |
+          {
+            echo "Image: \`$IMAGE:$NUMMER\` (auch \`${NUMMER%.*}\` und \`latest\`)"
+            echo
+            echo "Start: \`predict/README.md\`, \`docker compose -f predict/compose.yaml up -d\`"
+            echo
+            echo "## Änderungen"
+            # shellcheck disable=SC2086
+            git log --format='- %s (%h)' ${VORHER:+"$VORHER.."}"$SHA" -- $PFADE | head -200
+          } >notes.md
+          gh release create "$VERSION" --target "$SHA" --title "Prognose-Stack $NUMMER" \
+            --notes-file notes.md --latest=false

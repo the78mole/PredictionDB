@@ -1342,6 +1342,8 @@ Weitere Prognosequellen (z. B. Wind/PV der ÜNB oder Prognosen anderer Anbieter,
 
 Fertig trainierte Modelle (zuerst `de_lu_v1`: Last DE und Day-Ahead-Preis DE-LU, 7.3/7.7) sollen andere Instanzen ohne eigenes Training nutzen können. Sie werden als **eigene Modell-Releases in GHCR** veröffentlicht, getrennt von den Code-Releases, weil sich Modelle häufiger und unabhängig vom Code ändern (neuer Datenstand, Fine-Tuning, Champion-Wechsel).
 
+Wer nur Prognosen braucht, nutzt den schlanken Stack [`predict/`](../predict/README.md): ein Container, der ein Modellpaket (`ml-train bundle`, Aufbau in `ml_train/bundle.py`, später dasselbe Paket als ORAS-Artefakt aus GHCR) lädt, die Eingänge selbst bei den freien Quellen abruft und die Prognose als Dateien und über HTTP ausgibt, ohne Datenbank und Training. Das Paket enthält die Gitter-Gewichte der Cluster, mit denen trainiert wurde; damit ist die Kompatibilitätsfrage aus 7.11.2 für Wetter-Varianten gelöst, ohne Gold-Features oder Silber zu importieren.
+
 #### 7.11.1 Darf ein Modell veröffentlicht werden? Nutzungsbedingungen der Quellen
 
 Geprüft am 2026-10-23 anhand der Bedingungen der Anbieter. Das ist eine technische Einordnung und keine Rechtsberatung.

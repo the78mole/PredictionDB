@@ -20,12 +20,15 @@ dependencies = [
 
 [project.optional-dependencies]
 plots = ["matplotlib>=3.9"]
+# ml-train bundle für Wetter-Varianten (Nabenhöhen der Cluster wie in wx-process)
+bundle = ["wx-process"]
 
 [project.scripts]
 ml-train = "ml_train.cli:main"
 
 [tool.uv.sources]
 predictiondb-core = { workspace = true }
+wx-process = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

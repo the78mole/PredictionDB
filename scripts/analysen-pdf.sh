@@ -25,7 +25,7 @@ if [[ -z $chrome ]]; then
 fi
 [[ -n $chrome ]] || { echo "Kein Chrome/Chromium gefunden (CHROME setzen)" >&2; exit 1; }
 
-version=${PDF_VERSION:-$(git -C "$root" describe --tags --always --dirty 2>/dev/null || echo unbekannt)}
+version=${PDF_VERSION:-$(git -C "$root" describe --tags --match 'v[0-9]*' --always --dirty 2>/dev/null || echo unbekannt)}
 repo_url=${PDF_REPO_URL:-https://github.com/the78mole/predictiondb}
 ref=${PDF_REF:-$(git -C "$root" rev-parse HEAD 2>/dev/null || echo main)}
 tmp=$(mktemp -d)

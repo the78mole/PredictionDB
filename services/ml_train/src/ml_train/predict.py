@@ -13,8 +13,9 @@ from pathlib import Path
 import pandas as pd
 from sqlalchemy import Engine, text
 
-from ml_train.config import ModelConfig
-from ml_train.dataset import FeatureBuilder
+from ml_train.config import ModelConfig, Variant
+from ml_train.dataset import FeatureBuilder, FeatureFrame
+from ml_train.models import TwoStageModel
 from ml_train.registry import Registry
 from ml_train.snapshot import Snapshot, export_snapshot
 from predictiondb_core.log import get_logger
@@ -22,14 +23,24 @@ from predictiondb_core.log import get_logger
 log = get_logger(__name__)
 
 
+#: Tage, die ``asof``-Gruppen zurückschauen: Der Jahresmarktwert des Vorvorjahres steht am
+#: 1. Januar und ist Mitte Januar noch der jüngste veröffentlichte (2 Jahre plus Verzug)
+ASOF_BACK_DAYS = 2 * 366 + 14
+
+
+def lookback_days(cfg: ModelConfig, variant: Variant) -> int:
+    """Tage vor dem Ausgabezeitpunkt, die die Merkmale einer Variante brauchen."""
+    back = 45  # Lags: 28-Tage-Mittel, Vorwoche und Zeitumstellung mit Reserve
+    for name in variant.groups:
+        g = cfg.series_groups.get(name)
+        if g is not None and g.mode == "asof":
+            back = max(back, ASOF_BACK_DAYS + g.change_days)
+    return back
+
+
 def live_snapshot(engine: Engine, cfg: ModelConfig, issue: pd.Timestamp) -> Snapshot:
     codes = list(dict.fromkeys(cfg.targets + cfg.lag_series + cfg.series_codes))
-    # Monats- und Jahreswerte erscheinen erst Wochen nach Periodenende; Änderungen brauchen den
-    # Stand davor
-    back = 45
-    for g in cfg.series_groups.values():
-        if g.mode == "asof":
-            back = max(back, 400 + g.change_days)
+    back = max(lookback_days(cfg, v) for v in cfg.variants)
     start = (issue - timedelta(days=back)).to_pydatetime()
     end = (issue + timedelta(days=max(cfg.issue.lead_days) + 2)).to_pydatetime()
     return export_snapshot(
@@ -40,6 +51,47 @@ def live_snapshot(engine: Engine, cfg: ModelConfig, issue: pd.Timestamp) -> Snap
         weather_from=(issue - timedelta(days=2)).to_pydatetime(),
         max_lead_h=24 * (max(cfg.issue.lead_days) + 2),
     )
+
+
+def predict_model(
+    frame: FeatureFrame, model: TwoStageModel, version: str, issue: pd.Timestamp
+) -> pd.DataFrame:
+    """Prognosen einer geladenen Version in Langform (leer, wenn ein nötiger Wetterlauf fehlt).
+
+    Fehlt eine Merkmalsspalte ganz (Reihe zum Ausgabezeitpunkt nicht abrufbar), bleibt sie leer;
+    LightGBM behandelt das wie im Training als fehlenden Wert.
+    """
+    f = frame
+    if model.variant.requires_weather:
+        if "wx_lead_h" not in frame.X.columns:
+            log.warning("predict.no_weather", version=version, issue=str(issue))
+            return pd.DataFrame()
+        f = frame.subset(frame.X["wx_lead_h"].notna().to_numpy())
+        if len(f) == 0:
+            log.warning("predict.no_weather", version=version, issue=str(issue))
+            return pd.DataFrame()
+    missing = [c for c in model.features() if c not in f.X.columns]
+    if missing:
+        log.warning("predict.missing_features", version=version, columns=missing)
+        f = FeatureFrame(
+            f.X.reindex(columns=[*f.X.columns, *missing]), f.meta, f.y, f.benchmarks, f.groups
+        )
+    rows = []
+    for target, q in model.predict(f).items():
+        for col in q.columns:
+            rows.append(
+                pd.DataFrame(
+                    {
+                        "model_version": version,
+                        "target": target,
+                        "issue_time": issue,
+                        "valid_time": f.meta["ts"].to_numpy(),
+                        "quantile": int(col[1:]) / 100,
+                        "value": q[col].to_numpy(),
+                    }
+                )
+            )
+    return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
 
 
 def predict_versions(
@@ -53,30 +105,11 @@ def predict_versions(
     """Prognosen in Langform: ``model_version, target, issue_time, valid_time, quantile, value``."""
     fb = FeatureBuilder(snap, cfg)
     frame = fb.build_at([issue])
-    rows = []
-    for version in versions:
-        model = registry.load(version, cache)
-        f = frame
-        if model.variant.requires_weather:
-            f = frame.subset(frame.X["wx_lead_h"].notna().to_numpy())
-            if len(f) == 0:
-                log.warning("predict.no_weather", version=version, issue=str(issue))
-                continue
-        for target, q in model.predict(f).items():
-            for col in q.columns:
-                rows.append(
-                    pd.DataFrame(
-                        {
-                            "model_version": version,
-                            "target": target,
-                            "issue_time": issue,
-                            "valid_time": f.meta["ts"].to_numpy(),
-                            "quantile": int(col[1:]) / 100,
-                            "value": q[col].to_numpy(),
-                        }
-                    )
-                )
-    return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
+    parts = [
+        predict_model(frame, registry.load(version, cache), version, issue) for version in versions
+    ]
+    parts = [p for p in parts if not p.empty]
+    return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
 
 
 UPSERT = text("""
