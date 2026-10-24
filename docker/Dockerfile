@@ -12,6 +12,8 @@ FROM python:3.14-slim-trixie AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 RUN useradd --system --uid 10001 --home-dir /app app
+# Einhängepunkt für Volumes (ml-data): ein neues, leeres Volume übernimmt Besitzer und Rechte
+RUN mkdir -p /data && chown app:app /data
 WORKDIR /app
 COPY --from=build --chown=app:app /app /app
 ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1
