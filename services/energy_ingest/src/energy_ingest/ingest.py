@@ -17,13 +17,18 @@ from typing import Any, Literal, Protocol
 from energy_ingest.config import EnergySettings
 from energy_ingest.model import SeriesData
 from energy_ingest.sources import FormatError, Source, SourceMeta
-from energy_ingest.store import Deviation
+from energy_ingest.store import EMPTY_RETRY, Chunk, Deviation
 from predictiondb_core.log import get_logger
 
 log = get_logger(__name__)
 
 # Fester Ursprung des Blockrasters, damit Backfill-Blöcke immer gleich geschnitten sind
 ANCHOR = datetime(2015, 1, 1, tzinfo=UTC)
+
+# Angebrochener Block an der Grenze ``final_after_days``: Den schon endgültigen Teil holt der
+# Backfill höchstens so oft. Sonst bliebe zwischen dem letzten vollen Block und dem Fenster
+# des laufenden Abgleichs eine Lücke von bis zu einer Blocklänge.
+TAIL_REFRESH = timedelta(days=1)
 
 # format: Aufbau der Antwort weicht ab (Spalten, Einheiten), es wurde nichts geschrieben
 Status = Literal["ok", "empty", "failed", "format"]
@@ -32,7 +37,9 @@ Status = Literal["ok", "empty", "failed", "format"]
 class Store(Protocol):
     def source_id(self, source: SourceMeta) -> int: ...
     def write(self, source_id: int, batch: list[SeriesData], fetched: datetime) -> int: ...
-    def done_chunks(self, source_id: int, dataset: str) -> set[datetime]: ...
+    def done_chunks(
+        self, source_id: int, dataset: str, empty_retry: timedelta = ...
+    ) -> dict[datetime, Chunk]: ...
     def mark_chunk(
         self, source_id: int, dataset: str, start: datetime, end: datetime, n_values: int
     ) -> None: ...
@@ -80,6 +87,13 @@ def sync_lookback(source: Source, dataset: str) -> timedelta:
     erscheinen (z. B. Monatsmarktwerte); Quellen geben ihn optional in ``sync_lookback`` an."""
     extra: dict[str, timedelta] = getattr(source, "sync_lookback", {})
     return extra.get(dataset, timedelta(0))
+
+
+def empty_retry(source: Source) -> timedelta:
+    """Wartezeit, bis ein leer geladener Block erneut versucht wird; Quellen, die aus eigenen
+    Daten rechnen, setzen sie über ``empty_retry`` kürzer."""
+    retry: timedelta = getattr(source, "empty_retry", EMPTY_RETRY)
+    return retry
 
 
 class EnergyIngestor:
@@ -148,7 +162,10 @@ class EnergyIngestor:
         force: bool = False,
         final_only: bool = False,
     ) -> list[tuple[Source, str, datetime, datetime]]:
-        """Noch nicht vollständig geladene Blöcke, neueste zuerst, reihum je Quelle."""
+        """Noch nicht vollständig geladene Blöcke, neueste zuerst, reihum je Quelle.
+
+        Mit ``final_only`` nur endgültige Zeiträume: volle Blöcke vor der Grenze und vom
+        angebrochenen Block an der Grenze der Teil davor (höchstens alle ``TAIL_REFRESH``)."""
         final = now - timedelta(days=self.settings.final_after_days)
         per_source = []
         for src in self.sources:
@@ -157,11 +174,17 @@ class EnergyIngestor:
             for ds in src.datasets():
                 if datasets and ds not in datasets:
                     continue
-                done = set() if force else self.store.done_chunks(sid, ds)
+                done = {} if force else self.store.done_chunks(sid, ds, empty_retry(src))
                 for a, b in chunks(src.max_chunk(ds), start, end):
-                    if a in done or (final_only and b > final):
+                    rec = done.get(a)
+                    if rec and rec.end >= b:
                         continue
-                    items.append((src, ds, max(a, start), min(b, end), a, b))
+                    upto = b
+                    if final_only and b > final:
+                        if a >= final or (rec and rec.fetched_at > now - TAIL_REFRESH):
+                            continue
+                        upto = final
+                    items.append((src, ds, max(a, start), min(upto, end), a, b))
             items.sort(key=lambda i: i[4], reverse=True)
             per_source.append(items)
         return [
@@ -191,10 +214,11 @@ class EnergyIngestor:
         for src, ds, a, b in todo[:limit]:
             res = self.fetch(src, ds, a, b, now)
             results.append(res)
-            # Nur vollständige, abgeschlossene Rasterblöcke gelten als erledigt
+            # Erledigt ist, was ab einem Rasterbeginn endgültig geladen ist; endet es vor dem
+            # Rasterende, steht das in chunk_end und der Rest folgt später
             full = chunks(src.max_chunk(ds), a, b)
-            complete = len(full) == 1 and full[0] == (a, b) and b <= final
-            if res.status in ("ok", "empty") and complete:
+            aligned = len(full) == 1 and full[0][0] == a and b <= final
+            if res.status in ("ok", "empty") and aligned:
                 self.store.mark_chunk(self.store.source_id(src), ds, a, b, res.n_values)
         return results
 

@@ -103,6 +103,9 @@ class Marktwert:
         "market_value_month": timedelta(days=40),
         "market_value_year": timedelta(days=370),
     }
+    # Rechnet nur aus der eigenen Datenbank: Ein leerer Block (Grunddaten noch lückenhaft)
+    # wird schon am nächsten Tag neu gerechnet statt erst nach EMPTY_RETRY
+    empty_retry: ClassVar[timedelta] = timedelta(days=1)
 
     def __init__(self, engine: Engine, clock: Callable[[], datetime] | None = None) -> None:
         self.engine = engine

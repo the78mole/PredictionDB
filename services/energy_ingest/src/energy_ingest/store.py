@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, NamedTuple
 
 from sqlalchemy import Engine, text
 
@@ -18,6 +18,14 @@ from energy_ingest.sources import SourceMeta
 
 # Leere Blöcke (Quelle hatte nichts oder war gestört) später noch einmal versuchen
 EMPTY_RETRY = timedelta(days=30)
+
+
+class Chunk(NamedTuple):
+    """Eintrag in ``meta.energy_fetch``: geladen bis ``end``, zuletzt am ``fetched_at``."""
+
+    end: datetime
+    fetched_at: datetime
+
 
 _UPSERT = """
     INSERT INTO energy.value (series_id, ts, value, published)
@@ -147,18 +155,22 @@ class EnergyStore:
             conn.execute(text(_UPSERT))
         return len(rows)
 
-    def done_chunks(self, source_id: int, dataset: str) -> set[datetime]:
-        """Erledigte Blöcke; leere werden nach ``EMPTY_RETRY`` erneut versucht."""
+    def done_chunks(
+        self, source_id: int, dataset: str, empty_retry: timedelta = EMPTY_RETRY
+    ) -> dict[datetime, Chunk]:
+        """Erledigte Blöcke nach Beginn; leere werden nach ``empty_retry`` erneut versucht.
+
+        ``end`` kann vor dem Rasterende liegen, wenn nur der endgültige Teil eines Blocks
+        geladen ist (Backfill an der Grenze ``final_after_days``)."""
         with self.engine.connect() as conn:
-            return set(
-                conn.execute(
-                    text("""
-                        SELECT chunk_start FROM meta.energy_fetch
-                         WHERE source_id = :s AND dataset = :d
-                           AND (n_values > 0 OR fetched_at > now() - :retry)"""),
-                    {"s": source_id, "d": dataset, "retry": EMPTY_RETRY},
-                ).scalars()
-            )
+            rows = conn.execute(
+                text("""
+                    SELECT chunk_start, chunk_end, fetched_at FROM meta.energy_fetch
+                     WHERE source_id = :s AND dataset = :d
+                       AND (n_values > 0 OR fetched_at > now() - :retry)"""),
+                {"s": source_id, "d": dataset, "retry": empty_retry},
+            ).all()
+        return {r.chunk_start: Chunk(r.chunk_end, r.fetched_at) for r in rows}
 
     def mark_chunk(
         self, source_id: int, dataset: str, start: datetime, end: datetime, n_values: int

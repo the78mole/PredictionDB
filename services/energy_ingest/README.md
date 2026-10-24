@@ -106,7 +106,8 @@ schickt daraus E-Mails:
 - **Format geändert:** sofort.
 - **Abruf scheitert seit 24 h:** letzter erfolgreicher Abruf älter als 24 h.
 - **Reihe veraltet:** jüngster Wert älter als erwartet (Tageswerte 7 Tage, Wochenwerte
-  21 Tage, Monatswerte 75 Tage), etwa weil sich eine Download-Adresse geändert hat.
+  21 Tage, Monatswerte 75 Tage, Jahreswerte 800 Tage, da ihr Zeitstempel der Jahresbeginn
+  ist), etwa weil sich eine Download-Adresse geändert hat.
 
 SMTP-Zugang und Empfänger in `.env`: `PDB_SMTP_HOST` (mit Port), `PDB_SMTP_USER`,
 `PDB_SMTP_PASSWORD`, optional `PDB_SMTP_FROM` und `PDB_SMTP_STARTTLS`, dazu `PDB_ALERT_EMAIL`.
@@ -128,7 +129,11 @@ Tage voraus ab, prüft die Quellen gegeneinander (Warnung `energy.sources_disagr
 Abweichung) und lädt danach einige Blöcke Historie nach, neueste zuerst, reihum je Quelle,
 bis `PDB_ENERGY_BACKFILL_FROM` (Vorgabe 2015-01-01) erreicht ist. Vollständig geladene,
 mindestens sieben Tage alte Blöcke stehen in `meta.energy_fetch` und werden nicht erneut
-abgerufen (`--force` erzwingt es).
+abgerufen (`--force` erzwingt es). Vom Block, in den die Sieben-Tage-Grenze fällt, lädt der
+Backfill einmal am Tag den Teil vor der Grenze (in `meta.energy_fetch` mit `chunk_end` vor dem
+Rasterende); so bleibt zwischen dem letzten vollen Block und dem Fenster des laufenden
+Abgleichs keine Lücke. Leer geladene Blöcke werden nach 30 Tagen erneut versucht, die eigenen
+Marktwerte (`pdb_marktwert`) schon nach einem Tag, sobald die Grunddaten vollständig sind.
 
 Einstellungen (Umgebung bzw. `.env`): `PDB_ALLOW_ENTSO_E`, `PDB_ALLOW_NETZTRANSPARENZ`,
 `PDB_ALLOW_EIA_REUTERS`, `PDB_ALLOW_THE`, `PDB_EIA_API_KEY`, `PDB_ENTSOE_TOKEN`, `PDB_NETZTRANSPARENZ_CLIENT_ID`,

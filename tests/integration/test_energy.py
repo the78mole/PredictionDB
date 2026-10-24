@@ -131,6 +131,13 @@ def test_fetch_log(engine: Engine) -> None:
     sid = store.source_id(Src(priority=3))
     store.mark_chunk(sid, "x", T0, T0 + timedelta(days=10), 5)
     store.mark_chunk(sid, "y", T0, T0 + timedelta(days=10), 0)
-    assert store.done_chunks(sid, "x") == {T0}
+    done = store.done_chunks(sid, "x")
+    assert set(done) == {T0}
+    assert done[T0].end == T0 + timedelta(days=10)
     # leere Blöcke gelten vorerst als erledigt, werden aber später erneut versucht
-    assert store.done_chunks(sid, "y") == {T0}
+    assert set(store.done_chunks(sid, "y")) == {T0}
+    assert store.done_chunks(sid, "y", empty_retry=timedelta(0)) == {}
+    # Teilweise geladener Block: chunk_end wird beim späteren vollen Laden fortgeschrieben
+    store.mark_chunk(sid, "z", T0, T0 + timedelta(days=4), 3)
+    store.mark_chunk(sid, "z", T0, T0 + timedelta(days=10), 7)
+    assert store.done_chunks(sid, "z")[T0].end == T0 + timedelta(days=10)

@@ -37,6 +37,8 @@ class SourceMeta(Protocol):
 class Source(SourceMeta, Protocol):
     # Optional: ``sync_lookback: dict[str, timedelta]`` verlängert den Rückblick des
     # laufenden Abgleichs je Datensatz (siehe ``energy_ingest.ingest.sync_lookback``)
+    # Optional: ``empty_retry: timedelta`` verkürzt die Wartezeit bis zum erneuten Versuch
+    # leer geladener Blöcke (siehe ``energy_ingest.ingest.empty_retry``)
     def datasets(self) -> list[str]: ...
 
     def max_chunk(self, dataset: str) -> timedelta: ...

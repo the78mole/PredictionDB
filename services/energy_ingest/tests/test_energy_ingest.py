@@ -1,10 +1,10 @@
 from datetime import UTC, datetime, timedelta
 
 from energy_ingest.config import EnergySettings
-from energy_ingest.ingest import ANCHOR, EnergyIngestor, chunks, day_window
+from energy_ingest.ingest import ANCHOR, TAIL_REFRESH, EnergyIngestor, chunks, day_window
 from energy_ingest.model import QUARTER_HOUR, SeriesData, series
 from energy_ingest.sources import FormatError, SourceMeta
-from energy_ingest.store import Deviation
+from energy_ingest.store import EMPTY_RETRY, Chunk, Deviation
 
 NOW = datetime(2026, 10, 20, 23, 0, tzinfo=UTC)
 
@@ -41,7 +41,9 @@ class FakeStore:
     def __init__(self) -> None:
         self.ids: dict[str, int] = {}
         self.written: list[tuple[int, int]] = []
-        self.done: dict[tuple[int, str], set[datetime]] = {}
+        self.done: dict[tuple[int, str], dict[datetime, Chunk]] = {}
+        self.retry: dict[tuple[int, str], timedelta] = {}
+        self.clock = NOW
         self.deviations: list[Deviation] = []
         self.status: dict[tuple[int, str], tuple[str, int, str | None]] = {}
 
@@ -53,13 +55,16 @@ class FakeStore:
         self.written.append((source_id, n))
         return n
 
-    def done_chunks(self, source_id: int, dataset: str) -> set[datetime]:
-        return set(self.done.get((source_id, dataset), set()))
+    def done_chunks(
+        self, source_id: int, dataset: str, empty_retry: timedelta = EMPTY_RETRY
+    ) -> dict[datetime, Chunk]:
+        self.retry[(source_id, dataset)] = empty_retry
+        return dict(self.done.get((source_id, dataset), {}))
 
     def mark_chunk(
         self, source_id: int, dataset: str, start: datetime, end: datetime, n_values: int
     ) -> None:
-        self.done.setdefault((source_id, dataset), set()).add(start)
+        self.done.setdefault((source_id, dataset), {})[start] = Chunk(end, self.clock)
 
     def compare(self, start: datetime, end: datetime) -> list[Deviation]:
         return self.deviations
@@ -171,3 +176,47 @@ def test_format_error_reported_and_chunk_not_marked() -> None:
     assert {r.status for r in results} == {"format"}
     assert store.done == {}
     assert store.status[(store.ids["x"], "a")][0] == "format"
+
+
+def test_backfill_step_loads_final_part_of_boundary_chunk() -> None:
+    src = FakeSource("s")
+    store = FakeStore()
+    final = NOW - timedelta(days=7)
+    a, b = chunks(timedelta(days=10), final, final + timedelta(seconds=1))[0]
+    settings = EnergySettings(backfill_from=a, backfill_chunks_per_cycle=10)
+    ing = EnergyIngestor([src], store, settings)
+
+    ing.backfill_step(NOW)
+    assert ("a", a, final) in src.calls
+    assert store.done[(1, "a")][a].end == final
+
+    # Am selben Tag nicht noch einmal, nach TAIL_REFRESH bis zur neuen Grenze
+    src.calls.clear()
+    ing.backfill_step(NOW + timedelta(hours=1))
+    assert src.calls == []
+    later = NOW + TAIL_REFRESH + timedelta(hours=1)
+    store.clock = later
+    ing.backfill_step(later)
+    assert ("a", a, later - timedelta(days=7)) in src.calls
+
+    # Ist der Block endgültig, wird er ganz geladen und gilt als erledigt
+    src.calls.clear()
+    done_at = b + timedelta(days=7)
+    store.clock = done_at
+    ing.backfill_step(done_at)
+    assert ("a", a, b) in src.calls
+    assert store.done[(1, "a")][a].end == b
+    src.calls.clear()
+    ing.backfill_step(done_at + timedelta(hours=1))
+    assert all(c[1] != a for c in src.calls)
+
+
+def test_empty_retry_per_source() -> None:
+    plain, own = FakeSource("plain"), FakeSource("own")
+    own.empty_retry = timedelta(days=1)  # type: ignore[attr-defined]
+    store = FakeStore()
+    EnergyIngestor([plain, own], store, EnergySettings()).backfill(
+        ANCHOR, ANCHOR + timedelta(days=10), now=NOW
+    )
+    assert store.retry[(store.ids["plain"], "a")] == EMPTY_RETRY
+    assert store.retry[(store.ids["own"], "a")] == timedelta(days=1)
