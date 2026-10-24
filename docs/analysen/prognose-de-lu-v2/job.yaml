@@ -1,0 +1,36 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; ausgeführt mit ml-train backtest, Auswertung auswertung.py
+id: prognose-de-lu-v2
+title: Ablation der freien Zusatzreihen im Prognosemodell Last DE / Day-Ahead-Preis DE-LU
+question: >
+  Wie viel verbessern die neu eingebundenen freien Reihen (Day-Ahead-Preise der 14 Nachbarzonen,
+  Day-Ahead-Lastprognose der ÜNB, Brennstoffpreise und Wechselkurs, eigene Marktwerte) die
+  Prognose von Last und Preis für D+1 bis D+7 gegenüber dem Modell de_lu_v1/kalender?
+requested_by: Maulwurf
+kind: backtest
+inputs:
+  snapshot: {command: "ml-train --config config/ml/de_lu_v2.yaml snapshot --from 2015-01-01 --weather-from 2021-03-22"}
+  config: config/ml/de_lu_v2.yaml
+  free_only: true                  # keine Reihen aus PDB_ALLOW_*-Quellen
+method:
+  issue: {hour_utc: 8, lead_days: [1, 2, 3, 4, 5, 6, 7]}
+  runs:
+    - label: haupt                 # je eine Gruppe dazu, dann alle; Halbjahre ab 2024
+      command: >
+        ml-train --config config/ml/de_lu_v2.yaml backtest --variant kalender --variant nachbarn
+        --variant lastprognose --variant brennstoffe --variant marktwerte --variant frei
+      test: {from: 2024-01-01, fold_months: 6}
+    - label: 09utc                 # Ausgabe 09 UTC: Lastprognose der ÜNB auch im Winter bekannt
+      command: >
+        ml-train --config config/ml/de_lu_v2.yaml backtest --issue-hour 9 --variant kalender
+        --variant lastprognose --variant frei
+      test: {from: 2024-01-01, fold_months: 6}
+    - label: wetter                # Wetter-Features erst ab 06.01.2026 in der DB
+      command: >
+        ml-train --config config/ml/de_lu_v2.yaml backtest --variant wetter --variant wetter_frei
+        --test-from 2026-07-01 --fold-months 1 --stride 1
+  metrics: [mae, rmse, bias, pinball_p10_p50_p90, coverage80, rank_corr_day]
+  compare: common_rows             # alle Varianten eines Laufs auf denselben Stunden
+  group_by: [method, target, lead_day, season, year]
+outputs:
+  figures: [mae_gain_by_lead]
+schedule: on_new_model_version
