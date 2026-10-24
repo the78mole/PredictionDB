@@ -107,7 +107,7 @@ def test_series_groups_only_use_known_values(snap, cfg_v2) -> None:  # type: ign
     fb = FeatureBuilder(snap, cfg_v2)
     frame = fb.build([date(2023, 5, 10), date(2023, 1, 10)])
     X, meta = frame.X, frame.meta
-    for g in ("nachbarn", "lastprognose", "brennstoffe"):
+    for g in ("nachbarn", "lastprognose", "brennstoffe", "preisniveau"):
         assert frame.groups[g]
     # Nachbarpreis wie DE-LU: am 10.5. 08 UTC ist der Liefertag 10.5. bekannt, der 11.5. nicht
     first = meta.index[meta["issue_time"] == pd.Timestamp("2023-05-10 08:00", tz="UTC")][0]
@@ -115,6 +115,10 @@ def test_series_groups_only_use_known_values(snap, cfg_v2) -> None:  # type: ign
     assert X.loc[first, "lag_da_price_at_day"] == pytest.approx(
         fb.energy["da_price_at"][ts - pd.Timedelta(days=1)], rel=1e-5
     )
+    # 28-Tage-Mittel endet mit dem letzten vollständig bekannten Liefertag (10.5.)
+    days = fb.daily_mean["da_price_de_lu"]
+    expected = days.loc[pd.Timestamp("2023-04-13") : pd.Timestamp("2023-05-10")].mean()
+    assert X.loc[first, "lag_da_price_de_lu_mean_28d"] == pytest.approx(expected, rel=1e-5)
     # Lastprognose: im Sommer (08 UTC = 10 Uhr) für D+1 bekannt, im Winter (9 Uhr) noch nicht
     fc = X["fc_load_da_forecast"]
     summer = meta["issue_time"].dt.month == 5

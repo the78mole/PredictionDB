@@ -49,7 +49,7 @@ class StageTarget(BaseModel):
     center: str | None = None
 
 
-LagKind = Literal["day", "week", "mean_day", "mean_7d", "last"]
+LagKind = Literal["day", "week", "mean_day", "mean_7d", "mean_28d", "last"]
 
 
 class SeriesGroup(BaseModel):

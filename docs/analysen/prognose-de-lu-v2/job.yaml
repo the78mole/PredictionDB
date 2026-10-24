@@ -18,16 +18,23 @@ method:
       command: >
         ml-train --config config/ml/de_lu_v2.yaml backtest --variant kalender --variant nachbarn
         --variant lastprognose --variant brennstoffe --variant marktwerte --variant frei
-      test: {from: 2024-01-01, fold_months: 6}
+        --test-from 2025-01-01
+      test: {from: 2025-01-01, fold_months: 6}
     - label: 09utc                 # Ausgabe 09 UTC: Lastprognose der ÜNB auch im Winter bekannt
       command: >
         ml-train --config config/ml/de_lu_v2.yaml backtest --issue-hour 9 --variant kalender
-        --variant lastprognose --variant frei
-      test: {from: 2024-01-01, fold_months: 6}
+        --variant lastprognose --variant frei --test-from 2025-01-01
+      test: {from: 2025-01-01, fold_months: 6}
     - label: wetter                # Wetter-Features erst ab 06.01.2026 in der DB
       command: >
         ml-train --config config/ml/de_lu_v2.yaml backtest --variant wetter --variant wetter_frei
         --test-from 2026-07-01 --fold-months 1 --stride 1
+    - label: niveau                # Gegenprobe: wirken die neuen Reihen nur als Preisniveau?
+      command: >
+        ml-train --config config/ml/de_lu_v2.yaml backtest --variant kalender --variant preisniveau
+        --variant frei --variant frei_niveau --test-from 2025-01-01
+      test: {from: 2025-01-01, fold_months: 6}
+  threads: {OMP_NUM_THREADS: 8}    # auf 16 Kernen ohne Grenze rund 25-mal langsamer
   metrics: [mae, rmse, bias, pinball_p10_p50_p90, coverage80, rank_corr_day]
   compare: common_rows             # alle Varianten eines Laufs auf denselben Stunden
   group_by: [method, target, lead_day, season, year]

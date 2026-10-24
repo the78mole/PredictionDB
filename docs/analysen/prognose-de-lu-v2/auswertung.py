@@ -1,9 +1,9 @@
 """Ablation der freien Zusatzreihen im Prognosemodell de_lu_v2 (Tabellen und Grafiken).
 
-Aufruf nach den drei ``ml-train backtest``-Läufen aus job.yaml::
+Aufruf nach den vier ``ml-train backtest``-Läufen aus job.yaml::
 
     uv run --with matplotlib python docs/analysen/prognose-de-lu-v2/auswertung.py \\
-        .ml-data/bt2-haupt .ml-data/bt2-09utc .ml-data/bt2-wetter
+        .ml-data/bt2-haupt .ml-data/bt2-09utc .ml-data/bt2-wetter .ml-data/bt2-niveau
 
 Je Lauf werden alle Varianten auf denselben Zeilen verglichen (Ziel, Ausgabe, Stunde, für die
 jede Variante eine Prognose hat). Schreibt nach ``tabellen/`` und ``grafiken/`` neben diesem
@@ -27,7 +27,7 @@ from ml_train.metrics import add_context, common_rows, daily_rank_corr, score
 
 HERE = Path(__file__).resolve().parent
 TAB, FIG = HERE / "tabellen", HERE / "grafiken"
-RUNS = ["haupt", "09utc", "wetter"]
+RUNS = ["haupt", "09utc", "wetter", "niveau"]
 
 LABEL = {
     "kalender": "Maßstab (wie v1)",
@@ -36,6 +36,8 @@ LABEL = {
     "brennstoffe": "+ Brennstoffe",
     "marktwerte": "+ Marktwerte",
     "frei": "alle freien Reihen",
+    "preisniveau": "+ 28-Tage-Mittel Preis DE-LU",
+    "frei_niveau": "alle freien Reihen + 28-Tage-Mittel",
     "wetter": "GFS-Wetter",
     "wetter_frei": "GFS-Wetter + alle freien Reihen",
     "naive_day": "Vortag",
@@ -56,6 +58,8 @@ COLORS = {
     "brennstoffe": "#bf8700",
     "marktwerte": "#8250df",
     "frei": "#d1242f",
+    "preisniveau": "#bc4c00",
+    "frei_niveau": "#6e7781",
     "wetter": "#0969da",
     "wetter_frei": "#cf222e",
 }
@@ -131,7 +135,7 @@ def main(dirs: list[str]) -> None:
         base = "wetter" if name == "wetter" else "kalender"
         rel = tables(name, pred, base)
         plot_gain(name, rel, base, ["load_actual", "da_price_de_lu"])
-        if name != "09utc":
+        if name in ("haupt", "wetter"):
             plot_gain(
                 f"{name}_erzeugung",
                 rel,

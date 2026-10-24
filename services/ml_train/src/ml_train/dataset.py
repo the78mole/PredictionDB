@@ -308,6 +308,9 @@ class FeatureBuilder:
             if "mean_7d" in kinds:
                 roll7 = dm.rolling(7, min_periods=5).mean()
                 out[f"lag_{code}_mean_7d"] = roll7.reindex(full_arr).to_numpy()
+            if "mean_28d" in kinds:
+                roll28 = dm.rolling(28, min_periods=20).mean()
+                out[f"lag_{code}_mean_28d"] = roll28.reindex(full_arr).to_numpy()
             if "last" in kinds:
                 out[f"lag_{code}_last"] = s.reindex(known_arr - H).to_numpy()
         df = pd.DataFrame(out, index=meta.index).astype(np.float32)
