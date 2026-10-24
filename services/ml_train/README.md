@@ -25,7 +25,8 @@ flowchart LR
   Liefertage in Ortszeit (23 bis 25 Stunden).
 - **Leakage-Schutz:** Ist-Werte zählen ab Intervallende + 2 h, Preise eines Liefertags ab
   13 Uhr am Vortag, Wetter aus dem jüngsten Lauf mit `run_time + 6 h ≤ Ausgabe` (also der
-  00Z-Lauf desselben Tags). Die Prognosen der ÜNB (ENTSO-E/SMARD) sind nur Benchmark, nie Merkmal.
+  00Z-Lauf desselben Tags). Die Prognosen der ÜNB (ENTSO-E/SMARD) sind in `de_lu_v1` nur Benchmark;
+  `de_lu_v2` nutzt die Lastprognose zusätzlich als Merkmal, nur für D+1 und erst ab 10 Uhr am Vortag.
 - **Merkmale:** Kalender (Stunde, Wochentag, Feiertagsanteil nach Bevölkerung der Länder,
   Brückentage, Weihnachten, Sommerzeit, Tageslänge), Vorlauf, installierte Leistung je
   Technologie (MaStR), Lags (gleiche Stunde am letzten vollständigen Tag und in der Vorwoche,

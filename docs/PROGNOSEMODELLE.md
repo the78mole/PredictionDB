@@ -200,7 +200,9 @@ Im Backtest laufen auf denselben Zeilen mit:
 | Vorwoche | `naive_week` | gleiche Stunde in der jüngsten bekannten Vorwoche |
 | ÜNB/ENTSO-E | `bench_<reihe>` | Day-Ahead-Prognosen der ÜNB für Last, Wind und PV, nur für D+1 (so werden sie veröffentlicht) |
 
-Die ÜNB-Prognosen sind in `de_lu_v1` nur Vergleich, nie Merkmal.
+Die ÜNB-Prognosen sind in `de_lu_v1` nur Vergleich, nie Merkmal. In `de_lu_v2` ist die
+Lastprognose der ÜNB zusätzlich Merkmal (Gruppe `lastprognose`, nur D+1 und erst ab 10 Uhr am
+Vortag), bleibt aber auch Vergleichsverfahren.
 
 ## 5. Wissen zum Ausgabezeitpunkt (Leakage-Schutz)
 
@@ -421,8 +423,9 @@ Rollen in der Registry:
 | Vorhaben | Ziel |
 |---|---|
 | **Kalibrierung der Quantile** (konformale Korrektur je Vorlauf auf dem letzten Trainingsjahr) | Das Band P10–P90 enthält heute 62–65 % statt 80 % der Ist-Werte |
-| **Wetter-Variante bewerten**, sobald die GFS-Historie ab 2021 vollständig ist | Wind und PV sind ohne Wetter nur Klimatologie (Wind an Land MAE 7,4 GW gegen 1,2 GW bei den ÜNB) |
-| **Freie Zusatzreihen** (Nachbarpreise, Lastprognose der ÜNB, Brennstoffe, Marktwerte) | Preisniveau und Kopplung an Nachbarzonen, siehe [`de_lu_v2`](#102-de_lu_v2-in-arbeit) |
+| **Wetter-Variante bewerten**, sobald die GFS-Historie ab 2021 als Gold-Features in `feat.nwp_value` liegt (Stand 24.10.2026: erst ab 06.01.2026) | Wind und PV sind ohne Wetter nur Klimatologie (Wind an Land MAE 7,4 GW gegen 1,2 GW bei den ÜNB) |
+| **`de_lu_v2/frei` als Challenger** auf der VM registrieren | Preis −5 %, Last −4 % MAE im Backtest, siehe [`de_lu_v2`](#102-de_lu_v2) |
+| **Lastniveau über Wochen** (28-Tage-Mittel von Last und Residuallast) | In v2 verbessern Preisniveau und Brennstoffe die Last 2026 um bis zu 10 %, ein Hinweis auf ein fehlendes Lastniveau |
 | **Schulferien, bevölkerungsgewichtete Temperatur** | Last in Ferien und bei Hitze/Kälte |
 | **Trend im PV-Kapazitätsfaktor** | PV liegt im Mittel 1 GW zu hoch (Eigenverbrauch, Abregelung wachsen mit dem Bestand) |
 | **Hyperparameter-Suche** (z. B. Optuna) auf GPU oder nachts auf CPU | Feinabstimmung nach Abschluss der Merkmalsarbeit |
@@ -459,7 +462,7 @@ Für D+2 bis D+7 liegt der Preis-MAE bei 29–30 €/MWh gegenüber 31,6–36,6 
 Verfahren; die Rangkorrelation der Stunden eines Tags bei 0,875 gegenüber 0,79 (Vortag).
 Einzelheiten und Grafiken: [`docs/analysen/prognose-de-lu-v1/`](analysen/prognose-de-lu-v1/README.md).
 
-### 10.2 `de_lu_v2` (in Arbeit)
+### 10.2 `de_lu_v2`
 
 `de_lu_v2` übernimmt `de_lu_v1` unverändert und ergänzt **Reihengruppen** (`series_groups`):
 weitere Reihen aus `energy.value_best` als eigene Merkmalsgruppen. Eingebunden werden nur Reihen
@@ -480,10 +483,34 @@ fest, wann ein Wert als bekannt gilt:
 | `marktwerte` | `asof` | Monats- und Jahresmarktwerte nach EEG (Base, Wind an Land, Wind auf See, Solar), selbst aus SMARD berechnet |
 
 Damit wird die Lastprognose der ÜNB erstmals Merkmal, allerdings nur für D+1 und nur, wenn sie
-zum Ausgabezeitpunkt veröffentlicht war. Varianten für die Ablation: `kalender` (wie v1), je eine
-Gruppe dazu (`nachbarn`, `lastprognose`, `brennstoffe`, `marktwerte`), alle zusammen (`frei`)
-sowie `wetter` und `wetter_frei`. Die Ergebnisse der Ablation werden hier ergänzt, sobald sie
-vorliegen; sie erscheinen unter `docs/analysen/prognose-de-lu-v2/`.
+zum Ausgabezeitpunkt veröffentlicht war. Als Gegenprobe gibt es die Gruppe `preisniveau` (Modus
+`lags`, 28-Tage-Mittel des eigenen Preises DE-LU, keine neue Quelle). Varianten: `kalender` (wie
+v1), je eine Gruppe dazu (`nachbarn`, `lastprognose`, `brennstoffe`, `marktwerte`,
+`preisniveau`), alle vier neuen Gruppen (`frei`), alle mit Preisniveau (`frei_niveau`) sowie
+`wetter` und `wetter_frei`.
+
+Ergebnisse der Ablation (Backtest 01/2025 bis 10/2026, alle Varianten auf denselben Stunden,
+Analyse in [`docs/analysen/prognose-de-lu-v2/`](analysen/prognose-de-lu-v2/README.md)):
+
+| Variante | Preis MAE | Last MAE | Preis D+1 | Last D+1 |
+|---|---|---|---|---|
+| `kalender` (wie v1) | 31,0 €/MWh | 1 893 MW | 28,3 €/MWh | 1 833 MW |
+| `frei` | 29,4 €/MWh (−5,2 %) | 1 822 MW (−3,7 %) | 26,4 €/MWh | 1 757 MW |
+| `preisniveau` | 29,9 €/MWh (−3,6 %) | 1 827 MW (−3,5 %) | 26,9 €/MWh | 1 778 MW |
+| `frei_niveau` | 30,4 €/MWh (−2,0 %) | 1 776 MW (−6,2 %) | 27,1 €/MWh | 1 719 MW |
+| Vergleich D+1 | | | Vortag 28,7 €/MWh | ÜNB 1 981 MW |
+
+- Mit allen freien Reihen schlägt das Modell beim Preis für D+1 erstmals den Vortagespreis.
+- Brennstoffe, Marktwerte und Nachbarpreise bringen beim Preis je 4–5 %, zusammen kaum mehr. Der
+  Großteil davon ist ein längeres Preisgedächtnis: Das 28-Tage-Mittel des eigenen Preises allein
+  bringt 3,6 %. 2026 schrumpft der Vorsprung von `frei` auf 2,1 %.
+- Die Lastprognose der ÜNB als Merkmal bringt nur für D+1 etwas (−1,8 % bei Ausgabe 09 UTC).
+- Unterschiede unter etwa 3 % sind kein Befund: Jede neue Spalte ändert die zufällige
+  Merkmalsauswahl je Baum, das verschiebt den Fehler auch dort, wo das neue Merkmal leer ist.
+- Wetter ist noch nicht bewertbar, weil `feat.nwp_value` erst ab 06.01.2026 Werte hat.
+
+Empfehlung: `frei` als Challenger neben `de_lu_v1/kalender`. Die Champion/Challenger-Regel
+entscheidet dann im Betrieb.
 
 ## 11. Bekannte Grenzen
 
