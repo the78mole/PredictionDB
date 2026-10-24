@@ -2451,6 +2451,443 @@
       "panels": []
     },
     {
+      "type": "bargauge",
+      "title": "Belegung der Partitionen",
+      "id": 31,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "pdb-prometheus"
+      },
+      "description": "Dateisysteme der VM (node-exporter): System = Root-Partition (scsi0), Daten = /var/lib/docker (scsi1) mit allen Docker-Volumes, also Postgres/TimescaleDB, Garage S3, Prometheus, Grafana und ML. Belegt wie bei df (ohne für root reservierte Blöcke); Frei = für Dienste verfügbar.",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 97
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "pdb-prometheus"
+          },
+          "expr": "100 * (node_filesystem_size_bytes{job=\"node\",fstype!~\"tmpfs|ramfs|devtmpfs|overlay|squashfs|nsfs|autofs|fuse.*\",mountpoint!~\"/boot.*\"} - node_filesystem_free_bytes{job=\"node\",fstype!~\"tmpfs|ramfs|devtmpfs|overlay|squashfs|nsfs|autofs|fuse.*\",mountpoint!~\"/boot.*\"}) / ((node_filesystem_size_bytes{job=\"node\",fstype!~\"tmpfs|ramfs|devtmpfs|overlay|squashfs|nsfs|autofs|fuse.*\",mountpoint!~\"/boot.*\"} - node_filesystem_free_bytes{job=\"node\",fstype!~\"tmpfs|ramfs|devtmpfs|overlay|squashfs|nsfs|autofs|fuse.*\",mountpoint!~\"/boot.*\"}) + node_filesystem_avail_bytes{job=\"node\",fstype!~\"tmpfs|ramfs|devtmpfs|overlay|squashfs|nsfs|autofs|fuse.*\",mountpoint!~\"/boot.*\"})",
+          "legendFormat": "{{mountpoint}}",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "/"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "System (/)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "/var/lib/docker"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Daten (/var/lib/docker)"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Partitionen",
+      "id": 32,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "pdb-prometheus"
+      },
+      "description": "Dateisysteme der VM (node-exporter): System = Root-Partition (scsi0), Daten = /var/lib/docker (scsi1) mit allen Docker-Volumes, also Postgres/TimescaleDB, Garage S3, Prometheus, Grafana und ML. Belegt wie bei df (ohne für root reservierte Blöcke); Frei = für Dienste verfügbar.",
+      "gridPos": {
+        "h": 8,
+        "w": 16,
+        "x": 8,
+        "y": 97
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "pdb-prometheus"
+          },
+          "expr": "max by (mountpoint, device, fstype) (node_filesystem_size_bytes{job=\"node\",fstype!~\"tmpfs|ramfs|devtmpfs|overlay|squashfs|nsfs|autofs|fuse.*\",mountpoint!~\"/boot.*\"})",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "pdb-prometheus"
+          },
+          "expr": "max by (mountpoint, device, fstype) ((node_filesystem_size_bytes{job=\"node\",fstype!~\"tmpfs|ramfs|devtmpfs|overlay|squashfs|nsfs|autofs|fuse.*\",mountpoint!~\"/boot.*\"} - node_filesystem_free_bytes{job=\"node\",fstype!~\"tmpfs|ramfs|devtmpfs|overlay|squashfs|nsfs|autofs|fuse.*\",mountpoint!~\"/boot.*\"}))",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "pdb-prometheus"
+          },
+          "expr": "max by (mountpoint, device, fstype) (node_filesystem_avail_bytes{job=\"node\",fstype!~\"tmpfs|ramfs|devtmpfs|overlay|squashfs|nsfs|autofs|fuse.*\",mountpoint!~\"/boot.*\"})",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "pdb-prometheus"
+          },
+          "expr": "max by (mountpoint, device, fstype) (100 * (node_filesystem_size_bytes{job=\"node\",fstype!~\"tmpfs|ramfs|devtmpfs|overlay|squashfs|nsfs|autofs|fuse.*\",mountpoint!~\"/boot.*\"} - node_filesystem_free_bytes{job=\"node\",fstype!~\"tmpfs|ramfs|devtmpfs|overlay|squashfs|nsfs|autofs|fuse.*\",mountpoint!~\"/boot.*\"}) / ((node_filesystem_size_bytes{job=\"node\",fstype!~\"tmpfs|ramfs|devtmpfs|overlay|squashfs|nsfs|autofs|fuse.*\",mountpoint!~\"/boot.*\"} - node_filesystem_free_bytes{job=\"node\",fstype!~\"tmpfs|ramfs|devtmpfs|overlay|squashfs|nsfs|autofs|fuse.*\",mountpoint!~\"/boot.*\"}) + node_filesystem_avail_bytes{job=\"node\",fstype!~\"tmpfs|ramfs|devtmpfs|overlay|squashfs|nsfs|autofs|fuse.*\",mountpoint!~\"/boot.*\"}))",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "mountpoint": 0,
+              "device": 1,
+              "fstype": 2,
+              "Value #A": 3,
+              "Value #B": 4,
+              "Value #C": 5,
+              "Value #D": 6
+            },
+            "renameByName": {
+              "mountpoint": "Einhängepunkt",
+              "device": "Gerät",
+              "fstype": "Dateisystem",
+              "Value #A": "Gesamt",
+              "Value #B": "Belegt",
+              "Value #C": "Frei",
+              "Value #D": "Belegt %"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^(Gesamt|Belegt|Frei)$"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Belegt %"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 80
+                    },
+                    {
+                      "color": "red",
+                      "value": 90
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "gradient",
+                  "valueDisplayMode": "text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Einhängepunkt"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "/": {
+                        "text": "System (/)",
+                        "index": 0
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "/var/lib/docker": {
+                        "text": "Daten (/var/lib/docker)",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Einhängepunkt",
+            "desc": false
+          }
+        ]
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Belegter und freier Speicher je Partition",
+      "id": 33,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "pdb-prometheus"
+      },
+      "description": "Verlauf aus Prometheus (30 Tage Aufbewahrung). Durchgezogen = belegt, gestrichelt = frei.",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 105
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "pdb-prometheus"
+          },
+          "expr": "(node_filesystem_size_bytes{job=\"node\",fstype!~\"tmpfs|ramfs|devtmpfs|overlay|squashfs|nsfs|autofs|fuse.*\",mountpoint!~\"/boot.*\"} - node_filesystem_free_bytes{job=\"node\",fstype!~\"tmpfs|ramfs|devtmpfs|overlay|squashfs|nsfs|autofs|fuse.*\",mountpoint!~\"/boot.*\"})",
+          "legendFormat": "{{mountpoint}} belegt",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "pdb-prometheus"
+          },
+          "expr": "node_filesystem_avail_bytes{job=\"node\",fstype!~\"tmpfs|ramfs|devtmpfs|overlay|squashfs|nsfs|autofs|fuse.*\",mountpoint!~\"/boot.*\"}",
+          "legendFormat": "{{mountpoint}} frei",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "min": 0,
+          "custom": {
+            "fillOpacity": 10,
+            "axisLabel": ""
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "/ belegt"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "System (/) belegt"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "/var/lib/docker belegt"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Daten (/var/lib/docker) belegt"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "/ frei"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "System (/) frei"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "/var/lib/docker frei"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Daten (/var/lib/docker) frei"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* frei$"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "min",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
       "type": "stat",
       "title": "Datenbank",
       "id": 14,
@@ -2462,7 +2899,7 @@
         "h": 8,
         "w": 6,
         "x": 0,
-        "y": 97
+        "y": 113
       },
       "targets": [
         {
@@ -2505,7 +2942,7 @@
         "h": 8,
         "w": 18,
         "x": 6,
-        "y": 97
+        "y": 113
       },
       "targets": [
         {

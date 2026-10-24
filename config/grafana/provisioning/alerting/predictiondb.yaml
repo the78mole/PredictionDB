@@ -141,3 +141,47 @@ groups:
             PDB_ENERGY_OIL_BULLETIN_URL).
         labels:
           severity: warning
+
+  - orgId: 1
+    name: System
+    folder: PredictionDB
+    interval: 5m
+    rules:
+      # Partition der VM zu mehr als 90 % belegt (wie df, node-exporter). Gleiche Auswahl der
+      # Dateisysteme wie im Status-Dashboard (Abschnitt Speicher).
+      - uid: pdb-disk-full
+        title: System - Partition zu 90 % belegt
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: pdb-prometheus
+            model:
+              refId: A
+              instant: true
+              range: false
+              expr: >-
+                100 * (node_filesystem_size_bytes{job="node",fstype!~"tmpfs|ramfs|devtmpfs|overlay|squashfs|nsfs|autofs|fuse.*",mountpoint!~"/boot.*"}
+                - node_filesystem_free_bytes{job="node",fstype!~"tmpfs|ramfs|devtmpfs|overlay|squashfs|nsfs|autofs|fuse.*",mountpoint!~"/boot.*"})
+                / (node_filesystem_size_bytes{job="node",fstype!~"tmpfs|ramfs|devtmpfs|overlay|squashfs|nsfs|autofs|fuse.*",mountpoint!~"/boot.*"}
+                - node_filesystem_free_bytes{job="node",fstype!~"tmpfs|ramfs|devtmpfs|overlay|squashfs|nsfs|autofs|fuse.*",mountpoint!~"/boot.*"}
+                + node_filesystem_avail_bytes{job="node",fstype!~"tmpfs|ramfs|devtmpfs|overlay|squashfs|nsfs|autofs|fuse.*",mountpoint!~"/boot.*"})
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [90]}
+        noDataState: OK
+        execErrState: Error
+        for: 15m
+        annotations:
+          summary: "Partition {{ $labels.mountpoint }} zu {{ printf \"%.0f\" $values.A.Value }} % belegt"
+          description: >-
+            {{ $labels.mountpoint }} ({{ $labels.device }}) hat weniger als 10 % frei. Auf
+            /var/lib/docker liegen alle Volumes (Postgres, Garage, Prometheus); Platte in
+            Proxmox vergrößern oder alte Daten aufräumen.
+        labels:
+          severity: warning
