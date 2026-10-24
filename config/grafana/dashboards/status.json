@@ -6,7 +6,7 @@
   ],
   "timezone": "",
   "schemaVersion": 41,
-  "version": 30,
+  "version": 31,
   "editable": false,
   "refresh": "5m",
   "time": {
@@ -1592,6 +1592,17 @@
           "editorMode": "code",
           "format": "time_series",
           "rawSql": "SELECT day::timestamptz AS time, technology AS metric, sum(capacity_mw) / 1000 AS value\n  FROM assets.capacity_daily\n WHERE clustering_version = (SELECT max(clustering_version) FROM assets.capacity_daily)\n   AND $__timeFilter(day)\n GROUP BY 1, 2 ORDER BY 1"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT day::timestamptz AS time, 'Gesamt' AS metric, sum(capacity_mw) / 1000 AS value\n  FROM assets.capacity_daily\n WHERE clustering_version = (SELECT max(clustering_version) FROM assets.capacity_daily)\n   AND $__timeFilter(day)\n GROUP BY 1 ORDER BY 1"
         }
       ],
       "timeFrom": "12y",
@@ -1603,9 +1614,65 @@
               "mode": "normal"
             },
             "fillOpacity": 30
-          }
+          },
+          "decimals": 1
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Gesamt"
+            },
+            "properties": [
+              {
+                "id": "custom.stacking",
+                "value": {
+                  "mode": "none",
+                  "group": "gesamt"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "showLegend": true,
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
       }
     },
     {
