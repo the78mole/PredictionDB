@@ -51,6 +51,7 @@ uv run ml-train fit --snapshot .ml-data/snap --variant kalender --backtest .ml-d
 uv run ml-train registry list
 uv run ml-train registry evaluate <version>                        # Champion/Challenger
 uv run ml-train registry promote <version>
+uv run ml-train registry sync                                      # Spiegel für Grafana
 uv run ml-train predict --dry-run                                  # aktive Versionen, jetzt
 ```
 
@@ -79,6 +80,19 @@ mit eigenem `model_version` in `fcst.prediction`.
 Ziel im Mittel (Pinball-Loss über P10/P50/P90) besser sein und darf in keiner Gruppe aus Ziel,
 Vorlauftag und Jahreszeit mit mindestens 200 Werten mehr als 5 % schlechter sein
 (`promotion` in der YAML).
+
+### Spiegel in der Datenbank (Status-Dashboard)
+
+Grafana liest keine Dateien aus Garage. `registry sync` schreibt deshalb Versionen mit Rolle,
+Trainingsdauer und -zeitraum nach `meta.model_version`, den Verlauf nach `meta.model_event` und
+die Backtest-Kennzahlen je Ziel und Vorlauftag (MAE, RMSE, Bias, Pinball, Abdeckung P10–P90;
+`lead_day` 0 = alle) nach `meta.model_metric`. `fit` und `promote` gleichen danach selbst ab,
+`predict` vor jedem Lauf, sodass Änderungen spätestens nach einer Stunde im Dashboard stehen. Ist
+keine Datenbank erreichbar (Training auf dem Laptop), wird der Abgleich nur protokolliert und
+übersprungen. Die Sicht `fcst.prediction_error` stellt jede gespeicherte Medianprognose dem
+Ist-Wert (Stundenmittel aus `energy.value_best`) gegenüber; daraus rechnen die Panels den
+Prognosefehler im Betrieb. `fit --backtest` übernimmt die Laufzeit des Backtests aus `lauf.json`
+ins Manifest (`backtest_seconds`).
 
 ## Tests
 
