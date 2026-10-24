@@ -26,20 +26,41 @@ log = get_logger(__name__)
 ANCHOR = datetime(2015, 1, 1, tzinfo=UTC)
 
 # format: Aufbau der Antwort weicht ab (Spalten, Einheiten), es wurde nichts geschrieben
+#: Mindestabstand, bevor ein angebrochener Block fortgesetzt wird
+MIN_RESUME = timedelta(days=1)
+
 Status = Literal["ok", "empty", "failed", "format"]
 
 
 class Store(Protocol):
     def source_id(self, source: SourceMeta) -> int: ...
     def write(self, source_id: int, batch: list[SeriesData], fetched: datetime) -> int: ...
-    def done_chunks(self, source_id: int, dataset: str) -> set[datetime]: ...
+    def done_chunks(self, source_id: int, dataset: str) -> dict[datetime, datetime]: ...
     def mark_chunk(
-        self, source_id: int, dataset: str, start: datetime, end: datetime, n_values: int
+        self,
+        source_id: int,
+        dataset: str,
+        start: datetime,
+        end: datetime,
+        n_values: int,
+        *,
+        resume: bool = False,
     ) -> None: ...
     def compare(self, start: datetime, end: datetime) -> list[Deviation]: ...
     def record_status(
         self, source_id: int, dataset: str, status: str, n_values: int, error: str | None
     ) -> None: ...
+
+
+@dataclass(frozen=True)
+class Todo:
+    source: Source
+    dataset: str
+    start: datetime  # abzurufender Bereich
+    end: datetime
+    chunk_start: datetime  # Rasterblock
+    chunk_end: datetime
+    resume: bool = False  # setzt einen angebrochenen Block fort
 
 
 @dataclass
@@ -147,8 +168,13 @@ class EnergyIngestor:
         datasets: list[str] | None = None,
         force: bool = False,
         final_only: bool = False,
-    ) -> list[tuple[Source, str, datetime, datetime]]:
-        """Noch nicht vollständig geladene Blöcke, neueste zuerst, reihum je Quelle."""
+    ) -> list[Todo]:
+        """Noch nicht vollständig geladene Blöcke, neueste zuerst, reihum je Quelle.
+
+        Ein Block, der noch über die Grenze ``final_after_days`` reicht, wird bis zu dieser
+        Grenze geladen und später ab dort fortgesetzt. Sonst bliebe zwischen dem Fenster des
+        laufenden Abgleichs und dem jüngsten vollständigen Block eine Lücke von bis zu einer
+        Blocklänge (bei SMARD 91 Tage)."""
         final = now - timedelta(days=self.settings.final_after_days)
         per_source = []
         for src in self.sources:
@@ -157,19 +183,20 @@ class EnergyIngestor:
             for ds in src.datasets():
                 if datasets and ds not in datasets:
                     continue
-                done = set() if force else self.store.done_chunks(sid, ds)
+                done = {} if force else self.store.done_chunks(sid, ds)
                 for a, b in chunks(src.max_chunk(ds), start, end):
-                    if a in done or (final_only and b > final):
+                    loaded = done.get(a)
+                    if loaded is not None and loaded >= b:
                         continue
-                    items.append((src, ds, max(a, start), min(b, end), a, b))
-            items.sort(key=lambda i: i[4], reverse=True)
+                    lo = max(loaded or a, start)
+                    hi = min(b, end, final) if final_only else min(b, end)
+                    # angebrochene Blöcke höchstens einmal am Tag fortsetzen
+                    if hi <= lo or (loaded is not None and hi < b and hi - lo < MIN_RESUME):
+                        continue
+                    items.append(Todo(src, ds, lo, hi, a, b, resume=lo == loaded))
+            items.sort(key=lambda t: t.chunk_start, reverse=True)
             per_source.append(items)
-        return [
-            (i[0], i[1], i[2], i[3])
-            for group in zip_longest(*per_source)
-            for i in group
-            if i is not None
-        ]
+        return [t for group in zip_longest(*per_source) for t in group if t is not None]
 
     def backfill(
         self,
@@ -188,14 +215,22 @@ class EnergyIngestor:
             start, end, now=now, datasets=datasets, force=force, final_only=final_only
         )
         results = []
-        for src, ds, a, b in todo[:limit]:
-            res = self.fetch(src, ds, a, b, now)
+        for t in todo[:limit]:
+            res = self.fetch(t.source, t.dataset, t.start, t.end, now)
             results.append(res)
-            # Nur vollständige, abgeschlossene Rasterblöcke gelten als erledigt
-            full = chunks(src.max_chunk(ds), a, b)
-            complete = len(full) == 1 and full[0] == (a, b) and b <= final
-            if res.status in ("ok", "empty") and complete:
-                self.store.mark_chunk(self.store.source_id(src), ds, a, b, res.n_values)
+            # Als geladen gilt nur, was lückenlos ab Blockbeginn (oder ab dem bisher geladenen
+            # Stand) reicht und älter als die Grenze ``final_after_days`` ist
+            loaded = min(t.end, final)
+            contiguous = t.start == t.chunk_start or t.resume
+            if res.status in ("ok", "empty") and contiguous and loaded > t.start:
+                self.store.mark_chunk(
+                    self.store.source_id(t.source),
+                    t.dataset,
+                    t.chunk_start,
+                    loaded,
+                    res.n_values,
+                    resume=t.resume,
+                )
         return results
 
     def backfill_step(self, now: datetime | None = None) -> list[DatasetResult]:

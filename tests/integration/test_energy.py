@@ -131,6 +131,16 @@ def test_fetch_log(engine: Engine) -> None:
     sid = store.source_id(Src(priority=3))
     store.mark_chunk(sid, "x", T0, T0 + timedelta(days=10), 5)
     store.mark_chunk(sid, "y", T0, T0 + timedelta(days=10), 0)
-    assert store.done_chunks(sid, "x") == {T0}
+    assert store.done_chunks(sid, "x") == {T0: T0 + timedelta(days=10)}
     # leere Blöcke gelten vorerst als erledigt, werden aber später erneut versucht
-    assert store.done_chunks(sid, "y") == {T0}
+    assert store.done_chunks(sid, "y") == {T0: T0 + timedelta(days=10)}
+    # angebrochener Block: Stand und Wertezahl wachsen beim Fortsetzen
+    store.mark_chunk(sid, "z", T0, T0 + timedelta(days=3), 4)
+    store.mark_chunk(sid, "z", T0, T0 + timedelta(days=4), 2, resume=True)
+    assert store.done_chunks(sid, "z") == {T0: T0 + timedelta(days=4)}
+    with engine.connect() as conn:
+        n = conn.execute(
+            text("SELECT n_values FROM meta.energy_fetch WHERE source_id = :s AND dataset = 'z'"),
+            {"s": sid},
+        ).scalar_one()
+    assert n == 6
