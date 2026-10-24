@@ -6,7 +6,7 @@
   ],
   "timezone": "",
   "schemaVersion": 41,
-  "version": 34,
+  "version": 35,
   "editable": false,
   "refresh": "5m",
   "time": {
@@ -389,7 +389,7 @@
               },
               {
                 "id": "unit",
-                "value": "currencyEUR"
+                "value": "suffix:€/MWh"
               },
               {
                 "id": "decimals",
@@ -599,7 +599,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "currencyEUR",
+          "unit": "suffix:€/MWh",
           "decimals": 1,
           "custom": {
             "lineWidth": 1,
@@ -1247,11 +1247,11 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Preis €/MWh"
+                "value": "Preis"
               },
               {
                 "id": "unit",
-                "value": "currencyEUR"
+                "value": "suffix:€/MWh"
               },
               {
                 "id": "color",
@@ -1270,11 +1270,11 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Last MW"
+                "value": "Last"
               },
               {
                 "id": "unit",
-                "value": "short"
+                "value": "megwatt"
               },
               {
                 "id": "custom.axisPlacement",
@@ -1297,11 +1297,11 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Lastprognose MW (ÜNB)"
+                "value": "Lastprognose (ÜNB)"
               },
               {
                 "id": "unit",
-                "value": "short"
+                "value": "megwatt"
               },
               {
                 "id": "custom.axisPlacement",
