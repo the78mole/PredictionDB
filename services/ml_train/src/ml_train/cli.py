@@ -9,6 +9,7 @@ Beispiele::
     ml-train fit --snapshot /data/snap --variant kalender --backtest /data/bt --role champion
     ml-train registry list
     ml-train registry promote de_lu_v1-wetter-202611010800-ab12cd
+    ml-train registry sync                                     # Spiegel für Grafana
     ml-train predict                                           # aktive Versionen, jetzt
     ml-train predict --watch 3600
 """
@@ -26,6 +27,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+from sqlalchemy import Engine
 
 from ml_train.backtest import BacktestResult, data_days, run_backtest
 from ml_train.config import ModelConfig, load_config
@@ -94,6 +96,7 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--registry", default=DEFAULT_REGISTRY)
     rc = r.add_subparsers(dest="action", required=True)
     rc.add_parser("list")
+    rc.add_parser("sync", help="Versionen, Rollen und Kennzahlen nach meta.model_* spiegeln")
     for name in ("evaluate", "promote"):
         x = rc.add_parser(name)
         x.add_argument("version")
@@ -206,22 +209,46 @@ def cmd_fit(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace) -> int:
         "git_commit": git_commit(),
         "created": datetime.now(UTC).isoformat(timespec="seconds"),
     }
+    if a.backtest and (a.backtest / "lauf.json").exists():
+        timings = json.loads((a.backtest / "lauf.json").read_text()).get("timings_s", {})
+        manifest["backtest_seconds"] = round(sum(timings.values()), 1)
     if a.backtest and (a.backtest / "metrics.csv").exists():
         m = pd.read_csv(a.backtest / "metrics.csv")
         manifest["backtest_metrics"] = m[m["method"] == v.name].to_dict("records")
-    version = Registry(a.registry, cfg).register(model, manifest, bt, a.role)
+    reg = Registry(a.registry, cfg)
+    version = reg.register(model, manifest, bt, a.role)
+    try_sync(reg)
     print(json.dumps({"version": version, "role": a.role, "train_rows": len(frame)}))
     return 0
 
 
+def try_sync(reg: Registry, engine: Engine | None = None) -> None:
+    """Spiegel aktualisieren, wo eine Datenbank erreichbar ist (Training läuft auch ohne)."""
+    from ml_train.dbsync import sync_registry
+    from predictiondb_core.db import create_db_engine
+
+    try:
+        sync_registry(engine or create_db_engine(), reg)
+    except Exception as e:  # der Spiegel darf Training und Inferenz nie aufhalten
+        log.warning("sync.failed", error=str(e))
+
+
 def cmd_registry(cfg: ModelConfig, a: argparse.Namespace) -> int:
     reg = Registry(a.registry, cfg)
+    if a.action == "sync":
+        from ml_train.dbsync import sync_registry
+        from predictiondb_core.db import create_db_engine
+
+        print(json.dumps({"versions": sync_registry(create_db_engine(), reg)}))
+        return 0
     if a.action == "list":
         st = reg.state()
         st["active"] = reg.active()
         print(json.dumps(st, indent=2))
         return 0
     d = reg.promote(a.version, a.force) if a.action == "promote" else reg.evaluate(a.version)
+    if a.action == "promote":
+        try_sync(reg)
     if not d.overall.empty:
         print(d.overall.to_string(index=False))
     for r in d.reasons:
@@ -240,6 +267,7 @@ def cmd_predict(cfg: ModelConfig, a: argparse.Namespace) -> int:
         issue = (
             pd.Timestamp(a.issue, tz="UTC") if a.issue else pd.Timestamp.now(tz="UTC").floor("h")
         )
+        try_sync(reg, engine)
         versions = a.version or reg.active()
         if not versions:
             log.error("predict.no_versions", registry=a.registry)

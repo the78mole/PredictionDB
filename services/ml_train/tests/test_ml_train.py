@@ -197,3 +197,39 @@ def test_compare_blocks_group_regression() -> None:
     d = compare(champ, chal, PromotionRule(min_group_n=50))
     assert not d.promote
     assert any("Winter" in r for r in d.reasons)
+
+
+def test_dbsync_roles_and_metrics() -> None:
+    from ml_train.dbsync import metric_rows, roles
+
+    st = {
+        "champion": "c-kalender-2-x",
+        "challengers": ["c-wetter-3-x"],
+        "baseline": "c-kalender-1-x",
+        "previous": ["c-kalender-0-x"],
+        "history": [{"version": v} for v in ("c-old-0-x", "c-kalender-0-x", "c-kalender-2-x")],
+    }
+    assert roles(st) == {
+        "c-old-0-x": "retired",
+        "c-kalender-0-x": "previous",
+        "c-kalender-1-x": "baseline",
+        "c-wetter-3-x": "challenger",
+        "c-kalender-2-x": "champion",
+    }
+    ts = pd.date_range("2024-01-01", periods=48, freq="h", tz="UTC")
+    bt = pd.DataFrame(
+        {
+            "target": "load_actual",
+            "issue_time": ts[0],
+            "ts": ts,
+            "lead_day": [1] * 24 + [2] * 24,
+            "actual": 10.0,
+            "q10": 8.0,
+            "q50": [11.0] * 24 + [13.0] * 24,
+            "q90": 12.0,
+        }
+    )
+    rows = {r["lead_day"]: r for r in metric_rows("v", bt)}
+    assert set(rows) == {0, 1, 2}
+    assert rows[1]["mae"] == 1.0 and rows[2]["mae"] == 3.0 and rows[0]["mae"] == 2.0
+    assert rows[0]["n"] == 48 and rows[1]["coverage80"] == 1.0

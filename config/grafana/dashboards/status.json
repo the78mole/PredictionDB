@@ -6,7 +6,7 @@
   ],
   "timezone": "",
   "schemaVersion": 41,
-  "version": 32,
+  "version": 33,
   "editable": false,
   "refresh": "5m",
   "time": {
@@ -16,6 +16,884 @@
   "panels": [
     {
       "type": "row",
+      "title": "Prognosemodelle",
+      "id": 34,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Champion",
+      "id": 35,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 0,
+        "y": 1
+      },
+      "description": "Modellversion in Produktion (meta.model_version, gespiegelt aus der Registry in Garage durch ml-train registry sync bzw. jeden Lauf von ml-predict). Variante und Zeitpunkt des Trainings.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT v.variant || ' · ' || to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM.YY HH24:MI') AS \"Champion\"\n  FROM meta.model_version v\n WHERE v.role = 'champion' ORDER BY v.created DESC LIMIT 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "kein Champion"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/.*/"
+        },
+        "colorMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Trainiert vor",
+      "id": 36,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 5
+      },
+      "description": "Alter der jüngsten registrierten Modellversion (ml-train fit).",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT extract(epoch FROM now() - max(created)) / 86400 AS \"Tage\"\n  FROM meta.model_version"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "d",
+          "decimals": 1,
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "–",
+                  "color": "text",
+                  "index": 0
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 35
+              },
+              {
+                "color": "red",
+                "value": 100
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "background"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Prognose vor",
+      "id": 37,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 5
+      },
+      "description": "Jüngster Ausgabezeitpunkt in fcst.prediction. ml-predict rechnet stündlich.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT extract(epoch FROM now() - max(issue_time)) / 3600 AS \"Stunden\"\n  FROM fcst.prediction"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "h",
+          "decimals": 1,
+          "mappings": [
+            {
+              "type": "special",
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "–",
+                  "color": "text",
+                  "index": 0
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 3
+              },
+              {
+                "color": "red",
+                "value": 12
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "background"
+      }
+    },
+    {
+      "type": "table",
+      "title": "Modellversionen",
+      "id": 38,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 16,
+        "x": 8,
+        "y": 1
+      },
+      "description": "Alle Versionen der Registry, aktive zuerst. Dauer = reines Training bzw. der zugehörige Backtest (alle Faltungen). Tage = Ausgabetage des Trainings. MAE D+1 aus dem Backtest der Version (Median gegen Ist).",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT v.variant AS \"Variante\", CASE v.role WHEN 'champion' THEN 'Champion' WHEN 'challenger' THEN 'Challenger' WHEN 'baseline' THEN 'Baseline' WHEN 'previous' THEN 'Vorgänger' ELSE 'ausgemustert' END AS \"Rolle\",\n       to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM.YY HH24:MI') AS \"Trainiert\",\n       v.train_seconds AS \"Training\", v.backtest_seconds AS \"Backtest\",\n       v.train_rows AS \"Zeilen\",\n       to_char(v.train_from, 'DD.MM.YY') || ' – ' || to_char(v.train_to, 'DD.MM.YY') AS \"Tage\",\n       (SELECT m.mae FROM meta.model_metric m WHERE m.version = v.version AND m.target = 'load_actual' AND m.lead_day = 1) AS \"MAE Last D+1\",\n       (SELECT m.mae FROM meta.model_metric m WHERE m.version = v.version AND m.target = 'da_price_de_lu' AND m.lead_day = 1) AS \"MAE Preis D+1\",\n       v.git_commit AS \"Commit\", v.version AS \"Version\"\n  FROM meta.model_version v\n ORDER BY CASE v.role WHEN 'champion' THEN 0 WHEN 'challenger' THEN 1 WHEN 'baseline' THEN 2 WHEN 'previous' THEN 3 ELSE 4 END, v.created DESC LIMIT 12"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "minWidth": 30
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Variante"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Rolle"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 96
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Trainiert"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 112
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Training"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              },
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Backtest"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              },
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Zeilen"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 72
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Tage"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 140
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "MAE Last D+1"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 104
+              },
+              {
+                "id": "unit",
+                "value": "megwatt"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "MAE Preis D+1"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 108
+              },
+              {
+                "id": "unit",
+                "value": "currencyEUR"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Commit"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 104
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Rolle"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "Champion": {
+                        "color": "green",
+                        "index": 0
+                      },
+                      "Challenger": {
+                        "color": "blue",
+                        "index": 1
+                      },
+                      "Baseline": {
+                        "color": "text",
+                        "index": 2
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Prognosefehler Last D+1 (Tagesmittel)",
+      "id": 39,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
+      "timeFrom": "30d",
+      "description": "Tagesmittel des Fehlers der Medianprognose (P50) für den Folgetag (D+1) aus der Ausgabe um 08 UTC (wie im Backtest) gegen den Ist-Wert, je Modellversion aus fcst.prediction_error. RMSE gestrichelt. Ohne Gesamtsumme, da sich Fehler verschiedener Modelle nicht addieren. ENTSO-E Day-Ahead als Vergleich.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT time_bucket('1 day', e.valid_time, 'Europe/Berlin') AS time,\n       v.variant || ' ' || to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') || ' · ' || CASE v.role WHEN 'champion' THEN 'Champion' WHEN 'challenger' THEN 'Challenger' WHEN 'baseline' THEN 'Baseline' WHEN 'previous' THEN 'Vorgänger' ELSE 'ausgemustert' END || ' MAE' AS metric, avg(abs(e.err)) AS value\n  FROM fcst.prediction_error e JOIN meta.model_version v ON v.version = e.model_version\n WHERE e.target = 'load_actual' AND e.lead_day = 1 AND e.err IS NOT NULL\n   AND extract(hour FROM e.issue_time AT TIME ZONE 'UTC') = 8\n   AND $__timeFilter(e.valid_time)\n GROUP BY 1, 2 ORDER BY 1"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT time_bucket('1 day', e.valid_time, 'Europe/Berlin') AS time,\n       v.variant || ' ' || to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') || ' · ' || CASE v.role WHEN 'champion' THEN 'Champion' WHEN 'challenger' THEN 'Challenger' WHEN 'baseline' THEN 'Baseline' WHEN 'previous' THEN 'Vorgänger' ELSE 'ausgemustert' END || ' RMSE' AS metric, sqrt(avg(e.err ^ 2)) AS value\n  FROM fcst.prediction_error e JOIN meta.model_version v ON v.version = e.model_version\n WHERE e.target = 'load_actual' AND e.lead_day = 1 AND e.err IS NOT NULL\n   AND extract(hour FROM e.issue_time AT TIME ZONE 'UTC') = 8\n   AND $__timeFilter(e.valid_time)\n GROUP BY 1, 2 ORDER BY 1"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "WITH h AS (\n  SELECT time_bucket('1 hour', ts) AS ts, code, avg(value) AS value\n    FROM energy.value_best WHERE code IN ('load_actual', 'load_da_forecast') AND $__timeFilter(ts)\n   GROUP BY 1, 2)\nSELECT time_bucket('1 day', a.ts, 'Europe/Berlin') AS time, 'ENTSO-E Day-Ahead MAE' AS metric,\n       avg(abs(f.value - a.value)) AS value\n  FROM h a JOIN h f ON f.ts = a.ts AND f.code = 'load_da_forecast'\n WHERE a.code = 'load_actual'\n GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "megwatt",
+          "custom": {
+            "lineWidth": 1,
+            "showPoints": "always",
+            "pointSize": 4,
+            "spanNulls": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* RMSE$"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^ENTSO-E.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Prognosefehler Preis D+1 (Tagesmittel)",
+      "id": 40,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "timeFrom": "30d",
+      "description": "Tagesmittel des Fehlers der Medianprognose (P50) für den Folgetag (D+1) aus der Ausgabe um 08 UTC (wie im Backtest) gegen den Ist-Wert, je Modellversion aus fcst.prediction_error. RMSE gestrichelt. Ohne Gesamtsumme, da sich Fehler verschiedener Modelle nicht addieren.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT time_bucket('1 day', e.valid_time, 'Europe/Berlin') AS time,\n       v.variant || ' ' || to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') || ' · ' || CASE v.role WHEN 'champion' THEN 'Champion' WHEN 'challenger' THEN 'Challenger' WHEN 'baseline' THEN 'Baseline' WHEN 'previous' THEN 'Vorgänger' ELSE 'ausgemustert' END || ' MAE' AS metric, avg(abs(e.err)) AS value\n  FROM fcst.prediction_error e JOIN meta.model_version v ON v.version = e.model_version\n WHERE e.target = 'da_price_de_lu' AND e.lead_day = 1 AND e.err IS NOT NULL\n   AND extract(hour FROM e.issue_time AT TIME ZONE 'UTC') = 8\n   AND $__timeFilter(e.valid_time)\n GROUP BY 1, 2 ORDER BY 1"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT time_bucket('1 day', e.valid_time, 'Europe/Berlin') AS time,\n       v.variant || ' ' || to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') || ' · ' || CASE v.role WHEN 'champion' THEN 'Champion' WHEN 'challenger' THEN 'Challenger' WHEN 'baseline' THEN 'Baseline' WHEN 'previous' THEN 'Vorgänger' ELSE 'ausgemustert' END || ' RMSE' AS metric, sqrt(avg(e.err ^ 2)) AS value\n  FROM fcst.prediction_error e JOIN meta.model_version v ON v.version = e.model_version\n WHERE e.target = 'da_price_de_lu' AND e.lead_day = 1 AND e.err IS NOT NULL\n   AND extract(hour FROM e.issue_time AT TIME ZONE 'UTC') = 8\n   AND $__timeFilter(e.valid_time)\n GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyEUR",
+          "decimals": 1,
+          "custom": {
+            "lineWidth": 1,
+            "showPoints": "always",
+            "pointSize": 4,
+            "spanNulls": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* RMSE$"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^ENTSO-E.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Champion und Challenger im Backtest (MAE)",
+      "id": 41,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 10,
+        "x": 0,
+        "y": 17
+      },
+      "description": "MAE der Medianprognose je Vorlauftag aus dem Backtest der aktiven Versionen (meta.model_metric). Gesamt und RMSE über alle Vorlauftage. P10–P90 = Anteil der Ist-Werte im 80-%-Band (Soll 80 %). Last in MW, Preis in €/MWh.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT CASE v.role WHEN 'champion' THEN 'Champion' WHEN 'challenger' THEN 'Challenger' WHEN 'baseline' THEN 'Baseline' WHEN 'previous' THEN 'Vorgänger' ELSE 'ausgemustert' END || ' · ' || v.variant || ' ' || to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM.') AS \"Version\", CASE m.target WHEN 'load_actual' THEN 'Last MW' WHEN 'da_price_de_lu' THEN 'Preis €/MWh' END AS \"Ziel\",\n       avg(m.mae) FILTER (WHERE m.lead_day = 1) AS \"D+1\",\n       avg(m.mae) FILTER (WHERE m.lead_day = 2) AS \"D+2\",\n       avg(m.mae) FILTER (WHERE m.lead_day = 7) AS \"D+7\",\n       avg(m.mae) FILTER (WHERE m.lead_day = 0) AS \"Gesamt\",\n       avg(m.rmse) FILTER (WHERE m.lead_day = 0) AS \"RMSE\",\n       avg(m.coverage80) FILTER (WHERE m.lead_day = 0) AS \"P10–P90\"\n  FROM meta.model_metric m JOIN meta.model_version v USING (version)\n WHERE v.role <> 'retired' AND m.target IN ('load_actual', 'da_price_de_lu')\n GROUP BY v.version, v.variant, v.created, v.role, m.target\n ORDER BY m.target DESC, CASE v.role WHEN 'champion' THEN 0 WHEN 'challenger' THEN 1 WHEN 'baseline' THEN 2 WHEN 'previous' THEN 3 ELSE 4 END, v.created DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "custom": {
+            "minWidth": 30
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Version"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 190
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Ziel"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 104
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P10–P90"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 72
+              },
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "table",
+      "title": "Prognosefehler im Betrieb, letzte 14 Tage (MAE)",
+      "id": 42,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 9,
+        "x": 10,
+        "y": 17
+      },
+      "description": "Wie der Backtest, aber aus den gespeicherten Live-Prognosen (fcst.prediction) der letzten 14 Liefertage gegen die Ist-Werte, Ausgabe um 08 UTC. Bias = mittlere Abweichung (positiv: Prognose zu hoch).",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT CASE v.role WHEN 'champion' THEN 'Champion' WHEN 'challenger' THEN 'Challenger' WHEN 'baseline' THEN 'Baseline' WHEN 'previous' THEN 'Vorgänger' ELSE 'ausgemustert' END || ' · ' || v.variant || ' ' || to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM.') AS \"Version\", CASE e.target WHEN 'load_actual' THEN 'Last MW' WHEN 'da_price_de_lu' THEN 'Preis €/MWh' END AS \"Ziel\",\n       avg(abs(e.err)) FILTER (WHERE e.lead_day = 1) AS \"D+1\",\n       avg(abs(e.err)) FILTER (WHERE e.lead_day = 2) AS \"D+2\",\n       avg(abs(e.err)) FILTER (WHERE e.lead_day = 7) AS \"D+7\",\n       avg(e.err) AS \"Bias\", count(*) AS \"Werte\"\n  FROM fcst.prediction_error e JOIN meta.model_version v ON v.version = e.model_version\n WHERE e.valid_time >= now() - interval '14 days' AND e.err IS NOT NULL\n   AND extract(hour FROM e.issue_time AT TIME ZONE 'UTC') = 8\n   AND e.target IN ('load_actual', 'da_price_de_lu')\n GROUP BY v.version, v.variant, v.created, v.role, e.target\n ORDER BY e.target DESC, CASE v.role WHEN 'champion' THEN 0 WHEN 'challenger' THEN 1 WHEN 'baseline' THEN 2 WHEN 'previous' THEN 3 ELSE 4 END, v.created DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "custom": {
+            "minWidth": 30
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Version"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 190
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Ziel"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 104
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Werte"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "table",
+      "title": "Registry-Verlauf",
+      "id": 43,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 5,
+        "x": 19,
+        "y": 17
+      },
+      "description": "Registrierungen und Rollenwechsel (meta.model_event).",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT to_char(at AT TIME ZONE 'Europe/Berlin', 'DD.MM.YY HH24:MI') AS \"Zeit\",\n       CASE action WHEN 'champion' THEN 'Champion' WHEN 'challenger' THEN 'Challenger' WHEN 'baseline' THEN 'Baseline' ELSE action END AS \"Aktion\",\n       split_part(version, '-', 2) || ' ' || to_char(to_timestamp(split_part(version, '-', 3), 'YYYYMMDDHH24MI'), 'DD.MM.') AS \"Version\", note AS \"Notiz\"\n  FROM meta.model_event ORDER BY at DESC LIMIT 20"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "minWidth": 30
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Zeit"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 116
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Aktion"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 88
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Version"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "row",
       "title": "Energiedaten",
       "id": 1,
       "collapsed": false,
@@ -23,7 +901,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 0
+        "y": 25
       },
       "panels": []
     },
@@ -39,7 +917,7 @@
         "h": 10,
         "w": 14,
         "x": 0,
-        "y": 1
+        "y": 26
       },
       "targets": [
         {
@@ -181,7 +1059,7 @@
         "h": 10,
         "w": 10,
         "x": 14,
-        "y": 1
+        "y": 26
       },
       "targets": [
         {
@@ -250,7 +1128,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 11
+        "y": 36
       },
       "targets": [
         {
@@ -339,7 +1217,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 11
+        "y": 36
       },
       "targets": [
         {
@@ -415,7 +1293,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 19
+        "y": 44
       },
       "panels": []
     },
@@ -431,7 +1309,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 20
+        "y": 45
       },
       "targets": [
         {
@@ -474,7 +1352,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 24
+        "y": 49
       },
       "targets": [
         {
@@ -535,7 +1413,7 @@
         "h": 8,
         "w": 18,
         "x": 6,
-        "y": 20
+        "y": 45
       },
       "targets": [
         {
@@ -563,7 +1441,7 @@
         "h": 5,
         "w": 24,
         "x": 0,
-        "y": 28
+        "y": 53
       },
       "description": "Neu = neu geladene Läufe, Da = schon vorhanden, Unv. = unvollständig, Fehler = fehlgeschlagene Schritte. Zeitraum und Zuletzt in UTC, Start und Fertig ca. lokal.",
       "targets": [
@@ -847,7 +1725,7 @@
         "h": 12,
         "w": 14,
         "x": 0,
-        "y": 33
+        "y": 58
       },
       "description": "Oben die Live-Läufe (ingest-gfs, eigener Dienst mit eigener Quelle NOMADS, unabhängig vom Backfill): „NOAA ab hh:mm“ = Lauf noch nicht veröffentlicht, frühestens ab dieser lokalen Zeit; „wartet (NOAA)“ = teilweise veröffentlicht. Darunter laufende Backfill-Läufe und die nächsten der Warteschlange. Lauf in UTC, Start lokal.",
       "targets": [
@@ -1030,7 +1908,7 @@
         "h": 12,
         "w": 10,
         "x": 14,
-        "y": 33
+        "y": 58
       },
       "description": "Die letzten 50 abgeschlossenen Läufe aller Jobs, neueste oben. Neu = neu geladene Schritte; Lauf in UTC, Fertig in lokaler Zeit. übergeben = vom nächsten Live-Job geladen.",
       "targets": [
@@ -1183,7 +2061,7 @@
         "h": 11,
         "w": 24,
         "x": 0,
-        "y": 45
+        "y": 70
       },
       "description": "Neu = neu geladene Läufe, Da = schon vorhanden, Unv. = unvollständig, Überg. = offene Läufe eines beendeten Live-Jobs, die der nächste Job lädt (meist der jüngste, bei NOAA noch nicht veröffentlichte; zählen nicht zum Fortschritt), Fehler = fehlgeschlagene Schritte, abgebr. = abgebrochen. Dauer in Stunden:Minuten. Fehlermeldungen stehen in meta.backfill_job.error.",
       "targets": [
@@ -1496,7 +2374,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 56
+        "y": 81
       },
       "panels": []
     },
@@ -1512,7 +2390,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 57
+        "y": 82
       },
       "targets": [
         {
@@ -1633,7 +2511,7 @@
         "h": 8,
         "w": 16,
         "x": 8,
-        "y": 57
+        "y": 82
       },
       "targets": [
         {
@@ -1738,7 +2616,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 65
+        "y": 90
       },
       "panels": []
     },
@@ -1754,7 +2632,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 66
+        "y": 91
       },
       "targets": [
         {
@@ -1816,7 +2694,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 66
+        "y": 91
       },
       "targets": [
         {
@@ -1878,7 +2756,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 70
+        "y": 95
       },
       "targets": [
         {
@@ -1921,7 +2799,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 70
+        "y": 95
       },
       "targets": [
         {
@@ -1964,7 +2842,7 @@
         "h": 8,
         "w": 16,
         "x": 8,
-        "y": 66
+        "y": 91
       },
       "targets": [
         {
@@ -2015,7 +2893,7 @@
         "h": 14,
         "w": 8,
         "x": 0,
-        "y": 74
+        "y": 99
       },
       "targets": [
         {
@@ -2101,7 +2979,7 @@
         "h": 14,
         "w": 8,
         "x": 8,
-        "y": 74
+        "y": 99
       },
       "targets": [
         {
@@ -2187,7 +3065,7 @@
         "h": 14,
         "w": 8,
         "x": 16,
-        "y": 74
+        "y": 99
       },
       "targets": [
         {
@@ -2298,7 +3176,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 88
+        "y": 113
       },
       "targets": [
         {
@@ -2374,7 +3252,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 88
+        "y": 113
       },
       "targets": [
         {
@@ -2446,7 +3324,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 96
+        "y": 121
       },
       "panels": []
     },
@@ -2463,7 +3341,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 97
+        "y": 122
       },
       "targets": [
         {
@@ -2555,7 +3433,7 @@
         "h": 8,
         "w": 16,
         "x": 8,
-        "y": 97
+        "y": 122
       },
       "targets": [
         {
@@ -2766,7 +3644,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 105
+        "y": 130
       },
       "targets": [
         {
@@ -2899,7 +3777,7 @@
         "h": 8,
         "w": 6,
         "x": 0,
-        "y": 113
+        "y": 138
       },
       "targets": [
         {
@@ -2942,7 +3820,7 @@
         "h": 8,
         "w": 18,
         "x": 6,
-        "y": 113
+        "y": 138
       },
       "targets": [
         {
