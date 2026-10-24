@@ -126,9 +126,12 @@ energy-ingest check --days 14                  # Quellen gegeneinander prüfen (
 Im Dauerbetrieb gleicht der Dienst alle 15 min das Fenster von drei Tagen zurück bis zwei
 Tage voraus ab, prüft die Quellen gegeneinander (Warnung `energy.sources_disagree` ab 5 %
 Abweichung) und lädt danach einige Blöcke Historie nach, neueste zuerst, reihum je Quelle,
-bis `PDB_ENERGY_BACKFILL_FROM` (Vorgabe 2015-01-01) erreicht ist. Vollständig geladene,
-mindestens sieben Tage alte Blöcke stehen in `meta.energy_fetch` und werden nicht erneut
-abgerufen (`--force` erzwingt es).
+bis `PDB_ENERGY_BACKFILL_FROM` (Vorgabe 2015-01-01) erreicht ist. `meta.energy_fetch` hält
+je Block fest, bis wohin er geladen ist; geladen gilt nur, was mindestens sieben Tage alt
+ist (`PDB_ENERGY_FINAL_AFTER_DAYS`). Der jüngste Block reicht meist über diese Grenze: Er
+wird bis zur Grenze geladen und danach einmal am Tag ab dem bisherigen Stand fortgesetzt,
+damit zwischen dem Abgleichfenster und den fertigen Blöcken keine Lücke bleibt. Geladenes
+wird nicht erneut abgerufen (`--force` erzwingt es).
 
 Einstellungen (Umgebung bzw. `.env`): `PDB_ALLOW_ENTSO_E`, `PDB_ALLOW_NETZTRANSPARENZ`,
 `PDB_ALLOW_EIA_REUTERS`, `PDB_ALLOW_THE`, `PDB_EIA_API_KEY`, `PDB_ENTSOE_TOKEN`, `PDB_NETZTRANSPARENZ_CLIENT_ID`,

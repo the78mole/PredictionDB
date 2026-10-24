@@ -98,10 +98,12 @@ class Marktwert:
     priority = 40
     free = True
 
-    # Laufender Abgleich rechnet den Vormonat bzw. das Vorjahr nach, bis alle Stunden da sind
+    # Laufender Abgleich rechnet den Vormonat bzw. das Vorjahr nach, bis alle Stunden da sind.
+    # Eine Periode zählt nur, wenn sie im Fenster beginnt: Der Vormonat begann bis zu 62 Tage
+    # zuvor; das Vorjahr wird bis in den Februar nachgerechnet.
     sync_lookback: ClassVar[dict[str, timedelta]] = {
-        "market_value_month": timedelta(days=40),
-        "market_value_year": timedelta(days=370),
+        "market_value_month": timedelta(days=62),
+        "market_value_year": timedelta(days=400),
     }
 
     def __init__(self, engine: Engine, clock: Callable[[], datetime] | None = None) -> None:

@@ -41,7 +41,7 @@ class FakeStore:
     def __init__(self) -> None:
         self.ids: dict[str, int] = {}
         self.written: list[tuple[int, int]] = []
-        self.done: dict[tuple[int, str], set[datetime]] = {}
+        self.done: dict[tuple[int, str], dict[datetime, datetime]] = {}
         self.deviations: list[Deviation] = []
         self.status: dict[tuple[int, str], tuple[str, int, str | None]] = {}
 
@@ -53,13 +53,20 @@ class FakeStore:
         self.written.append((source_id, n))
         return n
 
-    def done_chunks(self, source_id: int, dataset: str) -> set[datetime]:
-        return set(self.done.get((source_id, dataset), set()))
+    def done_chunks(self, source_id: int, dataset: str) -> dict[datetime, datetime]:
+        return dict(self.done.get((source_id, dataset), {}))
 
     def mark_chunk(
-        self, source_id: int, dataset: str, start: datetime, end: datetime, n_values: int
+        self,
+        source_id: int,
+        dataset: str,
+        start: datetime,
+        end: datetime,
+        n_values: int,
+        *,
+        resume: bool = False,
     ) -> None:
-        self.done.setdefault((source_id, dataset), set()).add(start)
+        self.done.setdefault((source_id, dataset), {})[start] = end
 
     def compare(self, start: datetime, end: datetime) -> list[Deviation]:
         return self.deviations
@@ -108,22 +115,49 @@ def test_sync_lookback_per_dataset() -> None:
     assert [c[1:] for c in src.calls] == [(start, end), (start - timedelta(days=95), end)]
 
 
-def test_backfill_marks_only_final_full_chunks() -> None:
+def test_backfill_marks_loaded_until_final() -> None:
     src = FakeSource("s")
     store = FakeStore()
     ing = EnergyIngestor([src], store, EnergySettings())
     start = NOW - timedelta(days=40)
+    final = NOW - timedelta(days=7)
     ing.backfill(start, NOW, now=NOW)
     done = store.done[(1, "a")]
-    # Erster Block ist angeschnitten, letzter noch nicht endgültig
-    assert all(d >= start for d in done)
-    assert all(d + timedelta(days=10) <= NOW - timedelta(days=7) for d in done)
-    assert len(done) >= 2
+    # Erster Block ist angeschnitten und gilt nicht als geladen, alle anderen höchstens bis
+    # zur Grenze final_after_days
+    assert all(a >= start for a in done)
+    assert max(done.values()) == final
+    assert all(b <= final for b in done.values())
 
-    # Zweiter Lauf lädt nur noch, was nicht als erledigt gilt
+    # Zweiter Lauf am selben Tag: nur der angeschnittene Block und das noch nicht endgültige
     src.calls.clear()
     ing.backfill(start, NOW, now=NOW)
-    assert len(src.calls) == 2 * (len(chunks(timedelta(days=10), start, NOW)) - len(done))
+    open_chunks = [c for c in chunks(timedelta(days=10), start, NOW) if c[1] > final]
+    assert len(src.calls) == 2 * (1 + len(open_chunks))
+
+
+def test_backfill_step_closes_gap_before_sync_window() -> None:
+    """Der jüngste, noch nicht endgültige Block wird bis zur Grenze geladen und am Folgetag
+    ab dort fortgesetzt; ohne das bliebe eine Lücke bis zu einer Blocklänge."""
+    src = FakeSource("s")
+    src.max_chunk = lambda dataset: timedelta(days=91)  # type: ignore[method-assign]
+    store = FakeStore()
+    settings = EnergySettings(backfill_from=ANCHOR, backfill_chunks_per_cycle=2)
+    ing = EnergyIngestor([src], store, settings)
+    final = NOW - timedelta(days=7)
+    ing.backfill_step(NOW)
+    assert max(e for _, _, e in src.calls) == final
+    newest = max(store.done[(1, "a")])
+    assert store.done[(1, "a")][newest] == final
+
+    # Eine Viertelstunde später bleibt der Block liegen (es geht mit älteren weiter), am
+    # nächsten Tag kommt genau ein Tag dazu
+    src.calls.clear()
+    ing.backfill_step(NOW + timedelta(minutes=15))
+    assert all(c[2] <= newest for c in src.calls)
+    src.calls.clear()
+    ing.backfill_step(NOW + timedelta(days=1))
+    assert {c[1:] for c in src.calls} == {(final, final + timedelta(days=1))}
 
 
 def test_backfill_step_newest_first_round_robin() -> None:

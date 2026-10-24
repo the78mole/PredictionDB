@@ -147,22 +147,31 @@ class EnergyStore:
             conn.execute(text(_UPSERT))
         return len(rows)
 
-    def done_chunks(self, source_id: int, dataset: str) -> set[datetime]:
-        """Erledigte Blöcke; leere werden nach ``EMPTY_RETRY`` erneut versucht."""
+    def done_chunks(self, source_id: int, dataset: str) -> dict[datetime, datetime]:
+        """Blockbeginn -> geladen bis (bei vollständigen Blöcken das Blockende); leere
+        Blöcke werden nach ``EMPTY_RETRY`` erneut versucht."""
         with self.engine.connect() as conn:
-            return set(
-                conn.execute(
-                    text("""
-                        SELECT chunk_start FROM meta.energy_fetch
-                         WHERE source_id = :s AND dataset = :d
-                           AND (n_values > 0 OR fetched_at > now() - :retry)"""),
-                    {"s": source_id, "d": dataset, "retry": EMPTY_RETRY},
-                ).scalars()
-            )
+            rows = conn.execute(
+                text("""
+                    SELECT chunk_start, chunk_end FROM meta.energy_fetch
+                     WHERE source_id = :s AND dataset = :d
+                       AND (n_values > 0 OR fetched_at > now() - :retry)"""),
+                {"s": source_id, "d": dataset, "retry": EMPTY_RETRY},
+            ).all()
+        return {r.chunk_start: r.chunk_end for r in rows}
 
     def mark_chunk(
-        self, source_id: int, dataset: str, start: datetime, end: datetime, n_values: int
+        self,
+        source_id: int,
+        dataset: str,
+        start: datetime,
+        end: datetime,
+        n_values: int,
+        *,
+        resume: bool = False,
     ) -> None:
+        """Block als bis ``end`` geladen vermerken; ``resume`` zählt die Werte zum bisherigen
+        Stand eines angebrochenen Blocks hinzu."""
         with self.engine.begin() as conn:
             conn.execute(
                 text("""
@@ -170,9 +179,19 @@ class EnergyStore:
                       (source_id, dataset, chunk_start, chunk_end, n_values, fetched_at)
                     VALUES (:s, :d, :start, :end, :n, now())
                     ON CONFLICT (source_id, dataset, chunk_start) DO UPDATE
-                       SET chunk_end = EXCLUDED.chunk_end, n_values = EXCLUDED.n_values,
+                       SET chunk_end = EXCLUDED.chunk_end,
+                           n_values = EXCLUDED.n_values
+                                      + CASE WHEN :resume THEN meta.energy_fetch.n_values
+                                             ELSE 0 END,
                            fetched_at = EXCLUDED.fetched_at"""),
-                {"s": source_id, "d": dataset, "start": start, "end": end, "n": n_values},
+                {
+                    "s": source_id,
+                    "d": dataset,
+                    "start": start,
+                    "end": end,
+                    "n": n_values,
+                    "resume": resume,
+                },
             )
 
     def record_status(
