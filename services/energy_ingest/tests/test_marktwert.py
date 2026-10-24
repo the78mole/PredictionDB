@@ -106,6 +106,7 @@ def test_unfree_sources_need_allow(monkeypatch: pytest.MonkeyPatch) -> None:
     settings = EnergySettings(_env_file=None)
     assert _codes(settings) == [
         "smard",
+        "energy_charts",
         "eia",
         "ecb",
         "worldbank",

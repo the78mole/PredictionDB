@@ -11,7 +11,7 @@ fossiler Energieträger und der Euro-Dollar-Kurs (Abschnitt „Brennstoffpreise�
 | SMARD, Bundesnetzagentur (`smard`) | offen | je Reihe ein Datensatz (`da_price_de_lu`, `load_actual`, …) | 10 | ja, CC BY 4.0 |
 | Netztransparenz.de, ÜNB (`netztransparenz`) | kostenloser OAuth-Client, `PDB_NETZTRANSPARENZ_CLIENT_ID` und `_CLIENT_SECRET` | `market_value_month`, `market_value_year` | 15 | nein, keine Lizenz veröffentlicht |
 | ENTSO-E Transparency (`entsoe`) | kostenloser Token, `PDB_ENTSOE_TOKEN` | `price`, `load`, `load_forecast`, `generation`, `wind_solar_forecast` | 20 | nein, Preis, Last, Erzeugung nicht auf der Freigabeliste |
-| Energy-Charts, Fraunhofer ISE (`energy_charts`) | offen | `price`, `public_power`, `forecast_solar`, `forecast_wind_onshore`, `forecast_wind_offshore`, `forecast_load` | 30 | nein, nicht-kommerziell, Börsenpreise nicht weitergebbar |
+| Energy-Charts, Fraunhofer ISE (`energy_charts`) | offen | `price`, `public_power`, `forecast_solar`, `forecast_wind_onshore`, `forecast_wind_offshore`, `forecast_load` | 30 | ja, CC BY 4.0 laut API-Dokumentation; Preise DE-LU CC BY 4.0 (SMARD), Vermerk wird geprüft |
 | Eigene Marktwerte (`pdb_marktwert`) | Berechnung aus `energy.value_best` | `market_value_month`, `market_value_year` | 40 | ja, aus SMARD |
 | EIA, eigene Reihen (`eia`) | `PDB_EIA_API_KEY`, ohne Schlüssel Bulk-Dateien | `prices` (ULSD New York Harbor und Gulf Coast) | 10 | ja, Public Domain |
 | EIA, Reihen von Thomson Reuters (`eia_reuters`) | wie `eia` | `prices` (Brent, WTI, Benzin, Heizöl, Kerosin, Propan, Henry Hub) | 10 | nein, urheberrechtlich geschützt |
@@ -21,7 +21,7 @@ fossiler Energieträger und der Euro-Dollar-Kurs (Abschnitt „Brennstoffpreise�
 | Trading Hub Europe (`the`) | offen | `gas_prices` (VTP-Tagesmittel, Ausgleichsenergiepreise ab 10/2021) | 10 | nein, Vervielfältigung nur mit Zustimmung |
 
 **Nur freie Quellen als Standard.** Unfreie Quellen laufen nur mit ausdrücklicher Freigabe:
-`PDB_ALLOW_ENTSO_E`, `PDB_ALLOW_ENERGY_CHARTS`, `PDB_ALLOW_NETZTRANSPARENZ`,
+`PDB_ALLOW_ENTSO_E`, `PDB_ALLOW_NETZTRANSPARENZ`,
 `PDB_ALLOW_EIA_REUTERS`, `PDB_ALLOW_THE` (`true|false`,
 Vorgabe `false`; ohne Präfix `PDB_` ebenfalls gelesen). Beim Start schreibt der Dienst die
 Freigaben nach `meta.source.enabled`, und `energy.value_best` liest nur freigegebene Quellen.
@@ -129,8 +129,8 @@ bis `PDB_ENERGY_BACKFILL_FROM` (Vorgabe 2015-01-01) erreicht ist. Vollständig g
 mindestens sieben Tage alte Blöcke stehen in `meta.energy_fetch` und werden nicht erneut
 abgerufen (`--force` erzwingt es).
 
-Einstellungen (Umgebung bzw. `.env`): `PDB_ALLOW_ENTSO_E`, `PDB_ALLOW_ENERGY_CHARTS`,
-`PDB_ALLOW_NETZTRANSPARENZ`, `PDB_ENTSOE_TOKEN`, `PDB_NETZTRANSPARENZ_CLIENT_ID`,
+Einstellungen (Umgebung bzw. `.env`): `PDB_ALLOW_ENTSO_E`, `PDB_ALLOW_NETZTRANSPARENZ`,
+`PDB_ALLOW_EIA_REUTERS`, `PDB_ALLOW_THE`, `PDB_EIA_API_KEY`, `PDB_ENTSOE_TOKEN`, `PDB_NETZTRANSPARENZ_CLIENT_ID`,
 `PDB_NETZTRANSPARENZ_CLIENT_SECRET`, `PDB_ENERGY_SOURCES`
 (JSON-Liste), `PDB_ENERGY_LOOKBACK_DAYS`, `PDB_ENERGY_HORIZON_DAYS`,
 `PDB_ENERGY_BACKFILL_FROM`, `PDB_ENERGY_BACKFILL_CHUNKS_PER_CYCLE`,
@@ -138,8 +138,10 @@ Einstellungen (Umgebung bzw. `.env`): `PDB_ALLOW_ENTSO_E`, `PDB_ALLOW_ENERGY_CHA
 
 ## Lizenzen der Daten
 
-SMARD: CC BY 4.0, Bundesnetzagentur | SMARD.de. Energy-Charts: nicht-kommerziell mit
-Quellenangabe, Börsenpreise von EPEX SPOT/EEX lizenziert und nicht weitergebbar. ENTSO-E:
+SMARD: CC BY 4.0, Bundesnetzagentur | SMARD.de. Energy-Charts: CC BY 4.0 mit Quellenangabe
+Energy-Charts.info, soweit nicht anders angegeben (API-Dokumentation v2.0); die Preise DE-LU
+stammen von SMARD und stehen laut `license_info` unter CC BY 4.0, andere Gebotszonen nicht.
+ENTSO-E:
 Nutzungsbedingungen der Transparency Platform, frei (CC BY 4.0) nur die „List of Data available
 for free re-use“. Netztransparenz: keine Lizenz veröffentlicht. Die Vermerke stehen in
 `meta.source.license`, die Einordnung in `meta.source.free`.

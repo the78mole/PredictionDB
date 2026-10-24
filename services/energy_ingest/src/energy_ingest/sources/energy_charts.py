@@ -7,8 +7,11 @@ Genutzte Endpunkte::
     /public_power_forecast?country=de&production_type=solar&forecast_type=day-ahead&…
                                                   -> unix_seconds, forecast_values (MW)
 
-Zeitstempel bezeichnen den Beginn des Intervalls. Lizenz: nicht-kommerziell mit Quellenangabe,
-Börsenpreise nicht weitergebbar; daher nur mit ``PDB_ALLOW_ENERGY_CHARTS=true``.
+Zeitstempel bezeichnen den Beginn des Intervalls. Lizenz laut API-Dokumentation (v2.0): CC BY 4.0
+mit Quellenangabe Energy-Charts.info, soweit nicht anders angegeben. Für ``/price`` steht die
+Lizenz im Feld ``license_info``; für DE-LU ist es CC BY 4.0 von Bundesnetzagentur | SMARD.de,
+für andere Gebotszonen nur private und interne Nutzung. Fehlt der Vermerk oder weicht er ab,
+schreibt die Quelle keine Preise (``FormatError``).
 """
 
 from __future__ import annotations
@@ -22,7 +25,7 @@ import httpx
 
 from energy_ingest.http import Http
 from energy_ingest.model import QUARTER_HOUR, SeriesData, series
-from energy_ingest.sources import SourceError, clip
+from energy_ingest.sources import FormatError, SourceError, clip
 from predictiondb_core.log import get_logger
 
 log = get_logger(__name__)
@@ -81,11 +84,11 @@ def _points(
 class EnergyCharts:
     code = "energy_charts"
     license = (
-        "Energy-Charts.info (Fraunhofer ISE): nicht-kommerziell mit Quellenangabe; "
-        "Börsenpreise von EPEX SPOT/EEX lizenziert, keine Weitergabe"
+        "CC BY 4.0, Energy-Charts.info (Fraunhofer ISE); Preise DE-LU CC BY 4.0, "
+        "Bundesnetzagentur | SMARD.de"
     )
     priority = 30
-    free = False
+    free = True
 
     def __init__(
         self, http: Http, base_url: str = BASE_URL, bzn: str = "DE-LU", country: str = "de"
@@ -116,6 +119,9 @@ class EnergyCharts:
             data = self._get("price", {"bzn": self.bzn, **window})
             if not data:
                 return []
+            lic = str(data.get("license_info", ""))
+            if "CC BY 4.0" not in lic:
+                raise FormatError(f"Energy-Charts: Preise ohne freie Lizenz ({lic!r})")
             stamps = [datetime.fromtimestamp(int(s), tz=UTC) for s in data["unix_seconds"]]
             pts = _points(stamps, data["price"], start, end)
             return [SeriesData(series("da_price_de_lu"), _resolution(stamps), pts)] if pts else []

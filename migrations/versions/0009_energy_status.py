@@ -1,4 +1,4 @@
-"""Abrufstatus je Quelle und Datensatz, Aktualität je Reihe (Grundlage der Grafana-Alarme)
+"""Abrufstatus je Quelle und Datensatz, Aktualität je Reihe, Energy-Charts frei
 
 Revision ID: 0009_energy_status
 Revises: 0008_source_free
@@ -16,6 +16,14 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    # Energy-Charts: laut API-Dokumentation v2.0 CC BY 4.0, Preise DE-LU CC BY 4.0 (SMARD)
+    op.execute("""
+        UPDATE meta.source
+           SET free = true, enabled = true,
+               license = 'CC BY 4.0, Energy-Charts.info (Fraunhofer ISE); Preise DE-LU CC BY 4.0, '
+                         'Bundesnetzagentur | SMARD.de'
+         WHERE code = 'energy_charts'""")
+
     # Letzter Ausgang je Quelle und Datensatz; status: ok, empty, failed, format
     # (format = Aufbau der Antwort weicht ab, es wurde nichts geschrieben)
     op.execute("""
@@ -51,3 +59,4 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.execute("DROP VIEW IF EXISTS energy.series_freshness")
     op.execute("DROP TABLE IF EXISTS meta.energy_status")
+    op.execute("UPDATE meta.source SET free = false, enabled = false WHERE code = 'energy_charts'")
