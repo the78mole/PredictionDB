@@ -1,119 +1,146 @@
 # Datenquellen mit Zugangsschlüssel oder Lizenzfreigabe
 
-Diese Liste sammelt alle Datenquellen, für die ein API-Schlüssel (Registrierung) und/oder eine
-Zustimmung des Anbieters zur Nutzung bzw. Weitergabe nötig ist. Sie ist die Arbeitsliste für
-Anfragen an die Anbieter. Grundregel (ARCHITEKTUR 7.11.1, mit PR #34): Standardmäßig laufen nur freie
-Quellen; jede unfreie Quelle hat einen eigenen Schalter `PDB_ALLOW_*`, Vorgabe und Einstellung
-der VM ist `false`.
+Diese Anleitung richtet sich an Betreiber, die den Stack neu aufsetzen. Sie beschreibt alle
+Datenquellen, für die ein API-Schlüssel (Registrierung) und/oder eine Zustimmung des Anbieters
+nötig ist: wo man sich registriert, welche Variablen in die `.env` gehören und welche
+Lizenzfragen der Betreiber selbst klären muss.
 
-Geheimnisse stehen nie im Repo. Quelle der Wahrheit ist OpenBao (Namespace `it-infra`, KV v2
-unter `secret/`, ARCHITEKTUR 8.3); auf der VM landen die Werte in `/opt/predictiondb/.env`.
+Die Einordnung der Bedingungen ist eine technische Einschätzung, keine Rechtsberatung. Jeder
+Betreiber ist selbst dafür verantwortlich, die Nutzungsbedingungen für seinen Zweck zu prüfen.
 
-Stand: 2026-10-24. Technische Einordnung, keine Rechtsberatung.
+## Grundregel: ohne Zutun nur freie Quellen
+
+Nach dem Aufsetzen laufen nur Quellen, deren Bedingungen eine freie Nutzung und Weitergabe
+erlauben. Sie brauchen weder Schlüssel noch Zustimmung (siehe [Freie Quellen](#freie-quellen-ohne-schlüssel)).
+Damit liefert der Stack alles, was Training und Prognose brauchen; Marktwerte rechnet die
+Quelle `pdb_marktwert` selbst aus SMARD.
+
+Jede unfreie Quelle hat einen eigenen Schalter `PDB_ALLOW_*` mit der Vorgabe `false`. Erst mit
+`true` **und**, wo nötig, einem Schlüssel wird sie abgerufen. Daten unfreier Quellen fließen nur in
+`energy.value_best` ein, solange der Schalter an ist.
+
+Wer trainierte Modelle oder Daten weitergeben will, lässt alle `PDB_ALLOW_*` auf `false`
+(geplant: `pdb-model publish` bricht ab, sobald eine unfreie Quelle im Trainingsdatensatz steckt).
 
 ## Übersicht
 
-| Quelle | Zweck | Schlüssel | Lizenz | Schalter | Status |
+| Quelle | Wofür | Schlüssel | Variablen | Schalter | Lizenzfrage für den Betreiber |
 |---|---|---|---|---|---|
-| ENTSO-E Transparency Platform | Day-Ahead-Preis, Ist-Last, Lastprognose, Erzeugung, Wind/PV-Prognose (Abgleich zu SMARD) | ja, Token | nur „List of Data available for free re-use“ frei; Preis, Ist-Last, Erzeugung, Wind/PV-Prognose nicht | `PDB_ALLOW_ENTSO_E` | Token angefragt, Lizenz für genutzte Reihen nicht frei |
-| Netztransparenz.de (ÜNB) | amtliche Monats- und Jahresmarktwerte (`mw_*`, `jw_*`) | ja, OAuth2-Client | keine Lizenz veröffentlicht | `PDB_ALLOW_NETZTRANSPARENZ` | Zugang vorhanden, Lizenzanfrage offen |
-| Energy-Charts (Fraunhofer ISE) | Preis, Erzeugung, PV-Prognose; Wunsch: Terminpreise | nein | nicht-kommerziell, EPEX/EEX-Preise nicht weitergebbar | `PDB_ALLOW_ENERGY_CHARTS` | nicht frei; Anfrage nach Futures-Endpunkt offen |
-| EIA, Reihen von Thomson Reuters (`eia_reuters`, PR #38) | Brent, WTI, Benzin, Heizöl, Kerosin, Propan, Henry Hub | ja (kostenlos), auch ohne Schlüssel per Bulk-Datei | urheberrechtlich geschützt (Thomson Reuters) | `PDB_ALLOW_EIA_REUTERS` | Schlüssel vorhanden; Lizenz nicht frei, keine Anfrage geplant |
-| EIA, eigene Reihen (`eia`, PR #38) | ULSD-Notierungen (Diesel/Gasöl) | wie oben | Public Domain | – (frei) | Schlüssel vorhanden |
-| Trading Hub Europe (`the`, PR #38) | Tagespreis Gas am VTP, Ausgleichsenergiepreise | nein (User-Agent Pflicht) | Vervielfältigung nur mit schriftlicher Zustimmung | `PDB_ALLOW_THE` | Zustimmung offen |
-| EEX (CO2-Primärauktionen, Terminpreise Strom) | EUA-Preise, Phelix-DE-Futures | – | Disclaimer: nur einzelne persönliche Kopie; Weitergabe nur mit Zustimmung bzw. Abo | – | scheidet aus, nicht umgesetzt |
+| ENTSO-E Transparency Platform | Day-Ahead-Preis, Ist-Last, Lastprognose, Erzeugung, Wind/PV-Prognose (Abgleich zu SMARD) | ja, Token | `PDB_ENTSOE_TOKEN` | `PDB_ALLOW_ENTSO_E` | Nur die „List of Data available for free re-use“ ist frei; für Preis, Ist-Last, Erzeugung und Wind/PV-Prognose Rechte der Primärdateninhaber beachten |
+| Netztransparenz.de (ÜNB) | amtliche Monats- und Jahresmarktwerte | ja, OAuth2-Client | `PDB_NETZTRANSPARENZ_CLIENT_ID`, `PDB_NETZTRANSPARENZ_CLIENT_SECRET` | `PDB_ALLOW_NETZTRANSPARENZ` | keine Lizenz veröffentlicht, Bedingungen bei den ÜNB erfragen |
+| Energy-Charts (Fraunhofer ISE) | Preis, Erzeugung, PV-Prognose | nein | – | `PDB_ALLOW_ENERGY_CHARTS` | nur nicht-kommerziell; Börsenpreise (EPEX/EEX) nicht weitergebbar |
+| EIA, Reihen von Thomson Reuters (`eia_reuters`) | Brent, WTI, Benzin, Heizöl, Kerosin, Propan, Henry Hub | empfohlen (kostenlos) | `PDB_EIA_API_KEY` | `PDB_ALLOW_EIA_REUTERS` | urheberrechtlich geschützt (Thomson Reuters) |
+| EIA, eigene Reihen (`eia`) | ULSD (Diesel/Gasöl) | empfohlen (kostenlos) | `PDB_EIA_API_KEY` | – (frei) | keine, Public Domain |
+| Trading Hub Europe (`the`) | Tagespreis Gas am VTP, Ausgleichsenergiepreise | nein | – | `PDB_ALLOW_THE` | Vervielfältigung nur mit schriftlicher Zustimmung von THE |
+
+Nicht angebunden ist die EEX (CO2-Auktionen, Strom-Terminpreise): Ihr Disclaimer erlaubt nur eine
+einzelne persönliche Kopie, eine maschinelle Nutzung braucht ein kostenpflichtiges Abo.
 
 ## Je Quelle
 
-### ENTSO-E Transparency Platform
+### ENTSO-E Transparency Platform (`entsoe`)
 
-- **Code:** `services/energy_ingest/src/energy_ingest/sources/entsoe.py`, Quelle `entsoe`.
-- **Schlüssel:** Konto auf <https://transparency.entsoe.eu>, dann E-Mail an
-  `transparency@entsoe.eu`, Betreff „Restful API access“.
-- **OpenBao:** `secret/predictiondb`, Feld `entsoe_token` (ARCHITEKTUR 8.3).
-- **ENV:** `PDB_ENTSOE_TOKEN`; ohne Token bleibt die Quelle aus.
-- **Lizenz:** Nutzungsbedingungen vom 29.03.2023, Ziff. 3.1. Frei (CC BY 4.0) ist nur die
-  Freigabeliste vom 18.10.2023. Von den genutzten Reihen steht nur die Day-Ahead-Lastprognose
-  (6.1.b) darauf; Ist-Last (6.1.a), Day-Ahead-Preis (12.1.d), Erzeugung (16.1) und
-  Wind/PV-Prognose (14.1.d) nicht.
-- **Schalter:** `PDB_ALLOW_ENTSO_E=false`.
-- **Status:** Token angefragt. Eine Lizenzanfrage wäre bei den Primärdateninhabern (ÜNB, EPEX)
-  zu stellen; ohne sie bleibt nur die Lastprognose als freie Reihe.
+1. Konto auf <https://transparency.entsoe.eu> anlegen.
+2. E-Mail an `transparency@entsoe.eu` mit dem Betreff „Restful API access“ und der
+   Konto-E-Mail-Adresse schicken. Nach der Freischaltung steht der Token im Kontoprofil
+   („Web API Security Token“).
+3. In der `.env`:
 
-### Netztransparenz.de
+   ```dotenv
+   PDB_ENTSOE_TOKEN=<Token>
+   PDB_ALLOW_ENTSO_E=true
+   ```
 
-- **Code:** `services/energy_ingest/src/energy_ingest/sources/netztransparenz.py`, Quelle
-  `netztransparenz` (PR #31).
-- **Schlüssel:** Konto im API-Portal <https://api-portal.netztransparenz.de>, dort einen Client
-  anlegen (OAuth2 Client Credentials).
-- **OpenBao:** `secret/netztransparenz`, Felder `api-client-id` und `api-client-token`.
-- **ENV:** `PDB_NETZTRANSPARENZ_CLIENT_ID`, `PDB_NETZTRANSPARENZ_CLIENT_SECRET` (auf der VM
-  eingetragen).
-- **Lizenz:** weder auf der Website noch in der WebAPI-Doku (v1.14) eine Lizenz gefunden.
-- **Schalter:** `PDB_ALLOW_NETZTRANSPARENZ=false`; ersatzweise rechnet `pdb_marktwert` die
-  Marktwerte aus SMARD.
-- **Status:** Zugang vorhanden und getestet. Offen: Nutzungsbedingungen bei den ÜNB erfragen
-  (Voraussetzung für Modelle mit Netztransparenz-Daten, ARCHITEKTUR 7.11.1).
+**Lizenz:** Nutzungsbedingungen vom 29.03.2023, Ziff. 3.1: Rechte der Primärdateninhaber (ÜNB,
+Börsen) dürfen nicht verletzt werden, sonst ist deren Zustimmung nötig; Quelle „ENTSO-E
+Transparency Platform“ nennen. Frei (CC BY 4.0) ist nur die Freigabeliste (Stand 18.10.2023).
+Von den abgerufenen Reihen steht nur die Day-Ahead-Lastprognose (6.1.b) darauf, nicht Ist-Last
+(6.1.a), Day-Ahead-Preis (12.1.d), Erzeugung (16.1) und Wind/PV-Prognose (14.1.d).
 
-### Energy-Charts (Fraunhofer ISE)
+### Netztransparenz.de (`netztransparenz`)
 
-- **Code:** `services/energy_ingest/src/energy_ingest/sources/energy_charts.py`, Quelle
-  `energy_charts`.
-- **Schlüssel:** keiner (`api.energy-charts.info` ist offen).
-- **Lizenz:** Daten frei für nicht-kommerzielle und journalistische Zwecke mit Nennung
-  „Energy-Charts / Fraunhofer ISE“; Spot- und Terminpreise sind von EPEX SPOT/EEX lizenziert
-  und dürfen nicht weitergegeben werden.
-- **Schalter:** `PDB_ALLOW_ENERGY_CHARTS=false`.
-- **Status:** nicht frei. Anfrage an Fraunhofer ISE, Terminpreise (Futures) in die API
-  aufzunehmen, ist gestellt; Antwort offen. Terminpreise bleiben bis dahin offen.
+1. Konto im API-Portal <https://api-portal.netztransparenz.de> anlegen.
+2. Dort einen Client anlegen (OAuth2 Client Credentials); das Portal zeigt Client-ID und
+   Client-Secret.
+3. In der `.env`:
 
-### EIA (U.S. Energy Information Administration), PR #38
+   ```dotenv
+   PDB_NETZTRANSPARENZ_CLIENT_ID=<Client-ID>
+   PDB_NETZTRANSPARENZ_CLIENT_SECRET=<Client-Secret>
+   PDB_ALLOW_NETZTRANSPARENZ=true
+   ```
 
-- **Code:** `services/energy_ingest/src/energy_ingest/sources/eia.py`, Quellen `eia` (frei) und
-  `eia_reuters` (unfrei).
-- **Schlüssel:** kostenlos unter <https://www.eia.gov/opendata/register.php>. Ohne Schlüssel lädt
-  die Quelle die Bulk-Dateien `PET.zip` und `NG.zip`.
-- **OpenBao:** `secret/eia`; `betrieb/env-aus-openbao.sh` (Projektdateien) überträgt den Wert.
-- **ENV:** `PDB_EIA_API_KEY`.
-- **Lizenz:** Reihen der EIA selbst (`copyright: None`, ULSD) sind Public Domain. Brent, WTI,
-  Benzin, Heizöl, Kerosin, Propan und Henry Hub bezieht die EIA von Thomson Reuters; sie sind
-  urheberrechtlich geschützt.
-- **Schalter:** `PDB_ALLOW_EIA_REUTERS=false` (nur für `eia_reuters`).
-- **Status:** Schlüssel in OpenBao vorhanden; Eintrag in die VM-`.env` macht der Nutzer selbst.
-  Eine Freigabe der Reuters-Reihen ist nicht realistisch; Ersatz für Öl/Gas sind Weltbank
-  (monatlich) und Oil Bulletin (wöchentlich).
+4. Historie nachladen: `energy-ingest --source netztransparenz backfill 2011-12-01 <Folgemonat>`.
 
-### Trading Hub Europe (THE), PR #38
+**Lizenz:** Weder auf der Website noch in der WebAPI-Doku (v1.14) ist eine Lizenz zu finden. Wer
+die Daten nutzen oder weitergeben will, fragt die Bedingungen bei den ÜNB (50Hertz, Amprion,
+TenneT, TransnetBW) an. Ohne Freigabe rechnet `pdb_marktwert` die Marktwerte aus SMARD selbst
+(Abweichung siehe `docs/analysen/marktwert-schaetzung`).
 
-- **Code:** `services/energy_ingest/src/energy_ingest/sources/the.py`, Quelle `the`.
-- **Schlüssel:** keiner; DataExport-API `api.tradinghub.eu/api/dataexport/xmlexport/` verlangt
-  einen aussagekräftigen User-Agent.
-- **Lizenz:** Disclaimer: Vervielfältigung der Daten nur mit schriftlicher Zustimmung von THE.
-- **Schalter:** `PDB_ALLOW_THE=false`.
-- **Status:** Zustimmung offen (Anfrage an THE vorgeschlagen, noch nicht gestellt).
+### Energy-Charts (`energy_charts`)
 
-### EEX
+Kein Schlüssel nötig, `api.energy-charts.info` ist offen.
 
-- **Zweck:** CO2-Preise (EUA-Primärauktionen, xlsx ab 2012) und Terminpreise Strom.
-- **Lizenz:** Disclaimer erlaubt nur eine einzelne persönliche Kopie; maschinelle oder
-  regelmäßige Weitergabe nur mit Zustimmung (`datasource@eex-group.com`) bzw. kostenpflichtigem
-  Abo (EEX DataSource).
-- **Status:** scheidet aus, nicht umgesetzt.
+```dotenv
+PDB_ALLOW_ENERGY_CHARTS=true
+```
 
-## Freie Quellen ohne Schlüssel (zur Abgrenzung)
+**Lizenz:** Daten frei für nicht-kommerzielle und journalistische Zwecke mit Nennung
+„Energy-Charts / Fraunhofer ISE“. Spot- und Terminpreise sind von EPEX SPOT/EEX lizenziert und
+dürfen nicht weitergegeben werden. Für kommerzielle Nutzung den Fraunhofer ISE fragen.
 
-Diese Quellen brauchen weder Registrierung noch Zustimmung, nur den Quellenvermerk:
-NOAA GFS/GEFS (gemeinfrei), DWD Open Data, ECMWF Open Data (CC BY 4.0), MaStR (DL-DE BY 2.0),
-SMARD (CC BY 4.0), `pdb_marktwert` (eigene Berechnung aus SMARD) sowie mit PR #38 EZB
-(Weiterverwendung mit Quellenangabe), Weltbank Pink Sheet und EU Weekly Oil Bulletin
-(CC BY 4.0).
+### EIA (`eia`, `eia_reuters`)
 
-## Offene Anfragen
+1. Kostenlosen Schlüssel unter <https://www.eia.gov/opendata/register.php> beantragen; er kommt
+   per E-Mail.
+2. In der `.env`:
 
-1. ENTSO-E: Token (angefragt).
-2. Netztransparenz: Nutzungsbedingungen der Daten bei den ÜNB erfragen.
-3. Energy-Charts: Futures-Endpunkt in der API (angefragt).
-4. THE: schriftliche Zustimmung zur Nutzung der VTP-Preise.
+   ```dotenv
+   PDB_EIA_API_KEY=<Schlüssel>
+   # nur wenn die Reuters-Reihen gewollt und zulässig sind
+   PDB_ALLOW_EIA_REUTERS=true
+   ```
 
-Wird eine Freigabe erteilt: hier den Status ändern, ARCHITEKTUR 7.11.1 nachziehen und den
-Schalter in der VM-`.env` auf `true` setzen.
+Ohne Schlüssel lädt die Quelle die Bulk-Dateien `PET.zip` und `NG.zip` (zusammen rund 60 MB je
+Abruf); mit Schlüssel nutzt sie die API v2 für laufende Updates.
+
+**Lizenz:** Reihen, die die EIA selbst erhebt (ULSD), sind Public Domain und laufen immer. Brent,
+WTI, Benzin, Heizöl, Kerosin, Propan und Henry Hub bezieht die EIA von Thomson Reuters; sie sind
+urheberrechtlich geschützt. Freie Ersatzreihen liefern die Weltbank (monatlich) und das EU Weekly
+Oil Bulletin (wöchentlich).
+
+### Trading Hub Europe (`the`)
+
+Kein Schlüssel nötig; die DataExport-API verlangt nur einen aussagekräftigen User-Agent, den der
+Stack mitschickt.
+
+```dotenv
+PDB_ALLOW_THE=true
+```
+
+**Lizenz:** Laut Disclaimer braucht jede Vervielfältigung der Daten die schriftliche Zustimmung
+von THE. Vor dem Einschalten Zustimmung bei THE einholen.
+
+## Freie Quellen ohne Schlüssel
+
+Diese Quellen laufen ohne Registrierung und Schalter; verlangt ist nur der Quellenvermerk:
+
+| Quelle | Lizenz |
+|---|---|
+| NOAA GFS/GEFS | gemeinfrei |
+| DWD Open Data, ECMWF Open Data | CC BY 4.0 |
+| Marktstammdatenregister (MaStR) | Datenlizenz Deutschland – Namensnennung 2.0 |
+| SMARD (Bundesnetzagentur) | CC BY 4.0, „Bundesnetzagentur \| SMARD.de“ |
+| `pdb_marktwert` | eigene Berechnung aus SMARD |
+| EZB (EUR/USD) | Weiterverwendung mit Quellenangabe |
+| Weltbank Pink Sheet, EU Weekly Oil Bulletin | CC BY 4.0 |
+
+## Checkliste für ein neues System
+
+1. `.env.example` nach `.env` kopieren; alle `PDB_ALLOW_*` stehen auf `false`.
+2. Optional, aber empfohlen: EIA-Schlüssel beantragen und `PDB_EIA_API_KEY` setzen.
+3. Für jede gewünschte unfreie Quelle: Lizenzfrage klären, Zugang beantragen (oben), Variablen
+   setzen, Schalter auf `true`.
+4. Stack neu starten; `energy-ingest sources` listet die aktiven Quellen und ob sie frei oder
+   unfrei, aber freigegeben sind.
+5. Geheimnisse gehören nur in die `.env` (chmod 600) oder einen Secret-Store, nie ins Repo.
