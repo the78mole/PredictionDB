@@ -810,6 +810,8 @@ Kapazitätsfaktor, Preis relativ zum letzten bekannten Liefertag. Ohne Wetter sc
 Last bereits die ENTSO-E-Day-Ahead-Prognose (MAE D+1 1,73 gegen 1,98 GW, 2024–10/2026), beim
 Preis ab D+2 Vortag und Vorwoche. Die Variante mit GFS-Features wird nach dem Backfill bewertet.
 Backtest und Befunde: [`docs/analysen/prognose-de-lu-v1/`](analysen/prognose-de-lu-v1/README.md).
+Aufbau, technische Daten, Training und Optimierungsstrategien der Modelle im Einzelnen:
+[PROGNOSEMODELLE.md](PROGNOSEMODELLE.md).
 
 Zweistufiger Aufbau:
 

@@ -2,7 +2,8 @@
 
 Erstes Prognosemodell für die **Netzlast DE** und den **Day-Ahead-Preis DE-LU**: Quantile
 P10/P50/P90 je Stunde für die Liefertage D+1 bis D+7, zweistufig mit LightGBM
-(Kap. 7.3, 7.4 und 7.7 in `docs/ARCHITEKTUR.md`). Konfiguration in
+(Kap. 7.3, 7.4 und 7.7 in `docs/ARCHITEKTUR.md`). Ausführliche Beschreibung für Anwender:
+[`docs/PROGNOSEMODELLE.md`](../../docs/PROGNOSEMODELLE.md). Konfiguration in
 `config/ml/de_lu_v1.yaml`, Backtest-Ergebnisse in
 [`docs/analysen/prognose-de-lu-v1/`](../../docs/analysen/prognose-de-lu-v1/README.md).
 
@@ -34,7 +35,7 @@ flowchart LR
   Merkmalsbildung füllt die dreistündlichen Schritte ab 120 h auf Stunden auf (Momentanwerte
   linear, Intervallwerte über das Intervall verteilt) und markiert sie mit `wx_interp`.
 - **Ziele:** Wind und PV als Kapazitätsfaktor (geteilt durch die installierte Leistung), der
-  Preis relativ zum 7-Tage-Mittel. Bäume extrapolieren nicht, so bleiben wachsender Bestand und
+  Preis relativ zum Tagesmittel des letzten bekannten Liefertags. Bäume extrapolieren nicht, so bleiben wachsender Bestand und
   neue Preisniveaus beherrschbar.
 - **Varianten:** `kalender` (ohne Wetter, ab Start der Gebotszone DE-LU im Oktober 2018) ist der
   Maßstab, `wetter` nutzt zusätzlich die GFS-Features und braucht deren Historie.
