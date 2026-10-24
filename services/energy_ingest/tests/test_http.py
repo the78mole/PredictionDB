@@ -1,14 +1,14 @@
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from email.utils import format_datetime
 
 import httpx
 import pytest
 
-from energy_ingest import http as http_mod
 from energy_ingest.http import Http, retry_after
 
 
-def _client(handler) -> httpx.Client:
+def _client(handler: Callable[[httpx.Request], httpx.Response]) -> httpx.Client:
     return httpx.Client(transport=httpx.MockTransport(handler))
 
 
@@ -29,8 +29,8 @@ def test_throttle_per_host(monkeypatch: pytest.MonkeyPatch) -> None:
         sleeps.append(s)
         clock[0] += s
 
-    monkeypatch.setattr(http_mod.time, "monotonic", lambda: clock[0])
-    monkeypatch.setattr(http_mod.time, "sleep", sleep)
+    monkeypatch.setattr("energy_ingest.http.time.monotonic", lambda: clock[0])
+    monkeypatch.setattr("energy_ingest.http.time.sleep", sleep)
     with _client(lambda r: httpx.Response(200)) as c:
         h = Http(c, pace={"api.energy-charts.info": 2.0})
         h.get("https://api.energy-charts.info/price")
