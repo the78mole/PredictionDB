@@ -84,6 +84,69 @@ def test_lags_only_use_known_values(snap, cfg) -> None:  # type: ignore[no-untyp
         np.testing.assert_allclose(lagged[known.to_numpy()], direct[known.to_numpy()], rtol=1e-5)
 
 
+@pytest.fixture
+def cfg_v2() -> ModelConfig:
+    c, _ = load_config(ROOT / "config/ml/de_lu_v2.yaml")
+    c.stage1 = [t for t in c.stage1 if t.code != "gen_wind_offshore"]
+    c.series_groups["nachbarn"].codes = ["da_price_at"]
+    c.series_groups["brennstoffe"].codes = ["gas_eu_m"]
+    return c
+
+
+def test_v2_config_groups_are_known() -> None:
+    c, _ = load_config(ROOT / "config/ml/de_lu_v2.yaml")
+    assert {"nachbarn", "lastprognose", "brennstoffe", "marktwerte"} <= set(c.series_groups)
+    assert "da_price_fr" in c.series_codes
+    bad = c.model_dump()
+    bad["variants"][0]["groups"].append("gibtsnicht")
+    with pytest.raises(ValueError, match="gibtsnicht"):
+        ModelConfig.model_validate(bad)
+
+
+def test_series_groups_only_use_known_values(snap, cfg_v2) -> None:  # type: ignore[no-untyped-def]
+    fb = FeatureBuilder(snap, cfg_v2)
+    frame = fb.build([date(2023, 5, 10), date(2023, 1, 10)])
+    X, meta = frame.X, frame.meta
+    for g in ("nachbarn", "lastprognose", "brennstoffe", "preisniveau"):
+        assert frame.groups[g]
+    # Nachbarpreis wie DE-LU: am 10.5. 08 UTC ist der Liefertag 10.5. bekannt, der 11.5. nicht
+    first = meta.index[meta["issue_time"] == pd.Timestamp("2023-05-10 08:00", tz="UTC")][0]
+    ts = meta.loc[first, "ts"]
+    assert X.loc[first, "lag_da_price_at_day"] == pytest.approx(
+        fb.energy["da_price_at"][ts - pd.Timedelta(days=1)], rel=1e-5
+    )
+    # 28-Tage-Mittel endet mit dem letzten vollständig bekannten Liefertag (10.5.)
+    days = fb.daily_mean["da_price_de_lu"]
+    expected = days.loc[pd.Timestamp("2023-04-13") : pd.Timestamp("2023-05-10")].mean()
+    assert X.loc[first, "lag_da_price_de_lu_mean_28d"] == pytest.approx(expected, rel=1e-5)
+    # Lastprognose: im Sommer (08 UTC = 10 Uhr) für D+1 bekannt, im Winter (9 Uhr) noch nicht
+    fc = X["fc_load_da_forecast"]
+    summer = meta["issue_time"].dt.month == 5
+    assert fc[summer & (meta["lead_day"] == 1)].notna().all()
+    assert fc[meta["lead_day"] > 1].isna().all()
+    assert fc[~summer].isna().all()
+    # Monatswert Gas, veröffentlicht eine Woche nach Monatsende: am 10.5. gilt der April (seit
+    # 8.5.), am 10.1. der Dezember (seit 8.1.)
+    gas = snap.energy[snap.energy["code"] == "gas_eu_m"].set_index("ts")["value"]
+    april = gas[pd.Timestamp("2023-04-01", tz="UTC")]
+    assert X.loc[first, "asof_gas_eu_m"] == pytest.approx(april)
+    assert X.loc[first, "asof_gas_eu_m_chg"] == pytest.approx(1.0)
+    jan = meta.index[meta["issue_time"].dt.month == 1][0]
+    assert X.loc[jan, "asof_gas_eu_m"] == pytest.approx(gas[pd.Timestamp("2022-12-01", tz="UTC")])
+
+
+def test_series_groups_train_and_predict(snap, cfg_v2) -> None:  # type: ignore[no-untyped-def]
+    cfg_v2.lgbm.n_estimators = 30
+    fb = FeatureBuilder(snap, cfg_v2)
+    frame = fb.build([date(2022, 9, 1) + pd.Timedelta(days=i) for i in range(0, 200, 4)])
+    m = TwoStageModel(cfg_v2, cfg_v2.variant("frei")).fit(frame)
+    feats = m.stage2["da_price_de_lu"].features
+    assert "lag_da_price_at_mean_day" in feats and "asof_gas_eu_m" in feats
+    assert "fc_load_da_forecast" in m.stage1["load_actual"].features
+    out = m.predict(fb.build([date(2023, 6, 1)]))
+    assert out["da_price_de_lu"]["q50"].notna().all()
+
+
 def test_weather_uses_run_available_at_issue(snap, cfg) -> None:  # type: ignore[no-untyped-def]
     fb = FeatureBuilder(snap, cfg)
     frame = fb.build([date(2023, 5, 10)])

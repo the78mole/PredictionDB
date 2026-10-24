@@ -1,0 +1,137 @@
+# Zweites Prognosemodell: wie de_lu_v1, zusätzlich freie Reihen als eigene Merkmalsgruppen
+# (Nachbarzonen-Preise, Lastprognose der ÜNB, Brennstoffpreise, eigene Marktwerte).
+# Nur Reihen freier Quellen (keine PDB_ALLOW_*-Quellen), weil Modelle frei veröffentlicht werden.
+# Siehe services/ml_train/README.md und docs/ARCHITEKTUR.md Kap. 7.3, 7.4 und 7.7.
+name: de_lu_v2
+title: Last DE und Day-Ahead-Preis DE-LU, zweistufig, mit freien Zusatzreihen
+quantiles: [0.1, 0.5, 0.9]
+
+issue:
+  hour_utc: 8                  # vor Gebotsschluss (12 Uhr Ortszeit = 10/11 UTC)
+  lead_days: [1, 2, 3, 4, 5, 6, 7]
+  actual_delay_h: 2            # Ist-Werte ab Intervallende + 2 h bekannt
+  price_known_local_hour: 13   # Auktionsergebnis D+1 ab 13 Uhr am Vortag
+  nwp_delay_h: 6               # GFS-Lauf vollständig verarbeitet ca. 5,5 h nach Laufzeit
+
+# Stufe 1: Last, Wind, PV; Wind und PV als Kapazitätsfaktor (MaStR-Bestand)
+stage1:
+  - code: load_actual
+    role: load
+    benchmarks: [load_da_forecast]
+  - code: gen_wind_onshore
+    role: generation
+    normalize_by: [cap_wind_on]
+    benchmarks: [gen_da_forecast_wind_onshore]
+  - code: gen_wind_offshore
+    role: generation
+    normalize_by: [cap_wind_off]
+    benchmarks: [gen_da_forecast_wind_offshore]
+  - code: gen_solar
+    role: generation
+    normalize_by: [cap_pv]
+    benchmarks: [gen_da_forecast_solar]
+
+# Stufe 2: Preis mit Stufe-1-Prognosen und Residuallast, relativ zum Mittel des letzten bekannten
+# Liefertags (im Backtest H2 2025 besser als das 7-Tage-Mittel: MAE D+1 21,4 statt 22,3 EUR/MWh)
+stage2:
+  - code: da_price_de_lu
+    role: price
+    center: lag_da_price_de_lu_mean_day
+
+lag_series: [residual_load]
+
+series_groups:
+  # Day-Ahead-Preise der Nachbarzonen (Energy-Charts, CC BY 4.0), bekannt wie der Preis DE-LU
+  nachbarn:
+    mode: lags
+    codes: [da_price_at, da_price_be, da_price_ch, da_price_cz, da_price_dk1, da_price_dk2,
+            da_price_fr, da_price_hu, da_price_it_north, da_price_nl, da_price_no2, da_price_pl,
+            da_price_se4, da_price_si]
+    lags: [day, mean_day, mean_7d]
+  # Day-Ahead-Lastprognose der ÜNB (SMARD bzw. ENTSO-E 6.1.b, frei), bis 10 Uhr am Vortag
+  lastprognose:
+    mode: forecast
+    codes: [load_da_forecast]
+    known_local_hour: 10
+  # Brennstoffe und Wechselkurs: EZB, EIA (ULSD, Public Domain), Oil Bulletin, Weltbank
+  brennstoffe:
+    mode: asof
+    codes: [fx_usd_eur, oil_ulsd_nyh, oil_ulsd_usgc, retail_de_diesel_net,
+            retail_de_heating_oil_net, gas_eu_m, lng_japan_m, gas_henry_hub_m, coal_au_m,
+            coal_za_m, oil_brent_m]
+    change_days: 28
+  # Gegenprobe: längeres Preisgedächtnis aus dem eigenen Preis DE-LU (keine neue Quelle).
+  # Prüft, ob Brennstoffe, Marktwerte und Nachbarpreise nur als Preisniveau über Wochen wirken
+  preisniveau:
+    mode: lags
+    codes: [da_price_de_lu]
+    lags: [mean_28d]
+  # Marktwerte nach EEG, selbst aus SMARD berechnet (Quelle pdb_marktwert)
+  marktwerte:
+    mode: asof
+    codes: [mw_base, mw_wind_onshore, mw_wind_offshore, mw_solar, jw_base, jw_wind_onshore,
+            jw_wind_offshore, jw_solar]
+    change_days: 35
+
+variants:
+  # Maßstab wie de_lu_v1/kalender: Kalender, Lags, Bestand; ab Start der Gebotszone DE-LU
+  - name: kalender
+    groups: [calendar, lags, capacity, stage1]
+    train_from: 2018-10-08
+  # je eine neue Gruppe dazu (Ablation)
+  - name: nachbarn
+    groups: [calendar, lags, capacity, nachbarn, stage1]
+    train_from: 2018-10-08
+  - name: lastprognose
+    groups: [calendar, lags, capacity, lastprognose, stage1]
+    train_from: 2018-10-08
+  - name: brennstoffe
+    groups: [calendar, lags, capacity, brennstoffe, stage1]
+    train_from: 2018-10-08
+  - name: marktwerte
+    groups: [calendar, lags, capacity, marktwerte, stage1]
+    train_from: 2018-10-08
+  # alle freien Zusatzreihen
+  - name: frei
+    groups: [calendar, lags, capacity, nachbarn, lastprognose, brennstoffe, marktwerte, stage1]
+    train_from: 2018-10-08
+  # Gegenprobe Preisniveau: Maßstab bzw. alle freien Reihen, je mit 28-Tage-Mittel des Preises
+  - name: preisniveau
+    groups: [calendar, lags, capacity, preisniveau, stage1]
+    train_from: 2018-10-08
+  - name: frei_niveau
+    groups: [calendar, lags, capacity, nachbarn, lastprognose, brennstoffe, marktwerte,
+             preisniveau, stage1]
+    train_from: 2018-10-08
+  # mit GFS-Features je Technologie, nur Ausgabezeitpunkte mit Wetterlauf
+  - name: wetter
+    groups: [calendar, lags, capacity, weather, stage1]
+    requires_weather: true
+    train_from: 2021-03-23
+  - name: wetter_frei
+    groups: [calendar, lags, capacity, weather, nachbarn, lastprognose, brennstoffe, marktwerte,
+             stage1]
+    requires_weather: true
+    train_from: 2021-03-23
+
+lgbm:
+  num_leaves: 63
+  learning_rate: 0.05
+  n_estimators: 400
+  min_child_samples: 50
+  subsample: 0.8
+  subsample_freq: 1
+  colsample_bytree: 0.8
+  reg_lambda: 1.0
+
+backtest:
+  test_from: 2024-01-01
+  fold_months: 6
+  gap_days: 8
+  oof_folds: 3
+  train_issue_stride: 2
+
+promotion:
+  min_gain: 0.0
+  max_group_loss: 0.05
+  min_group_n: 200

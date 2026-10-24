@@ -14,6 +14,8 @@ import pandas as pd
 from ml_train.calendar import holiday_share
 from ml_train.snapshot import Snapshot
 
+H = pd.Timedelta(hours=1)
+
 
 def synthetic_snapshot(
     start: str = "2022-01-01",
@@ -59,17 +61,29 @@ def synthetic_snapshot(
 
     energy = pd.concat(
         [
-            pd.DataFrame({"ts": ts, "code": code, "value": v})
+            pd.DataFrame({"ts": ts, "code": code, "value": v, "published": ts + 2 * H})
             for code, v in {
                 "load_actual": load,
                 "load_da_forecast": load + rng.normal(0, 1500, n),
                 "gen_wind_onshore": gen_wind,
                 "gen_solar": np.clip(gen_solar, 0, None),
                 "da_price_de_lu": price,
+                "da_price_at": price + 5 + rng.normal(0, 4, n),
             }.items()
         ],
         ignore_index=True,
     )
+    # Monatswert (Gaspreis) mit Veröffentlichung eine Woche nach Monatsende
+    months = pd.date_range(start, end, freq="MS", tz="UTC", inclusive="left")
+    gas = pd.DataFrame(
+        {
+            "ts": months,
+            "code": "gas_eu_m",
+            "value": 10 + np.arange(len(months), dtype=float),
+            "published": (months + pd.offsets.MonthBegin(1)) + pd.Timedelta(days=7),
+        }
+    )
+    energy = pd.concat([energy, gas], ignore_index=True)
 
     cap_days = pd.date_range(start, end, freq="D")
     cyears = np.asarray((cap_days - cap_days[0]) / pd.Timedelta(days=365))

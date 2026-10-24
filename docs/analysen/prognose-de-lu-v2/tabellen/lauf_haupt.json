@@ -1,0 +1,61 @@
+{
+  "snapshot_id": "cb9d83c5ca7e852a",
+  "config_sha256": "f3db43366de7ab11afb37b29a4ffca8a17bb1a7ba7f249f27fc0199f94d92786",
+  "config": "de_lu_v2",
+  "folds": [
+    {
+      "no": 0,
+      "test_from": "2025-01-01",
+      "test_to": "2025-06-30",
+      "train_to": "2024-12-24"
+    },
+    {
+      "no": 1,
+      "test_from": "2025-07-01",
+      "test_to": "2025-12-31",
+      "train_to": "2025-06-23"
+    },
+    {
+      "no": 2,
+      "test_from": "2026-01-01",
+      "test_to": "2026-06-30",
+      "train_to": "2025-12-24"
+    },
+    {
+      "no": 3,
+      "test_from": "2026-07-01",
+      "test_to": "2026-10-23",
+      "train_to": "2026-06-23"
+    }
+  ],
+  "timings_s": {
+    "features_s": 54.7,
+    "fold0_kalender_s": 98.0,
+    "fold0_nachbarn_s": 169.8,
+    "fold0_lastprognose_s": 101.9,
+    "fold0_brennstoffe_s": 126.0,
+    "fold0_marktwerte_s": 113.5,
+    "fold0_frei_s": 226.6,
+    "fold1_kalender_s": 101.9,
+    "fold1_nachbarn_s": 190.2,
+    "fold1_lastprognose_s": 106.1,
+    "fold1_brennstoffe_s": 159.6,
+    "fold1_marktwerte_s": 206.1,
+    "fold1_frei_s": 323.7,
+    "fold2_kalender_s": 140.0,
+    "fold2_nachbarn_s": 233.8,
+    "fold2_lastprognose_s": 113.9,
+    "fold2_brennstoffe_s": 135.8,
+    "fold2_marktwerte_s": 120.3,
+    "fold2_frei_s": 238.8,
+    "fold3_kalender_s": 108.1,
+    "fold3_nachbarn_s": 184.2,
+    "fold3_lastprognose_s": 110.9,
+    "fold3_brennstoffe_s": 266.3,
+    "fold3_marktwerte_s": 202.4,
+    "fold3_frei_s": 458.9
+  },
+  "rows": 4505284,
+  "git_commit": "c82d0028f11a",
+  "finished": "2026-10-24T15:56:14+00:00"
+}

@@ -84,6 +84,7 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--test-to", type=parse_date)
     b.add_argument("--fold-months", type=int)
     b.add_argument("--stride", type=int, help="nur jeden n-ten Ausgabetag trainieren")
+    b.add_argument("--issue-hour", type=int, help="Ausgabestunde (UTC) statt issue.hour_utc")
 
     f = cmd.add_parser("fit", help="Variante mit allen Daten trainieren und registrieren")
     f.add_argument("--snapshot", required=True, type=Path)
@@ -119,7 +120,7 @@ def cmd_snapshot(cfg: ModelConfig, a: argparse.Namespace) -> int:
     from predictiondb_core.db import create_db_engine
 
     end = a.end or (datetime.now(UTC).date() + timedelta(days=2))
-    codes = list(dict.fromkeys(cfg.targets + cfg.lag_series))
+    codes = list(dict.fromkeys(cfg.targets + cfg.lag_series + cfg.series_codes))
     codes += sorted({b for t in cfg.stage1 + cfg.stage2 for b in t.benchmarks})
     codes += [c for c in a.extra_codes.split(",") if c]
     snap = export_snapshot(
@@ -174,6 +175,8 @@ def cmd_backtest(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace) -> int:
         cfg.backtest.fold_months = a.fold_months
     if a.stride:
         cfg.backtest.train_issue_stride = a.stride
+    if a.issue_hour is not None:
+        cfg.issue.hour_utc = a.issue_hour
     snap = load_snapshot(a.snapshot)
     fb = FeatureBuilder(snap, cfg)
     res = run_backtest(fb, cfg, a.variant)

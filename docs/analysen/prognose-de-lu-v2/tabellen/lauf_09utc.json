@@ -1,0 +1,49 @@
+{
+  "snapshot_id": "cb9d83c5ca7e852a",
+  "config_sha256": "f3db43366de7ab11afb37b29a4ffca8a17bb1a7ba7f249f27fc0199f94d92786",
+  "config": "de_lu_v2",
+  "folds": [
+    {
+      "no": 0,
+      "test_from": "2025-01-01",
+      "test_to": "2025-06-30",
+      "train_to": "2024-12-24"
+    },
+    {
+      "no": 1,
+      "test_from": "2025-07-01",
+      "test_to": "2025-12-31",
+      "train_to": "2025-06-23"
+    },
+    {
+      "no": 2,
+      "test_from": "2026-01-01",
+      "test_to": "2026-06-30",
+      "train_to": "2025-12-24"
+    },
+    {
+      "no": 3,
+      "test_from": "2026-07-01",
+      "test_to": "2026-10-23",
+      "train_to": "2026-06-23"
+    }
+  ],
+  "timings_s": {
+    "features_s": 51.8,
+    "fold0_kalender_s": 108.2,
+    "fold0_lastprognose_s": 108.3,
+    "fold0_frei_s": 213.6,
+    "fold1_kalender_s": 100.0,
+    "fold1_lastprognose_s": 120.6,
+    "fold1_frei_s": 248.5,
+    "fold2_kalender_s": 111.2,
+    "fold2_lastprognose_s": 109.3,
+    "fold2_frei_s": 246.3,
+    "fold3_kalender_s": 114.6,
+    "fold3_lastprognose_s": 137.6,
+    "fold3_frei_s": 384.4
+  },
+  "rows": 2839579,
+  "git_commit": "c82d0028f11a",
+  "finished": "2026-10-24T16:31:40+00:00"
+}

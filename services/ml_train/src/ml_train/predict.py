@@ -23,8 +23,14 @@ log = get_logger(__name__)
 
 
 def live_snapshot(engine: Engine, cfg: ModelConfig, issue: pd.Timestamp) -> Snapshot:
-    codes = list(dict.fromkeys(cfg.targets + cfg.lag_series))
-    start = (issue - timedelta(days=45)).to_pydatetime()
+    codes = list(dict.fromkeys(cfg.targets + cfg.lag_series + cfg.series_codes))
+    # Monats- und Jahreswerte erscheinen erst Wochen nach Periodenende; Änderungen brauchen den
+    # Stand davor
+    back = 45
+    for g in cfg.series_groups.values():
+        if g.mode == "asof":
+            back = max(back, 400 + g.change_days)
+    start = (issue - timedelta(days=back)).to_pydatetime()
     end = (issue + timedelta(days=max(cfg.issue.lead_days) + 2)).to_pydatetime()
     return export_snapshot(
         engine,

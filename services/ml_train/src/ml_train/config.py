@@ -13,9 +13,11 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
-FeatureGroup = Literal["calendar", "lags", "capacity", "weather", "stage1"]
+#: Feste Gruppen; dazu kommen die Reihengruppen aus ``series_groups`` unter ihrem Namen
+BUILTIN_GROUPS = ("calendar", "lags", "capacity", "weather", "stage1")
+FeatureGroup = str
 
 
 class IssueConfig(BaseModel):
@@ -45,6 +47,31 @@ class StageTarget(BaseModel):
     normalize_by: list[str] = Field(default_factory=list)
     #: Ziel relativ zu dieser Merkmalsspalte lernen, z. B. ``lag_da_price_de_lu_mean_7d``
     center: str | None = None
+
+
+LagKind = Literal["day", "week", "mean_day", "mean_7d", "mean_28d", "last"]
+
+
+class SeriesGroup(BaseModel):
+    """Weitere Reihen aus ``energy.value_best`` als eigene Merkmalsgruppe.
+
+    - ``lags``: wie die Lags der Ziele (gleiche Stunde am letzten vollständigen Tag, Tages- und
+      7-Tage-Mittel …); Reihen ``da_price_*`` gelten wie der Preis DE-LU ab dem Auktionsergebnis
+      am Vortag als bekannt, alle anderen wie Ist-Werte.
+    - ``forecast``: Prognose Dritter für die Zielstunde selbst, bekannt ab ``known_local_hour``
+      (Ortszeit) am Vortag des Liefertags, sonst leer (z. B. Lastprognose der ÜNB nur für D+1).
+    - ``asof``: letzter zum Ausgabezeitpunkt veröffentlichter Wert (Spalte ``published`` im
+      Snapshot) und seine Änderung gegenüber dem Stand ``change_days`` Tage davor; für Tages-,
+      Wochen- und Monatswerte wie Brennstoffpreise und Marktwerte.
+    """
+
+    mode: Literal["lags", "forecast", "asof"]
+    codes: list[str]
+    lags: list[LagKind] = Field(
+        default_factory=lambda: list[LagKind](["day", "mean_day", "mean_7d"])
+    )
+    known_local_hour: int = Field(default=10, ge=0, le=23)
+    change_days: int = Field(default=28, ge=1)
 
 
 class LgbmParams(BaseModel):
@@ -110,6 +137,26 @@ class ModelConfig(BaseModel):
     lag_series: list[str] = Field(default_factory=list)
     #: Wetter-Merkmale aus dem Snapshot (``<technologie>_<feature>``); leer = alle
     weather_features: list[str] = Field(default_factory=list)
+    #: weitere Merkmalsgruppen aus Energie- und Preisreihen, Name -> Gruppe
+    series_groups: dict[str, SeriesGroup] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _known_groups(self) -> ModelConfig:
+        for name in self.series_groups:
+            if name in BUILTIN_GROUPS:
+                raise ValueError(f"Reihengruppe {name!r} überdeckt eine feste Gruppe")
+        for v in self.variants:
+            unknown = [
+                g for g in v.groups if g not in BUILTIN_GROUPS and g not in self.series_groups
+            ]
+            if unknown:
+                raise ValueError(f"Variante {v.name!r}: unbekannte Gruppen {unknown}")
+        return self
+
+    @property
+    def series_codes(self) -> list[str]:
+        """Alle Reihen der Reihengruppen (für den Snapshot)."""
+        return list(dict.fromkeys(c for g in self.series_groups.values() for c in g.codes))
 
     @property
     def targets(self) -> list[str]:
