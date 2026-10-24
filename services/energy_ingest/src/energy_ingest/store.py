@@ -30,7 +30,8 @@ _UPSERT = """
         OR EXCLUDED.published < energy.value.published
 """
 
-# Stundenmittel je Reihen-Code und Quelle, paarweise verglichen
+# Stundenmittel je Reihen-Code und Quelle, paarweise verglichen; nur freigegebene Quellen,
+# damit gesperrte Altwerte (meta.source.enabled = false) nicht mehr gelesen werden
 _COMPARE = """
     WITH h AS (
       SELECT s.code, src.code AS source, time_bucket('1 hour', v.ts) AS hour,
@@ -38,7 +39,7 @@ _COMPARE = """
         FROM energy.value v
         JOIN energy.series s USING (series_id)
         JOIN meta.source src ON src.source_id = s.source_id
-       WHERE v.ts >= :start AND v.ts < :end AND v.value IS NOT NULL
+       WHERE v.ts >= :start AND v.ts < :end AND v.value IS NOT NULL AND src.enabled
        GROUP BY 1, 2, 3
     )
     SELECT a.code, a.source AS source_a, b.source AS source_b, count(*) AS n,
