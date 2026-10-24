@@ -18,7 +18,7 @@ def make_http() -> Iterator[Callable[[Handler], Http]]:
     def make(handler: Handler) -> Http:
         client = httpx.Client(transport=httpx.MockTransport(handler))
         clients.append(client)
-        return Http(client, attempts=2, wait_max=0.01)
+        return Http(client, attempts=2, wait_max=0.01, pace={})
 
     yield make
     for c in clients:
