@@ -11,7 +11,7 @@
   "refresh": "5m",
   "time": {
     "from": "now-2d",
-    "to": "now"
+    "to": "now+1d/d"
   },
   "panels": [
     {
@@ -1203,7 +1203,8 @@
           "mode": "multi",
           "sort": "desc"
         }
-      }
+      },
+      "timeFrom": "2d"
     },
     {
       "type": "timeseries",
@@ -2879,7 +2880,8 @@
           "mode": "multi",
           "sort": "none"
         }
-      }
+      },
+      "timeFrom": "2d"
     },
     {
       "type": "timeseries",
@@ -2965,7 +2967,8 @@
           "mode": "multi",
           "sort": "desc"
         }
-      }
+      },
+      "timeFrom": "2d"
     },
     {
       "type": "timeseries",
@@ -3051,7 +3054,8 @@
           "mode": "multi",
           "sort": "desc"
         }
-      }
+      },
+      "timeFrom": "2d"
     },
     {
       "type": "table",
@@ -3237,7 +3241,8 @@
           "mode": "multi",
           "sort": "none"
         }
-      }
+      },
+      "timeFrom": "2d"
     },
     {
       "type": "timeseries",
@@ -3313,7 +3318,8 @@
           "mode": "multi",
           "sort": "none"
         }
-      }
+      },
+      "timeFrom": "2d"
     },
     {
       "type": "row",
@@ -3763,7 +3769,8 @@
         "tooltip": {
           "mode": "multi"
         }
-      }
+      },
+      "timeFrom": "2d"
     },
     {
       "type": "stat",
