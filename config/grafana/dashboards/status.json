@@ -6,7 +6,7 @@
   ],
   "timezone": "",
   "schemaVersion": 41,
-  "version": 29,
+  "version": 30,
   "editable": false,
   "refresh": "5m",
   "time": {
@@ -36,7 +36,7 @@
         "uid": "pdb-postgres"
       },
       "gridPos": {
-        "h": 7,
+        "h": 10,
         "w": 14,
         "x": 0,
         "y": 1
@@ -178,7 +178,7 @@
         "uid": "pdb-postgres"
       },
       "gridPos": {
-        "h": 7,
+        "h": 10,
         "w": 10,
         "x": 14,
         "y": 1
@@ -209,8 +209,11 @@
           "fields": ""
         },
         "valueMode": "hidden",
-        "namePlacement": "top",
-        "sizing": "auto"
+        "namePlacement": "left",
+        "sizing": "manual",
+        "minVizHeight": 18,
+        "maxVizHeight": 28,
+        "minVizWidth": 8
       },
       "fieldConfig": {
         "defaults": {
@@ -247,7 +250,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 8
+        "y": 11
       },
       "targets": [
         {
@@ -288,7 +291,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 8
+        "y": 11
       },
       "targets": [
         {
@@ -358,7 +361,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 16
+        "y": 19
       },
       "panels": []
     },
@@ -374,7 +377,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 17
+        "y": 20
       },
       "targets": [
         {
@@ -417,7 +420,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 21
+        "y": 24
       },
       "targets": [
         {
@@ -478,7 +481,7 @@
         "h": 8,
         "w": 18,
         "x": 6,
-        "y": 17
+        "y": 20
       },
       "targets": [
         {
@@ -506,7 +509,7 @@
         "h": 5,
         "w": 24,
         "x": 0,
-        "y": 25
+        "y": 28
       },
       "description": "Neu = neu geladene Läufe, Da = schon vorhanden, Unv. = unvollständig, Fehler = fehlgeschlagene Schritte. Zeitraum und Zuletzt in UTC, Start und Fertig ca. lokal.",
       "targets": [
@@ -790,7 +793,7 @@
         "h": 12,
         "w": 14,
         "x": 0,
-        "y": 30
+        "y": 33
       },
       "description": "Oben die Live-Läufe (ingest-gfs, eigener Dienst mit eigener Quelle NOMADS, unabhängig vom Backfill): „NOAA ab hh:mm“ = Lauf noch nicht veröffentlicht, frühestens ab dieser lokalen Zeit; „wartet (NOAA)“ = teilweise veröffentlicht. Darunter laufende Backfill-Läufe und die nächsten der Warteschlange. Lauf in UTC, Start lokal.",
       "targets": [
@@ -973,7 +976,7 @@
         "h": 12,
         "w": 10,
         "x": 14,
-        "y": 30
+        "y": 33
       },
       "description": "Die letzten 50 abgeschlossenen Läufe aller Jobs, neueste oben. Neu = neu geladene Schritte; Lauf in UTC, Fertig in lokaler Zeit. übergeben = vom nächsten Live-Job geladen.",
       "targets": [
@@ -1126,7 +1129,7 @@
         "h": 11,
         "w": 24,
         "x": 0,
-        "y": 42
+        "y": 45
       },
       "description": "Neu = neu geladene Läufe, Da = schon vorhanden, Unv. = unvollständig, Überg. = offene Läufe eines beendeten Live-Jobs, die der nächste Job lädt (meist der jüngste, bei NOAA noch nicht veröffentlichte; zählen nicht zum Fortschritt), Fehler = fehlgeschlagene Schritte, abgebr. = abgebrochen. Dauer in Stunden:Minuten. Fehlermeldungen stehen in meta.backfill_job.error.",
       "targets": [
@@ -1439,7 +1442,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 53
+        "y": 56
       },
       "panels": []
     },
@@ -1455,7 +1458,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 54
+        "y": 57
       },
       "targets": [
         {
@@ -1576,7 +1579,7 @@
         "h": 8,
         "w": 16,
         "x": 8,
-        "y": 54
+        "y": 57
       },
       "targets": [
         {
@@ -1614,7 +1617,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 62
+        "y": 65
       },
       "panels": []
     },
@@ -1630,7 +1633,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 63
+        "y": 66
       },
       "targets": [
         {
@@ -1692,7 +1695,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 63
+        "y": 66
       },
       "targets": [
         {
@@ -1754,7 +1757,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 67
+        "y": 70
       },
       "targets": [
         {
@@ -1797,7 +1800,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 67
+        "y": 70
       },
       "targets": [
         {
@@ -1840,7 +1843,7 @@
         "h": 8,
         "w": 16,
         "x": 8,
-        "y": 63
+        "y": 66
       },
       "targets": [
         {
@@ -1885,7 +1888,7 @@
         "h": 14,
         "w": 8,
         "x": 0,
-        "y": 71
+        "y": 74
       },
       "targets": [
         {
@@ -1924,7 +1927,7 @@
         "h": 14,
         "w": 8,
         "x": 8,
-        "y": 71
+        "y": 74
       },
       "targets": [
         {
@@ -1963,7 +1966,7 @@
         "h": 14,
         "w": 8,
         "x": 16,
-        "y": 71
+        "y": 74
       },
       "targets": [
         {
@@ -2074,7 +2077,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 85
+        "y": 88
       },
       "targets": [
         {
@@ -2149,7 +2152,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 85
+        "y": 88
       },
       "targets": [
         {
@@ -2220,7 +2223,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 93
+        "y": 96
       },
       "panels": []
     },
@@ -2236,7 +2239,7 @@
         "h": 8,
         "w": 6,
         "x": 0,
-        "y": 94
+        "y": 97
       },
       "targets": [
         {
@@ -2279,7 +2282,7 @@
         "h": 8,
         "w": 18,
         "x": 6,
-        "y": 94
+        "y": 97
       },
       "targets": [
         {
