@@ -353,6 +353,25 @@ Rollen in der Registry:
 | `baseline` | LightGBM ohne Wetter als fester Maßstab | ja |
 | `previous` | frühere Champions, als Rückfall | der jüngste |
 
+### Veröffentlichung und Tags (geplant)
+
+Wird ein Modell veröffentlicht, spiegeln sich die Rollen als Tags in GHCR
+(`ghcr.io/the78mole/predictiondb-models/de_lu`, Lizenz CC BY 4.0). Details in
+[ARCHITEKTUR.md, 7.11.3 und 7.11.4](ARCHITEKTUR.md#7113-tags-challenger-champion-ehrenplatz):
+
+| Ereignis in der Registry | Tag in GHCR |
+|---|---|
+| neue Version als Challenger | `challenger-JJJJ-MM-TT` (bei mehreren am Tag mit Zusatz `-<konfiguration>-<variante>`) |
+| `registry promote` | `champion` wandert, dazu bleibend `champion-JJJJ-MM-TT` |
+| abgelöster Champion (Rolle `previous`) | `honor-JJJJ-MM-TT` |
+| Challenger scheidet aus, ohne Champion gewesen zu sein | `retired-JJJJ-MM-TT` |
+| Ex-Champion wird erneut Champion | weiterer `champion-JJJJ-MM-TT` |
+
+Die Kennzahlen (MAE Preis und Last D+1/D+2, Vergleich zum Vortagespreis, Trainingszeitraum,
+Quellen mit Lizenz) stehen als Annotation am Artefakt, die Modellkarte liegt im Artefakt, und
+die Champion-Zeitleiste des Marktes liegt als eigenes Artefakt unter `…/de_lu:history`.
+Eingerichtet wird das erst, wenn mindestens drei Jahre GFS-Trainingsdaten vorliegen.
+
 ## 8. Betrieb: Inferenz, Registry, Dashboard
 
 - **Inferenz:** Der Dienst `ml-predict` (Compose-Profil `ml`) ruft stündlich `ml-train predict`
