@@ -1,0 +1,143 @@
+# Alarme per E-Mail. SMTP-Zugang und Empfänger kommen aus der Umgebung (compose.yaml, .env:
+# PDB_SMTP_*, PDB_ALERT_EMAIL). Ohne PDB_SMTP_HOST bleibt der Versand aus, die Alarme sind in
+# Grafana trotzdem sichtbar. Änderungen in der Oberfläche überschreibt der nächste Neustart.
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: E-Mail Betrieb
+    receivers:
+      - uid: pdb-email
+        type: email
+        settings:
+          addresses: ${PDB_ALERT_EMAIL}
+          singleEmail: true
+
+policies:
+  - orgId: 1
+    receiver: E-Mail Betrieb
+    group_by: [alertname]
+    group_wait: 1m
+    group_interval: 30m
+    repeat_interval: 24h
+
+groups:
+  - orgId: 1
+    name: Datenquellen
+    folder: PredictionDB
+    interval: 5m
+    rules:
+      # Aufbau einer Antwort weicht ab (Spalte, Blatt, Einheit); der Abruf schreibt nichts
+      - uid: pdb-source-format
+        title: Datenquelle - Format geändert
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: pdb-postgres
+            model:
+              refId: A
+              format: table
+              rawQuery: true
+              editorMode: code
+              rawSql: |
+                SELECT src.code AS source, e.dataset, left(coalesce(e.error, ''), 300) AS error,
+                       1 AS value
+                  FROM meta.energy_status e
+                  JOIN meta.source src USING (source_id)
+                 WHERE e.status = 'format' AND src.enabled
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+        noDataState: OK
+        execErrState: Error
+        for: 0m
+        annotations:
+          summary: "Format von {{ $labels.source }}/{{ $labels.dataset }} geändert"
+          description: >-
+            {{ $labels.error }}. Der Import dieser Quelle ist angehalten, bis der Parser
+            angepasst ist (services/energy_ingest/src/energy_ingest/sources).
+        labels:
+          severity: warning
+
+      # Abruf scheitert seit mindestens 24 h (Netz, Adresse, Zugang)
+      - uid: pdb-source-failing
+        title: Datenquelle - Abruf scheitert seit 24 h
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: pdb-postgres
+            model:
+              refId: A
+              format: table
+              rawQuery: true
+              editorMode: code
+              rawSql: |
+                SELECT src.code AS source, e.dataset, left(coalesce(e.error, ''), 300) AS error,
+                       1 AS value
+                  FROM meta.energy_status e
+                  JOIN meta.source src USING (source_id)
+                 WHERE e.status = 'failed' AND src.enabled
+                   AND coalesce(e.last_ok_at, '-infinity') < now() - interval '24 hours'
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+        noDataState: OK
+        execErrState: Error
+        for: 0m
+        annotations:
+          summary: "Abruf {{ $labels.source }}/{{ $labels.dataset }} scheitert seit 24 h"
+          description: "{{ $labels.error }}"
+        labels:
+          severity: warning
+
+      # Jüngster Wert einer Reihe älter als erwartet (energy.series_freshness). Reihen, die
+      # seit mehr als 180 Tagen darüber liegen, gelten als eingestellt und melden nicht mehr.
+      - uid: pdb-series-stale
+        title: Datenquelle - Reihe veraltet
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: pdb-postgres
+            model:
+              refId: A
+              format: table
+              rawQuery: true
+              editorMode: code
+              rawSql: |
+                SELECT source, code, to_char(last_ts, 'YYYY-MM-DD') AS last_value,
+                       1 AS value
+                  FROM energy.series_freshness
+                 WHERE enabled AND last_ts < now() - max_age
+                   AND last_ts > now() - max_age - interval '180 days'
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+        noDataState: OK
+        execErrState: Error
+        for: 1h
+        annotations:
+          summary: "Reihe {{ $labels.source }}/{{ $labels.code }} veraltet"
+          description: >-
+            Letzter Wert vom {{ $labels.last_value }}. Bei Weltbank und Oil Bulletin hat sich
+            vermutlich die Download-Adresse geändert (PDB_ENERGY_WORLDBANK_URL,
+            PDB_ENERGY_OIL_BULLETIN_URL).
+        labels:
+          severity: warning

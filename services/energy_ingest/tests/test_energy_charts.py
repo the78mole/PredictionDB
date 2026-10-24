@@ -2,12 +2,15 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 import httpx
+import pytest
 
 from energy_ingest.http import Http
+from energy_ingest.sources import FormatError
 from energy_ingest.sources.energy_charts import EnergyCharts
 
 T0 = datetime(2026, 10, 18, 22, 0, tzinfo=UTC)
 STAMPS = [int((T0 + i * timedelta(minutes=15)).timestamp()) for i in range(4)]
+LICENSE = "CC BY 4.0 (creativecommons.org/licenses/by/4.0) from Bundesnetzagentur | SMARD.de"
 
 
 def handler(req: httpx.Request) -> httpx.Response:
@@ -17,7 +20,12 @@ def handler(req: httpx.Request) -> httpx.Response:
         assert req.url.params["start"] == "2026-10-18T22:00+00:00"
         return httpx.Response(
             200,
-            json={"unix_seconds": STAMPS, "price": [90.1, 88.0, None, 85.5], "unit": "EUR / MWh"},
+            json={
+                "license_info": LICENSE,
+                "unix_seconds": STAMPS,
+                "price": [90.1, 88.0, None, 85.5],
+                "unit": "EUR / MWh",
+            },
         )
     if p == "/public_power":
         return httpx.Response(
@@ -47,6 +55,15 @@ def test_price(make_http: Callable[..., Http]) -> None:
     assert data.code == "da_price_de_lu"
     assert data.resolution == timedelta(minutes=15)
     assert [v for _, v in data.points] == [90.1, 88.0, 85.5]
+
+
+def test_price_without_free_license_is_rejected(make_http: Callable[..., Http]) -> None:
+    def restricted(req: httpx.Request) -> httpx.Response:
+        body = {"license_info": "private and internal use only", "unix_seconds": STAMPS}
+        return httpx.Response(200, json={**body, "price": [1.0, 2.0, 3.0, 4.0]})
+
+    with pytest.raises(FormatError, match="ohne freie Lizenz"):
+        EnergyCharts(make_http(restricted)).fetch("price", T0, T0 + timedelta(hours=1))
 
 
 def test_public_power_maps_names(make_http: Callable[..., Http]) -> None:
