@@ -6,7 +6,7 @@
   ],
   "timezone": "",
   "schemaVersion": 41,
-  "version": 28,
+  "version": 29,
   "editable": false,
   "refresh": "5m",
   "time": {
@@ -975,7 +975,7 @@
         "x": 14,
         "y": 30
       },
-      "description": "Die letzten 50 abgeschlossenen Läufe aller Jobs, neueste oben. Neu = neu geladene Schritte; Lauf in UTC, Fertig in lokaler Zeit.",
+      "description": "Die letzten 50 abgeschlossenen Läufe aller Jobs, neueste oben. Neu = neu geladene Schritte; Lauf in UTC, Fertig in lokaler Zeit. übergeben = vom nächsten Live-Job geladen.",
       "targets": [
         {
           "refId": "A",
@@ -986,7 +986,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT to_char(r.run_time AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') AS \"Lauf\",\n       CASE WHEN r.status = 'complete' AND r.steps_stored = 0 THEN 'schon da'\n                     ELSE CASE r.status WHEN 'complete' THEN 'geladen' WHEN 'skipped' THEN 'schon da'\n                     WHEN 'incomplete' THEN 'unvollst.' ELSE 'abgebr.' END END AS \"Ergebnis\",\n       r.steps_stored AS \"Neu\",\n       r.steps_failed AS \"Fehler\",\n       r.bytes_stored AS \"Bronze\",\n       to_char(r.finished_at - r.started_at, 'HH24:MI:SS') AS \"Dauer\",\n       to_char(r.finished_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Fertig\",\n       CASE j.mode WHEN 'live' THEN 'Live' ELSE 'Backfill' END AS \"Art\"\n  FROM meta.backfill_run r JOIN meta.backfill_job j USING (job_id)\n WHERE r.finished_at IS NOT NULL\n ORDER BY r.finished_at DESC\n LIMIT 50"
+          "rawSql": "SELECT to_char(r.run_time AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') AS \"Lauf\",\n       CASE WHEN r.status = 'complete' AND r.steps_stored = 0 THEN 'schon da'\n                     ELSE CASE r.status WHEN 'complete' THEN 'geladen' WHEN 'skipped' THEN 'schon da'\n                     WHEN 'incomplete' THEN 'unvollst.' WHEN 'handed_over' THEN 'übergeben' ELSE 'abgebr.' END END AS \"Ergebnis\",\n       r.steps_stored AS \"Neu\",\n       r.steps_failed AS \"Fehler\",\n       r.bytes_stored AS \"Bronze\",\n       to_char(r.finished_at - r.started_at, 'HH24:MI:SS') AS \"Dauer\",\n       to_char(r.finished_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Fertig\",\n       CASE j.mode WHEN 'live' THEN 'Live' ELSE 'Backfill' END AS \"Art\"\n  FROM meta.backfill_run r JOIN meta.backfill_job j USING (job_id)\n WHERE r.finished_at IS NOT NULL\n ORDER BY r.finished_at DESC\n LIMIT 50"
         }
       ],
       "fieldConfig": {
@@ -1128,7 +1128,7 @@
         "x": 0,
         "y": 42
       },
-      "description": "Neu = neu geladene Läufe, Da = schon vorhanden, Unv. = unvollständig, Fehler = fehlgeschlagene Schritte, abgebr. = abgebrochen. Dauer in Stunden:Minuten. Fehlermeldungen stehen in meta.backfill_job.error.",
+      "description": "Neu = neu geladene Läufe, Da = schon vorhanden, Unv. = unvollständig, Überg. = offene Läufe eines beendeten Live-Jobs, die der nächste Job lädt (meist der jüngste, bei NOAA noch nicht veröffentlichte; zählen nicht zum Fortschritt), Fehler = fehlgeschlagene Schritte, abgebr. = abgebrochen. Dauer in Stunden:Minuten. Fehlermeldungen stehen in meta.backfill_job.error.",
       "targets": [
         {
           "refId": "A",
@@ -1139,7 +1139,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT job_id AS \"Job\",\n       CASE mode WHEN 'live' THEN 'Live' ELSE 'Backfill' END AS \"Art\",\n       to_char(range_start AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') || ' – ' ||\n         to_char(range_end AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zeitraum\",\n       array_to_string(run_hours, '/') || 'Z' AS \"Läufe\",\n       round(100.0 * (n_complete + n_incomplete) / nullif(n_runs, 0), 1) AS \"Fortschritt\",\n       (n_complete + n_incomplete) || '/' || n_runs AS \"Bearbeitet\",\n       n_complete - n_skipped AS \"Neu\",\n       n_skipped AS \"Da\",\n       n_incomplete AS \"Unv.\",\n       n_failed_steps AS \"Fehler\",\n       bytes_stored AS \"Bronze\",\n       to_char(last_run AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zuletzt\",\n       to_char(started_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Start\",\n       to_char(finished_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Ende\",\n       floor(extract(epoch FROM finished_at - started_at) / 3600)::int || ':' || to_char(finished_at - started_at, 'MI') AS \"Dauer\",\n       CASE WHEN status = 'done' THEN 'fertig' WHEN status = 'failed' THEN 'Fehler'\n            WHEN mode = 'live' THEN 'beendet' ELSE 'abgebr.' END AS \"Status\"\n  FROM meta.backfill_job\n WHERE status <> 'running'\n ORDER BY finished_at DESC NULLS LAST\n LIMIT 10"
+          "rawSql": "SELECT job_id AS \"Job\",\n       CASE mode WHEN 'live' THEN 'Live' ELSE 'Backfill' END AS \"Art\",\n       to_char(range_start AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') || ' – ' ||\n         to_char(range_end AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zeitraum\",\n       array_to_string(run_hours, '/') || 'Z' AS \"Läufe\",\n       round(100.0 * (n_complete + n_incomplete) / nullif(n_runs - h.n, 0), 1) AS \"Fortschritt\",\n       (n_complete + n_incomplete) || '/' || (n_runs - h.n) AS \"Bearbeitet\",\n       n_complete - n_skipped AS \"Neu\",\n       n_skipped AS \"Da\",\n       n_incomplete AS \"Unv.\",\n       h.n AS \"Überg.\",\n       n_failed_steps AS \"Fehler\",\n       bytes_stored AS \"Bronze\",\n       to_char(last_run AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zuletzt\",\n       to_char(started_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Start\",\n       to_char(finished_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Ende\",\n       floor(extract(epoch FROM finished_at - started_at) / 3600)::int || ':' || to_char(finished_at - started_at, 'MI') AS \"Dauer\",\n       CASE WHEN status = 'done' THEN 'fertig' WHEN status = 'failed' THEN 'Fehler'\n            WHEN mode = 'live' THEN 'beendet' ELSE 'abgebr.' END AS \"Status\"\n  FROM meta.backfill_job j,\n       LATERAL (SELECT count(*) AS n FROM meta.backfill_run r\n                 WHERE r.job_id = j.job_id AND r.status = 'handed_over') h\n WHERE status <> 'running'\n ORDER BY finished_at DESC NULLS LAST\n LIMIT 10"
         }
       ],
       "fieldConfig": {
@@ -1304,6 +1304,22 @@
               {
                 "id": "custom.width",
                 "value": 46
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Überg."
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 56
               },
               {
                 "id": "custom.align",
