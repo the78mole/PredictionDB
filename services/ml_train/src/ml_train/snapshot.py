@@ -5,8 +5,9 @@ auf der VM aus der Datenbank exportiert und kann ohne Datenbankzugang überall v
 werden (lokal, im LAN oder auf einer Miet-GPU).
 
 ========================= ===================================================================
-``energy.parquet``        ``ts`` (UTC, Stundenbeginn), ``code``, ``value``: Stundenmittel aus
-                          ``energy.value_best`` (15-min-Werte werden gemittelt)
+``energy.parquet``        ``ts`` (UTC, Stundenbeginn), ``code``, ``value``, ``published``:
+                          Stundenmittel aus ``energy.value_best`` (15-min-Werte werden
+                          gemittelt), ``published`` als spätester Wert der Stunde
 ``weather.parquet``       ``run_time``, ``valid_time``, ``feature``, ``value``: Wetter-Features
                           je Technologie, über die Cluster zusammengefasst (``*_power`` als
                           Summe, alles andere leistungsgewichtet gemittelt), Schritte nativ
@@ -101,8 +102,9 @@ def load_snapshot(path: str | Path) -> Snapshot:
     energy = pd.read_parquet(p / "energy.parquet")
     weather = pd.read_parquet(p / "weather.parquet")
     capacity = pd.read_parquet(p / "capacity.parquet")
-    for col in ("ts",):
-        energy[col] = pd.to_datetime(energy[col], utc=True)
+    for col in ("ts", "published"):
+        if col in energy.columns:
+            energy[col] = pd.to_datetime(energy[col], utc=True)
     for col in ("run_time", "valid_time"):
         weather[col] = pd.to_datetime(weather[col], utc=True)
     return Snapshot(energy, weather, capacity, manifest)
@@ -120,7 +122,7 @@ def _months(start: datetime, end: datetime) -> Iterable[tuple[datetime, datetime
 
 
 ENERGY_SQL = text("""
-    SELECT time_bucket('1 hour', ts) AS ts, avg(value) AS value
+    SELECT time_bucket('1 hour', ts) AS ts, avg(value) AS value, max(published) AS published
     FROM energy.value_best
     WHERE code = :code AND ts >= :a AND ts < :b
     GROUP BY 1 ORDER BY 1""")
@@ -207,6 +209,7 @@ def export_snapshot(
             capacity = pd.DataFrame(columns=["day", "technology", "capacity_mw"])
     energy = pd.concat(energy_parts, ignore_index=True)
     energy["ts"] = pd.to_datetime(energy["ts"], utc=True)
+    energy["published"] = pd.to_datetime(energy["published"], utc=True)
     weather = (
         pd.concat(weather_parts, ignore_index=True)
         if weather_parts

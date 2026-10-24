@@ -10,7 +10,10 @@ Leakage-Schutz (ARCHITEKTUR.md 7.4):
 - Ist-Werte gelten ab Intervallende plus ``actual_delay_h`` als bekannt.
 - Day-Ahead-Preise eines Liefertags gelten am Vortag ab ``price_known_local_hour`` als bekannt.
 - Wetter kommt aus dem jüngsten Lauf mit ``run_time + nwp_delay_h <= issue_time``.
-- Prognosen Dritter (ENTSO-E) dienen nur als Benchmark, nie als Merkmal.
+- Prognosen Dritter (Lastprognose der ÜNB) sind nur als eigene Reihengruppe (``forecast``)
+  Merkmal, und nur für Liefertage, deren Prognose zum Ausgabezeitpunkt veröffentlicht war.
+- Tages-, Wochen- und Monatswerte (Brennstoffpreise, Marktwerte) gelten ab ihrer Spalte
+  ``published`` im Snapshot als bekannt.
 
 Wetter liegt im Snapshot in nativen Schritten (GFS v16 stündlich bis 120 h, danach
 dreistündlich). Erst hier wird auf Stunden interpoliert (Vorgabe: Interpolation beim Lesen):
@@ -30,7 +33,7 @@ import numpy as np
 import pandas as pd
 
 from ml_train.calendar import BERLIN, CALENDAR_COLUMNS, calendar_features
-from ml_train.config import FeatureGroup, ModelConfig
+from ml_train.config import FeatureGroup, ModelConfig, SeriesGroup
 from ml_train.snapshot import Snapshot
 
 H = pd.Timedelta(hours=1)
@@ -38,7 +41,9 @@ DAY = pd.Timedelta(days=1)
 
 #: Intervallgrößen (Wert gilt für das Intervall bis zur Gültigkeitszeit)
 INTERVAL_SUFFIXES = ("_ghi", "_pv_cf", "_pv_power", "_precip", "_snow_fraction")
-PRICE_CODES = ("da_price_de_lu",)
+#: Day-Ahead-Preise (DE-LU und Nachbarzonen): bekannt ab dem Auktionsergebnis am Vortag
+PRICE_PREFIX = "da_price_"
+LAG_KINDS = ("day", "week", "mean_day", "mean_7d", "last")
 META_COLUMNS = ["issue_time", "ts", "lead_day", "lead_h"]
 
 
@@ -143,6 +148,7 @@ class FeatureBuilder:
     def __init__(self, snapshot: Snapshot, cfg: ModelConfig) -> None:
         self.cfg = cfg
         self.energy = snapshot.energy_wide()
+        self.energy_long = snapshot.energy
         self.capacity = snapshot.capacity_wide()
         self.weather = WeatherTable(snapshot.weather, cfg.weather_features)
         local = self.energy.index.tz_convert(BERLIN)
@@ -154,7 +160,7 @@ class FeatureBuilder:
 
     def _known_until(self, code: str, issue: pd.Timestamp) -> pd.Timestamp:
         """Erste Stunde (Beginn), die zum Ausgabezeitpunkt noch nicht bekannt ist."""
-        if code in PRICE_CODES:
+        if code.startswith(PRICE_PREFIX):
             local = issue.tz_convert(BERLIN)
             last_day = local.date() + timedelta(
                 days=1 if local.hour >= self.cfg.issue.price_known_local_hour else 0
@@ -226,6 +232,11 @@ class FeatureBuilder:
         groups["weather"] = list(wx.columns)
         parts.append(wx)
 
+        for name, sg in self.cfg.series_groups.items():
+            extra = self._series_group(sg, meta)
+            groups[name] = list(extra.columns)
+            parts.append(extra)
+
         X = pd.concat(parts, axis=1)
         y = pd.DataFrame({c: self._lookup(c, meta["ts"]) for c in self.cfg.targets}, index=X.index)
         bench_codes = sorted({b for t in self.cfg.stage1 + self.cfg.stage2 for b in t.benchmarks})
@@ -259,11 +270,19 @@ class FeatureBuilder:
         return [c for c in dict.fromkeys(codes + self.cfg.lag_series) if c in self.energy.columns]
 
     def _lags(self, meta: pd.DataFrame) -> pd.DataFrame:
+        return self._lag_block(self.lag_codes(), LAG_KINDS, meta)
+
+    def _lag_block(
+        self, codes: Sequence[str], kinds: Sequence[str], meta: pd.DataFrame
+    ) -> pd.DataFrame:
         ts = pd.DatetimeIndex(meta["ts"])
         issues = pd.DatetimeIndex(meta["issue_time"])
         uniq = issues.unique()
+        target_day = pd.DatetimeIndex(ts.tz_convert(BERLIN).normalize().tz_localize(None))
         out: dict[str, np.ndarray] = {}
-        for code in self.lag_codes():
+        for code in codes:
+            if code not in self.energy.columns:
+                continue
             known = {i: self._known_until(code, i) for i in uniq}
             known_arr = pd.DatetimeIndex([known[i] for i in issues])
             last_day = {
@@ -274,22 +293,79 @@ class FeatureBuilder:
                 for i, d in last_day.items()
             }
             full_arr = pd.DatetimeIndex([pd.Timestamp(full_day[i]) for i in issues])
-            target_day = pd.DatetimeIndex(ts.tz_convert(BERLIN).normalize().tz_localize(None))
             k_days = ((target_day - full_arr) / DAY).astype(int)
             s = self.energy[code]
-            out[f"lag_{code}_day"] = s.reindex(ts - k_days.to_numpy() * DAY).to_numpy()
-            # gleiche Stunde vor m Wochen, kleinstes m mit bekanntem Wert
-            m = np.ceil((ts - known_arr + H) / (7 * DAY)).astype(int)
-            m = np.maximum(m, 1)
-            out[f"lag_{code}_week"] = s.reindex(ts - m * 7 * DAY).to_numpy()
             dm = self.daily_mean[code]
-            out[f"lag_{code}_mean_day"] = dm.reindex(full_arr).to_numpy()
-            roll7 = dm.rolling(7, min_periods=5).mean()
-            out[f"lag_{code}_mean_7d"] = roll7.reindex(full_arr).to_numpy()
-            last = s.reindex(known_arr - H).to_numpy()
-            out[f"lag_{code}_last"] = last
+            if "day" in kinds:
+                out[f"lag_{code}_day"] = s.reindex(ts - k_days.to_numpy() * DAY).to_numpy()
+            if "week" in kinds:
+                # gleiche Stunde vor m Wochen, kleinstes m mit bekanntem Wert
+                m = np.ceil((ts - known_arr + H) / (7 * DAY)).astype(int)
+                m = np.maximum(m, 1)
+                out[f"lag_{code}_week"] = s.reindex(ts - m * 7 * DAY).to_numpy()
+            if "mean_day" in kinds:
+                out[f"lag_{code}_mean_day"] = dm.reindex(full_arr).to_numpy()
+            if "mean_7d" in kinds:
+                roll7 = dm.rolling(7, min_periods=5).mean()
+                out[f"lag_{code}_mean_7d"] = roll7.reindex(full_arr).to_numpy()
+            if "last" in kinds:
+                out[f"lag_{code}_last"] = s.reindex(known_arr - H).to_numpy()
         df = pd.DataFrame(out, index=meta.index).astype(np.float32)
         return df
+
+    # --- Reihengruppen -----------------------------------------------------------------------
+
+    def _series_group(self, sg: SeriesGroup, meta: pd.DataFrame) -> pd.DataFrame:
+        if sg.mode == "lags":
+            return self._lag_block(sg.codes, sg.lags, meta)
+        if sg.mode == "forecast":
+            return self._forecast(sg, meta)
+        return self._asof(sg, meta)
+
+    def _forecast(self, sg: SeriesGroup, meta: pd.DataFrame) -> pd.DataFrame:
+        """Wert der Zielstunde, wenn die Prognose ihres Liefertags schon veröffentlicht war."""
+        ts = pd.DatetimeIndex(meta["ts"])
+        day = ts.tz_convert(BERLIN).normalize().tz_localize(None)
+        published = {
+            d: (d - DAY + pd.Timedelta(hours=sg.known_local_hour)).tz_localize(BERLIN)
+            for d in day.unique()
+        }
+        pub = pd.DatetimeIndex([published[d] for d in day]).tz_convert("UTC")
+        known = np.asarray(pd.DatetimeIndex(meta["issue_time"]) >= pub)
+        out: dict[str, np.ndarray] = {}
+        for code in sg.codes:
+            if code not in self.energy.columns:
+                continue
+            v = self.energy[code].reindex(ts).to_numpy(np.float64)
+            out[f"fc_{code}"] = np.where(known, v, np.nan)
+        return pd.DataFrame(out, index=meta.index).astype(np.float32)
+
+    def _asof(self, sg: SeriesGroup, meta: pd.DataFrame) -> pd.DataFrame:
+        """Letzter veröffentlichter Wert je Ausgabezeitpunkt und Änderung über ``change_days``."""
+        e = self.energy_long
+        if "published" not in e.columns:
+            raise ValueError(
+                "Snapshot ohne Spalte published: mit aktuellem ml-train neu exportieren"
+            )
+        issues = pd.DatetimeIndex(meta["issue_time"])
+        uniq = pd.DataFrame({"issue": issues.unique().sort_values().as_unit("ns")})
+        uniq["before"] = uniq["issue"] - pd.Timedelta(days=sg.change_days)
+        out: dict[str, np.ndarray] = {}
+        for code in sg.codes:
+            s = e.loc[(e["code"] == code) & e["published"].notna(), ["published", "value"]]
+            if s.empty:
+                continue
+            s = s.sort_values("published").astype({"value": np.float64})
+            s["published"] = pd.DatetimeIndex(s["published"]).as_unit("ns")
+            now = pd.merge_asof(uniq, s, left_on="issue", right_on="published")["value"]
+            then = pd.merge_asof(
+                uniq.sort_values("before"), s, left_on="before", right_on="published"
+            )["value"]
+            cur = pd.Series(now.to_numpy(), index=uniq["issue"])
+            chg = pd.Series(now.to_numpy() - then.to_numpy(), index=uniq["issue"])
+            out[f"asof_{code}"] = cur.reindex(issues).to_numpy()
+            out[f"asof_{code}_chg"] = chg.reindex(issues).to_numpy()
+        return pd.DataFrame(out, index=meta.index).astype(np.float32)
 
     def _weather(self, meta: pd.DataFrame) -> pd.DataFrame:
         cols = [*self.weather.columns, "wx_interp", "wx_lead_h"]
