@@ -16,7 +16,7 @@ Gemessen wurde über 2025 bis Oktober 2026 auf denselben 110 000 Stunden je Ziel
 sinkt der MAE von 31,0 auf 29,4 €/MWh, bei der Last von 1,89 auf 1,82 GW. Der Pinball-Loss über
 P10/P50/P90 sinkt um je 3 %. Für den Folgetag schlägt das Modell damit erstmals den
 Vortagespreis: 26,4 €/MWh gegenüber 28,7 €/MWh (v1: 28,3). Bei der Last liegt es mit 1,76 GW
-13 % unter der ÜNB-Prognose (1,98 GW).
+11 % unter der ÜNB-Prognose (1,98 GW).
 
 **Der Großteil des Preisgewinns kommt aus einem längeren Preisgedächtnis, nicht aus den neuen
 Daten selbst.** v1 kennt den Preis nur über den letzten Tag und die letzten sieben Tage.
