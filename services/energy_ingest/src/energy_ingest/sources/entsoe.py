@@ -4,9 +4,10 @@ Den Token gibt es nach Registrierung auf transparency.entsoe.eu und einer E-Mail
 transparency@entsoe.eu mit dem Betreff „Restful API access“. Ohne ``PDB_ENTSOE_TOKEN``
 bleibt die Quelle abgeschaltet.
 
-Frei weiterverwendbar (CC BY 4.0) ist nur die „List of Data available for free re-use“; Ist-Last,
-Preise, Erzeugung und Wind-/PV-Prognosen gehören nicht dazu. Die Quelle läuft deshalb nur mit
-``PDB_ALLOW_ENTSO_E=true``.
+Frei weiterverwendbar (CC BY 4.0) ist nur die „List of Data available for free re-use“. Von den
+genutzten Reihen steht nur die Day-Ahead-Lastprognose (6.1.b) darauf; sie läuft als eigene, freie
+Quelle ``entsoe_last`` ohne Schalter, sobald ein Token gesetzt ist. Ist-Last, Preise, Erzeugung
+und Wind-/PV-Prognosen (Quelle ``entsoe``) laufen nur mit ``PDB_ALLOW_ENTSO_E=true``.
 
 Antworten sind XML-Dokumente (``Publication_MarketDocument`` bzw. ``GL_MarketDocument``)
 mit ``TimeSeries/Period/Point``. Bei Kurventyp A03 fehlen Punkte, deren Wert sich nicht
@@ -167,6 +168,10 @@ def merge(
     return (res, pts) if pts else None
 
 
+#: Datensätze auf der Freigabeliste von ENTSO-E (Stand 18.10.2023)
+FREE_DATASETS = ["load_forecast"]
+
+
 class Entsoe:
     code = "entsoe"
     license = "ENTSO-E Transparency Platform, Nutzungsbedingungen von ENTSO-E"
@@ -181,7 +186,7 @@ class Entsoe:
         self.base_url = base_url
 
     def datasets(self) -> list[str]:
-        return list(QUERIES)
+        return [d for d in QUERIES if d not in FREE_DATASETS]
 
     def max_chunk(self, dataset: str) -> timedelta:
         return timedelta(days=31)
@@ -222,3 +227,14 @@ class Entsoe:
             if merged:
                 out.append(SeriesData(series(code), merged[0], merged[1]))
         return out
+
+
+class EntsoeLast(Entsoe):
+    """Freier Teil von ENTSO-E: Day-Ahead-Lastprognose (6.1.b), CC BY 4.0."""
+
+    code = "entsoe_last"
+    license = "CC BY 4.0, ENTSO-E Transparency Platform (List of Data available for free re-use)"
+    free = True
+
+    def datasets(self) -> list[str]:
+        return list(FREE_DATASETS)

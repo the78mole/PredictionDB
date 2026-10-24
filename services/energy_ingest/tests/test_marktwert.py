@@ -105,6 +105,7 @@ def test_unfree_sources_need_allow(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PDB_NETZTRANSPARENZ_CLIENT_SECRET", "s")
     settings = EnergySettings(_env_file=None)
     assert _codes(settings) == [
+        "entsoe_last",
         "smard",
         "energy_charts",
         "eia",
@@ -119,5 +120,11 @@ def test_unfree_sources_need_allow(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PDB_ALLOW_ENERGY_CHARTS", "true")
     settings = EnergySettings(_env_file=None)
     # Mit amtlichen Marktwerten entfällt die eigene Rechnung
-    assert _codes(settings)[:4] == ["entsoe", "smard", "energy_charts", "netztransparenz"]
+    assert _codes(settings)[:5] == [
+        "entsoe",
+        "entsoe_last",
+        "smard",
+        "energy_charts",
+        "netztransparenz",
+    ]
     assert "pdb_marktwert" not in _codes(settings)

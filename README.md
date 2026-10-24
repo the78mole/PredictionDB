@@ -1,7 +1,8 @@
 # PredictionDB
 
 Strombedarfs- und Strompreisprognose für Deutschland auf Basis kostenfreier Wettermodelle
-(NOAA GFS u. a.) und Energiedaten. Architektur: [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md).
+(NOAA GFS u. a.) und Energiedaten. Architektur: [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md). Quellen mit
+Schlüssel- oder Lizenzbedarf: [docs/DATENQUELLEN-ZUGANG.md](docs/DATENQUELLEN-ZUGANG.md).
 
 ## Aufbau
 

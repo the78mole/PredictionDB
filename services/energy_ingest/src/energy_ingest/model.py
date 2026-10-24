@@ -41,6 +41,26 @@ UNIT_USD_T = "USD/t"
 UNIT_USD_PER_EUR = "USD/EUR"
 
 
+#: Nachbarzonen, deren Day-Ahead-Preise Energy-Charts unter CC BY 4.0 (SMARD) ausliefert:
+#: Gebotszone -> Kürzel im Reihen-Code ``da_price_<kürzel>``
+NEIGHBOUR_ZONES: dict[str, str] = {
+    "AT": "at",
+    "BE": "be",
+    "CH": "ch",
+    "CZ": "cz",
+    "DK1": "dk1",
+    "DK2": "dk2",
+    "FR": "fr",
+    "HU": "hu",
+    "IT-North": "it_north",
+    "NL": "nl",
+    "NO2": "no2",
+    "PL": "pl",
+    "SE4": "se4",
+    "SI": "si",
+}
+
+
 class Kind(StrEnum):
     """Art der Reihe; bestimmt den geschätzten Veröffentlichungszeitpunkt."""
 
@@ -78,6 +98,11 @@ SERIES: dict[str, SeriesInfo] = {
     s.code: s
     for s in [
         SeriesInfo("da_price_de_lu", Kind.PRICE_DA, UNIT_EUR_MWH),
+        # Day-Ahead-Preise der Nachbarzonen (Marktkopplung), Energy-Charts unter CC BY 4.0
+        *(
+            SeriesInfo(f"da_price_{z}", Kind.PRICE_DA, UNIT_EUR_MWH)
+            for z in NEIGHBOUR_ZONES.values()
+        ),
         SeriesInfo("load_actual", Kind.ACTUAL, UNIT_MW),
         SeriesInfo("residual_load", Kind.ACTUAL, UNIT_MW),
         SeriesInfo("load_da_forecast", Kind.LOAD_DA_FORECAST, UNIT_MW),

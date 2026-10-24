@@ -16,7 +16,7 @@ LICENSE = "CC BY 4.0 (creativecommons.org/licenses/by/4.0) from Bundesnetzagentu
 def handler(req: httpx.Request) -> httpx.Response:
     p = req.url.path
     if p == "/price":
-        assert req.url.params["bzn"] == "DE-LU"
+        assert req.url.params["bzn"] in ("DE-LU", "IT-North")
         assert req.url.params["start"] == "2026-10-18T22:00+00:00"
         return httpx.Response(
             200,
@@ -55,6 +55,14 @@ def test_price(make_http: Callable[..., Http]) -> None:
     assert data.code == "da_price_de_lu"
     assert data.resolution == timedelta(minutes=15)
     assert [v for _, v in data.points] == [90.1, 88.0, 85.5]
+
+
+def test_neighbour_price(make_http: Callable[..., Http]) -> None:
+    ec = EnergyCharts(make_http(handler))
+    assert "price_it_north" in ec.datasets()
+    (data,) = ec.fetch("price_it_north", T0, T0 + timedelta(hours=1))
+    assert data.code == "da_price_it_north"
+    assert len(data.points) == 3
 
 
 def test_price_without_free_license_is_rejected(make_http: Callable[..., Http]) -> None:

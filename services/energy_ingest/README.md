@@ -10,8 +10,9 @@ fossiler Energieträger und der Euro-Dollar-Kurs (Abschnitt „Brennstoffpreise�
 |---|---|---|---|---|
 | SMARD, Bundesnetzagentur (`smard`) | offen | je Reihe ein Datensatz (`da_price_de_lu`, `load_actual`, …) | 10 | ja, CC BY 4.0 |
 | Netztransparenz.de, ÜNB (`netztransparenz`) | kostenloser OAuth-Client, `PDB_NETZTRANSPARENZ_CLIENT_ID` und `_CLIENT_SECRET` | `market_value_month`, `market_value_year` | 15 | nein, keine Lizenz veröffentlicht |
-| ENTSO-E Transparency (`entsoe`) | kostenloser Token, `PDB_ENTSOE_TOKEN` | `price`, `load`, `load_forecast`, `generation`, `wind_solar_forecast` | 20 | nein, Preis, Last, Erzeugung nicht auf der Freigabeliste |
-| Energy-Charts, Fraunhofer ISE (`energy_charts`) | offen | `price`, `public_power`, `forecast_solar`, `forecast_wind_onshore`, `forecast_wind_offshore`, `forecast_load` | 30 | ja, CC BY 4.0 laut API-Dokumentation; Preise DE-LU CC BY 4.0 (SMARD), Vermerk wird geprüft |
+| ENTSO-E Transparency (`entsoe`) | kostenloser Token, `PDB_ENTSOE_TOKEN` | `price`, `load`, `generation`, `wind_solar_forecast` | 20 | nein, Preis, Last, Erzeugung nicht auf der Freigabeliste |
+| ENTSO-E, freier Teil (`entsoe_last`) | wie `entsoe`, ohne Schalter | `load_forecast` (Day-Ahead-Lastprognose 6.1.b) | 20 | ja, CC BY 4.0 (Freigabeliste) |
+| Energy-Charts, Fraunhofer ISE (`energy_charts`) | offen | `price`, `price_<zone>` (Nachbarzonen AT, BE, CH, CZ, DK1, DK2, FR, HU, IT-North, NL, NO2, PL, SE4, SI als `da_price_<zone>`), `public_power`, `forecast_solar`, `forecast_wind_onshore`, `forecast_wind_offshore`, `forecast_load` | 30 | ja, CC BY 4.0 laut API-Dokumentation; Preise DE-LU und Nachbarzonen CC BY 4.0 (SMARD), Vermerk wird geprüft |
 | Eigene Marktwerte (`pdb_marktwert`) | Berechnung aus `energy.value_best` | `market_value_month`, `market_value_year` | 40 | ja, aus SMARD |
 | EIA, eigene Reihen (`eia`) | `PDB_EIA_API_KEY`, ohne Schlüssel Bulk-Dateien | `prices` (ULSD New York Harbor und Gulf Coast) | 10 | ja, Public Domain |
 | EIA, Reihen von Thomson Reuters (`eia_reuters`) | wie `eia` | `prices` (Brent, WTI, Benzin, Heizöl, Kerosin, Propan, Henry Hub) | 10 | nein, urheberrechtlich geschützt |

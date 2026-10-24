@@ -30,7 +30,7 @@ from energy_ingest.sources import Source
 from energy_ingest.sources.ecb import Ecb
 from energy_ingest.sources.eia import Eia, EiaBulk, EiaReuters
 from energy_ingest.sources.energy_charts import EnergyCharts
-from energy_ingest.sources.entsoe import Entsoe
+from energy_ingest.sources.entsoe import Entsoe, EntsoeLast
 from energy_ingest.sources.marktwert import Marktwert
 from energy_ingest.sources.netztransparenz import Netztransparenz
 from energy_ingest.sources.oil_bulletin import OilBulletin
@@ -107,12 +107,14 @@ def build_sources(
             sources.append(Smard(http))
         elif code == "energy_charts":
             sources.append(EnergyCharts(http))
-        elif code == "entsoe":
+        elif code in ("entsoe", "entsoe_last"):
             token = settings.entsoe_token.get_secret_value()
             if not token:
-                log.warning("energy.entsoe_disabled", reason="PDB_ENTSOE_TOKEN nicht gesetzt")
+                log.warning(
+                    "energy.entsoe_disabled", source=code, reason="PDB_ENTSOE_TOKEN nicht gesetzt"
+                )
                 continue
-            sources.append(Entsoe(http, token))
+            sources.append((Entsoe if code == "entsoe" else EntsoeLast)(http, token))
         elif code == "netztransparenz":
             cid = settings.netztransparenz_client_id
             secret = settings.netztransparenz_client_secret.get_secret_value()
