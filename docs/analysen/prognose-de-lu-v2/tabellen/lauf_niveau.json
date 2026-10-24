@@ -1,0 +1,53 @@
+{
+  "snapshot_id": "cb9d83c5ca7e852a",
+  "config_sha256": "60911447284fb0701316931ea040edea69d15736b1699756a924fe50cb1827e7",
+  "config": "de_lu_v2",
+  "folds": [
+    {
+      "no": 0,
+      "test_from": "2025-01-01",
+      "test_to": "2025-06-30",
+      "train_to": "2024-12-24"
+    },
+    {
+      "no": 1,
+      "test_from": "2025-07-01",
+      "test_to": "2025-12-31",
+      "train_to": "2025-06-23"
+    },
+    {
+      "no": 2,
+      "test_from": "2026-01-01",
+      "test_to": "2026-06-30",
+      "train_to": "2025-12-24"
+    },
+    {
+      "no": 3,
+      "test_from": "2026-07-01",
+      "test_to": "2026-10-23",
+      "train_to": "2026-06-23"
+    }
+  ],
+  "timings_s": {
+    "features_s": 50.4,
+    "fold0_kalender_s": 97.9,
+    "fold0_preisniveau_s": 98.5,
+    "fold0_frei_s": 210.1,
+    "fold0_frei_niveau_s": 209.4,
+    "fold1_kalender_s": 100.9,
+    "fold1_preisniveau_s": 105.7,
+    "fold1_frei_s": 251.2,
+    "fold1_frei_niveau_s": 230.0,
+    "fold2_kalender_s": 104.5,
+    "fold2_preisniveau_s": 105.2,
+    "fold2_frei_s": 239.7,
+    "fold2_frei_niveau_s": 244.3,
+    "fold3_kalender_s": 106.9,
+    "fold3_preisniveau_s": 110.3,
+    "fold3_frei_s": 244.2,
+    "fold3_frei_niveau_s": 247.5
+  },
+  "rows": 3394814,
+  "git_commit": "0540cfcb75cc",
+  "finished": "2026-10-24T17:39:08+00:00"
+}
