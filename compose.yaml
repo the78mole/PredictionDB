@@ -155,6 +155,8 @@ services:
     environment:
       <<: *app-env
       PDB_ML_REGISTRY: s3://ml-artifacts/models
+      # LightGBM/OpenMP sonst mit einem Thread je Host-Kern: bei cpus-Grenze massive Überbelegung
+      OMP_NUM_THREADS: ${ML_TRAIN_CPUS:-4}
     volumes:
       - ml-data:/data
     depends_on:
@@ -168,6 +170,7 @@ services:
     environment:
       <<: *app-env
       PDB_ML_REGISTRY: s3://ml-artifacts/models
+      OMP_NUM_THREADS: ${ML_PREDICT_THREADS:-2}
     depends_on:
       migrate: {condition: service_completed_successfully}
 

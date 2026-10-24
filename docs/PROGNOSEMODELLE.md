@@ -410,7 +410,8 @@ Eingerichtet wird das erst, wenn mindestens drei Jahre GFS-Trainingsdaten vorlie
 | `PDB_ML_CONFIG` | `config/ml/de_lu_v1.yaml` |
 | `PDB_ML_REGISTRY` | `s3://ml-artifacts/models` (oder ein lokaler Ordner) |
 | `PDB_ML_CACHE` | `/tmp/ml-train-cache` (geladene Modelle) |
-| `ML_TRAIN_CPUS` | 4 (CPU-Grenze des Trainings-Containers) |
+| `ML_TRAIN_CPUS` | 4 (CPU-Grenze des Trainings-Containers, setzt auch `OMP_NUM_THREADS`; ohne diese Kopplung startet LightGBM einen Thread je Host-Kern und wird um ein Vielfaches langsamer) |
+| `ML_PREDICT_THREADS` | 2 (OpenMP-Threads der stündlichen Inferenz `ml-predict`) |
 
 ## 9. Optimierungsstrategien
 
