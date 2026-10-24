@@ -43,6 +43,11 @@ update() {
   docker compose run --rm garage-init
   docker compose run --rm migrate
   docker compose up -d
+  # Ältere Commit-Tags des App-Images entfernen (je ~1 GB unter /var/lib/containerd auf /);
+  # "deployed" zeigt auf denselben Stand, laufende Container bleiben unberührt
+  docker image ls --format '{{.Repository}}:{{.Tag}}' "$image" \
+    | grep -vxF -e "$image:$neu" -e "$image:deployed" \
+    | xargs -r docker rmi >/dev/null 2>&1 || true
   docker image prune -f >/dev/null || true
   echo "$neu" > .git/pdb-deployed
   echo "Ausgerollt: $(git log -1 --format='%h %s')"
