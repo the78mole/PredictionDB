@@ -21,11 +21,24 @@ HOUR = timedelta(hours=1)
 # Zeitstempel selbst liegen exakt am Monats- bzw. Jahresbeginn (Ortszeit)
 MONTH = timedelta(days=30)
 YEAR = timedelta(days=365)
+DAY = timedelta(days=1)
+WEEK = timedelta(days=7)
 # Monats- und Jahresmarktwerte erscheinen spätestens zehn Werktage nach Periodenende
 MARKET_VALUE_DELAY = timedelta(days=14)
+# Brennstoffpreise: Tageswerte am Folgetag, das Oil Bulletin einige Tage nach dem Stichtag
+# (Montag), Monatsmittel der Weltbank in den ersten Tagen des Folgemonats
+DAILY_PRICE_DELAY = timedelta(days=1)
+WEEKLY_PRICE_DELAY = timedelta(days=7)
+MONTHLY_PRICE_DELAY = timedelta(days=7)
 
 UNIT_MW = "MW"
 UNIT_EUR_MWH = "EUR/MWh"
+UNIT_EUR_L = "EUR/l"
+UNIT_USD_BBL = "USD/bbl"
+UNIT_USD_GAL = "USD/gal"
+UNIT_USD_MMBTU = "USD/MMBtu"
+UNIT_USD_T = "USD/t"
+UNIT_USD_PER_EUR = "USD/EUR"
 
 
 class Kind(StrEnum):
@@ -37,6 +50,9 @@ class Kind(StrEnum):
     GEN_DA_FORECAST = "gen_da_forecast"  # Wind-/PV-Prognose der ÜNB für den Folgetag
     MARKET_VALUE_MONTH = "market_value_month"  # Monatsmarktwert nach EEG (ÜNB)
     MARKET_VALUE_YEAR = "market_value_year"  # Jahresmarktwert nach EEG (ÜNB)
+    PRICE_DAILY = "price_daily"  # Tagespreis (Brennstoff, Wechselkurs)
+    PRICE_WEEKLY = "price_weekly"  # Wochenpreis (EU Oil Bulletin)
+    PRICE_MONTHLY = "price_monthly"  # Monatsmittel (Weltbank)
 
 
 @dataclass(frozen=True)
@@ -102,6 +118,35 @@ SERIES: dict[str, SeriesInfo] = {
             for p, kind in [("mw", Kind.MARKET_VALUE_MONTH), ("jw", Kind.MARKET_VALUE_YEAR)]
             for t in ["base", "wind_onshore", "wind_offshore", "solar"]
         ),
+        # Brennstoffe und Wechselkurs (Tageswerte); Ölprodukte in Notierungseinheit
+        SeriesInfo("oil_brent", Kind.PRICE_DAILY, UNIT_USD_BBL),
+        SeriesInfo("oil_wti", Kind.PRICE_DAILY, UNIT_USD_BBL),
+        SeriesInfo("oil_ulsd_nyh", Kind.PRICE_DAILY, UNIT_USD_GAL),
+        SeriesInfo("oil_ulsd_usgc", Kind.PRICE_DAILY, UNIT_USD_GAL),
+        SeriesInfo("oil_gasoline_nyh", Kind.PRICE_DAILY, UNIT_USD_GAL),
+        SeriesInfo("oil_heating_oil_nyh", Kind.PRICE_DAILY, UNIT_USD_GAL),
+        SeriesInfo("oil_jet_usgc", Kind.PRICE_DAILY, UNIT_USD_GAL),
+        SeriesInfo("lpg_propane_mb", Kind.PRICE_DAILY, UNIT_USD_GAL),
+        SeriesInfo("gas_henry_hub", Kind.PRICE_DAILY, UNIT_USD_MMBTU),
+        SeriesInfo("gas_the_vtp", Kind.PRICE_DAILY, UNIT_EUR_MWH),
+        SeriesInfo("gas_the_imbalance_pos", Kind.PRICE_DAILY, UNIT_EUR_MWH),
+        SeriesInfo("gas_the_imbalance_neg", Kind.PRICE_DAILY, UNIT_EUR_MWH),
+        SeriesInfo("fx_usd_eur", Kind.PRICE_DAILY, UNIT_USD_PER_EUR),
+        # Endkundenpreise DE (Oil Bulletin), mit Steuern und netto (*_net)
+        *(
+            SeriesInfo(f"retail_de_{t}{n}", Kind.PRICE_WEEKLY, UNIT_EUR_L)
+            for t in ["euro95", "diesel", "heating_oil", "lpg"]
+            for n in ["", "_net"]
+        ),
+        # Monatsmittel der Weltbank (Suffix _m, damit sie Tageswerte nicht überdecken)
+        SeriesInfo("oil_brent_m", Kind.PRICE_MONTHLY, UNIT_USD_BBL),
+        SeriesInfo("oil_wti_m", Kind.PRICE_MONTHLY, UNIT_USD_BBL),
+        SeriesInfo("oil_dubai_m", Kind.PRICE_MONTHLY, UNIT_USD_BBL),
+        SeriesInfo("coal_au_m", Kind.PRICE_MONTHLY, UNIT_USD_T),
+        SeriesInfo("coal_za_m", Kind.PRICE_MONTHLY, UNIT_USD_T),
+        SeriesInfo("gas_henry_hub_m", Kind.PRICE_MONTHLY, UNIT_USD_MMBTU),
+        SeriesInfo("gas_eu_m", Kind.PRICE_MONTHLY, UNIT_USD_MMBTU),
+        SeriesInfo("lng_japan_m", Kind.PRICE_MONTHLY, UNIT_USD_MMBTU),
     ]
 }
 
@@ -131,6 +176,8 @@ def estimate_published(kind: Kind, ts: datetime, resolution: timedelta) -> datet
     - Wind-/PV-Prognose Folgetag: bis 18:00 Ortszeit am Vortag (Art. 14.1 d).
     - Ist-Werte: bis eine Stunde nach Ende des Intervalls (Art. 6.1 a, 16.1 b).
     - Monats- und Jahresmarktwerte: zwei Wochen nach Ende des Monats bzw. Jahres.
+    - Brennstoffpreise: Tageswerte einen Tag nach Ende des Tages, Wochenwerte eine Woche
+      nach dem Stichtag, Monatsmittel eine Woche nach Monatsende.
     """
     match kind:
         case Kind.PRICE_DA:
@@ -145,6 +192,12 @@ def estimate_published(kind: Kind, ts: datetime, resolution: timedelta) -> datet
             return next_period(ts, 1) + MARKET_VALUE_DELAY
         case Kind.MARKET_VALUE_YEAR:
             return next_period(ts, 12) + MARKET_VALUE_DELAY
+        case Kind.PRICE_DAILY:
+            return ts + resolution + DAILY_PRICE_DELAY
+        case Kind.PRICE_WEEKLY:
+            return ts + WEEKLY_PRICE_DELAY
+        case Kind.PRICE_MONTHLY:
+            return next_period(ts, 1) + MONTHLY_PRICE_DELAY
 
 
 def published_at(kind: Kind, ts: datetime, resolution: timedelta, fetched: datetime) -> datetime:

@@ -30,7 +30,8 @@ _UPSERT = """
         OR EXCLUDED.published < energy.value.published
 """
 
-# Stundenmittel je Reihen-Code und Quelle, paarweise verglichen
+# Stundenmittel je Reihen-Code und Quelle, paarweise verglichen; nur freigegebene Quellen,
+# damit gesperrte Altwerte (meta.source.enabled = false) nicht mehr gelesen werden
 _COMPARE = """
     WITH h AS (
       SELECT s.code, src.code AS source, time_bucket('1 hour', v.ts) AS hour,
@@ -38,7 +39,7 @@ _COMPARE = """
         FROM energy.value v
         JOIN energy.series s USING (series_id)
         JOIN meta.source src ON src.source_id = s.source_id
-       WHERE v.ts >= :start AND v.ts < :end AND v.value IS NOT NULL
+       WHERE v.ts >= :start AND v.ts < :end AND v.value IS NOT NULL AND src.enabled
        GROUP BY 1, 2, 3
     )
     SELECT a.code, a.source AS source_a, b.source AS source_b, count(*) AS n,
@@ -172,6 +173,25 @@ class EnergyStore:
                        SET chunk_end = EXCLUDED.chunk_end, n_values = EXCLUDED.n_values,
                            fetched_at = EXCLUDED.fetched_at"""),
                 {"s": source_id, "d": dataset, "start": start, "end": end, "n": n_values},
+            )
+
+    def record_status(
+        self, source_id: int, dataset: str, status: str, n_values: int, error: str | None
+    ) -> None:
+        """Letzter Ausgang je Quelle und Datensatz (``meta.energy_status``, für Alarme)."""
+        with self.engine.begin() as conn:
+            conn.execute(
+                text("""
+                    INSERT INTO meta.energy_status
+                      (source_id, dataset, status, n_values, error, checked_at, last_ok_at)
+                    VALUES (:s, :d, :status, :n, :error, now(),
+                            CASE WHEN :status IN ('ok', 'empty') THEN now() END)
+                    ON CONFLICT (source_id, dataset) DO UPDATE
+                       SET status = EXCLUDED.status, n_values = EXCLUDED.n_values,
+                           error = EXCLUDED.error, checked_at = EXCLUDED.checked_at,
+                           last_ok_at = COALESCE(EXCLUDED.last_ok_at,
+                                                 meta.energy_status.last_ok_at)"""),
+                {"s": source_id, "d": dataset, "status": status, "n": n_values, "error": error},
             )
 
     def compare(self, start: datetime, end: datetime) -> list[Deviation]:
