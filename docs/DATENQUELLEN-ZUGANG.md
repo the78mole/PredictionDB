@@ -33,7 +33,8 @@ Betreiber unter Nennung der Quellen frei veröffentlichen.
 | NOAA GFS/GEFS | Wetterprognosen | nein | gemeinfrei |
 | Marktstammdatenregister (MaStR) | installierte Leistung PV/Wind | nein | Datenlizenz Deutschland – Namensnennung 2.0 |
 | SMARD (Bundesnetzagentur) | Day-Ahead-Preis, Last, Erzeugung, Prognosen | nein | CC BY 4.0, „Bundesnetzagentur \| SMARD.de“ |
-| Energy-Charts (Fraunhofer ISE) | Day-Ahead-Preis DE-LU, Erzeugung, Last, PV/Wind-Prognose | nein | CC BY 4.0, „Energy-Charts.info“; Preis DE-LU: CC BY 4.0, „Bundesnetzagentur \| SMARD.de“ |
+| Energy-Charts (Fraunhofer ISE) | Day-Ahead-Preis DE-LU und 14 Nachbarzonen, Erzeugung, Last, PV/Wind-Prognose | nein | CC BY 4.0, „Energy-Charts.info“; Preise DE-LU und Nachbarzonen: CC BY 4.0, „Bundesnetzagentur \| SMARD.de“ |
+| ENTSO-E, freier Teil (`entsoe_last`) | Day-Ahead-Lastprognose (6.1.b) | Token (siehe unten) | CC BY 4.0, „ENTSO-E Transparency Platform“ |
 | `pdb_marktwert` | Monats- und Jahresmarktwerte | – | eigene Berechnung aus SMARD |
 | EIA, eigene Reihen (`eia`) | ULSD (Diesel/Gasöl) | optional, kostenlos | Public Domain |
 | EZB | Referenzkurs EUR/USD | nein | Weiterverwendung mit Quellenangabe |
@@ -46,7 +47,8 @@ Laut API-Dokumentation (v2.0) stehen die Daten von `api.energy-charts.info` unte
 soweit nicht anders angegeben. Abweichend geregelt ist nur der Day-Ahead-Preis (`/price`): Die
 Antwort nennt die Lizenz im Feld `license_info`. Für DE-LU und die Zonen AT, BE, CH, CZ, DK1,
 DK2, FR, HU, IT-North, NL, NO2, PL, SE4 und SI ist das CC BY 4.0 von SMARD; für alle anderen
-Zonen nur private und interne Nutzung. `energy-ingest` prüft den Vermerk bei jeder Antwort und
+Zonen nur private und interne Nutzung. `energy-ingest` lädt DE-LU und alle Nachbarzonen mit
+CC BY 4.0 (Reihen `da_price_<zone>`, z. B. `da_price_fr`), prüft den Vermerk bei jeder Antwort und
 schreibt keine Preise, wenn er fehlt oder abweicht.
 
 ### EIA-Schlüssel (empfohlen)
@@ -62,7 +64,7 @@ Die freien EIA-Reihen laufen auch ohne Schlüssel über die Bulk-Dateien `PET.zi
 
 | Quelle | Wofür | Schlüssel | Schalter | Warum unfrei |
 |---|---|---|---|---|
-| ENTSO-E Transparency Platform (`entsoe`) | Preis, Ist-Last, Lastprognose, Erzeugung, Wind/PV-Prognose (Abgleich zu SMARD) | Token | `PDB_ALLOW_ENTSO_E` | Preis, Ist-Last, Erzeugung, Wind/PV-Prognose nicht auf der Free-Re-use-Liste |
+| ENTSO-E Transparency Platform (`entsoe`) | Preis, Ist-Last, Erzeugung, Wind/PV-Prognose (Abgleich zu SMARD) | Token | `PDB_ALLOW_ENTSO_E` | Preis, Ist-Last, Erzeugung, Wind/PV-Prognose nicht auf der Free-Re-use-Liste |
 | Netztransparenz.de (`netztransparenz`) | amtliche Monats- und Jahresmarktwerte | OAuth2-Client | `PDB_ALLOW_NETZTRANSPARENZ` | keine Lizenz veröffentlicht |
 | EIA, Reihen von Thomson Reuters (`eia_reuters`) | Brent, WTI, Benzin, Heizöl, Kerosin, Propan, Henry Hub | wie EIA | `PDB_ALLOW_EIA_REUTERS` | urheberrechtlich geschützt |
 | Trading Hub Europe (`the`) | Tagespreis Gas am VTP, Ausgleichsenergiepreise | nein | `PDB_ALLOW_THE` | Vervielfältigung nur mit schriftlicher Zustimmung |
@@ -75,6 +77,10 @@ Erzeugung frei, `pdb_marktwert` die Marktwerte, Weltbank und Oil Bulletin die Br
 
 ### ENTSO-E Transparency Platform
 
+Der Token schaltet die freie Day-Ahead-Lastprognose (`entsoe_last`) ohne weiteren Schalter frei.
+Für Preis, Ist-Last, Erzeugung und Wind/PV-Prognose (`entsoe`) braucht es zusätzlich
+`PDB_ALLOW_ENTSO_E=true`.
+
 1. Konto auf <https://transparency.entsoe.eu> anlegen.
 2. E-Mail an `transparency@entsoe.eu`, Betreff „Restful API access“, mit der
    Konto-E-Mail-Adresse. Nach der Freischaltung steht der Token im Kontoprofil.
@@ -82,13 +88,14 @@ Erzeugung frei, `pdb_marktwert` die Marktwerte, Weltbank und Oil Bulletin die Br
 
    ```dotenv
    PDB_ENTSOE_TOKEN=<Token>
+   # nur für den unfreien Teil, danach keine freie Veröffentlichung
    PDB_ALLOW_ENTSO_E=true
    ```
 
 Lizenz: Nutzungsbedingungen vom 29.03.2023, Ziff. 3.1: Rechte der Primärdateninhaber (ÜNB,
 Börsen) beachten, sonst ist deren Zustimmung nötig. Frei (CC BY 4.0) ist nur die „List of Data
 available for free re-use“ (Stand 18.10.2023). Von den abgerufenen Reihen steht nur die
-Day-Ahead-Lastprognose (6.1.b) darauf.
+Day-Ahead-Lastprognose (6.1.b) darauf; sie läuft deshalb als eigene freie Quelle.
 
 ### Netztransparenz.de
 
@@ -125,11 +132,9 @@ nicht geladen:
 
 | Reihe | Quelle | Nutzen für die Prognose |
 |---|---|---|
-| Day-Ahead-Preise der Nachbarzonen (AT, BE, CH, CZ, DK1, DK2, FR, NL, PL, …) | Energy-Charts `/price`, CC BY 4.0 (SMARD) | Marktkopplung: Preisniveau der Nachbarn erklärt Importe und Exporte |
 | Grenzüberschreitender Handel und physikalische Flüsse | Energy-Charts `/cbet`, `/cbpf` | Import/Export als Teil der Residuallast |
 | Nettoerzeugung inkl. Industrie-Eigenversorgung | Energy-Charts `/total_power` | vollständigere Erzeugungs- und Lastbilanz |
 | Installierte Leistung je Energieträger | Energy-Charts `/installed_power` | Plausibilitätsprüfung zu MaStR, Kraftwerkspark konventionell |
-| Day-Ahead-Lastprognose der ÜNB | ENTSO-E 6.1.b (Free-Re-use-Liste, Token nötig) | Benchmark und Eingangsgröße für die Lastprognose; derzeit liegt die ganze Quelle hinter `PDB_ALLOW_ENTSO_E`, die freie Reihe müsste davon getrennt werden |
 | Lastprognosen Woche/Monat/Jahr voraus, Übertragungskapazitäten | ENTSO-E (Free-Re-use-Liste, Token nötig) | längere Vorläufe, Engpässe an den Grenzen |
 | Wetter-Beobachtungen und Prognosen | DWD Open Data, ECMWF Open Data (CC BY 4.0) | Ergänzung und Abgleich zu GFS |
 

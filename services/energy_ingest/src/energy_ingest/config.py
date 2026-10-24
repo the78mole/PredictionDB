@@ -25,6 +25,7 @@ from energy_ingest.sources.worldbank import URL as WORLDBANK_URL
 
 ALL_SOURCES = [
     "entsoe",
+    "entsoe_last",
     "smard",
     "energy_charts",
     "netztransparenz",

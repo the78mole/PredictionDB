@@ -7,7 +7,7 @@ import pytest
 
 from energy_ingest.http import Http
 from energy_ingest.sources import SourceError
-from energy_ingest.sources.entsoe import Entsoe, parse_document, parse_duration
+from energy_ingest.sources.entsoe import Entsoe, EntsoeLast, parse_document, parse_duration
 
 FIXTURES = Path(__file__).parent / "fixtures"
 T0 = datetime(2026, 10, 18, 22, 0, tzinfo=UTC)
@@ -64,3 +64,11 @@ def test_error_ack_raises() -> None:
 def test_requires_token(make_http: Callable[..., Http]) -> None:
     with pytest.raises(ValueError):
         Entsoe(make_http(lambda r: httpx.Response(200)), "")
+
+
+def test_free_load_forecast_is_separate_source(make_http: Callable[..., Http]) -> None:
+    http = make_http(fixture_handler("entsoe_ack.xml", status=200))
+    free, unfree = EntsoeLast(http, "tok"), Entsoe(http, "tok")
+    assert free.free and not unfree.free
+    assert free.datasets() == ["load_forecast"]
+    assert "load_forecast" not in unfree.datasets()

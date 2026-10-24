@@ -2,7 +2,7 @@
 
 Genutzte Endpunkte::
 
-    /price?bzn=DE-LU&start=…&end=…               -> unix_seconds, price (EUR/MWh)
+    /price?bzn=DE-LU&start=…&end=…               -> unix_seconds, price (EUR/MWh), license_info
     /public_power?country=de&start=…&end=…        -> unix_seconds, production_types[name, data] (MW)
     /public_power_forecast?country=de&production_type=solar&forecast_type=day-ahead&…
                                                   -> unix_seconds, forecast_values (MW)
@@ -10,8 +10,9 @@ Genutzte Endpunkte::
 Zeitstempel bezeichnen den Beginn des Intervalls. Lizenz laut API-Dokumentation (v2.0): CC BY 4.0
 mit Quellenangabe Energy-Charts.info, soweit nicht anders angegeben. Für ``/price`` steht die
 Lizenz im Feld ``license_info``; für DE-LU ist es CC BY 4.0 von Bundesnetzagentur | SMARD.de,
-für andere Gebotszonen nur private und interne Nutzung. Fehlt der Vermerk oder weicht er ab,
-schreibt die Quelle keine Preise (``FormatError``).
+für andere Gebotszonen nur private und interne Nutzung. Neben DE-LU lädt die Quelle die
+Nachbarzonen mit CC BY 4.0 (``NEIGHBOUR_ZONES``, Datensätze ``price_<kürzel>``). Fehlt der
+Vermerk oder weicht er ab, schreibt die Quelle keine Preise (``FormatError``).
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ from typing import Any
 import httpx
 
 from energy_ingest.http import Http
-from energy_ingest.model import QUARTER_HOUR, SeriesData, series
+from energy_ingest.model import NEIGHBOUR_ZONES, QUARTER_HOUR, SeriesData, series
 from energy_ingest.sources import FormatError, SourceError, clip
 from predictiondb_core.log import get_logger
 
@@ -99,7 +100,12 @@ class EnergyCharts:
         self.country = country
 
     def datasets(self) -> list[str]:
-        return ["price", "public_power", *(f"forecast_{t}" for t in FORECASTS)]
+        return [
+            "price",
+            *(f"price_{z}" for z in NEIGHBOUR_ZONES.values()),
+            "public_power",
+            *(f"forecast_{t}" for t in FORECASTS),
+        ]
 
     def max_chunk(self, dataset: str) -> timedelta:
         return timedelta(days=31)
@@ -115,8 +121,14 @@ class EnergyCharts:
 
     def fetch(self, dataset: str, start: datetime, end: datetime) -> list[SeriesData]:
         window = {"start": _iso(start), "end": _iso(end)}
-        if dataset == "price":
-            data = self._get("price", {"bzn": self.bzn, **window})
+        if dataset == "price" or dataset.startswith("price_"):
+            if dataset == "price":
+                bzn, price_code = self.bzn, "da_price_de_lu"
+            else:
+                short = dataset.removeprefix("price_")
+                bzn = next(z for z, c in NEIGHBOUR_ZONES.items() if c == short)
+                price_code = f"da_price_{short}"
+            data = self._get("price", {"bzn": bzn, **window})
             if not data:
                 return []
             lic = str(data.get("license_info", ""))
@@ -124,7 +136,7 @@ class EnergyCharts:
                 raise FormatError(f"Energy-Charts: Preise ohne freie Lizenz ({lic!r})")
             stamps = [datetime.fromtimestamp(int(s), tz=UTC) for s in data["unix_seconds"]]
             pts = _points(stamps, data["price"], start, end)
-            return [SeriesData(series("da_price_de_lu"), _resolution(stamps), pts)] if pts else []
+            return [SeriesData(series(price_code), _resolution(stamps), pts)] if pts else []
 
         if dataset == "public_power":
             data = self._get("public_power", {"country": self.country, **window})
