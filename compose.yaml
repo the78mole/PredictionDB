@@ -71,7 +71,8 @@ services:
       garage-init: {condition: service_completed_successfully}
 
   # Day-Ahead-Preise, Last und Erzeugung DE (SMARD, Energy-Charts, ENTSO-E), Brennstoffpreise
-  # (EIA, Weltbank, Oil Bulletin, THE) und EUR/USD (EZB) nach energy.*
+  # (EIA, Weltbank, Oil Bulletin, THE), EUR/USD (EZB), Gasspeicher, LNG und Gasbilanz
+  # (GIE AGSI+/ALSI, Eurostat) nach energy.*
   # Alle 15 min Abgleich um heute, dazu schrittweise Backfill der Historie seit 2015.
   energy-ingest:
     <<: *app
