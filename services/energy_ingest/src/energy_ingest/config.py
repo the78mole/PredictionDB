@@ -33,6 +33,7 @@ ALL_SOURCES = [
     # Brennstoffpreise und Wechselkurs
     "eia",
     "eia_reuters",
+    "eia_steo",
     "ecb",
     "worldbank",
     "oil_bulletin",

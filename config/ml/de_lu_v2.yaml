@@ -66,6 +66,13 @@ series_groups:
     mode: lags
     codes: [da_price_de_lu]
     lags: [mean_28d]
+  # Erwartete Brennstoffpreisänderung 1-3 Monate aus dem jüngsten EIA Short-Term Energy Outlook
+  # (gemeinfrei, Quelle eia_steo); im Preisniveau-Backtest (docs/analysen/preisniveau-schaetzung)
+  # trug sie Information über die Richtung des Monatsmittels
+  steo:
+    mode: outlook
+    codes: [steo_brent, steo_henry_hub]
+    horizons: [1, 2, 3]
   # Marktwerte nach EEG, selbst aus SMARD berechnet (Quelle pdb_marktwert)
   marktwerte:
     mode: asof
@@ -102,6 +109,15 @@ variants:
   - name: frei_niveau
     groups: [calendar, lags, capacity, nachbarn, lastprognose, brennstoffe, marktwerte,
              preisniveau, stage1]
+    train_from: 2018-10-08
+  # Preisniveau (28-Tage-Mittel) mit erwarteter Brennstoffänderung aus dem STEO, allein und
+  # mit allen freien Reihen
+  - name: steo
+    groups: [calendar, lags, capacity, preisniveau, steo, stage1]
+    train_from: 2018-10-08
+  - name: frei_steo
+    groups: [calendar, lags, capacity, nachbarn, lastprognose, brennstoffe, marktwerte,
+             preisniveau, steo, stage1]
     train_from: 2018-10-08
   # mit GFS-Features je Technologie, nur Ausgabezeitpunkte mit Wetterlauf
   - name: wetter

@@ -135,6 +135,22 @@ def test_series_groups_only_use_known_values(snap, cfg_v2) -> None:  # type: ign
     assert X.loc[jan, "asof_gas_eu_m"] == pytest.approx(gas[pd.Timestamp("2022-12-01", tz="UTC")])
 
 
+def test_outlook_uses_latest_published_issue(snap, cfg_v2) -> None:  # type: ignore[no-untyped-def]
+    assert cfg_v2.series_groups["steo"].stored_codes[:2] == ["steo_brent_h00", "steo_brent_h01"]
+    assert "steo_henry_hub_h03" in cfg_v2.series_codes
+    fb = FeatureBuilder(snap, cfg_v2)
+    frame = fb.build([date(2023, 5, 10), date(2023, 5, 12)])
+    X, meta = frame.X, frame.meta
+    assert frame.groups["steo"] == ["ol_steo_brent_h1", "ol_steo_brent_h2", "ol_steo_brent_h3"]
+    # Maiausgabe erscheint am 11.5.: am 10.5. gilt die Aprilausgabe (Index 10 ab Juni 2022,
+    # steigend), am 12.5. die Maiausgabe (fallend)
+    may10 = meta["issue_time"] == pd.Timestamp("2023-05-10 08:00", tz="UTC")
+    assert X.loc[may10, "ol_steo_brent_h1"].to_numpy() == pytest.approx(0.05, abs=1e-6)
+    assert X.loc[may10, "ol_steo_brent_h3"].to_numpy() == pytest.approx(0.15, abs=1e-6)
+    may12 = meta["issue_time"] == pd.Timestamp("2023-05-12 08:00", tz="UTC")
+    assert X.loc[may12, "ol_steo_brent_h2"].to_numpy() == pytest.approx(-0.10, abs=1e-6)
+
+
 def test_series_groups_train_and_predict(snap, cfg_v2) -> None:  # type: ignore[no-untyped-def]
     cfg_v2.lgbm.n_estimators = 30
     fb = FeatureBuilder(snap, cfg_v2)
@@ -142,6 +158,8 @@ def test_series_groups_train_and_predict(snap, cfg_v2) -> None:  # type: ignore[
     m = TwoStageModel(cfg_v2, cfg_v2.variant("frei")).fit(frame)
     feats = m.stage2["da_price_de_lu"].features
     assert "lag_da_price_at_mean_day" in feats and "asof_gas_eu_m" in feats
+    m = TwoStageModel(cfg_v2, cfg_v2.variant("frei_steo")).fit(frame)
+    assert "ol_steo_brent_h1" in m.stage2["da_price_de_lu"].features
     assert "fc_load_da_forecast" in m.stage1["load_actual"].features
     out = m.predict(fb.build([date(2023, 6, 1)]))
     assert out["da_price_de_lu"]["q50"].notna().all()

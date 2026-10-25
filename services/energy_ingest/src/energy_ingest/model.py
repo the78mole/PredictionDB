@@ -34,6 +34,8 @@ MONTHLY_PRICE_DELAY = timedelta(days=7)
 # Monatswerte je nach Land nach drei bis zwölf Wochen
 GAS_DAY_DELAY = timedelta(hours=14)
 MONTHLY_STAT_DELAY = timedelta(days=90)
+# Short-Term Energy Outlook der EIA: erscheint in der ersten Monatshälfte (meist 6.-12.)
+OUTLOOK_DELAY = timedelta(days=14)
 
 UNIT_MW = "MW"
 UNIT_EUR_MWH = "EUR/MWh"
@@ -114,6 +116,18 @@ GAS_BALANCE: dict[str, str] = {
     "stock_change": "STK_CHG_MG",  # Einspeicherung positiv (Verbrauch = Aufkommen - Änderung)
 }
 
+#: Prognosen des EIA Short-Term Energy Outlook: Kürzel im Reihen-Code -> Einheit. Je Ausgabe
+#: (Zeitstempel = Ausgabemonat) und Vorlauf k Monate eine Reihe ``steo_<kürzel>_h<kk>`` mit
+#: der Prognose für den Monat Ausgabemonat + k. So bleibt jede Ausgabe erhalten (``energy.value``
+#: hat nur einen Wert je Reihe und Zeitstempel). Der STEO reicht bis Dezember des Folgejahrs,
+#: also 12 bis 23 Monate.
+OUTLOOK_SERIES: dict[str, str] = {"brent": UNIT_USD_BBL, "henry_hub": UNIT_USD_MMBTU}
+OUTLOOK_HORIZONS = range(24)
+
+
+def outlook_code(name: str, horizon: int) -> str:
+    return f"steo_{name}_h{horizon:02d}"
+
 
 class Kind(StrEnum):
     """Art der Reihe; bestimmt den geschätzten Veröffentlichungszeitpunkt."""
@@ -130,6 +144,7 @@ class Kind(StrEnum):
     GAS_DAY = "gas_day"  # Gasspeicher und LNG je Gastag (GIE AGSI+, ALSI)
     STOCK_MONTHLY = "stock_monthly"  # Bestand am Monatsende (Eurostat)
     FLOW_MONTHLY = "flow_monthly"  # Menge je Monat (Eurostat)
+    OUTLOOK_MONTHLY = "outlook_monthly"  # Prognose je Ausgabe, Zeitstempel = Ausgabemonat (STEO)
 
 
 @dataclass(frozen=True)
@@ -270,6 +285,12 @@ SERIES: dict[str, SeriesInfo] = {
             for a in GAS_IMPORT_AREAS
             for p in GAS_IMPORT_PARTNERS
         ),
+        # Prognosen der EIA (STEO) je Ausgabe und Vorlauf
+        *(
+            SeriesInfo(outlook_code(n, k), Kind.OUTLOOK_MONTHLY, unit)
+            for n, unit in OUTLOOK_SERIES.items()
+            for k in OUTLOOK_HORIZONS
+        ),
     ]
 }
 
@@ -304,6 +325,7 @@ def estimate_published(kind: Kind, ts: datetime, resolution: timedelta) -> datet
     - Gasspeicher und LNG (GIE): Gastag D (Beginn 06:00) am Folgetag um 20:00 Ortszeit.
     - Monatsendbestand (Eurostat, Zeitstempel am Monatsende): 90 Tage danach.
     - Monatsmengen (Eurostat, Zeitstempel am Monatsbeginn): 90 Tage nach Monatsende.
+    - STEO-Prognosen (Zeitstempel am Beginn des Ausgabemonats): 14 Tage danach.
     """
     match kind:
         case Kind.PRICE_DA:
@@ -330,6 +352,8 @@ def estimate_published(kind: Kind, ts: datetime, resolution: timedelta) -> datet
             return ts + MONTHLY_STAT_DELAY
         case Kind.FLOW_MONTHLY:
             return next_period(ts, 1) + MONTHLY_STAT_DELAY
+        case Kind.OUTLOOK_MONTHLY:
+            return ts + OUTLOOK_DELAY
 
 
 def published_at(kind: Kind, ts: datetime, resolution: timedelta, fetched: datetime) -> datetime:

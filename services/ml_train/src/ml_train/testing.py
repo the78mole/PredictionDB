@@ -83,7 +83,24 @@ def synthetic_snapshot(
             "published": (months + pd.offsets.MonthBegin(1)) + pd.Timedelta(days=7),
         }
     )
-    energy = pd.concat([energy, gas], ignore_index=True)
+    # Monatsprognose je Ausgabe (wie EIA STEO): Ausgabe i erwartet je Monat Vorlauf eine
+    # Änderung von +-5 %, im Wechsel; veröffentlicht am 11. des Ausgabemonats
+    sign = np.where(np.arange(len(months)) % 2 == 0, 1.0, -1.0)
+    outlook = pd.concat(
+        [
+            pd.DataFrame(
+                {
+                    "ts": months,
+                    "code": f"steo_brent_h{k:02d}",
+                    "value": (60 + np.arange(len(months))) * np.exp(0.05 * k * sign),
+                    "published": months + pd.Timedelta(days=10),
+                }
+            )
+            for k in range(4)
+        ],
+        ignore_index=True,
+    )
+    energy = pd.concat([energy, gas, outlook], ignore_index=True)
 
     cap_days = pd.date_range(start, end, freq="D")
     cyears = np.asarray((cap_days - cap_days[0]) / pd.Timedelta(days=365))

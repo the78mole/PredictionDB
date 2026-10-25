@@ -25,6 +25,7 @@ Gasbilanz“).
 | GIE AGSI+ (`gie_agsi`) | kostenloser Schlüssel, `PDB_GIE_API_KEY` | `storage_de`, `storage_at`, `storage_nl`, `storage_cz`, `storage_eu` (Gasspeicher je Gastag) | 10 | ja, Weiterverwendung frei mit Quellenangabe „GIE AGSI+“ |
 | GIE ALSI (`gie_alsi`) | wie `gie_agsi` | `lng_de`, `lng_nl`, `lng_be`, `lng_fr`, `lng_eu` (LNG-Terminals je Gastag) | 10 | ja, wie AGSI+ |
 | Eurostat (`eurostat`) | offen | `gas_stock` (Bestand am Monatsende), `gas_balance` (Monatsbilanz), `gas_import_origin` (Importe nach Herkunft) | 10 | ja, CC BY 4.0 |
+| EIA Short-Term Energy Outlook (`eia_steo`) | offen, xlsx je Ausgabe | `outlook` (Monatsprognosen Brent und Henry Hub je Ausgabe und Vorlauf) | 10 | ja, Public Domain (nur Prognosen) |
 
 **Nur freie Quellen als Standard.** Unfreie Quellen laufen nur mit ausdrücklicher Freigabe:
 `PDB_ALLOW_ENTSO_E`, `PDB_ALLOW_NETZTRANSPARENZ`,
@@ -93,6 +94,18 @@ Als Veröffentlichung gilt bei Tageswerten das Ende des Folgetags, beim Oil Bull
 Stichtag plus sieben Tage, bei Monatsmitteln Monatsende plus sieben Tage. Die Historie reicht
 bei EIA bis 1986, beim Oil Bulletin bis 2005, bei der Weltbank bis 1960; vor 2015 nur per
 `energy-ingest --source worldbank backfill 1960-01-01 2015-01-01` und entsprechend.
+
+Prognosen der EIA aus dem Short-Term Energy Outlook (`eia_steo`), je Ausgabe und Vorlauf
+k = 0 bis 23 Monate: `steo_brent_h<kk>` (USD/bbl) und `steo_henry_hub_h<kk>` (USD/MMBtu). Der
+Zeitstempel ist der Ausgabemonat, der Wert die Prognose für Ausgabemonat + k; `h00` ist die
+Schätzung für den laufenden Monat. So bleibt jede Ausgabe erhalten, obwohl `energy.value` je
+Reihe und Zeitstempel nur einen Wert hat. Die EIA legt jede Ausgabe unter fester Adresse ab
+(`https://www.eia.gov/outlooks/steo/archives/<mmmJJ>_base.xlsx`, Blatt `2tab`); gelesen werden
+nur Monate nach dem letzten Ist-Monat (Blatt `Dates`), denn die Ist-Werte stammen von Thomson
+Reuters. Als Veröffentlichung gilt der 14. des Ausgabemonats (die EIA veröffentlicht meist
+zwischen dem 6. und 12.). Die Ausgabe des laufenden Monats fehlt bis dahin ohne Fehler; fehlt
+eine ältere, meldet der Abruf einen Fehler. Historie ab Januar 2015. Verwendung als Merkmal:
+`docs/analysen/preisniveau-schaetzung`.
 
 Weltbank und Oil Bulletin liefern ganze xlsx-Dateien, die der Dienst zwölf Stunden im
 Speicher hält. Ihre Adressen enthalten eine Dokument-ID und sind einstellbar
@@ -197,5 +210,5 @@ Nutzungsbedingungen der Transparency Platform, frei (CC BY 4.0) nur die „List 
 for free re-use“. Netztransparenz: keine Lizenz veröffentlicht. Die Vermerke stehen in
 `meta.source.license`, die Einordnung in `meta.source.free`. GIE AGSI+ und ALSI: keine formale
 Lizenz, laut Nutzungsregel der API beliebig weiterverwendbar mit Quellenangabe „GIE AGSI+“ bzw.
-„GIE ALSI“. Eurostat:
+„GIE ALSI“. EIA Short-Term Energy Outlook: Prognosen gemeinfrei. Eurostat:
 CC BY 4.0.

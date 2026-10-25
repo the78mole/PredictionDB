@@ -323,6 +323,8 @@ class FeatureBuilder:
             return self._lag_block(sg.codes, sg.lags, meta)
         if sg.mode == "forecast":
             return self._forecast(sg, meta)
+        if sg.mode == "outlook":
+            return self._outlook(sg, meta)
         return self._asof(sg, meta)
 
     def _forecast(self, sg: SeriesGroup, meta: pd.DataFrame) -> pd.DataFrame:
@@ -368,6 +370,39 @@ class FeatureBuilder:
             chg = pd.Series(now.to_numpy() - then.to_numpy(), index=uniq["issue"])
             out[f"asof_{code}"] = cur.reindex(issues).to_numpy()
             out[f"asof_{code}_chg"] = chg.reindex(issues).to_numpy()
+        return pd.DataFrame(out, index=meta.index).astype(np.float32)
+
+    def _outlook(self, sg: SeriesGroup, meta: pd.DataFrame) -> pd.DataFrame:
+        """Erwartete log-Änderung je Vorlauf aus der jüngsten veröffentlichten Ausgabe.
+
+        Eine Ausgabe gilt erst als bekannt, wenn alle ihre Werte veröffentlicht sind; Vorlauf und
+        Bezugswert (laufender Monat) stammen immer aus derselben Ausgabe.
+        """
+        e = self.energy_long
+        if "published" not in e.columns:
+            raise ValueError(
+                "Snapshot ohne Spalte published: mit aktuellem ml-train neu exportieren"
+            )
+        issues = pd.DatetimeIndex(meta["issue_time"])
+        uniq = pd.DataFrame({"issue": issues.unique().sort_values().as_unit("ns")})
+        ks = sorted(set(sg.horizons))
+        out: dict[str, np.ndarray] = {}
+        for stem in sg.codes:
+            cols = {f"{stem}_h{k:02d}": k for k in sorted({0, *ks})}
+            s = e.loc[e["code"].isin(list(cols)) & e["published"].notna()]
+            if s.empty:
+                continue
+            wide = s.pivot_table(index="ts", columns="code", values="value", aggfunc="last")
+            pub = s.groupby("ts")["published"].max()
+            wide = wide.reindex(columns=list(cols)).rename(columns=cols)
+            wide["published"] = pd.DatetimeIndex(pub.reindex(wide.index)).as_unit("ns")
+            wide = wide.sort_values("published").reset_index(drop=True)
+            cur = pd.merge_asof(uniq, wide, left_on="issue", right_on="published")
+            cur.index = uniq["issue"]
+            for k in ks:
+                with np.errstate(divide="ignore", invalid="ignore"):
+                    v = np.log(cur[k].to_numpy(np.float64) / cur[0].to_numpy(np.float64))
+                out[f"ol_{stem}_h{k}"] = pd.Series(v, index=cur.index).reindex(issues).to_numpy()
         return pd.DataFrame(out, index=meta.index).astype(np.float32)
 
     def _weather(self, meta: pd.DataFrame) -> pd.DataFrame:

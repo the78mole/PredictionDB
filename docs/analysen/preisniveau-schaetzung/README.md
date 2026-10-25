@@ -49,9 +49,10 @@ Monats). Wind an Land: kein Vorteil. Die Tabellen dazu stehen in [tabellen/](tab
 **Folgerung:**
 
 - Als Niveau-Merkmal für `ml_train` taugen der gleitende Spotpreis der letzten 30 Tage und die
-  erwartete Brent- und Henry-Hub-Änderung aus dem aktuellen STEO. Den STEO als Quelle
-  einzubinden lohnt sich: Er ist gemeinfrei, erscheint monatlich als xlsx mit fester URL und
-  steht als Bulk-Download (`STEO.zip`) bereit.
+  erwartete Brent- und Henry-Hub-Änderung aus dem aktuellen STEO. Der STEO ist gemeinfrei und
+  erscheint monatlich als xlsx mit fester URL. Er ist deshalb als Quelle `eia_steo` in
+  `energy_ingest` eingebunden, die Änderung für 1–3 Monate als Merkmalsgruppe `steo` in
+  `config/ml/de_lu_v2.yaml` (Varianten `steo` und `frei_steo`).
 - Ein eigener Dienst für das physikalische Modell lohnt sich in dieser Form nicht.
 - Mehr als einige Prozent sind ohne Terminmarkt nicht zu erwarten. Den größten Teil des
   Fehlers machen Brüche wie 2021/2022, die niemand vorhergesehen hat.

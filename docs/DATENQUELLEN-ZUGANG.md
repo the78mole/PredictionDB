@@ -37,6 +37,7 @@ Betreiber unter Nennung der Quellen frei veröffentlichen.
 | ENTSO-E, freier Teil (`entsoe_last`) | Day-Ahead-Lastprognose (6.1.b) | Token (siehe unten) | CC BY 4.0, „ENTSO-E Transparency Platform“ |
 | `pdb_marktwert` | Monats- und Jahresmarktwerte | – | eigene Berechnung aus SMARD |
 | EIA, eigene Reihen (`eia`) | ULSD (Diesel/Gasöl) | optional, kostenlos | Public Domain |
+| EIA Short-Term Energy Outlook (`eia_steo`) | Monatsprognosen Brent und Henry Hub je Ausgabe | nein | Public Domain (nur die Prognosen; die Ist-Werte von Thomson Reuters in derselben Tabelle werden nicht übernommen) |
 | EZB | Referenzkurs EUR/USD | nein | Weiterverwendung mit Quellenangabe |
 | Weltbank Pink Sheet | Monatspreise Öl, Kohle, Gas (TTF), LNG | nein | CC BY 4.0 |
 | EU Weekly Oil Bulletin | Endkundenpreise Kraftstoffe, Heizöl | nein | CC BY 4.0 |
