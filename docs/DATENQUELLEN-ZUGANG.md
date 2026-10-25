@@ -40,6 +40,9 @@ Betreiber unter Nennung der Quellen frei veröffentlichen.
 | EZB | Referenzkurs EUR/USD | nein | Weiterverwendung mit Quellenangabe |
 | Weltbank Pink Sheet | Monatspreise Öl, Kohle, Gas (TTF), LNG | nein | CC BY 4.0 |
 | EU Weekly Oil Bulletin | Endkundenpreise Kraftstoffe, Heizöl | nein | CC BY 4.0 |
+| GIE AGSI+ (`gie_agsi`) | Gasspeicher je Gastag: Füllstand, Füllgrad, Ein-/Ausspeisung (DE, AT, NL, CZ, EU) | ja, kostenlos (siehe unten) | frei weiterverwendbar, Quellenangabe „GIE AGSI+“ Pflicht |
+| GIE ALSI (`gie_alsi`) | LNG-Terminals je Gastag: Bestand, Ausspeisung, Kapazität (DE, NL, BE, FR, EU) | wie AGSI+ | wie AGSI+, Quellenangabe „GIE ALSI“ |
+| Eurostat (`eurostat`) | Gas monatlich: Bestand, Bilanz (Import, Export, Verbrauch, Strom/Wärme), Importe nach Herkunft | nein | CC BY 4.0, „Eurostat“ |
 
 ### Energy-Charts: Lizenz je Reihe
 
@@ -59,6 +62,21 @@ Die freien EIA-Reihen laufen auch ohne Schlüssel über die Bulk-Dateien `PET.zi
 1. Kostenlosen Schlüssel unter <https://www.eia.gov/opendata/register.php> beantragen; er kommt
    per E-Mail.
 2. In der `.env`: `PDB_EIA_API_KEY=<Schlüssel>`
+
+### GIE-AGSI+-Schlüssel (empfohlen)
+
+Derselbe Schlüssel gilt für AGSI+ (Speicher) und ALSI (LNG). Ohne Schlüssel bleiben
+`gie_agsi` und `gie_alsi` aus (Warnung `energy.gie_disabled`); Speicher und Importe gibt es
+dann nur monatlich von Eurostat.
+
+1. Konto unter <https://agsi.gie.eu/account> anlegen; der Schlüssel steht danach im Konto. Er
+   läuft nicht ab und gilt für AGSI+ und ALSI.
+2. In der `.env`: `PDB_GIE_API_KEY=<Schlüssel>`
+
+Bedingungen: Die Daten dürfen beliebig weiterverwendet werden, die Quelle („GIE AGSI+“) muss
+aber genannt sein; sonst kann GIE den Schlüssel sperren. Höchstens 60 Abrufe je Minute, der
+Stack hält dafür gut eine Sekunde Abstand. Historie vor 2015: `energy-ingest --source gie_agsi
+backfill 2011-01-01 2015-01-01`.
 
 ## Unfreie Quellen (nur intern, mit Schalter)
 
@@ -142,7 +160,8 @@ nicht geladen:
 
 1. `.env.example` nach `.env` kopieren; alle `PDB_ALLOW_*` bleiben auf `false`, wenn Daten
    oder Modelle veröffentlicht werden sollen.
-2. Empfohlen: EIA-Schlüssel beantragen und `PDB_EIA_API_KEY` setzen.
+2. Empfohlen: EIA- und GIE-AGSI+-Schlüssel beantragen und `PDB_EIA_API_KEY` bzw.
+   `PDB_GIE_API_KEY` setzen.
 3. Nur für internen Gebrauch: gewünschte unfreie Quelle beantragen (oben), Variablen setzen,
    Schalter auf `true`. Danach keine Daten oder Modelle dieser Instanz veröffentlichen.
 4. Stack starten; `energy-ingest sources` listet die aktiven Quellen und ob sie frei oder

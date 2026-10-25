@@ -21,9 +21,13 @@ from predictiondb_core.log import get_logger
 
 log = get_logger(__name__)
 
+#: Abfrageparameter; als Liste von Paaren, wenn ein Name mehrfach vorkommt
+Params = dict[str, Any] | list[tuple[str, Any]]
+
 #: Mindestabstand zwischen zwei Abrufen je Host in Sekunden. Energy-Charts antwortet bei vielen
-#: Abrufen nacheinander (Nachbarzonen, Kaltstart nach dem Deploy) sonst mit 429.
-PACE_S: dict[str, float] = {"api.energy-charts.info": 2.0}
+#: Abrufen nacheinander (Nachbarzonen, Kaltstart nach dem Deploy) sonst mit 429; AGSI+ sperrt
+#: ab 60 Abrufen je Minute.
+PACE_S: dict[str, float] = {"api.energy-charts.info": 2.0, "agsi.gie.eu": 1.1}
 #: Obergrenze für eine vom Server per Retry-After verlangte Wartezeit
 RETRY_AFTER_MAX_S = 120.0
 
@@ -108,7 +112,7 @@ class Http:
         self._last_call[host] = time.monotonic()
 
     def _get_once(
-        self, url: str, params: dict[str, Any] | None, headers: dict[str, str] | None = None
+        self, url: str, params: Params | None, headers: dict[str, str] | None = None
     ) -> httpx.Response:
         self._throttle(url)
         r = self.client.get(url, params=params, headers=headers)
@@ -119,7 +123,7 @@ class Http:
     def get(
         self,
         url: str,
-        params: dict[str, Any] | None = None,
+        params: Params | None = None,
         headers: dict[str, str] | None = None,
     ) -> httpx.Response:
         """GET mit Wiederholung; andere 4xx-Antworten gehen ohne Ausnahme zurück."""
