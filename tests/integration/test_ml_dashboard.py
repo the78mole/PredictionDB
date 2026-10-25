@@ -84,7 +84,8 @@ def _registry(root: Path, now: pd.Timestamp) -> tuple[Registry, list[str]]:
                     "target": t,
                     "issue_time": ts.floor("D"),
                     "ts": ts,
-                    "lead_day": (ts.day % 7) + 1,
+                    "lead_day": (ts - ts[0]).days % 7
+                    + 1,  # alle 7 Vorlauftage, unabhängig vom Datum
                     "actual": base,
                     "q10": base * 0.9,
                     "q50": base * (1.01 + 0.01 * i),
