@@ -31,7 +31,7 @@ services:
     networks: [backend]
 
   garage:
-    image: dxflrs/garage:v2.4.1
+    image: dxflrs/garage:v2.5.0
     environment:
       GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET}
       GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN}
@@ -221,7 +221,7 @@ services:
 
   # Systemmetriken für Grafana: Host (node-exporter) und je Container (cAdvisor), 30 Tage
   prometheus:
-    image: prom/prometheus:v3.15.0
+    image: prom/prometheus:v3.15.1
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
