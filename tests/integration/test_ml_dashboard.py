@@ -84,7 +84,7 @@ def _registry(root: Path, now: pd.Timestamp) -> tuple[Registry, list[str]]:
                     "target": t,
                     "issue_time": ts.floor("D"),
                     "ts": ts,
-                    # Tage ab Fensterbeginn: Kalendertag % 7 verliert nach 30-Tage-Monaten einen Vorlauftag
+                    # Tage ab Fensterbeginn (Kalendertag % 7 verliert Vorlauftage)
                     "lead_day": (ts - ts[0]).days % 7 + 1,
                     "actual": base,
                     "q10": base * 0.9,
