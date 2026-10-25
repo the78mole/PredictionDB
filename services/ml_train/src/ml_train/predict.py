@@ -26,6 +26,8 @@ log = get_logger(__name__)
 #: Tage, die ``asof``-Gruppen zurückschauen: Der Jahresmarktwert des Vorvorjahres steht am
 #: 1. Januar und ist Mitte Januar noch der jüngste veröffentlichte (2 Jahre plus Verzug)
 ASOF_BACK_DAYS = 2 * 366 + 14
+#: jüngste Ausgabe einer Monatsprognose: Zeitstempel am Monatsbeginn, erscheint bis Mitte Monat
+OUTLOOK_BACK_DAYS = 75
 
 
 def lookback_days(cfg: ModelConfig, variant: Variant) -> int:
@@ -35,6 +37,8 @@ def lookback_days(cfg: ModelConfig, variant: Variant) -> int:
         g = cfg.series_groups.get(name)
         if g is not None and g.mode == "asof":
             back = max(back, ASOF_BACK_DAYS + g.change_days)
+        if g is not None and g.mode == "outlook":
+            back = max(back, OUTLOOK_BACK_DAYS)
     return back
 
 

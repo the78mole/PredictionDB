@@ -58,7 +58,7 @@ def required_codes(cfg: ModelConfig, variant: Variant) -> list[str]:
     for name in variant.groups:
         g = cfg.series_groups.get(name)
         if g is not None:
-            codes += g.codes
+            codes += g.stored_codes
     return list(dict.fromkeys(codes))
 
 

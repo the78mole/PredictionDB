@@ -28,9 +28,12 @@ from energy_ingest.http import Http
 from energy_ingest.model import (
     BERLIN,
     NEIGHBOUR_ZONES,
+    OUTLOOK_HORIZONS,
+    OUTLOOK_SERIES,
     Kind,
     SeriesData,
     next_period,
+    outlook_code,
     published_at,
     series,
 )
@@ -41,6 +44,7 @@ from energy_ingest.sources.energy_charts import FORECASTS, PUBLIC_POWER, EnergyC
 from energy_ingest.sources.marktwert import PRICE, WEIGHTS, market_values, period_starts
 from energy_ingest.sources.oil_bulletin import PRODUCTS, OilBulletin
 from energy_ingest.sources.smard import FILTERS, Smard
+from energy_ingest.sources.steo import EiaSteo
 from energy_ingest.sources.worldbank import COLUMNS, WorldBank
 from predictiondb_core.log import get_logger
 
@@ -62,6 +66,7 @@ REFRESH: dict[Kind, timedelta] = {
     Kind.PRICE_DAILY: timedelta(days=14),
     Kind.PRICE_WEEKLY: timedelta(days=28),
     Kind.PRICE_MONTHLY: timedelta(days=70),
+    Kind.OUTLOOK_MONTHLY: timedelta(days=62),
 }
 
 
@@ -82,6 +87,9 @@ def routes() -> dict[str, list[tuple[str, str]]]:
     for product in PRODUCTS.values():
         for suffix in ("", "_net"):
             add(f"retail_de_{product}{suffix}", "oil_bulletin", "retail_de")
+    for name in OUTLOOK_SERIES:
+        for k in OUTLOOK_HORIZONS:
+            add(outlook_code(name, k), "eia_steo", "outlook")
     add("da_price_de_lu", "energy_charts", "price")
     for short in NEIGHBOUR_ZONES.values():
         add(f"da_price_{short}", "energy_charts", f"price_{short}")
@@ -105,6 +113,7 @@ def build_sources(http: Http, settings: EnergySettings | None = None) -> dict[st
         Eia(http, s.eia_api_key.get_secret_value(), EiaBulk(http)),
         WorldBank(http, s.worldbank_url),
         OilBulletin(http, s.oil_bulletin_url),
+        EiaSteo(http),
     ]
     return {src.code: src for src in sources}
 
