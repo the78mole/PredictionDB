@@ -128,6 +128,9 @@ class _Gie:
     def datasets(self) -> list[str]:
         return [f"{self.prefix}_{a}" for a in self.areas]
 
+    def _redact(self, text: str) -> str:
+        return text.replace(self.api_key, "***") if self.api_key else text
+
     def max_chunk(self, dataset: str) -> timedelta:
         return timedelta(days=PAGE - 10)  # eine Seite je Block
 
@@ -145,9 +148,14 @@ class _Gie:
         page = 1
         while True:
             r = self.http.get(self.url, {**params, "page": page}, {"x-key": self.api_key})
-            if r.status_code >= 400:
-                raise SourceError(f"GIE {dataset}: {r.status_code} {r.text[:200]}")
-            last, part = parse_page(r.json(), self.fields)
+            try:
+                if r.status_code >= 400:
+                    raise SourceError(f"GIE {dataset}: {r.status_code} {r.text[:200]}")
+                last, part = parse_page(r.json(), self.fields)
+            except SourceError as exc:
+                # GIE wiederholt den Schlüssel in Fehlermeldungen; nicht ins Log oder in
+                # meta.energy_status tragen (auch nicht über die verkettete Ausnahme)
+                raise type(exc)(self._redact(str(exc))) from None
             for prefix, pts in part.items():
                 found[prefix].extend(pts)
             page += 1
