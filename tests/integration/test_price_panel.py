@@ -59,19 +59,21 @@ def test_panel_spans_yesterday_to_end_of_day(engine: Engine, span: timedelta) ->
         now = c.execute(text("SELECT now()")).scalar_one()
     length = _var(engine, "preis_bis", now - span, now)
     shift = _var(engine, "preis_ab", now - span, now)
-    assert length.startswith("+") and length.endswith("s") and shift.endswith("s")
+    assert length.startswith("+") and length.endswith("h") and shift.endswith("m")
+    # Grafana bildet "now+<Länge>-<Rückversatz>" und verwirft den Ausdruck, wenn Ziffern
+    # nach Zeichen 10 stehen; dann fällt der timeShift stillschweigend weg.
+    assert len(f"{length}-{shift}") <= 10
 
     # Grafana: [now, now + Länge] um Rückversatz nach hinten verschoben
-    lo = now - timedelta(seconds=int(shift[:-1]))
-    hi = now + timedelta(seconds=int(length[1:-1]) - int(shift[:-1]))
+    lo = now - timedelta(minutes=int(shift[:-1]))
+    hi = now + timedelta(hours=int(length[1:-1])) - timedelta(minutes=int(shift[:-1]))
     exp_lo, exp_hi = _expected(now)
-    assert abs(lo - exp_lo) < timedelta(seconds=2)
-    assert abs(hi - exp_hi) < timedelta(seconds=2)
+    assert timedelta(0) <= exp_lo - lo < timedelta(minutes=1)
+    assert timedelta(0) <= exp_hi - hi < timedelta(minutes=1)
 
 
-def test_past_range_still_shows_yesterday_and_today(engine: Engine) -> None:
+def test_past_range_keeps_dashboard_range(engine: Engine) -> None:
+    # Bei absoluten Zeiträumen wendet Grafana timeFrom nicht an, nur den timeShift
     end = datetime(2025, 1, 10, tzinfo=UTC)
-    with engine.connect() as c:
-        now = c.execute(text("SELECT now()")).scalar_one()
-    shift = _var(engine, "preis_ab", end - timedelta(days=1), end)
-    assert abs(now - timedelta(seconds=int(shift[:-1])) - _expected(now)[0]) < timedelta(seconds=2)
+    assert _var(engine, "preis_bis", end - timedelta(days=1), end) == "aus"
+    assert _var(engine, "preis_ab", end - timedelta(days=1), end) == "0m"
