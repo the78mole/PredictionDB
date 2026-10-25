@@ -1207,7 +1207,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Day-Ahead-Preis DE-LU und Last (beste Quelle, bis Tagesende)",
+      "title": "Day-Ahead-Preis DE-LU und Last (beste Quelle, gestern bis Tagesende)",
       "id": 5,
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -1334,7 +1334,7 @@
           "sort": "none"
         }
       },
-      "description": "Reicht über den Dashboard-Zeitbereich hinaus bis Mitternacht, ab 12 Uhr bis Ende morgen (Day-Ahead-Auktion gegen 12 Uhr, Veröffentlichung ab ca. 13 Uhr). Gestrichelt die Day-Ahead-Lastprognose der Übertragungsnetzbetreiber.",
+      "description": "Zeigt immer gestern und heute komplett, unabhängig vom Dashboard-Zeitbereich; ab 12 Uhr zusätzlich morgen (Day-Ahead-Auktion gegen 12 Uhr, Veröffentlichung ab ca. 13 Uhr). Gestrichelt die Day-Ahead-Lastprognose der Übertragungsnetzbetreiber.",
       "timeFrom": "${preis_bis}",
       "timeShift": "${preis_ab}",
       "hideTimeOverride": true
@@ -3914,15 +3914,15 @@
       {
         "type": "query",
         "name": "preis_bis",
-        "label": "Preis-Panel: Länge bis Tagesende",
+        "label": "Preis-Panel: Länge ab gestern 00:00",
         "hide": 2,
         "skipUrlSync": true,
         "datasource": {
           "type": "grafana-postgresql-datasource",
           "uid": "pdb-postgres"
         },
-        "query": "-- Länge Beginn Zeitbereich bis Ende heute (vor 12 Uhr) bzw. Ende morgen (ab 12 Uhr),\n-- jeweils Europe/Berlin. 'aus' ist ungültig: Grafana nimmt dann den Dashboard-Zeitbereich\n-- (absolute oder vergangene Zeiträume).\nWITH b AS (SELECT now() AT TIME ZONE 'Europe/Berlin' AS lokal)\nSELECT CASE WHEN $__timeTo() >= now() - interval '5 minutes'\n            THEN '+' || ceil(extract(epoch FROM\n                   ((date_trunc('day', lokal) + CASE WHEN extract(hour FROM lokal) >= 12\n                                                     THEN interval '2 days' ELSE interval '1 day' END)\n                      AT TIME ZONE 'Europe/Berlin') - $__timeFrom()))::bigint || 's'\n            ELSE 'aus' END\n  FROM b",
-        "definition": "-- Länge Beginn Zeitbereich bis Ende heute (vor 12 Uhr) bzw. Ende morgen (ab 12 Uhr),\n-- jeweils Europe/Berlin. 'aus' ist ungültig: Grafana nimmt dann den Dashboard-Zeitbereich\n-- (absolute oder vergangene Zeiträume).\nWITH b AS (SELECT now() AT TIME ZONE 'Europe/Berlin' AS lokal)\nSELECT CASE WHEN $__timeTo() >= now() - interval '5 minutes'\n            THEN '+' || ceil(extract(epoch FROM\n                   ((date_trunc('day', lokal) + CASE WHEN extract(hour FROM lokal) >= 12\n                                                     THEN interval '2 days' ELSE interval '1 day' END)\n                      AT TIME ZONE 'Europe/Berlin') - $__timeFrom()))::bigint || 's'\n            ELSE 'aus' END\n  FROM b",
+        "query": "-- Länge von gestern 00:00 bis Ende heute (vor 12 Uhr) bzw. Ende morgen (ab 12 Uhr), jeweils\n-- Europe/Berlin (timeFrom des Preis-Panels). Unabhängig vom Dashboard-Zeitbereich.\nWITH b AS (SELECT date_trunc('day', now() AT TIME ZONE 'Europe/Berlin') AS heute,\n                  extract(hour FROM now() AT TIME ZONE 'Europe/Berlin') >= 12 AS nachmittag)\nSELECT '+' || ceil(extract(epoch FROM\n         ((heute + CASE WHEN nachmittag THEN interval '2 days' ELSE interval '1 day' END)\n            AT TIME ZONE 'Europe/Berlin')\n         - ((heute - interval '1 day') AT TIME ZONE 'Europe/Berlin')))::bigint || 's'\n  FROM b",
+        "definition": "-- Länge von gestern 00:00 bis Ende heute (vor 12 Uhr) bzw. Ende morgen (ab 12 Uhr), jeweils\n-- Europe/Berlin (timeFrom des Preis-Panels). Unabhängig vom Dashboard-Zeitbereich.\nWITH b AS (SELECT date_trunc('day', now() AT TIME ZONE 'Europe/Berlin') AS heute,\n                  extract(hour FROM now() AT TIME ZONE 'Europe/Berlin') >= 12 AS nachmittag)\nSELECT '+' || ceil(extract(epoch FROM\n         ((heute + CASE WHEN nachmittag THEN interval '2 days' ELSE interval '1 day' END)\n            AT TIME ZONE 'Europe/Berlin')\n         - ((heute - interval '1 day') AT TIME ZONE 'Europe/Berlin')))::bigint || 's'\n  FROM b",
         "refresh": 2,
         "includeAll": false,
         "multi": false,
@@ -3932,15 +3932,15 @@
       {
         "type": "query",
         "name": "preis_ab",
-        "label": "Preis-Panel: Rückversatz",
+        "label": "Preis-Panel: Rückversatz bis gestern 00:00",
         "hide": 2,
         "skipUrlSync": true,
         "datasource": {
           "type": "grafana-postgresql-datasource",
           "uid": "pdb-postgres"
         },
-        "query": "-- Abstand Beginn Zeitbereich bis jetzt (für timeShift des Preis-Panels)\nSELECT CASE WHEN $__timeTo() >= now() - interval '5 minutes'\n            THEN ceil(extract(epoch FROM now() - $__timeFrom()))::bigint || 's'\n            ELSE '0s' END",
-        "definition": "-- Abstand Beginn Zeitbereich bis jetzt (für timeShift des Preis-Panels)\nSELECT CASE WHEN $__timeTo() >= now() - interval '5 minutes'\n            THEN ceil(extract(epoch FROM now() - $__timeFrom()))::bigint || 's'\n            ELSE '0s' END",
+        "query": "-- Abstand gestern 00:00 (Europe/Berlin) bis jetzt (timeShift des Preis-Panels).\n-- Unabhängig vom Dashboard-Zeitbereich.\nSELECT ceil(extract(epoch FROM now()\n         - ((date_trunc('day', now() AT TIME ZONE 'Europe/Berlin') - interval '1 day')\n              AT TIME ZONE 'Europe/Berlin')))::bigint || 's'",
+        "definition": "-- Abstand gestern 00:00 (Europe/Berlin) bis jetzt (timeShift des Preis-Panels).\n-- Unabhängig vom Dashboard-Zeitbereich.\nSELECT ceil(extract(epoch FROM now()\n         - ((date_trunc('day', now() AT TIME ZONE 'Europe/Berlin') - interval '1 day')\n              AT TIME ZONE 'Europe/Berlin')))::bigint || 's'",
         "refresh": 2,
         "includeAll": false,
         "multi": false,
