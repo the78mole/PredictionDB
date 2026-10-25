@@ -1,8 +1,8 @@
 """Einstellungen des Energie-Ingests (Präfix ``PDB_ENERGY_``).
 
 Zugangsdaten: ``PDB_ENTSOE_TOKEN``, ``PDB_NETZTRANSPARENZ_CLIENT_ID``,
-``PDB_NETZTRANSPARENZ_CLIENT_SECRET`` und ``PDB_EIA_API_KEY`` (ohne Schlüssel lädt die EIA-Quelle
-die Bulk-Dateien).
+``PDB_NETZTRANSPARENZ_CLIENT_SECRET``, ``PDB_EIA_API_KEY`` (ohne Schlüssel lädt die EIA-Quelle
+die Bulk-Dateien) und ``PDB_GIE_API_KEY`` (Gasspeicher AGSI+, ohne Schlüssel aus).
 
 Quellen, deren Nutzungsbedingungen die Weitergabe einschränken (ENTSO-E, Netztransparenz,
 Thomson-Reuters-Reihen der EIA, THE; ``docs/ARCHITEKTUR.md`` 7.11.1), laufen nur mit
@@ -37,6 +37,9 @@ ALL_SOURCES = [
     "worldbank",
     "oil_bulletin",
     "the",
+    # Gasspeicher
+    "gie_agsi",
+    "eurostat",
 ]
 
 #: Unfreie Quellen und das Feld ihrer Freigabe in ``EnergySettings``
@@ -81,6 +84,10 @@ class EnergySettings(BaseSettings):
     eia_api_key: SecretStr = Field(
         default=SecretStr(""),
         validation_alias=AliasChoices("PDB_EIA_API_KEY", "PDB_ENERGY_EIA_API_KEY"),
+    )
+    gie_api_key: SecretStr = Field(
+        default=SecretStr(""),
+        validation_alias=AliasChoices("PDB_GIE_API_KEY", "PDB_ENERGY_GIE_API_KEY"),
     )
     # Download-Adressen mit Dokument-ID, die sich ändern kann (dann Grafana-Alarm)
     worldbank_url: str = WORLDBANK_URL

@@ -103,6 +103,7 @@ def test_unfree_sources_need_allow(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PDB_ENTSOE_TOKEN", "t")
     monkeypatch.setenv("PDB_NETZTRANSPARENZ_CLIENT_ID", "id")
     monkeypatch.setenv("PDB_NETZTRANSPARENZ_CLIENT_SECRET", "s")
+    monkeypatch.setenv("PDB_GIE_API_KEY", "k")
     settings = EnergySettings(_env_file=None)
     assert _codes(settings) == [
         "entsoe_last",
@@ -112,6 +113,8 @@ def test_unfree_sources_need_allow(monkeypatch: pytest.MonkeyPatch) -> None:
         "ecb",
         "worldbank",
         "oil_bulletin",
+        "gie_agsi",
+        "eurostat",
         "pdb_marktwert",
     ]
 

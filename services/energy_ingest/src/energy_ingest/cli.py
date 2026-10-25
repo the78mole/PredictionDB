@@ -9,6 +9,7 @@ Beispiele::
     energy-ingest --source smard backfill 2024-01-01 2024-02-01 --dataset da_price_de_lu
     energy-ingest check --days 14                      # Quellen gegeneinander prüfen
     energy-ingest --source worldbank backfill 1960-01-01 2026-10-01   # Brennstoffe ab 1960
+    energy-ingest --source gie_agsi backfill 2011-01-01 2015-01-01    # Gasspeicher ab 2011
 """
 
 from __future__ import annotations
@@ -31,6 +32,8 @@ from energy_ingest.sources.ecb import Ecb
 from energy_ingest.sources.eia import Eia, EiaBulk, EiaReuters
 from energy_ingest.sources.energy_charts import EnergyCharts
 from energy_ingest.sources.entsoe import Entsoe, EntsoeLast
+from energy_ingest.sources.eurostat import Eurostat
+from energy_ingest.sources.gie_agsi import GieAgsi
 from energy_ingest.sources.marktwert import Marktwert
 from energy_ingest.sources.netztransparenz import Netztransparenz
 from energy_ingest.sources.oil_bulletin import OilBulletin
@@ -139,6 +142,14 @@ def build_sources(
             sources.append(OilBulletin(http, settings.oil_bulletin_url))
         elif code == "the":
             sources.append(The(http))
+        elif code == "gie_agsi":
+            gie_key = settings.gie_api_key.get_secret_value()
+            if not gie_key:
+                log.warning("energy.gie_disabled", reason="PDB_GIE_API_KEY nicht gesetzt")
+                continue
+            sources.append(GieAgsi(http, gie_key))
+        elif code == "eurostat":
+            sources.append(Eurostat(http))
         else:
             raise ValueError(f"unbekannte Quelle {code!r}")
     # Eigene Marktwerte, solange die amtlichen von Netztransparenz nicht geladen werden

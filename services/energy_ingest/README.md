@@ -4,7 +4,8 @@ Lädt Day-Ahead-Preise (DE-LU), Netzlast, Residuallast, Erzeugung je Energieträ
 Folgetag-Prognosen der ÜNB sowie die Monats- und Jahresmarktwerte nach EEG für Deutschland
 aus allen kostenfreien Quellen nach TimescaleDB
 (Schema `energy`, Kapitel 3.2, 3.3 und 5.3 in `docs/ARCHITEKTUR.md`). Dazu kommen Preise
-fossiler Energieträger und der Euro-Dollar-Kurs (Abschnitt „Brennstoffpreise“).
+fossiler Energieträger und der Euro-Dollar-Kurs (Abschnitt „Brennstoffpreise“) sowie die
+Füllstände der Gasspeicher (Abschnitt „Gasspeicher“).
 
 | Quelle | Zugang | Datensätze | Rang | frei |
 |---|---|---|---|---|
@@ -20,6 +21,8 @@ fossiler Energieträger und der Euro-Dollar-Kurs (Abschnitt „Brennstoffpreise�
 | Weltbank, Pink Sheet (`worldbank`) | offen, xlsx | `prices` (Monatsmittel Brent, WTI, Dubai, Kohle AU/ZA, Erdgas US/Europa, LNG Japan) | 10 | ja, CC BY 4.0 |
 | EU Weekly Oil Bulletin (`oil_bulletin`) | offen, xlsx | `retail_de` (Super E5, Diesel, Heizöl, LPG mit und ohne Steuern) | 10 | ja, CC BY 4.0 |
 | Trading Hub Europe (`the`) | offen | `gas_prices` (VTP-Tagesmittel, Ausgleichsenergiepreise ab 10/2021) | 10 | nein, Vervielfältigung nur mit Zustimmung |
+| GIE AGSI+ (`gie_agsi`) | kostenloser Schlüssel, `PDB_GIE_API_KEY` | `storage_de`, `storage_at`, `storage_nl`, `storage_cz`, `storage_eu` (Gasspeicher je Gastag) | 10 | ja, Weiterverwendung frei mit Quellenangabe „GIE AGSI+“ |
+| Eurostat (`eurostat`) | offen | `gas_stock` (Gasbestand am Monatsende, `nrg_stk_gasm`) | 10 | ja, CC BY 4.0 |
 
 **Nur freie Quellen als Standard.** Unfreie Quellen laufen nur mit ausdrücklicher Freigabe:
 `PDB_ALLOW_ENTSO_E`, `PDB_ALLOW_NETZTRANSPARENZ`,
@@ -95,6 +98,22 @@ Speicher hält. Ihre Adressen enthalten eine Dokument-ID und sind einstellbar
 jedes Jahr. Die Kopplung der Preise (Brent als Leitpreis der Ölkette, TTF der Gaskette) und
 die Bewertung weiterer Quellen stehen im Doc „Preise fossiler Energieträger“.
 
+## Gasspeicher
+
+Je Gebiet (`de`, `at`, `nl`, `cz` und `eu`; die Nachbarn wegen der Speicher, die auch am
+deutschen Markt hängen, etwa Haidach und 7Fields):
+
+- AGSI+ je Gastag ab 06:00 Ortszeit: `gas_storage_<gebiet>` (Füllstand am Ende des Gastags,
+  TWh), `gas_storage_full_<gebiet>` (Füllgrad, %), `gas_injection_<gebiet>` und
+  `gas_withdrawal_<gebiet>` (GWh/d), `gas_storage_wgv_<gebiet>` (Arbeitsgasvolumen, TWh).
+  Gastage mit Status `N` (keine Daten) entfallen, geschätzte Werte (`E`) werden 14 Tage lang
+  neu abgerufen, bis GIE sie bestätigt. Als Veröffentlichung gilt der Folgetag 20:00 Ortszeit
+  (GIE: 19:30 MEZ). Historie ab 2011, laut GIE vollständig ab 2016.
+- Eurostat je Monat: `gas_storage_<gebiet>_m` (Schlussbestand Erdgas im Inland, aus TJ
+  Brennwert in TWh umgerechnet). Der Bestand am Monatsende steht am Beginn des Folgemonats,
+  als Veröffentlichung gelten 90 Tage danach. Historie ab 2008. Die Werte können von
+  `gas_storage_<gebiet>` abweichen (eigene Abgrenzung), daher eigener Code.
+
 ## Formatprüfung und Alarme
 
 Jede Quelle prüft den Aufbau ihrer Antwort (Blätter, Spaltenköpfe, Einheiten, Reihen-IDs).
@@ -106,7 +125,8 @@ schickt daraus E-Mails:
 - **Format geändert:** sofort.
 - **Abruf scheitert seit 24 h:** letzter erfolgreicher Abruf älter als 24 h.
 - **Reihe veraltet:** jüngster Wert älter als erwartet (Tageswerte 7 Tage, Wochenwerte
-  21 Tage, Monatswerte 75 Tage), etwa weil sich eine Download-Adresse geändert hat.
+  21 Tage, Monatswerte 75 Tage, Eurostat 120 Tage), etwa weil sich eine Download-Adresse
+  geändert hat.
 
 SMTP-Zugang und Empfänger in `.env`: `PDB_SMTP_HOST` (mit Port), `PDB_SMTP_USER`,
 `PDB_SMTP_PASSWORD`, optional `PDB_SMTP_FROM` und `PDB_SMTP_STARTTLS`, dazu `PDB_ALERT_EMAIL`.
@@ -134,7 +154,7 @@ damit zwischen dem Abgleichfenster und den fertigen Blöcken keine Lücke bleibt
 wird nicht erneut abgerufen (`--force` erzwingt es).
 
 Einstellungen (Umgebung bzw. `.env`): `PDB_ALLOW_ENTSO_E`, `PDB_ALLOW_NETZTRANSPARENZ`,
-`PDB_ALLOW_EIA_REUTERS`, `PDB_ALLOW_THE`, `PDB_EIA_API_KEY`, `PDB_ENTSOE_TOKEN`, `PDB_NETZTRANSPARENZ_CLIENT_ID`,
+`PDB_ALLOW_EIA_REUTERS`, `PDB_ALLOW_THE`, `PDB_EIA_API_KEY`, `PDB_GIE_API_KEY`, `PDB_ENTSOE_TOKEN`, `PDB_NETZTRANSPARENZ_CLIENT_ID`,
 `PDB_NETZTRANSPARENZ_CLIENT_SECRET`, `PDB_ENERGY_SOURCES`
 (JSON-Liste), `PDB_ENERGY_LOOKBACK_DAYS`, `PDB_ENERGY_HORIZON_DAYS`,
 `PDB_ENERGY_BACKFILL_FROM`, `PDB_ENERGY_BACKFILL_CHUNKS_PER_CYCLE`,
@@ -148,4 +168,6 @@ stammen von SMARD und stehen laut `license_info` unter CC BY 4.0, andere Gebotsz
 ENTSO-E:
 Nutzungsbedingungen der Transparency Platform, frei (CC BY 4.0) nur die „List of Data available
 for free re-use“. Netztransparenz: keine Lizenz veröffentlicht. Die Vermerke stehen in
-`meta.source.license`, die Einordnung in `meta.source.free`.
+`meta.source.license`, die Einordnung in `meta.source.free`. GIE AGSI+: keine formale Lizenz,
+laut Nutzungsregel der API beliebig weiterverwendbar mit Quellenangabe „GIE AGSI+“. Eurostat:
+CC BY 4.0.
