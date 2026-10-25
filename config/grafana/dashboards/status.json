@@ -463,7 +463,7 @@
         "y": 9
       },
       "timeFrom": "30d",
-      "description": "Tagesmittel des Fehlers der Medianprognose (P50) für den Folgetag (D+1) aus der Ausgabe um 08 UTC (wie im Backtest) gegen den Ist-Wert, je Modellversion aus fcst.prediction_error. RMSE gestrichelt. Ohne Gesamtsumme, da sich Fehler verschiedener Modelle nicht addieren. ENTSO-E Day-Ahead als Vergleich. Gepunktet auf der rechten Achse: relativer Fehler in Prozent, gerechnet als Tages-MAE geteilt durch den mittleren Betrag des Ist-Last am selben Tag (WAPE = Σ|Prognose − Ist| / Σ|Ist|). Für ENTSO-E Day-Ahead genauso berechnet.",
+      "description": "Tagesmittel des Fehlers der Medianprognose (P50) für den Folgetag (D+1) aus der Ausgabe um 08 UTC (wie im Backtest) gegen den Ist-Wert, je Modellversion aus fcst.prediction_error. RMSE gestrichelt. Ohne Gesamtsumme, da sich Fehler verschiedener Modelle nicht addieren. ENTSO-E Day-Ahead als Vergleich. Gepunktet auf der rechten Achse: relativer Fehler in Prozent, gerechnet als Tages-MAE geteilt durch den mittleren Betrag des Ist-Last am selben Tag (WAPE = Σ|Prognose − Ist| / Σ|Ist|), gekappt bei 100 %. Für ENTSO-E Day-Ahead genauso berechnet.",
       "targets": [
         {
           "refId": "A",
@@ -507,7 +507,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT time_bucket('1 day', e.valid_time, 'Europe/Berlin') AS time,\n       v.variant || ' ' || to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') || ' · ' || CASE v.role WHEN 'champion' THEN 'Champion' WHEN 'challenger' THEN 'Challenger' WHEN 'baseline' THEN 'Baseline' WHEN 'previous' THEN 'Vorgänger' ELSE 'ausgemustert' END || ' Fehler %' AS metric,\n       100 * sum(abs(e.err)) / nullif(sum(abs(e.actual)), 0) AS value\n  FROM fcst.prediction_error e JOIN meta.model_version v ON v.version = e.model_version\n WHERE e.target = 'load_actual' AND e.lead_day = 1 AND e.err IS NOT NULL\n   AND extract(hour FROM e.issue_time AT TIME ZONE 'UTC') = 8\n   AND $__timeFilter(e.valid_time)\n GROUP BY 1, 2 ORDER BY 1"
+          "rawSql": "SELECT time_bucket('1 day', e.valid_time, 'Europe/Berlin') AS time,\n       v.variant || ' ' || to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') || ' · ' || CASE v.role WHEN 'champion' THEN 'Champion' WHEN 'challenger' THEN 'Challenger' WHEN 'baseline' THEN 'Baseline' WHEN 'previous' THEN 'Vorgänger' ELSE 'ausgemustert' END || ' Fehler %' AS metric,\n       least(100 * sum(abs(e.err)) / nullif(sum(abs(e.actual)), 0), 100) AS value\n  FROM fcst.prediction_error e JOIN meta.model_version v ON v.version = e.model_version\n WHERE e.target = 'load_actual' AND e.lead_day = 1 AND e.err IS NOT NULL\n   AND extract(hour FROM e.issue_time AT TIME ZONE 'UTC') = 8\n   AND $__timeFilter(e.valid_time)\n GROUP BY 1, 2 ORDER BY 1"
         },
         {
           "refId": "E",
@@ -518,7 +518,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "WITH h AS (\n  SELECT time_bucket('1 hour', ts) AS ts, code, avg(value) AS value\n    FROM energy.value_best WHERE code IN ('load_actual', 'load_da_forecast') AND $__timeFilter(ts)\n   GROUP BY 1, 2)\nSELECT time_bucket('1 day', a.ts, 'Europe/Berlin') AS time, 'ENTSO-E Day-Ahead Fehler %' AS metric,\n       100 * sum(abs(f.value - a.value)) / nullif(sum(abs(a.value)), 0) AS value\n  FROM h a JOIN h f ON f.ts = a.ts AND f.code = 'load_da_forecast'\n WHERE a.code = 'load_actual'\n GROUP BY 1, 2 ORDER BY 1"
+          "rawSql": "WITH h AS (\n  SELECT time_bucket('1 hour', ts) AS ts, code, avg(value) AS value\n    FROM energy.value_best WHERE code IN ('load_actual', 'load_da_forecast') AND $__timeFilter(ts)\n   GROUP BY 1, 2)\nSELECT time_bucket('1 day', a.ts, 'Europe/Berlin') AS time, 'ENTSO-E Day-Ahead Fehler %' AS metric,\n       least(100 * sum(abs(f.value - a.value)) / nullif(sum(abs(a.value)), 0), 100) AS value\n  FROM h a JOIN h f ON f.ts = a.ts AND f.code = 'load_da_forecast'\n WHERE a.code = 'load_actual'\n GROUP BY 1, 2 ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -628,7 +628,7 @@
         "y": 9
       },
       "timeFrom": "30d",
-      "description": "Tagesmittel des Fehlers der Medianprognose (P50) für den Folgetag (D+1) aus der Ausgabe um 08 UTC (wie im Backtest) gegen den Ist-Wert, je Modellversion aus fcst.prediction_error. RMSE gestrichelt. Ohne Gesamtsumme, da sich Fehler verschiedener Modelle nicht addieren. Gepunktet auf der rechten Achse: relativer Fehler in Prozent, gerechnet als Tages-MAE geteilt durch den mittleren Betrag des Ist-Preises am selben Tag (WAPE = Σ|Prognose − Ist| / Σ|Ist|). Bewusst kein stundenweiser MAPE: Preise liegen oft nahe 0 € oder sind negativ, einzelne Stunden würden den Mittelwert sonst sprengen. An Tagen mit durchweg niedrigen Preisen fällt die Prozentzahl trotzdem hoch aus.",
+      "description": "Tagesmittel des Fehlers der Medianprognose (P50) für den Folgetag (D+1) aus der Ausgabe um 08 UTC (wie im Backtest) gegen den Ist-Wert, je Modellversion aus fcst.prediction_error. RMSE gestrichelt. Ohne Gesamtsumme, da sich Fehler verschiedener Modelle nicht addieren. Gepunktet auf der rechten Achse: relativer Fehler in Prozent, gerechnet als Tages-MAE geteilt durch den mittleren Betrag des Ist-Preises am selben Tag (WAPE = Σ|Prognose − Ist| / Σ|Ist|), gekappt bei 100 %. Bewusst kein stundenweiser MAPE: Preise liegen oft nahe 0 € oder sind negativ, einzelne Stunden würden den Mittelwert sonst sprengen. An Tagen mit durchweg niedrigen Preisen fällt die Prozentzahl trotzdem hoch aus, daher die Kappung bei 100 %.",
       "targets": [
         {
           "refId": "A",
@@ -661,7 +661,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT time_bucket('1 day', e.valid_time, 'Europe/Berlin') AS time,\n       v.variant || ' ' || to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') || ' · ' || CASE v.role WHEN 'champion' THEN 'Champion' WHEN 'challenger' THEN 'Challenger' WHEN 'baseline' THEN 'Baseline' WHEN 'previous' THEN 'Vorgänger' ELSE 'ausgemustert' END || ' Fehler %' AS metric,\n       100 * sum(abs(e.err)) / nullif(sum(abs(e.actual)), 0) AS value\n  FROM fcst.prediction_error e JOIN meta.model_version v ON v.version = e.model_version\n WHERE e.target = 'da_price_de_lu' AND e.lead_day = 1 AND e.err IS NOT NULL\n   AND extract(hour FROM e.issue_time AT TIME ZONE 'UTC') = 8\n   AND $__timeFilter(e.valid_time)\n GROUP BY 1, 2 ORDER BY 1"
+          "rawSql": "SELECT time_bucket('1 day', e.valid_time, 'Europe/Berlin') AS time,\n       v.variant || ' ' || to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') || ' · ' || CASE v.role WHEN 'champion' THEN 'Champion' WHEN 'challenger' THEN 'Challenger' WHEN 'baseline' THEN 'Baseline' WHEN 'previous' THEN 'Vorgänger' ELSE 'ausgemustert' END || ' Fehler %' AS metric,\n       least(100 * sum(abs(e.err)) / nullif(sum(abs(e.actual)), 0), 100) AS value\n  FROM fcst.prediction_error e JOIN meta.model_version v ON v.version = e.model_version\n WHERE e.target = 'da_price_de_lu' AND e.lead_day = 1 AND e.err IS NOT NULL\n   AND extract(hour FROM e.issue_time AT TIME ZONE 'UTC') = 8\n   AND $__timeFilter(e.valid_time)\n GROUP BY 1, 2 ORDER BY 1"
         }
       ],
       "fieldConfig": {
