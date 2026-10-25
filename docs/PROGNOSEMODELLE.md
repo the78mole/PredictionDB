@@ -377,7 +377,9 @@ Eingerichtet wird das erst, wenn mindestens drei Jahre GFS-Trainingsdaten vorlie
 - **Inferenz:** Der Dienst `ml-predict` (Compose-Profil `ml`) ruft stündlich `ml-train predict`
   auf. Er liest einen kleinen Live-Snapshot um den Ausgabezeitpunkt (Energie der letzten
   45 Tage, Wetterläufe der letzten 2 Tage, Bestand), bildet die Merkmale wie im Training und
-  rechnet alle aktiven Versionen. Jede Version schreibt unter eigenem `model_version` nach
+  rechnet alle aktiven Versionen. Jede Konfiguration (`de_lu_v1`, `de_lu_v2`) ist eine eigene
+  Registry-Linie mit eigenem Champion und Challenger; der Dienst rechnet beide Linien
+  (`--also-config config/ml/de_lu_v2.yaml`). Jede Version schreibt unter eigenem `model_version` nach
   `fcst.prediction` (Ziel, Ausgabezeitpunkt, Gültigkeitszeit, Quantil, Wert). Ein erneuter Lauf
   zum selben Ausgabezeitpunkt überschreibt. Eine Wetter-Variante wird übersprungen, wenn kein
   passender Lauf vorliegt.

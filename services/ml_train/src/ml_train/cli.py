@@ -111,6 +111,12 @@ def build_parser() -> argparse.ArgumentParser:
     pr.add_argument("--version", action="append", help="statt der aktiven Versionen")
     pr.add_argument("--dry-run", action="store_true", help="nur ausgeben, nicht schreiben")
     pr.add_argument("--watch", type=int, default=0, help="Sekunden zwischen Läufen")
+    pr.add_argument(
+        "--also-config",
+        action="append",
+        default=[],
+        help="weitere Konfiguration (eigene Registry-Linie), deren aktive Versionen mitlaufen",
+    )
 
     bu = cmd.add_parser("bundle", help="Prognosepaket einer Version für den Stack predict/")
     bu.add_argument("version")
@@ -273,23 +279,32 @@ def cmd_predict(cfg: ModelConfig, a: argparse.Namespace) -> int:
     from predictiondb_core.db import create_db_engine
 
     engine = create_db_engine()
-    reg = Registry(a.registry, cfg)
+    # Jede Konfiguration ist eine eigene Registry-Linie mit eigenem Champion/Challenger
+    lines = [(cfg, Registry(a.registry, cfg))]
+    lines += [(c, Registry(a.registry, c)) for c, _ in map(load_config, a.also_config)]
     while True:
         issue = (
             pd.Timestamp(a.issue, tz="UTC") if a.issue else pd.Timestamp.now(tz="UTC").floor("h")
         )
-        try_sync(reg, engine)
-        versions = a.version or reg.active()
-        if not versions:
+        found = False
+        for line_cfg, reg in lines:
+            try_sync(reg, engine)
+            # --version gilt nur für die Hauptkonfiguration
+            versions = (a.version if line_cfg is cfg else None) or reg.active()
+            if not versions:
+                log.warning("predict.no_versions", registry=a.registry, config=line_cfg.name)
+                continue
+            found = True
+            snap = live_snapshot(engine, line_cfg, issue)
+            df = predict_versions(snap, line_cfg, reg, versions, issue, Path(DEFAULT_CACHE))
+            if a.dry_run:
+                print(df.to_string(index=False, max_rows=60))
+            else:
+                n = write_predictions(engine, df)
+                log.info("predict.done", issue=str(issue), versions=versions, rows=n)
+        if not found:
             log.error("predict.no_versions", registry=a.registry)
             return 1
-        snap = live_snapshot(engine, cfg, issue)
-        df = predict_versions(snap, cfg, reg, versions, issue, Path(DEFAULT_CACHE))
-        if a.dry_run:
-            print(df.to_string(index=False, max_rows=60))
-        else:
-            n = write_predictions(engine, df)
-            log.info("predict.done", issue=str(issue), versions=versions, rows=n)
         if not a.watch:
             return 0
         time.sleep(a.watch)

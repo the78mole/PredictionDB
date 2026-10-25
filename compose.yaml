@@ -162,11 +162,11 @@ services:
     depends_on:
       migrate: {condition: service_completed_successfully}
 
-  # Inferenz aller aktiven Modellversionen stündlich nach fcst.prediction
+  # Inferenz aller aktiven Modellversionen (Linien de_lu_v1 und de_lu_v2) stündlich nach fcst.prediction
   ml-predict:
     <<: *app
     profiles: [ml]
-    command: ["ml-train", "predict", "--watch", "3600"]
+    command: ["ml-train", "predict", "--watch", "3600", "--also-config", "config/ml/de_lu_v2.yaml"]
     environment:
       <<: *app-env
       PDB_ML_REGISTRY: s3://ml-artifacts/models
