@@ -34,6 +34,8 @@ MONTHLY_PRICE_DELAY = timedelta(days=7)
 # Monatswerte je nach Land nach drei bis zwölf Wochen
 GAS_DAY_DELAY = timedelta(hours=14)
 MONTHLY_STAT_DELAY = timedelta(days=90)
+# Öl- und Kohlebilanz der EU und Kohle je Land: Eurostat braucht bis zu vier Monate
+MONTHLY_STAT_DELAY_SLOW = timedelta(days=150)
 # Short-Term Energy Outlook der EIA: erscheint in der ersten Monatshälfte (meist 6.-12.)
 OUTLOOK_DELAY = timedelta(days=14)
 
@@ -49,6 +51,8 @@ UNIT_TWH = "TWh"
 UNIT_GWH = "GWh"
 UNIT_GWH_D = "GWh/d"
 UNIT_PERCENT = "%"
+UNIT_KT = "kt"
+UNIT_KBBL = "kbbl"
 
 
 #: Nachbarzonen, deren Day-Ahead-Preise Energy-Charts unter CC BY 4.0 (SMARD) ausliefert:
@@ -116,6 +120,50 @@ GAS_BALANCE: dict[str, str] = {
     "stock_change": "STK_CHG_MG",  # Einspeicherung positiv (Verbrauch = Aufkommen - Änderung)
 }
 
+#: Gebiete der Öl- und Kohlereihen von Eurostat (Kürzel aus ``GAS_STORAGE_AREAS``)
+FUEL_STAT_AREAS = ("de", "eu")
+
+#: Rohöleinfuhr DE (Eurostat ``nrg_ti_coifpm``, alle Felder): Kürzel -> Indikator
+OIL_CRUDE_IMPORT: dict[str, str] = {
+    "price": "AVGPRC_USD_BBL",  # mittlerer CIF-Preis frei Grenze
+    "volume": "VOL_THS_BBL",
+}
+
+#: Monatsbilanz Rohöl (Eurostat ``nrg_cb_oilm``): Kürzel im Reihen-Code -> Bilanzposition
+OIL_CRUDE_BALANCE: dict[str, str] = {
+    "import": "IMP",
+    "refinery_intake": "RI_OBS",
+    "stock_change": "STK_CHG",  # Aufbau positiv (Schlussbestand - Anfangsbestand)
+}
+
+#: Schlussbestände Öl im Inland (Eurostat ``nrg_stk_oilm``): Kürzel -> Produkt
+OIL_STOCK: dict[str, str] = {
+    "crude": "O4100_TOT",
+    "products": "O4600",
+}
+
+#: Herkunftsländer der Rohöleinfuhr DE (Eurostat ``nrg_ti_oilm``), die größten seit 2020;
+#: Kürzel im Reihen-Code -> Eurostat-Partner
+OIL_IMPORT_PARTNERS: dict[str, str] = {
+    "no": "NO",
+    "us": "US",
+    "kz": "KZ",
+    "ly": "LY",
+    "uk": "UK",
+    "ru": "RU",  # bis 2022 größter Lieferant
+    "iq": "IQ",
+    "ng": "NG",
+    "az": "AZ",
+    "sa": "SA",
+}
+
+#: Monatsbilanz Steinkohle (Eurostat ``nrg_cb_sffm``): Kürzel im Reihen-Code -> Position
+COAL_BALANCE: dict[str, str] = {
+    "import": "IMP",
+    "import_non_eu": "IMP_FROM_NEU",
+    "consumption": "GID_OBS",  # Bruttoinlandslieferungen (DE meldet hier die Einfuhr)
+    "power_heat": "TI_EHG_MAP",  # Einsatz in Strom- und Wärmeerzeugung (Versorger)
+}
 #: Prognosen des EIA Short-Term Energy Outlook: Kürzel im Reihen-Code -> Einheit. Je Ausgabe
 #: (Zeitstempel = Ausgabemonat) und Vorlauf k Monate eine Reihe ``steo_<kürzel>_h<kk>`` mit
 #: der Prognose für den Monat Ausgabemonat + k. So bleibt jede Ausgabe erhalten (``energy.value``
@@ -144,6 +192,9 @@ class Kind(StrEnum):
     GAS_DAY = "gas_day"  # Gasspeicher und LNG je Gastag (GIE AGSI+, ALSI)
     STOCK_MONTHLY = "stock_monthly"  # Bestand am Monatsende (Eurostat)
     FLOW_MONTHLY = "flow_monthly"  # Menge je Monat (Eurostat)
+    PRICE_MONTHLY_STAT = "price_monthly_stat"  # Monatsmittel aus der Statistik (Eurostat)
+    STOCK_MONTHLY_SLOW = "stock_monthly_slow"  # wie STOCK_MONTHLY, später veröffentlicht
+    FLOW_MONTHLY_SLOW = "flow_monthly_slow"  # wie FLOW_MONTHLY, später veröffentlicht
     OUTLOOK_MONTHLY = "outlook_monthly"  # Prognose je Ausgabe, Zeitstempel = Ausgabemonat (STEO)
 
 
@@ -285,6 +336,39 @@ SERIES: dict[str, SeriesInfo] = {
             for a in GAS_IMPORT_AREAS
             for p in GAS_IMPORT_PARTNERS
         ),
+        # Eurostat Öl und Steinkohle je Monat (kt, Rohöleinfuhr DE auch Preis und Volumen);
+        # die EU-Summen und die Kohle erscheinen später als die Ölzahlen für DE
+        SeriesInfo("oil_crude_import_price_de_m", Kind.PRICE_MONTHLY_STAT, UNIT_USD_BBL),
+        SeriesInfo("oil_crude_import_volume_de_m", Kind.FLOW_MONTHLY, UNIT_KBBL),
+        *(
+            SeriesInfo(
+                f"oil_crude_{b}_{a}_m",
+                Kind.FLOW_MONTHLY if a == "de" else Kind.FLOW_MONTHLY_SLOW,
+                UNIT_KT,
+            )
+            for a in FUEL_STAT_AREAS
+            for b in OIL_CRUDE_BALANCE
+        ),
+        *(
+            SeriesInfo(
+                f"oil_stock_{p}_{a}_m",
+                Kind.STOCK_MONTHLY if a == "de" else Kind.STOCK_MONTHLY_SLOW,
+                UNIT_KT,
+            )
+            for a in FUEL_STAT_AREAS
+            for p in OIL_STOCK
+        ),
+        *(
+            SeriesInfo(f"oil_crude_import_de_{p}_m", Kind.FLOW_MONTHLY, UNIT_KT)
+            for p in OIL_IMPORT_PARTNERS
+        ),
+        *(
+            SeriesInfo(f"coal_hard_{b}_{a}_m", Kind.FLOW_MONTHLY_SLOW, UNIT_KT)
+            for a in FUEL_STAT_AREAS
+            for b in COAL_BALANCE
+        ),
+        # Kohlebestände meldet DE seit 2019 nicht mehr (Wert 0), daher nur EU
+        SeriesInfo("coal_hard_stock_eu_m", Kind.STOCK_MONTHLY_SLOW, UNIT_KT),
         # Prognosen der EIA (STEO) je Ausgabe und Vorlauf
         *(
             SeriesInfo(outlook_code(n, k), Kind.OUTLOOK_MONTHLY, unit)
@@ -324,7 +408,9 @@ def estimate_published(kind: Kind, ts: datetime, resolution: timedelta) -> datet
       nach dem Stichtag, Monatsmittel eine Woche nach Monatsende.
     - Gasspeicher und LNG (GIE): Gastag D (Beginn 06:00) am Folgetag um 20:00 Ortszeit.
     - Monatsendbestand (Eurostat, Zeitstempel am Monatsende): 90 Tage danach.
-    - Monatsmengen (Eurostat, Zeitstempel am Monatsbeginn): 90 Tage nach Monatsende.
+    - Monatsmengen und -preise (Eurostat, Zeitstempel am Monatsbeginn): 90 Tage nach
+      Monatsende.
+    - Öl- und Kohlebilanz der EU, Kohle je Land (Eurostat): wie oben, aber 150 Tage.
     - STEO-Prognosen (Zeitstempel am Beginn des Ausgabemonats): 14 Tage danach.
     """
     match kind:
@@ -350,8 +436,12 @@ def estimate_published(kind: Kind, ts: datetime, resolution: timedelta) -> datet
             return ts + resolution + GAS_DAY_DELAY
         case Kind.STOCK_MONTHLY:
             return ts + MONTHLY_STAT_DELAY
-        case Kind.FLOW_MONTHLY:
+        case Kind.FLOW_MONTHLY | Kind.PRICE_MONTHLY_STAT:
             return next_period(ts, 1) + MONTHLY_STAT_DELAY
+        case Kind.STOCK_MONTHLY_SLOW:
+            return ts + MONTHLY_STAT_DELAY_SLOW
+        case Kind.FLOW_MONTHLY_SLOW:
+            return next_period(ts, 1) + MONTHLY_STAT_DELAY_SLOW
         case Kind.OUTLOOK_MONTHLY:
             return ts + OUTLOOK_DELAY
 

@@ -24,7 +24,7 @@ Gasbilanz“).
 | Trading Hub Europe (`the`) | offen | `gas_prices` (VTP-Tagesmittel, Ausgleichsenergiepreise ab 10/2021) | 10 | nein, Vervielfältigung nur mit Zustimmung |
 | GIE AGSI+ (`gie_agsi`) | kostenloser Schlüssel, `PDB_GIE_API_KEY` | `storage_de`, `storage_at`, `storage_nl`, `storage_cz`, `storage_eu` (Gasspeicher je Gastag) | 10 | ja, Weiterverwendung frei mit Quellenangabe „GIE AGSI+“ |
 | GIE ALSI (`gie_alsi`) | wie `gie_agsi` | `lng_de`, `lng_nl`, `lng_be`, `lng_fr`, `lng_eu` (LNG-Terminals je Gastag) | 10 | ja, wie AGSI+ |
-| Eurostat (`eurostat`) | offen | `gas_stock` (Bestand am Monatsende), `gas_balance` (Monatsbilanz), `gas_import_origin` (Importe nach Herkunft) | 10 | ja, CC BY 4.0 |
+| Eurostat (`eurostat`) | offen | `gas_stock` (Bestand am Monatsende), `gas_balance` (Monatsbilanz), `gas_import_origin` (Importe nach Herkunft), `oil_crude_import` (Rohöl-Einfuhrpreis DE), `oil_crude_balance`, `oil_stock`, `oil_import_origin`, `coal_balance`, `coal_stock` | 10 | ja, CC BY 4.0 |
 | EIA Short-Term Energy Outlook (`eia_steo`) | offen, xlsx je Ausgabe | `outlook` (Monatsprognosen Brent und Henry Hub je Ausgabe und Vorlauf) | 10 | ja, Public Domain (nur Prognosen) |
 
 **Nur freie Quellen als Standard.** Unfreie Quellen laufen nur mit ausdrücklicher Freigabe:
@@ -150,6 +150,31 @@ Eurostat-Monatsmengen am Monatsbeginn (TWh, Suffix `_m`), als Veröffentlichung 
   seit 2022 vor allem Norwegen, Niederlande und Belgien als Herkunft; die eigentliche
   Herkunft des LNG zeigt die EU-Reihe.
 
+Öl und Steinkohle von Eurostat je Monat (Suffix `_m`, Mengen in kt, Zeitstempel wie beim Gas):
+
+- Rohöleinfuhr DE über alle Felder (`nrg_ti_coifpm`, ab 2005): `oil_crude_import_price_de_m`
+  (mittlerer CIF-Preis frei Grenze, USD/bbl) und `oil_crude_import_volume_de_m` (kbbl). Das
+  ist der einzige freie Rohölpreis; Brent und WTI der EIA stammen von Thomson Reuters
+  (`eia_reuters`).
+- Rohölbilanz für `de` und `eu` (`nrg_cb_oilm`): `oil_crude_import_<gebiet>_m`,
+  `oil_crude_refinery_intake_<gebiet>_m` (Raffinerieeinsatz), `oil_crude_stock_change_<gebiet>_m`
+  (Aufbau positiv).
+- Schlussbestände im Inland (`nrg_stk_oilm`, ab 2013): `oil_stock_crude_<gebiet>_m` und
+  `oil_stock_products_<gebiet>_m` (Mineralölprodukte), am Beginn des Folgemonats.
+- Rohöl nach Herkunft für DE (`nrg_ti_oilm`): `oil_crude_import_de_<herkunft>_m` mit `no`, `us`,
+  `kz`, `ly`, `uk`, `ru`, `iq`, `ng`, `az` und `sa`.
+- Steinkohle für `de` und `eu` (`nrg_cb_sffm`): `coal_hard_import_<gebiet>_m`,
+  `coal_hard_import_non_eu_<gebiet>_m`, `coal_hard_consumption_<gebiet>_m`
+  (Bruttoinlandslieferung; DE meldet hier die Einfuhr) und `coal_hard_power_heat_<gebiet>_m`
+  (Einsatz der Versorger in Strom- und Wärmeerzeugung), dazu `coal_hard_stock_eu_m`. DE meldet
+  seit 2019 keine Kohlebestände (Wert 0), daher fehlt `coal_hard_stock_de_m`. Kohle nach
+  Herkunft veröffentlicht Eurostat nur jährlich.
+
+Die Ölzahlen für DE erscheinen etwa zwei Monate nach Monatsende (Veröffentlichung wie beim Gas
+nach 90 Tagen angesetzt). Die EU-Summen für Öl und alle Kohlereihen kommen bis zu vier Monate
+später; für sie gelten 150 Tage (Kinds `FLOW_MONTHLY_SLOW`, `STOCK_MONTHLY_SLOW`) und
+„Reihe veraltet“ erst nach 240 Tagen (Migration `0014_freshness_eurostat_fuels`).
+
 Tägliche Flüsse an den Grenzübergangspunkten gibt es nur bei ENTSOG; dessen
 Nutzungsbedingungen enthalten keine offene Lizenz und untersagen leistungsmindernde
 automatische Abrufe, deshalb ist ENTSOG nicht angebunden.
@@ -165,7 +190,7 @@ schickt daraus E-Mails:
 - **Format geändert:** sofort.
 - **Abruf scheitert seit 24 h:** letzter erfolgreicher Abruf älter als 24 h.
 - **Reihe veraltet:** jüngster Wert älter als erwartet (Tageswerte 7 Tage, Wochenwerte
-  21 Tage, Monatswerte 75 Tage, Eurostat 150 Tage), etwa weil sich eine Download-Adresse
+  21 Tage, Monatswerte 75 Tage, Eurostat 150 Tage, Öl der EU und Kohle von Eurostat 240 Tage), etwa weil sich eine Download-Adresse
   geändert hat.
 
 SMTP-Zugang und Empfänger in `.env`: `PDB_SMTP_HOST` (mit Port), `PDB_SMTP_USER`,

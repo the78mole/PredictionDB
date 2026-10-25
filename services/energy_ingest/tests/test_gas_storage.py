@@ -1,4 +1,4 @@
-"""Gasspeicher, LNG und Gasbilanz: GIE AGSI+, GIE ALSI, Eurostat.
+"""Gasspeicher, LNG, Gas-, Öl- und Kohlebilanz: GIE AGSI+, GIE ALSI, Eurostat.
 
 Alle Fixtures sind echte Antworten vom 25.10.2026 (Eurostat ohne ``extension``);
 ``alsi_de_2022.json`` zeigt Gastage ohne Daten (Status ``N``, Werte ``-``).
@@ -15,7 +15,16 @@ import pytest
 
 from energy_ingest.config import EnergySettings
 from energy_ingest.http import Http
-from energy_ingest.model import DAY, MONTH, SERIES, Kind, estimate_published, series
+from energy_ingest.model import (
+    COAL_BALANCE,
+    DAY,
+    MONTH,
+    OIL_IMPORT_PARTNERS,
+    SERIES,
+    Kind,
+    estimate_published,
+    series,
+)
 from energy_ingest.sources import FormatError, SourceError
 from energy_ingest.sources.eurostat import TABLES, Eurostat
 from energy_ingest.sources.eurostat import parse_json as parse_eurostat
@@ -294,6 +303,91 @@ def test_eurostat_unknown_partner() -> None:
     idx["XX"] = idx.pop("NO")
     with pytest.raises(FormatError, match="fremde partner"):
         parse_eurostat(body, TABLES["gas_import_origin"])
+
+
+# --- Eurostat: Öl und Steinkohle -----------------------------------------------------------
+
+
+def test_eurostat_crude_import_price(make_http: MakeHttp) -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        seen.append(req)
+        return httpx.Response(200, json=_json("eurostat_nrg_ti_coifpm.json"))
+
+    start = datetime(2025, 12, 31, 23, 0, tzinfo=UTC)  # Januar 2026
+    out = Eurostat(make_http(handler)).fetch("oil_crude_import", start, start + 273 * DAY)
+    params = seen[0].url.params
+    assert seen[0].url.path.endswith("/nrg_ti_coifpm")
+    assert params["crudeoil"] == "TOTAL" and params.get_list("geo") == ["DE"]
+    assert params.get_list("indic_nrg") == ["AVGPRC_USD_BBL", "VOL_THS_BBL"]
+    by_code = {s.code: s for s in out}
+    price = by_code["oil_crude_import_price_de_m"]
+    assert price.info.kind is Kind.PRICE_MONTHLY_STAT and price.info.unit == "USD/bbl"
+    aug = datetime(2026, 7, 31, 22, 0, tzinfo=UTC)
+    # nicht umgerechnet: USD/bbl bzw. kbbl wie bei Eurostat
+    assert dict(price.points)[aug] == pytest.approx(94.054)
+    assert dict(by_code["oil_crude_import_volume_de_m"].points)[aug] == pytest.approx(44709.542)
+    assert estimate_published(price.info.kind, aug, MONTH) == datetime(
+        2026, 8, 31, 22, 0, tzinfo=UTC
+    ) + timedelta(days=90)
+
+
+def test_eurostat_crude_balance_matches_stock() -> None:
+    bal = parse_eurostat(_json("eurostat_nrg_cb_oilm.json"), TABLES["oil_crude_balance"])
+    stk = parse_eurostat(_json("eurostat_nrg_stk_oilm.json"), TABLES["oil_stock"])
+    change = dict(bal[("DE", "STK_CHG")])
+    stock = dict(stk[("DE", "O4100_TOT")])
+    # Bestandsänderung im Januar = Bestand Ende Januar (am 1.2.) - Ende Dezember (am 1.1.)
+    jan, feb = datetime(2025, 12, 31, 23, 0, tzinfo=UTC), datetime(2026, 1, 31, 23, 0, tzinfo=UTC)
+    assert change[jan] == pytest.approx(stock[feb] - stock[jan], abs=1.0)
+    assert dict(bal[("DE", "IMP")])[jan] == pytest.approx(6797.96, abs=0.01)
+
+
+def test_eurostat_oil_kinds() -> None:
+    assert SERIES["oil_crude_import_de_m"].kind is Kind.FLOW_MONTHLY
+    assert SERIES["oil_crude_import_eu_m"].kind is Kind.FLOW_MONTHLY_SLOW
+    assert SERIES["oil_stock_products_de_m"].kind is Kind.STOCK_MONTHLY
+    assert SERIES["oil_stock_crude_eu_m"].kind is Kind.STOCK_MONTHLY_SLOW
+    assert SERIES["coal_hard_power_heat_de_m"].kind is Kind.FLOW_MONTHLY_SLOW
+    assert "coal_hard_stock_de_m" not in SERIES
+    may = datetime(2026, 4, 30, 22, 0, tzinfo=UTC)
+    june = datetime(2026, 5, 31, 22, 0, tzinfo=UTC)
+    assert estimate_published(Kind.FLOW_MONTHLY_SLOW, may, MONTH) == june + timedelta(days=150)
+    assert estimate_published(Kind.STOCK_MONTHLY_SLOW, june, MONTH) == june + timedelta(days=150)
+
+
+def test_eurostat_oil_import_origin(make_http: MakeHttp) -> None:
+    def handler(req: httpx.Request) -> httpx.Response:
+        assert req.url.params["siec"] == "O4100_TOT"
+        return httpx.Response(200, json=_json("eurostat_nrg_ti_oilm.json"))
+
+    start = datetime(2025, 12, 31, 23, 0, tzinfo=UTC)
+    out = Eurostat(make_http(handler)).fetch("oil_import_origin", start, start + 273 * DAY)
+    by_code = {s.code: s for s in out}
+    assert set(by_code) == {f"oil_crude_import_de_{p}_m" for p in OIL_IMPORT_PARTNERS}
+    aug = datetime(2026, 7, 31, 22, 0, tzinfo=UTC)
+    assert dict(by_code["oil_crude_import_de_ly_m"].points)[aug] == pytest.approx(1108.136)
+    assert dict(by_code["oil_crude_import_de_ru_m"].points)[aug] == 0.0
+
+
+def test_eurostat_coal(make_http: MakeHttp) -> None:
+    def handler(req: httpx.Request) -> httpx.Response:
+        stock = req.url.params.get_list("nrg_bal") == ["STKCL_NAT"]
+        name = "eurostat_nrg_cb_sffm_stock.json" if stock else "eurostat_nrg_cb_sffm.json"
+        return httpx.Response(200, json=_json(name))
+
+    es = Eurostat(make_http(handler))
+    start = datetime(2025, 12, 31, 23, 0, tzinfo=UTC)
+    bal = {s.code: s for s in es.fetch("coal_balance", start, start + 273 * DAY)}
+    assert set(bal) == {f"coal_hard_{b}_{a}_m" for b in COAL_BALANCE for a in ["de", "eu"]}
+    july = datetime(2026, 6, 30, 22, 0, tzinfo=UTC)
+    de = {c: dict(s.points) for c, s in bal.items() if c.endswith("_de_m")}
+    assert de["coal_hard_import_de_m"][july] == pytest.approx(1973.376)
+    assert de["coal_hard_power_heat_de_m"][july] < de["coal_hard_import_de_m"][july]
+    stock = es.fetch("coal_stock", start, start + 273 * DAY)
+    assert [s.code for s in stock] == ["coal_hard_stock_eu_m"]
+    assert stock[0].info.unit == "kt"
 
 
 @pytest.mark.parametrize("status", [200, 403])
