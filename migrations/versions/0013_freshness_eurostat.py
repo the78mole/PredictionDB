@@ -1,7 +1,7 @@
-"""Aktualität: Monatswerte von Eurostat dürfen bis 120 Tage alt sein
+"""Aktualität: Monatswerte von Eurostat dürfen bis 150 Tage alt sein
 
-Eurostat veröffentlicht den Gasbestand am Monatsende (``nrg_stk_gasm``) je nach Land drei
-bis zwölf Wochen nach Monatsende. Der Wert steht am Beginn des Folgemonats; mit 75 Tagen
+Eurostat veröffentlicht die Monatsstatistik Erdgas (Bestand, Bilanz, Importe) je nach Land
+drei bis zwölf Wochen nach Monatsende. Monatsmengen stehen am Monatsbeginn; mit 75 Tagen
 löste der Alarm „Reihe veraltet“ vor fast jeder Veröffentlichung aus.
 
 Revision ID: 0013_freshness_eurostat
@@ -33,7 +33,7 @@ _VIEW = """
       ) last ON true"""
 
 _EUROSTAT = """WHEN s.resolution <= interval '31 days' AND src.code = 'eurostat'
-                     THEN interval '120 days'
+                     THEN interval '150 days'
                 """
 
 

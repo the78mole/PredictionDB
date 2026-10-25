@@ -30,10 +30,10 @@ MARKET_VALUE_DELAY = timedelta(days=14)
 DAILY_PRICE_DELAY = timedelta(days=1)
 WEEKLY_PRICE_DELAY = timedelta(days=7)
 MONTHLY_PRICE_DELAY = timedelta(days=7)
-# Gasspeicher: AGSI+ veröffentlicht den Gastag D am Folgetag um 19:30 (MEZ), Eurostat den
-# Monatsendbestand je nach Land nach drei bis zwölf Wochen
-GAS_DAY_STORAGE_DELAY = timedelta(hours=14)
-MONTHLY_STOCK_DELAY = timedelta(days=90)
+# Gasspeicher und LNG: GIE veröffentlicht den Gastag D am Folgetag um 19:30 (MEZ), Eurostat
+# Monatswerte je nach Land nach drei bis zwölf Wochen
+GAS_DAY_DELAY = timedelta(hours=14)
+MONTHLY_STAT_DELAY = timedelta(days=90)
 
 UNIT_MW = "MW"
 UNIT_EUR_MWH = "EUR/MWh"
@@ -44,6 +44,7 @@ UNIT_USD_MMBTU = "USD/MMBtu"
 UNIT_USD_T = "USD/t"
 UNIT_USD_PER_EUR = "USD/EUR"
 UNIT_TWH = "TWh"
+UNIT_GWH = "GWh"
 UNIT_GWH_D = "GWh/d"
 UNIT_PERCENT = "%"
 
@@ -78,6 +79,41 @@ GAS_STORAGE_AREAS: dict[str, tuple[dict[str, str], str]] = {
     "eu": ({"type": "eu"}, "EU27_2020"),
 }
 
+#: Gebiete der LNG-Reihen (GIE ALSI): DE und die Terminals, über die LNG nach Deutschland
+#: kommt (Rotterdam, Zeebrugge, Dunkerque), und die EU
+LNG_AREAS: dict[str, dict[str, str]] = {
+    "de": {"country": "DE"},
+    "nl": {"country": "NL"},
+    "be": {"country": "BE"},
+    "fr": {"country": "FR"},
+    "eu": {"type": "eu"},
+}
+
+#: Herkunftsländer der Gasimporte (Eurostat ``nrg_ti_gasm``) für DE und EU; ``nsp`` = nicht
+#: angegeben. Kürzel im Reihen-Code -> Eurostat-Partner
+GAS_IMPORT_PARTNERS: dict[str, str] = {
+    "no": "NO",
+    "ru": "RU",
+    "us": "US",
+    "qa": "QA",
+    "dz": "DZ",
+    "uk": "UK",
+    "nl": "NL",
+    "be": "BE",
+    "nsp": "NSP",
+}
+GAS_IMPORT_AREAS = ("de", "eu")
+
+#: Monatsbilanz Erdgas (Eurostat ``nrg_cb_gasm``): Kürzel im Reihen-Code -> Bilanzposition
+GAS_BALANCE: dict[str, str] = {
+    "import": "IMP",
+    "export": "EXP",
+    "production": "IPRD",
+    "consumption": "IC_OBS",
+    "power_heat": "TI_EHG_MAP",  # Einsatz in Strom- und Wärmeerzeugung (Versorger)
+    "stock_change": "STK_CHG_MG",  # Einspeicherung positiv (Verbrauch = Aufkommen - Änderung)
+}
+
 
 class Kind(StrEnum):
     """Art der Reihe; bestimmt den geschätzten Veröffentlichungszeitpunkt."""
@@ -91,8 +127,9 @@ class Kind(StrEnum):
     PRICE_DAILY = "price_daily"  # Tagespreis (Brennstoff, Wechselkurs)
     PRICE_WEEKLY = "price_weekly"  # Wochenpreis (EU Oil Bulletin)
     PRICE_MONTHLY = "price_monthly"  # Monatsmittel (Weltbank)
-    GAS_DAY_STORAGE = "gas_day_storage"  # Gasspeicher je Gastag (AGSI+)
+    GAS_DAY = "gas_day"  # Gasspeicher und LNG je Gastag (GIE AGSI+, ALSI)
     STOCK_MONTHLY = "stock_monthly"  # Bestand am Monatsende (Eurostat)
+    FLOW_MONTHLY = "flow_monthly"  # Menge je Monat (Eurostat)
 
 
 @dataclass(frozen=True)
@@ -195,7 +232,7 @@ SERIES: dict[str, SeriesInfo] = {
         # Gasspeicher je Gastag (AGSI+): Füllstand am Ende des Gastags, Füllgrad, Ein- und
         # Ausspeisung, Arbeitsgasvolumen
         *(
-            SeriesInfo(f"gas_{q}_{a}", Kind.GAS_DAY_STORAGE, unit)
+            SeriesInfo(f"gas_{q}_{a}", Kind.GAS_DAY, unit)
             for a in GAS_STORAGE_AREAS
             for q, unit in [
                 ("storage", UNIT_TWH),
@@ -205,10 +242,33 @@ SERIES: dict[str, SeriesInfo] = {
                 ("storage_wgv", UNIT_TWH),
             ]
         ),
-        # Gasbestand am Monatsende im Inland (Eurostat, Suffix _m)
+        # LNG-Terminals je Gastag (ALSI): Bestand in den Tanks, Ausspeisung ins Netz,
+        # Speicher- und Ausspeisekapazität
+        *(
+            SeriesInfo(f"lng_{q}_{a}", Kind.GAS_DAY, unit)
+            for a in LNG_AREAS
+            for q, unit in [
+                ("inventory", UNIT_GWH),
+                ("sendout", UNIT_GWH_D),
+                ("dtmi", UNIT_GWH),
+                ("dtrs", UNIT_GWH_D),
+            ]
+        ),
+        # Eurostat je Monat (Suffix _m): Gasbestand am Monatsende im Inland, Bilanz,
+        # Importe nach Herkunft
         *(
             SeriesInfo(f"gas_storage_{a}_m", Kind.STOCK_MONTHLY, UNIT_TWH)
             for a in GAS_STORAGE_AREAS
+        ),
+        *(
+            SeriesInfo(f"gas_{b}_{a}_m", Kind.FLOW_MONTHLY, UNIT_TWH)
+            for a in GAS_STORAGE_AREAS
+            for b in GAS_BALANCE
+        ),
+        *(
+            SeriesInfo(f"gas_import_{a}_{p}_m", Kind.FLOW_MONTHLY, UNIT_TWH)
+            for a in GAS_IMPORT_AREAS
+            for p in GAS_IMPORT_PARTNERS
         ),
     ]
 }
@@ -241,8 +301,9 @@ def estimate_published(kind: Kind, ts: datetime, resolution: timedelta) -> datet
     - Monats- und Jahresmarktwerte: zwei Wochen nach Ende des Monats bzw. Jahres.
     - Brennstoffpreise: Tageswerte einen Tag nach Ende des Tages, Wochenwerte eine Woche
       nach dem Stichtag, Monatsmittel eine Woche nach Monatsende.
-    - Gasspeicher (AGSI+): Gastag D (Beginn 06:00) am Folgetag um 20:00 Ortszeit.
+    - Gasspeicher und LNG (GIE): Gastag D (Beginn 06:00) am Folgetag um 20:00 Ortszeit.
     - Monatsendbestand (Eurostat, Zeitstempel am Monatsende): 90 Tage danach.
+    - Monatsmengen (Eurostat, Zeitstempel am Monatsbeginn): 90 Tage nach Monatsende.
     """
     match kind:
         case Kind.PRICE_DA:
@@ -263,10 +324,12 @@ def estimate_published(kind: Kind, ts: datetime, resolution: timedelta) -> datet
             return ts + WEEKLY_PRICE_DELAY
         case Kind.PRICE_MONTHLY:
             return next_period(ts, 1) + MONTHLY_PRICE_DELAY
-        case Kind.GAS_DAY_STORAGE:
-            return ts + resolution + GAS_DAY_STORAGE_DELAY
+        case Kind.GAS_DAY:
+            return ts + resolution + GAS_DAY_DELAY
         case Kind.STOCK_MONTHLY:
-            return ts + MONTHLY_STOCK_DELAY
+            return ts + MONTHLY_STAT_DELAY
+        case Kind.FLOW_MONTHLY:
+            return next_period(ts, 1) + MONTHLY_STAT_DELAY
 
 
 def published_at(kind: Kind, ts: datetime, resolution: timedelta, fetched: datetime) -> datetime:

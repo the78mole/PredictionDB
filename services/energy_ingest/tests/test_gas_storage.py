@@ -1,8 +1,7 @@
-"""Gasspeicher: GIE AGSI+ und Eurostat.
+"""Gasspeicher, LNG und Gasbilanz: GIE AGSI+, GIE ALSI, Eurostat.
 
-``eurostat_nrg_stk_gasm.json`` ist eine echte Antwort vom 25.10.2026 (ohne ``extension``),
-``agsi_de.json`` folgt dem Aufbau aus der GIE-API-Dokumentation v013 (Zahlen als
-Zeichenketten, ``-`` für fehlende Werte, Status ``N`` ohne Daten).
+Alle Fixtures sind echte Antworten vom 25.10.2026 (Eurostat ohne ``extension``);
+``alsi_de_2022.json`` zeigt Gastage ohne Daten (Status ``N``, Werte ``-``).
 """
 
 import json
@@ -18,9 +17,9 @@ from energy_ingest.config import EnergySettings
 from energy_ingest.http import Http
 from energy_ingest.model import DAY, MONTH, SERIES, Kind, estimate_published, series
 from energy_ingest.sources import FormatError, SourceError
-from energy_ingest.sources.eurostat import Eurostat
+from energy_ingest.sources.eurostat import TABLES, Eurostat
 from energy_ingest.sources.eurostat import parse_json as parse_eurostat
-from energy_ingest.sources.gie_agsi import GieAgsi, parse_page
+from energy_ingest.sources.gie import ALSI_FIELDS, GieAgsi, GieAlsi, parse_page
 
 FIXTURES = Path(__file__).parent / "fixtures"
 Handler = Callable[[httpx.Request], httpx.Response]
@@ -40,19 +39,28 @@ def test_agsi_parse_page() -> None:
     last, out = parse_page(_json("agsi_de.json"))
     assert last == 1
     storage = dict(out["gas_storage"])
-    assert storage[GAS_DAY_22] == pytest.approx(193.0621)
-    # Status N entfällt, "-" ergibt keinen Wert
-    assert len(storage) == 3
-    assert len(out["gas_injection"]) == 2
-    assert dict(out["gas_storage_full"])[GAS_DAY_22] == pytest.approx(76.75)
-    assert dict(out["gas_withdrawal"])[GAS_DAY_22] == pytest.approx(20.11)
-    assert dict(out["gas_storage_wgv"])[GAS_DAY_22] == pytest.approx(251.5401)
+    assert len(storage) == 7
+    assert storage[GAS_DAY_22] == pytest.approx(151.2647)
+    assert dict(out["gas_storage_full"])[GAS_DAY_22] == pytest.approx(61.15)
+    assert dict(out["gas_injection"])[GAS_DAY_22] == pytest.approx(268.04)
+    assert dict(out["gas_withdrawal"])[GAS_DAY_22] == pytest.approx(114.9)
+    assert dict(out["gas_storage_wgv"])[GAS_DAY_22] == pytest.approx(247.3563)
+
+
+def test_agsi_missing_values_and_status_n() -> None:
+    body = _json("agsi_de.json")
+    body["data"][0]["status"] = "N"  # 24.10. ohne Daten
+    body["data"][2]["injection"] = "-"  # 22.10. ohne Einspeisung
+    _, out = parse_page(body)
+    assert len(out["gas_storage"]) == 6
+    assert GAS_DAY_22 not in dict(out["gas_injection"])
+    assert GAS_DAY_22 in dict(out["gas_withdrawal"])
 
 
 def test_agsi_format_errors() -> None:
     body = _json("agsi_de.json")
     del body["data"][0]["gasInStorage"]
-    with pytest.raises(FormatError, match="Felder fehlen"):
+    with pytest.raises(FormatError, match="gasInStorage"):
         parse_page(body)
     body = _json("agsi_de.json")
     body["data"][0]["status"] = "X"
@@ -101,8 +109,9 @@ def test_agsi_fetch_pages_and_params(make_http: MakeHttp) -> None:
         "gas_withdrawal_de",
         "gas_storage_wgv_de",
     }
-    # Fenster [21.10., 23.10.): 23.10. fällt heraus, 20.10. hat Status N
-    assert [ts for ts, _ in by_code["gas_storage_de"].points] == [GAS_DAY_22 - DAY, GAS_DAY_22]
+    # Fenster [20.10., 23.10.): Gastage 20. bis 22.10.
+    days = [ts for ts, _ in by_code["gas_storage_de"].points]
+    assert days == [GAS_DAY_22 - 2 * DAY, GAS_DAY_22 - DAY, GAS_DAY_22]
     assert by_code["gas_storage_de"].resolution == DAY
 
 
@@ -122,7 +131,7 @@ def test_agsi_eu_uses_type(make_http: MakeHttp) -> None:
 def test_agsi_published() -> None:
     # Gastag 22.10. (Beginn 06:00) erscheint am 23.10. um 19:30, angenommen 20:00 MESZ
     info = series("gas_storage_de")
-    assert info.kind is Kind.GAS_DAY_STORAGE
+    assert info.kind is Kind.GAS_DAY
     assert estimate_published(info.kind, GAS_DAY_22, DAY) == datetime(
         2026, 10, 23, 18, 0, tzinfo=UTC
     )
@@ -140,28 +149,77 @@ def test_agsi_needs_key() -> None:
     ]
 
 
+# --- ALSI --------------------------------------------------------------------------------
+
+
+def test_alsi_parse_page() -> None:
+    last, out = parse_page(_json("alsi_de.json"), ALSI_FIELDS)
+    assert last == 1
+    inventory = dict(out["lng_inventory"])
+    assert len(inventory) == 5
+    assert inventory[GAS_DAY_22 - DAY] == pytest.approx(1006.87)  # GWh, nicht 10³ m³ LNG
+    assert dict(out["lng_sendout"])[GAS_DAY_22 - DAY] == pytest.approx(229.5)
+    assert dict(out["lng_dtmi"])[GAS_DAY_22] == pytest.approx(5158.76)
+    assert dict(out["lng_dtrs"])[GAS_DAY_22] == pytest.approx(844)
+
+
+def test_alsi_no_data_days() -> None:
+    _, out = parse_page(_json("alsi_de_2022.json"), ALSI_FIELDS)
+    assert all(not pts for pts in out.values())
+
+
+def test_alsi_nested_field_missing() -> None:
+    body = _json("alsi_de.json")
+    del body["data"][0]["inventory"]["gwh"]
+    with pytest.raises(FormatError, match=r"inventory\.gwh"):
+        parse_page(body, ALSI_FIELDS)
+
+
+def test_alsi_fetch(make_http: MakeHttp) -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        seen.append(req)
+        return httpx.Response(200, json=_json("alsi_de.json"))
+
+    src = GieAlsi(make_http(handler), "geheim")
+    assert src.datasets() == ["lng_de", "lng_nl", "lng_be", "lng_fr", "lng_eu"]
+    assert src.sync_lookback["lng_de"] == timedelta(days=14)
+    out = src.fetch("lng_de", GAS_DAY_22 - DAY, GAS_DAY_22 + DAY)
+    assert seen[0].url.host == "alsi.gie.eu"
+    assert seen[0].headers["x-key"] == "geheim"
+    assert seen[0].url.params["country"] == "DE"
+    assert {s.code for s in out} == {
+        "lng_inventory_de",
+        "lng_sendout_de",
+        "lng_dtmi_de",
+        "lng_dtrs_de",
+    }
+    assert all(s.info.kind is Kind.GAS_DAY for s in out)
+
+
 # --- Eurostat ----------------------------------------------------------------------------
 
 
 def test_eurostat_parse() -> None:
-    out = parse_eurostat(_json("eurostat_nrg_stk_gasm.json"))
-    assert set(out) == {"DE", "AT", "NL", "CZ", "EU27_2020"}
-    de = dict(out["DE"])
+    out = parse_eurostat(_json("eurostat_nrg_stk_gasm.json"), TABLES["gas_stock"])
+    assert {geo for geo, _ in out} == {"DE", "AT", "NL", "CZ", "EU27_2020"}
+    de = dict(out[("DE", "STKCL_NAT")])
     # Bestand Ende Januar 2026 steht am 1. Februar
     feb_1 = datetime(2026, 1, 31, 23, 0, tzinfo=UTC)
     assert de[feb_1] == pytest.approx(285548.0 / 3600)
-    assert len(out["DE"]) == 8 and len(out["AT"]) == 9
+    assert len(out[("DE", "STKCL_NAT")]) == 8 and len(out[("AT", "STKCL_NAT")]) == 9
 
 
 def test_eurostat_format_errors() -> None:
     body = _json("eurostat_nrg_stk_gasm.json")
     body["dimension"]["unit"]["category"]["index"] = {"MIO_M3": 0}
     with pytest.raises(FormatError, match="unit"):
-        parse_eurostat(body)
+        parse_eurostat(body, TABLES["gas_stock"])
     body = _json("eurostat_nrg_stk_gasm.json")
     del body["dimension"]
     with pytest.raises(FormatError, match="unerwartete Antwort"):
-        parse_eurostat(body)
+        parse_eurostat(body, TABLES["gas_stock"])
 
 
 def test_eurostat_fetch(make_http: MakeHttp) -> None:
@@ -190,3 +248,49 @@ def test_eurostat_published() -> None:
     assert info.kind is Kind.STOCK_MONTHLY
     ts = datetime(2026, 9, 30, 22, 0, tzinfo=UTC)
     assert estimate_published(info.kind, ts, MONTH) == ts + timedelta(days=90)
+
+
+def test_eurostat_balance() -> None:
+    table = TABLES["gas_balance"]
+    out = parse_eurostat(_json("eurostat_nrg_cb_gasm.json"), table)
+    june = datetime(2026, 5, 31, 22, 0, tzinfo=UTC)  # Juni 2026, Monatsbeginn
+    de = {k: dict(v) for (geo, k), v in out.items() if geo == "DE"}
+    # Verbrauch = Förderung + Import - Export - Speicheränderung (Einspeicherung positiv)
+    supply = de["IPRD"][june] + de["IMP"][june] - de["EXP"][june] - de["STK_CHG_MG"][june]
+    assert de["IC_OBS"][june] == pytest.approx(supply, abs=0.01)
+    assert de["IMP"][june] == pytest.approx(83.59, abs=0.01)
+
+
+def test_eurostat_import_origin_fetch(make_http: MakeHttp) -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        seen.append(req)
+        return httpx.Response(200, json=_json("eurostat_nrg_ti_gasm.json"))
+
+    start = datetime(2026, 4, 30, 22, 0, tzinfo=UTC)  # Mai 2026
+    out = Eurostat(make_http(handler)).fetch("gas_import_origin", start, start + 92 * DAY)
+    params = seen[0].url.params
+    assert seen[0].url.path.endswith("/nrg_ti_gasm")
+    assert params.get_list("geo") == ["DE", "EU27_2020"]
+    assert "NSP" in params.get_list("partner")
+    assert params["sinceTimePeriod"] == "2026-05"
+    by_code = {s.code: s for s in out}
+    assert "gas_import_de_no_m" in by_code and "gas_import_eu_us_m" in by_code
+    jun = datetime(2026, 5, 31, 22, 0, tzinfo=UTC)
+    assert dict(by_code["gas_import_de_no_m"].points)[jun] == pytest.approx(37.39, abs=0.01)
+    assert by_code["gas_import_de_no_m"].info.kind is Kind.FLOW_MONTHLY
+
+
+def test_eurostat_flow_published() -> None:
+    may = datetime(2026, 4, 30, 22, 0, tzinfo=UTC)
+    june = datetime(2026, 5, 31, 22, 0, tzinfo=UTC)
+    assert estimate_published(Kind.FLOW_MONTHLY, may, MONTH) == june + timedelta(days=90)
+
+
+def test_eurostat_unknown_partner() -> None:
+    body = _json("eurostat_nrg_ti_gasm.json")
+    idx = body["dimension"]["partner"]["category"]["index"]
+    idx["XX"] = idx.pop("NO")
+    with pytest.raises(FormatError, match="fremde partner"):
+        parse_eurostat(body, TABLES["gas_import_origin"])

@@ -5,7 +5,8 @@ Folgetag-Prognosen der ÜNB sowie die Monats- und Jahresmarktwerte nach EEG für
 aus allen kostenfreien Quellen nach TimescaleDB
 (Schema `energy`, Kapitel 3.2, 3.3 und 5.3 in `docs/ARCHITEKTUR.md`). Dazu kommen Preise
 fossiler Energieträger und der Euro-Dollar-Kurs (Abschnitt „Brennstoffpreise“) sowie die
-Füllstände der Gasspeicher (Abschnitt „Gasspeicher“).
+Gasspeicher, LNG-Terminals und die Monatsbilanz Erdgas (Abschnitt „Gasspeicher, LNG und
+Gasbilanz“).
 
 | Quelle | Zugang | Datensätze | Rang | frei |
 |---|---|---|---|---|
@@ -22,7 +23,8 @@ Füllstände der Gasspeicher (Abschnitt „Gasspeicher“).
 | EU Weekly Oil Bulletin (`oil_bulletin`) | offen, xlsx | `retail_de` (Super E5, Diesel, Heizöl, LPG mit und ohne Steuern) | 10 | ja, CC BY 4.0 |
 | Trading Hub Europe (`the`) | offen | `gas_prices` (VTP-Tagesmittel, Ausgleichsenergiepreise ab 10/2021) | 10 | nein, Vervielfältigung nur mit Zustimmung |
 | GIE AGSI+ (`gie_agsi`) | kostenloser Schlüssel, `PDB_GIE_API_KEY` | `storage_de`, `storage_at`, `storage_nl`, `storage_cz`, `storage_eu` (Gasspeicher je Gastag) | 10 | ja, Weiterverwendung frei mit Quellenangabe „GIE AGSI+“ |
-| Eurostat (`eurostat`) | offen | `gas_stock` (Gasbestand am Monatsende, `nrg_stk_gasm`) | 10 | ja, CC BY 4.0 |
+| GIE ALSI (`gie_alsi`) | wie `gie_agsi` | `lng_de`, `lng_nl`, `lng_be`, `lng_fr`, `lng_eu` (LNG-Terminals je Gastag) | 10 | ja, wie AGSI+ |
+| Eurostat (`eurostat`) | offen | `gas_stock` (Bestand am Monatsende), `gas_balance` (Monatsbilanz), `gas_import_origin` (Importe nach Herkunft) | 10 | ja, CC BY 4.0 |
 
 **Nur freie Quellen als Standard.** Unfreie Quellen laufen nur mit ausdrücklicher Freigabe:
 `PDB_ALLOW_ENTSO_E`, `PDB_ALLOW_NETZTRANSPARENZ`,
@@ -98,10 +100,10 @@ Speicher hält. Ihre Adressen enthalten eine Dokument-ID und sind einstellbar
 jedes Jahr. Die Kopplung der Preise (Brent als Leitpreis der Ölkette, TTF der Gaskette) und
 die Bewertung weiterer Quellen stehen im Doc „Preise fossiler Energieträger“.
 
-## Gasspeicher
+## Gasspeicher, LNG und Gasbilanz
 
-Je Gebiet (`de`, `at`, `nl`, `cz` und `eu`; die Nachbarn wegen der Speicher, die auch am
-deutschen Markt hängen, etwa Haidach und 7Fields):
+Speicher je Gebiet (`de`, `at`, `nl`, `cz` und `eu`; die Nachbarn wegen der Speicher, die
+auch am deutschen Markt hängen, etwa Haidach und 7Fields):
 
 - AGSI+ je Gastag ab 06:00 Ortszeit: `gas_storage_<gebiet>` (Füllstand am Ende des Gastags,
   TWh), `gas_storage_full_<gebiet>` (Füllgrad, %), `gas_injection_<gebiet>` und
@@ -114,6 +116,31 @@ deutschen Markt hängen, etwa Haidach und 7Fields):
   als Veröffentlichung gelten 90 Tage danach. Historie ab 2008. Die Werte können von
   `gas_storage_<gebiet>` abweichen (eigene Abgrenzung), daher eigener Code.
 
+LNG je Gebiet (`de`, `nl`, `be`, `fr`, `eu`; Rotterdam, Zeebrugge und Dunkerque liefern auch
+nach Deutschland), ALSI je Gastag: `lng_inventory_<gebiet>` (LNG in den Tanks am Ende des
+Gastags, GWh), `lng_sendout_<gebiet>` (Ausspeisung ins Netz, GWh/d), `lng_dtmi_<gebiet>`
+(erklärte Tankkapazität, GWh), `lng_dtrs_<gebiet>` (erklärte Ausspeisekapazität, GWh/d).
+Historie ab 2012, für DE ab Dezember 2022 (Wilhelmshaven). Geschätzte Tage (Status `E`)
+schreibt ALSI für DE teils mit dem Vortageswert fort; sie werden wie bei AGSI+ 14 Tage lang neu
+abgerufen.
+
+Eurostat-Monatsmengen am Monatsbeginn (TWh, Suffix `_m`), als Veröffentlichung gelten
+90 Tage nach Monatsende:
+
+- Bilanz je Speicher-Gebiet (`nrg_cb_gasm`): `gas_import_<gebiet>_m`, `gas_export_<gebiet>_m`,
+  `gas_production_<gebiet>_m`, `gas_consumption_<gebiet>_m` (Inlandsverbrauch),
+  `gas_power_heat_<gebiet>_m` (Einsatz in Strom- und Wärmeerzeugung der Versorger),
+  `gas_stock_change_<gebiet>_m` (Einspeicherung positiv; Verbrauch = Förderung + Import −
+  Export − Speicheränderung).
+- Importe nach Herkunft für `de` und `eu` (`nrg_ti_gasm`): `gas_import_<gebiet>_<herkunft>_m`
+  mit `no`, `ru`, `us`, `qa`, `dz`, `uk`, `nl`, `be` und `nsp` (nicht angegeben). DE meldet
+  seit 2022 vor allem Norwegen, Niederlande und Belgien als Herkunft; die eigentliche
+  Herkunft des LNG zeigt die EU-Reihe.
+
+Tägliche Flüsse an den Grenzübergangspunkten gibt es nur bei ENTSOG; dessen
+Nutzungsbedingungen enthalten keine offene Lizenz und untersagen leistungsmindernde
+automatische Abrufe, deshalb ist ENTSOG nicht angebunden.
+
 ## Formatprüfung und Alarme
 
 Jede Quelle prüft den Aufbau ihrer Antwort (Blätter, Spaltenköpfe, Einheiten, Reihen-IDs).
@@ -125,7 +152,7 @@ schickt daraus E-Mails:
 - **Format geändert:** sofort.
 - **Abruf scheitert seit 24 h:** letzter erfolgreicher Abruf älter als 24 h.
 - **Reihe veraltet:** jüngster Wert älter als erwartet (Tageswerte 7 Tage, Wochenwerte
-  21 Tage, Monatswerte 75 Tage, Eurostat 120 Tage), etwa weil sich eine Download-Adresse
+  21 Tage, Monatswerte 75 Tage, Eurostat 150 Tage), etwa weil sich eine Download-Adresse
   geändert hat.
 
 SMTP-Zugang und Empfänger in `.env`: `PDB_SMTP_HOST` (mit Port), `PDB_SMTP_USER`,
@@ -168,6 +195,7 @@ stammen von SMARD und stehen laut `license_info` unter CC BY 4.0, andere Gebotsz
 ENTSO-E:
 Nutzungsbedingungen der Transparency Platform, frei (CC BY 4.0) nur die „List of Data available
 for free re-use“. Netztransparenz: keine Lizenz veröffentlicht. Die Vermerke stehen in
-`meta.source.license`, die Einordnung in `meta.source.free`. GIE AGSI+: keine formale Lizenz,
-laut Nutzungsregel der API beliebig weiterverwendbar mit Quellenangabe „GIE AGSI+“. Eurostat:
+`meta.source.license`, die Einordnung in `meta.source.free`. GIE AGSI+ und ALSI: keine formale
+Lizenz, laut Nutzungsregel der API beliebig weiterverwendbar mit Quellenangabe „GIE AGSI+“ bzw.
+„GIE ALSI“. Eurostat:
 CC BY 4.0.

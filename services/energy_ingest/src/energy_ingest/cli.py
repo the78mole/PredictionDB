@@ -33,7 +33,7 @@ from energy_ingest.sources.eia import Eia, EiaBulk, EiaReuters
 from energy_ingest.sources.energy_charts import EnergyCharts
 from energy_ingest.sources.entsoe import Entsoe, EntsoeLast
 from energy_ingest.sources.eurostat import Eurostat
-from energy_ingest.sources.gie_agsi import GieAgsi
+from energy_ingest.sources.gie import GieAgsi, GieAlsi
 from energy_ingest.sources.marktwert import Marktwert
 from energy_ingest.sources.netztransparenz import Netztransparenz
 from energy_ingest.sources.oil_bulletin import OilBulletin
@@ -142,12 +142,14 @@ def build_sources(
             sources.append(OilBulletin(http, settings.oil_bulletin_url))
         elif code == "the":
             sources.append(The(http))
-        elif code == "gie_agsi":
+        elif code in ("gie_agsi", "gie_alsi"):
             gie_key = settings.gie_api_key.get_secret_value()
             if not gie_key:
-                log.warning("energy.gie_disabled", reason="PDB_GIE_API_KEY nicht gesetzt")
+                log.warning(
+                    "energy.gie_disabled", source=code, reason="PDB_GIE_API_KEY nicht gesetzt"
+                )
                 continue
-            sources.append(GieAgsi(http, gie_key))
+            sources.append((GieAgsi if code == "gie_agsi" else GieAlsi)(http, gie_key))
         elif code == "eurostat":
             sources.append(Eurostat(http))
         else:

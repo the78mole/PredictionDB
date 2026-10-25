@@ -2,7 +2,7 @@
 
 Zugangsdaten: ``PDB_ENTSOE_TOKEN``, ``PDB_NETZTRANSPARENZ_CLIENT_ID``,
 ``PDB_NETZTRANSPARENZ_CLIENT_SECRET``, ``PDB_EIA_API_KEY`` (ohne Schlüssel lädt die EIA-Quelle
-die Bulk-Dateien) und ``PDB_GIE_API_KEY`` (Gasspeicher AGSI+, ohne Schlüssel aus).
+die Bulk-Dateien) und ``PDB_GIE_API_KEY`` (Gasspeicher AGSI+ und LNG ALSI, ohne Schlüssel aus).
 
 Quellen, deren Nutzungsbedingungen die Weitergabe einschränken (ENTSO-E, Netztransparenz,
 Thomson-Reuters-Reihen der EIA, THE; ``docs/ARCHITEKTUR.md`` 7.11.1), laufen nur mit
@@ -37,8 +37,9 @@ ALL_SOURCES = [
     "worldbank",
     "oil_bulletin",
     "the",
-    # Gasspeicher
+    # Gasspeicher, LNG, Gasbilanz
     "gie_agsi",
+    "gie_alsi",
     "eurostat",
 ]
 

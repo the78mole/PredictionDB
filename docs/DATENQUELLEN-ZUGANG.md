@@ -41,7 +41,8 @@ Betreiber unter Nennung der Quellen frei veröffentlichen.
 | Weltbank Pink Sheet | Monatspreise Öl, Kohle, Gas (TTF), LNG | nein | CC BY 4.0 |
 | EU Weekly Oil Bulletin | Endkundenpreise Kraftstoffe, Heizöl | nein | CC BY 4.0 |
 | GIE AGSI+ (`gie_agsi`) | Gasspeicher je Gastag: Füllstand, Füllgrad, Ein-/Ausspeisung (DE, AT, NL, CZ, EU) | ja, kostenlos (siehe unten) | frei weiterverwendbar, Quellenangabe „GIE AGSI+“ Pflicht |
-| Eurostat (`eurostat`) | Gasbestand am Monatsende (DE, AT, NL, CZ, EU) | nein | CC BY 4.0, „Eurostat“ |
+| GIE ALSI (`gie_alsi`) | LNG-Terminals je Gastag: Bestand, Ausspeisung, Kapazität (DE, NL, BE, FR, EU) | wie AGSI+ | wie AGSI+, Quellenangabe „GIE ALSI“ |
+| Eurostat (`eurostat`) | Gas monatlich: Bestand, Bilanz (Import, Export, Verbrauch, Strom/Wärme), Importe nach Herkunft | nein | CC BY 4.0, „Eurostat“ |
 
 ### Energy-Charts: Lizenz je Reihe
 
@@ -64,8 +65,9 @@ Die freien EIA-Reihen laufen auch ohne Schlüssel über die Bulk-Dateien `PET.zi
 
 ### GIE-AGSI+-Schlüssel (empfohlen)
 
-Ohne Schlüssel bleibt die Quelle `gie_agsi` aus (Warnung `energy.gie_disabled`); die
-Gasspeicher gibt es dann nur monatlich von Eurostat.
+Derselbe Schlüssel gilt für AGSI+ (Speicher) und ALSI (LNG). Ohne Schlüssel bleiben
+`gie_agsi` und `gie_alsi` aus (Warnung `energy.gie_disabled`); Speicher und Importe gibt es
+dann nur monatlich von Eurostat.
 
 1. Konto unter <https://agsi.gie.eu/account> anlegen; der Schlüssel steht danach im Konto. Er
    läuft nicht ab und gilt für AGSI+ und ALSI.

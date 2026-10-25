@@ -114,6 +114,7 @@ def test_unfree_sources_need_allow(monkeypatch: pytest.MonkeyPatch) -> None:
         "worldbank",
         "oil_bulletin",
         "gie_agsi",
+        "gie_alsi",
         "eurostat",
         "pdb_marktwert",
     ]
