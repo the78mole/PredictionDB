@@ -44,6 +44,7 @@ import pandas as pd
 
 HIER = Path(__file__).resolve().parent
 sys.path.insert(0, str(HIER))
+import brennstoff  # noqa: E402
 import daten  # noqa: E402
 
 HORIZONTE = 18
@@ -237,9 +238,59 @@ def backtest(df: pd.DataFrame, cap: pd.DataFrame) -> pd.DataFrame:
     return bt
 
 
+MIN_TRAINING = 24
+RIDGE = 1.0
+MERKMALE_BRENNSTOFF = ["d_henry_hub", "d_brent"]
+MERKMALE_ALLE = ["saison", "d_henry_hub", "d_brent", "speicher_abw", "gas_trend"]
+
+
+def regression(bt: pd.DataFrame, merkmale: list[str]) -> pd.Series:
+    """Prognose = letzter Monat x exp(Ridge-Regression der log-Änderung, ohne Achsenabschnitt).
+
+    Je Stichtag und Horizont wird nur auf Zeilen desselben Horizonts trainiert, deren Zielmonat
+    vor dem Stichtag lag (Ist bekannt). Ohne Achsenabschnitt: Ein im Training gelernter Trend
+    (2016-2021 stiegen die Preise) würde sonst fortgeschrieben. Fehlen Merkmale (STEO reicht nur
+    bis Ende Y+1) oder Trainingsdaten, bleibt es beim letzten Monat.
+    """
+    y = np.log(bt["ist_base"] / bt["naiv_letzter_monat"])
+    ok = bt[merkmale].notna().all(axis=1) & (bt["naiv_letzter_monat"] > 0)
+    out = bt["naiv_letzter_monat"].copy()
+    for (stichtag, h), zeilen in bt[ok].groupby(["stichtag", "h"]):
+        stand = stichtag - 1
+        train = ok & y.notna() & np.isfinite(y) & (bt["h"] == h) & (bt["ziel"] <= stand)
+        if train.sum() < MIN_TRAINING:
+            continue
+        x = bt.loc[train, merkmale].to_numpy(dtype=float)
+        yt = y[train].to_numpy()
+        beta = np.linalg.solve(x.T @ x + RIDGE * np.eye(len(merkmale)), x.T @ yt)
+        xn = zeilen[merkmale].to_numpy(dtype=float)
+        out[zeilen.index] = zeilen["naiv_letzter_monat"] * np.exp(xn @ beta)
+    return out
+
+
+def brennstoff_spalten(bt: pd.DataFrame, cache: Path, bis: pd.Period) -> pd.DataFrame:
+    ausgaben = brennstoff.steo(cache / "steo", 2015, bis)
+    lager = brennstoff.speicher(cache)
+    gas = brennstoff.gas_europa(cache)
+    m = pd.DataFrame(
+        [
+            brennstoff.merkmale(r.stichtag - 1, r.ziel, ausgaben, lager, gas)
+            for r in bt[["stichtag", "ziel"]].itertuples()
+        ],
+        index=bt.index,
+    )
+    bt = bt.join(m)
+    bt["saison"] = np.log(bt["relativ_base"] / bt["naiv_letzter_monat"])
+    bt["brennstoff_base"] = regression(bt, MERKMALE_BRENNSTOFF)
+    bt["alle_base"] = regression(bt, MERKMALE_ALLE)
+    return bt
+
+
 SCHAETZER_BASE = {
     "modell_base": "Modell",
     "relativ_base": "Modell relativ",
+    "brennstoff_base": "STEO-Regression",
+    "alle_base": "Regression alle Merkmale",
     "naiv_letzter_monat": "letzter Monat",
     "naiv_12_monate": "12-Monats-Mittel",
     "naiv_vorjahresmonat": "Vorjahresmonat",
@@ -266,6 +317,12 @@ def kennzahlen(bt: pd.DataFrame, ziel: str, schaetzer: dict[str, str]) -> pd.Dat
     return pd.DataFrame(zeilen)
 
 
+GRAFIK_BASE = {
+    k: SCHAETZER_BASE[k]
+    for k in ("modell_base", "brennstoff_base", "naiv_letzter_monat", "naiv_12_monate")
+}
+
+
 def grafik_horizont(bt: pd.DataFrame, ziel: Path) -> None:
     d = bt.dropna(subset=["ist_base", *SCHAETZER_BASE])
     fig, axes = plt.subplots(1, 2, figsize=(11, 4.2), sharey=False)
@@ -278,14 +335,14 @@ def grafik_horizont(bt: pd.DataFrame, ziel: Path) -> None:
         strict=True,
     ):
         x = d[maske]
-        for col, name in SCHAETZER_BASE.items():
+        for col, name in GRAFIK_BASE.items():
             mae = (x[col] - x["ist_base"]).abs().groupby(x["h"]).mean()
             ax.plot(
                 mae.index,
                 mae.to_numpy(),
                 marker="o",
                 ms=3,
-                lw=2.2 if col == "modell_base" else 1.2,
+                lw=2.2 if col == "brennstoff_base" else 1.2,
                 label=name,
             )
         ax.set_title(titel)
@@ -336,6 +393,7 @@ def main() -> None:
     cap = leistung()
     bt = backtest(df, cap)
     ist = ist_monate(df)
+    bt = brennstoff_spalten(bt, args.cache, ist.index.max() + 1)
 
     tab = HIER / "tabellen"
     gra = HIER / "grafiken"

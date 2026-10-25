@@ -9,45 +9,52 @@ daher einfache Spot-Mittel.
 
 ## Ergebnis in Kürze
 
-**Das Modell schlägt den einfachsten Schätzer nicht.** Über 130 Stichtage (Januar 2016 bis
-Oktober 2026) und Horizonte von 1 bis 18 Monaten liegt die Base-Prognose gleichauf mit
-"Monatsmittel des letzten Monats fortschreiben". MAE in EUR/MWh:
+**Bester Schätzer: der letzte Monat, korrigiert um die Brennstoffprognose der EIA.** Die
+"STEO-Regression" schreibt das Monatsmittel des letzten Monats fort. Sie verschiebt es um die
+Änderung, die der damals aktuelle Short-Term Energy Outlook der EIA für Henry Hub und Brent
+erwartete. Bei 7–18 Monaten Vorlauf sinkt der Fehler damit um 4–7 % gegenüber dem bloßen
+Fortschreiben. Bei 1–6 Monaten ist der Vorteil klein (1–6 %). MAE in EUR/MWh, 130 Stichtage
+(Januar 2016 bis Oktober 2026):
 
-| Horizont (Monate) | Modell | Modell relativ | letzter Monat | 12-Monats-Mittel | Vorjahresmonat |
-|---|---|---|---|---|---|
-| 1–3 | 22,0 | 21,1 | 21,3 | 32,1 | 43,3 |
-| 4–6 | 31,7 | 30,4 | 31,2 | 39,4 | 44,2 |
-| 7–12 | 42,3 | 42,6 | 42,5 | 47,4 | 45,7 |
-| 13–18 | 55,9 | 55,0 | 53,9 | 53,8 | 58,2 |
+| Horizont (Monate) | STEO-Regression | Modell | Modell relativ | letzter Monat | 12-Monats-Mittel | Vorjahresmonat |
+|---|---|---|---|---|---|---|
+| 1–3 | **21,1** | 22,0 | 21,1 | 21,3 | 32,1 | 43,3 |
+| 4–6 | 30,7 | 31,7 | **30,4** | 31,2 | 39,4 | 44,2 |
+| 7–12 | **40,6** | 42,3 | 42,6 | 42,5 | 47,4 | 45,7 |
+| 13–18 | **51,6** | 55,9 | 55,0 | 53,9 | 53,8 | 58,2 |
 
 Ohne die Krise (Zielmonate 07/2021–06/2023):
 
-| Horizont (Monate) | Modell | Modell relativ | letzter Monat | 12-Monats-Mittel | Vorjahresmonat |
-|---|---|---|---|---|---|
-| 1–3 | 10,5 | 9,2 | 9,5 | 16,1 | 26,7 |
-| 4–6 | 14,6 | 14,4 | 15,1 | 21,0 | 27,4 |
-| 7–12 | 22,9 | 22,7 | 22,8 | 27,9 | 28,4 |
-| 13–18 | 35,7 | 35,5 | 33,0 | 32,8 | 36,3 |
+| Horizont (Monate) | STEO-Regression | Modell | Modell relativ | letzter Monat | 12-Monats-Mittel | Vorjahresmonat |
+|---|---|---|---|---|---|---|
+| 1–3 | **9,1** | 10,5 | 9,2 | 9,5 | 16,1 | 26,7 |
+| 4–6 | **14,2** | 14,6 | 14,4 | 15,1 | 21,0 | 27,4 |
+| 7–12 | **21,9** | 22,9 | 22,7 | 22,8 | 27,9 | 28,4 |
+| 13–18 | **30,9** | 35,7 | 35,5 | 33,0 | 32,8 | 36,3 |
 
-**Das Niveau verhält sich wie ein Zufallspfad.** Der beste Schätzer für die nächsten Monate ist
-der Stand von heute. Saison, Residuallast und Ausbau verschieben das Monatsmittel kaum
-messbar. Entscheidend ist der Brennstoffpreis, und für dessen künftigen Verlauf hat das Modell
-keine Information. Den Rest verdecken Wetter und Brennstoffschwankungen, die sich nicht
-vorhersehen lassen.
+**Das physikalische Modell allein bringt nichts.** Grenzkosten, Merit-Order und Residuallast
+("Modell") liegen gleichauf mit dem Fortschreiben des letzten Monats. Saison, Residuallast und
+Ausbau verschieben das Monatsmittel kaum messbar. Entscheidend ist der Brennstoffpreis.
 
-**Bei den Marktwerten hilft das Modell nur wenig.** Solar: Bei 7–18 Monaten liegt das Modell
+**Die STEO-Prognose trägt Information über die Richtung.** Die erwartete Änderung des
+Henry-Hub-Preises korreliert mit der späteren Änderung des deutschen Strompreises (0,2–0,6
+je nach Horizont), obwohl Henry Hub ein US-Gaspreis ist. Gasspeicher (Eurostat) und der
+Gaspreistrend der Weltbank verbessern nichts. Mit ihnen ("Regression alle Merkmale") wird die
+Prognose sogar schlechter.
+
+**Bei den Marktwerten hilft das Modell wenig.** Solar: Bei 7–18 Monaten liegt das Modell
 1–2 EUR/MWh vor dem naiven Schätzer (Wertfaktor des Vorjahresmonats mal Base des letzten
-Monats), bei 1–6 Monaten gleichauf. Wind an Land: kein Vorteil, bei 13–18 Monaten sogar
-schlechter. Die Tabellen dazu stehen in [tabellen/](tabellen/).
+Monats). Wind an Land: kein Vorteil. Die Tabellen dazu stehen in [tabellen/](tabellen/).
 
 **Folgerung:**
 
-- Für das Preisniveau als Merkmal in `ml_train` reicht vorerst der gleitende Spotpreis der
-  letzten 30 Tage. Ein eigener Dienst `pdb_niveau` lohnt sich in dieser Form nicht.
-- Besser werden kann die Prognose nur mit Information über den künftigen Brennstoffpreis.
-  Freie Kandidaten: EIA STEO (Brent, Henry Hub, monatlich bis Ende Y+1), die Prognosen der
-  Weltbank (Gas Europa, Kohle) und die Gasspeicherfüllstände von GIE AGSI+. Ob sie das
-  Niveau verbessern, wäre der nächste Backtest.
+- Als Niveau-Merkmal für `ml_train` taugen der gleitende Spotpreis der letzten 30 Tage und die
+  erwartete Brent- und Henry-Hub-Änderung aus dem aktuellen STEO. Den STEO als Quelle
+  einzubinden lohnt sich: Er ist gemeinfrei, erscheint monatlich als xlsx mit fester URL und
+  steht als Bulk-Download (`STEO.zip`) bereit.
+- Ein eigener Dienst für das physikalische Modell lohnt sich in dieser Form nicht.
+- Mehr als einige Prozent sind ohne Terminmarkt nicht zu erwarten. Den größten Teil des
+  Fehlers machen Brüche wie 2021/2022, die niemand vorhergesehen hat.
 
 ## Grafiken
 
@@ -55,8 +62,9 @@ schlechter. Die Tabellen dazu stehen in [tabellen/](tabellen/).
 
 ![Ist gegen Prognose](grafiken/verlauf.png)
 
-Die Prognose mit 12 Monaten Vorlauf läuft dem Ist um ein Jahr hinterher, genau wie ein
-fortgeschriebener Stand. 2022 hat sie den Anstieg verpasst, 2023 den Rückgang.
+Die Prognose des physikalischen Modells mit 12 Monaten Vorlauf läuft dem Ist um ein Jahr
+hinterher, genau wie ein fortgeschriebener Stand. 2022 hat sie den Anstieg verpasst, 2023 den
+Rückgang.
 
 ## Modell
 
@@ -79,45 +87,64 @@ An jedem Monatsersten t, nur mit Daten vor t:
 Monat). Ein falsch geschätztes C kürzt sich so heraus. Übrig bleibt nur, was das Modell über
 Saison und Ausbau sagt.
 
+**STEO-Regression:** Prognose = Monatsmittel des letzten Monats × exp(b1 · ΔHenry Hub + b2 ·
+ΔBrent). Δ ist die log-Änderung zwischen letztem Monat und Zielmonat in der STEO-Ausgabe, die
+im letzten Monat erschienen ist. b1 und b2 werden je Horizont per Ridge-Regression (λ = 1)
+geschätzt, ohne Achsenabschnitt. Trainiert wird nur auf Zielmonaten vor dem Stichtag, mit
+mindestens 24 Beispielen. Wo das fehlt (Anfang 2016–2018) oder der STEO den Zielmonat nicht
+mehr abdeckt (er reicht bis Ende Y+1), bleibt es beim letzten Monat.
+
+**Regression alle Merkmale:** wie oben, zusätzlich mit der Saison aus "Modell relativ", der
+Abweichung des EU-Gasspeichers vom Mittel der fünf Vorjahre (Eurostat, drei Monate Verzug)
+und dem Dreimonatstrend des europäischen Gaspreises (Weltbank, ein Monat Verzug).
+
 **Naive Schätzer:** Monatsmittel des letzten vollständigen Monats, Mittel der letzten 12
 Monate und derselbe Kalendermonat im letzten verfügbaren Jahr. Für die Marktwerte:
 Wertfaktor (Marktwert / Base) des Vorjahresmonats × Base des letzten Monats.
 
 ## Daten
 
-Alle Daten stammen aus der [Energy-Charts-API](https://api.energy-charts.info/) (Fraunhofer
-ISE), Lizenz CC BY 4.0:
+- [Energy-Charts-API](https://api.energy-charts.info/) (Fraunhofer ISE), CC BY 4.0:
+  `/price` (Day-Ahead DE-AT-LU bis 30.09.2018, danach DE-LU; Bundesnetzagentur | SMARD.de),
+  `/public_power` (Last, Wind an Land, Wind auf See, Solar; Viertelstunden zu Stundenmitteln)
+  und `/installed_power` (installierte Leistung je Monat)
+- [EIA Short-Term Energy Outlook](https://www.eia.gov/outlooks/steo/), alle 142 Ausgaben
+  Januar 2015 bis Oktober 2026 aus dem Archiv
+  (`https://www.eia.gov/outlooks/steo/archives/<mmmYY>_base.xlsx`), Tabelle 2, Reihen
+  `NGHHUUS` (Henry Hub) und `BREPUUS` (Brent). Die Prognosen sind Werk der EIA und gemeinfrei.
+  Die historischen Brent- und Henry-Hub-Werte darin stammen von Thomson Reuters. Verwendet
+  wird nur die prognostizierte Änderung.
+- [Eurostat `nrg_stk_gasm`](https://ec.europa.eu/eurostat/databrowser/view/nrg_stk_gasm/default/table),
+  Gasspeicher-Endbestand EU27, CC BY 4.0
+- [Weltbank Pink Sheet](https://www.worldbank.org/en/research/commodity-markets),
+  "Natural gas, Europe", CC BY 4.0
 
-- `/price`: Day-Ahead-Preis DE-AT-LU bis 30.09.2018, danach DE-LU (Bundesnetzagentur |
-  SMARD.de)
-- `/public_power`: Last, Wind an Land, Wind auf See, Solar für Deutschland (Viertelstunden,
-  zu Stundenmitteln zusammengefasst)
-- `/installed_power`: installierte Leistung je Monat (Solar DC, Wind an Land, Wind auf See)
-
-Aufruf aus dem Repository-Wurzelverzeichnis. Der erste Lauf lädt etwa 12 Jahre Stundendaten
-und dauert einige Minuten:
+Aufruf aus dem Repository-Wurzelverzeichnis. Der erste Lauf lädt etwa 12 Jahre Stundendaten und
+142 STEO-Ausgaben und dauert einige Minuten:
 
 ```
-uv run --no-project --with pandas --with matplotlib --with httpx \
+uv run --no-project --with pandas --with matplotlib --with httpx --with openpyxl \
     python docs/analysen/preisniveau-schaetzung/auswertung.py --cache /tmp/pn
 ```
 
-Ergebnisse: [tabellen/prognosen.csv](tabellen/prognosen.csv) (jede Prognose mit Ist und
-naiven Werten), [tabellen/kennzahlen_base.csv](tabellen/kennzahlen_base.csv),
+Ergebnisse: [tabellen/prognosen.csv](tabellen/prognosen.csv) (jede Prognose mit Merkmalen, Ist
+und naiven Werten), [tabellen/kennzahlen_base.csv](tabellen/kennzahlen_base.csv),
 [tabellen/kennzahlen_mw_solar.csv](tabellen/kennzahlen_mw_solar.csv),
 [tabellen/kennzahlen_mw_wind_onshore.csv](tabellen/kennzahlen_mw_wind_onshore.csv),
 [tabellen/ist_monate.csv](tabellen/ist_monate.csv).
 
 ## Einschränkungen
 
-- Die installierte Leistung ist der heutige Datenstand. Nachmeldungen im MaStR sind darin
-  schon enthalten, im Backtest wäre sie also etwas zu gut bekannt. Für das Ergebnis spielt das
-  kaum eine Rolle, weil das Modell ohnehin nicht besser ist als naiv.
+- Die STEO-Regression ist nicht unabhängig gewählt. Ein erster Ansatz mit Achsenabschnitt hat
+  den Preisanstieg 2016–2021 als Trend gelernt und war schlechter als naiv. Erst ohne
+  Achsenabschnitt war er besser. Getestet wurden außerdem Varianten mit nur Henry Hub, mit
+  stärkerer Regularisierung und mit 36-Monats-Fenster; sie liegen dazwischen. Der Vorteil von
+  4–7 % ist deshalb eher eine Obergrenze.
+- Die Prognosen überlappen sich: Zielmonate aus benachbarten Stichtagen sind nicht unabhängig.
+  Unterschiede von wenigen Prozent liegen nahe an dem, was der Zufall erklären kann.
+- Die installierte Leistung ist der heutige Datenstand. Nachmeldungen im MaStR sind darin schon
+  enthalten, im Backtest wäre sie also etwas zu gut bekannt.
 - Die Marktwerte sind mit der Ist-Erzeugung von Energy-Charts auf Stundenbasis gerechnet, nicht
   mit der Hochrechnung der ÜNB (siehe [marktwert-schaetzung](../marktwert-schaetzung/README.md)).
-- Die Prognosen überlappen sich: Zielmonate aus benachbarten Stichtagen sind nicht unabhängig.
-  Die Unterschiede zwischen Modell und "letzter Monat" liegen innerhalb dessen, was das
-  erklären kann.
-- Die Parameter (30 Tage, oberes Viertel, 2-GW-Klassen, 3 Vorjahre) wurden nicht optimiert.
-  Andere Werte könnten etwas besser abschneiden. An der Grundaussage ändert das
-  voraussichtlich nichts, weil auch "Modell relativ" nicht besser ist.
+- Die Parameter des physikalischen Modells (30 Tage, oberes Viertel, 2-GW-Klassen, 3 Vorjahre)
+  wurden nicht optimiert.
