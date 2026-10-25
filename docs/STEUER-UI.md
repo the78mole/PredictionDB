@@ -78,7 +78,7 @@ Umsetzung:
   eine per UI gefundene Einstellung jederzeit fest in die Konfiguration übernehmen und die UI
   wieder abschalten.
 
-**Sonderfall Lizenzschalter.** Für die Schalter `PDB_ALLOW_*` (unfreie Quellen) gilt zusätzlich:
+**Sonderfall Lizenzschalter (entschieden 2026-10-25).** Für die Schalter `PDB_ALLOW_*` (unfreie Quellen) gilt zusätzlich:
 Die UI kann **nur einschränken, nie lockern**. Eine unfreie Quelle läuft nur, wenn ihr
 `PDB_ALLOW_*` per ENV auf `true` steht; die UI kann sie dann für diese Instanz oder für einzelne
 Input-Sets wieder ausschließen, aber eine per ENV nicht freigegebene unfreie Quelle nicht
@@ -265,7 +265,7 @@ angegangen, wenn der Betrieb über ENV und CLI stabil läuft. Sinnvolle Reihenfo
 2. **Mehrere Instanzen:** Soll eine UI mehrere Stacks steuern (etwa VM und spätere Cloud-Instanz)
    oder bleibt es bei einer UI je Instanz? Vorschlag: eine je Instanz, gemeinsame Anmeldung über
    Federation.
-3. **Einschränken statt lockern (3.):** Bestätigen, dass unfreie Quellen ausschließlich per ENV
-   freigegeben werden können.
+3. ~~Einschränken statt lockern~~ **Entschieden (2026-10-25):** Unfreie Quellen werden
+   ausschließlich per ENV (`PDB_ALLOW_*`) freigegeben; die UI kann sie nur ausschließen (3.).
 4. **Auth-Zeitpunkt:** Ab wann Keycloak Pflicht wird, spätestens bevor die UI außerhalb des
    lokalen Netzes erreichbar ist.
