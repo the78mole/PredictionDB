@@ -42,7 +42,7 @@ Betreiber unter Nennung der Quellen frei veröffentlichen.
 | EU Weekly Oil Bulletin | Endkundenpreise Kraftstoffe, Heizöl | nein | CC BY 4.0 |
 | GIE AGSI+ (`gie_agsi`) | Gasspeicher je Gastag: Füllstand, Füllgrad, Ein-/Ausspeisung (DE, AT, NL, CZ, EU) | ja, kostenlos (siehe unten) | frei weiterverwendbar, Quellenangabe „GIE AGSI+“ Pflicht |
 | GIE ALSI (`gie_alsi`) | LNG-Terminals je Gastag: Bestand, Ausspeisung, Kapazität (DE, NL, BE, FR, EU) | wie AGSI+ | wie AGSI+, Quellenangabe „GIE ALSI“ |
-| Eurostat (`eurostat`) | Gas monatlich: Bestand, Bilanz (Import, Export, Verbrauch, Strom/Wärme), Importe nach Herkunft | nein | CC BY 4.0, „Eurostat“ |
+| Eurostat (`eurostat`) | monatlich: Gas (Bestand, Bilanz, Importe nach Herkunft), Rohöl-Einfuhrpreis DE, Öl (Bilanz, Bestände, Rohöl nach Herkunft), Steinkohle (Einfuhr, Kraftwerkseinsatz, EU-Bestand) | nein | CC BY 4.0, „Eurostat“ |
 
 ### Energy-Charts: Lizenz je Reihe
 
