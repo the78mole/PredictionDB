@@ -1,6 +1,6 @@
 # Strompreisprognose – Architekturentwurf
 
-**Version:** 0.10 (Entwurf) · **Stand:** 2026-10-23 · **Status:** zur Diskussion
+**Version:** 0.11 (Entwurf) · **Stand:** 2026-10-25 · **Status:** zur Diskussion
 
 ---
 
@@ -17,6 +17,7 @@
 - **Prognose eigener Anlagen:** Über die API lassen sich einzelne PV-, Windkraft- und Wasserkraftanlagen mit Stammdaten und optional einem Jahr Messwerten anlegen; sie bekommen eine Erzeugungsprognose aus denselben Wetterdaten, physikalisch gerechnet und mit den Messwerten kalibriert (7.6).
 - **Repository:** `the78mole/PredictionDB` (Nachfolger der dortigen `SPECIFICATION.md` v0.1).
 - **Python mit uv**, ein uv-Workspace mit mehreren Paketen; jeder Dienst ein eigenes, schlankes Image.
+- **Steuerung über ENV, Konfigurationsdateien und CLI.** Eine Steuer-UI (SPA mit FastAPI-Backend) ist optional zuschaltbar; ENV-Variablen haben immer Vorrang, das System läuft vollständig ohne sie ([STEUER-UI.md](STEUER-UI.md)).
 - **Cloud-Migration** ist von Anfang an mitgedacht: nur S3-API, Postgres-Protokoll und 12-Factor-Konfiguration. Garage → AWS S3/R2/Hetzner, Postgres → Managed Postgres (Timescale Cloud o. Ä.), Compose → Kubernetes/Nomad.
 
 ---
@@ -1365,7 +1366,7 @@ Geprüft am 2026-10-23 anhand der Bedingungen der Anbieter. Das ist eine technis
 2. **Mit dem Modell wird keine Datenreihe ausgeliefert**, die nicht frei weitergegeben werden darf. Das betrifft vor allem die Backtest-Datei: In die Veröffentlichung kommen nur Kennzahlen (MAE, Pinball-Loss je Ziel, Vorlauf und Jahreszeit), nicht `backtest.parquet` mit Ist-Preisen.
 3. **Jede Modellkarte nennt alle Quellen mit Lizenz und Quellenvermerk** sowie den Hinweis, dass die Daten verändert (aggregiert, abgeleitet) wurden.
 
-Umsetzung im Code (PR #36): `meta.source` hat die Felder `free` (Bedingungen erlauben freie Weitergabe) und `enabled` (im Betrieb freigegeben). Unfreie Quellen laufen nur mit `PDB_ALLOW_ENTSO_E`, `PDB_ALLOW_NETZTRANSPARENZ`, `PDB_ALLOW_EIA_REUTERS` bzw. `PDB_ALLOW_THE=true`, Vorgabe `false`; Energy-Charts (seit PR #38) und die ENTSO-E-Lastprognose (`entsoe_last`, PR #39) sind frei und laufen ohne Schalter. Übersicht für Betreiber: `docs/DATENQUELLEN-ZUGANG.md`. `energy.value_best` liest nur freigegebene Quellen, SMARD hat Rang 1. Ohne Netztransparenz rechnet die Quelle `pdb_marktwert` die Monats- und Jahresmarktwerte aus SMARD selbst. Auf einer Instanz mit Standardeinstellung ist damit jedes trainierte Modell veröffentlichbar. `pdb-model publish` prüft das trotzdem und bricht ab, wenn das Snapshot-Manifest eine Quelle mit `free = false` enthält.
+Umsetzung im Code (PR #36): `meta.source` hat die Felder `free` (Bedingungen erlauben freie Weitergabe) und `enabled` (im Betrieb freigegeben). Unfreie Quellen laufen nur mit `PDB_ALLOW_ENTSO_E`, `PDB_ALLOW_NETZTRANSPARENZ`, `PDB_ALLOW_EIA_REUTERS` bzw. `PDB_ALLOW_THE=true`, Vorgabe `false`; Energy-Charts (seit PR #38) und die ENTSO-E-Lastprognose (`entsoe_last`, PR #39) sind frei und laufen ohne Schalter. Übersicht für Betreiber: `docs/DATENQUELLEN-ZUGANG.md`. `energy.value_best` liest nur freigegebene Quellen, SMARD hat Rang 1. Ohne Netztransparenz rechnet die Quelle `pdb_marktwert` die Monats- und Jahresmarktwerte aus SMARD selbst. Auf einer Instanz mit Standardeinstellung ist damit jedes trainierte Modell veröffentlichbar. `pdb-model publish` prüft das trotzdem und bricht ab, wenn das Snapshot-Manifest eine Quelle mit `free = false` enthält. Die optionale Steuer-UI leitet daraus eine Lizenzklasse `frei`/`intern` je Modell ab und sperrt das Veröffentlichen von `intern`-Modellen serverseitig ([STEUER-UI.md](STEUER-UI.md) Kap. 5).
 
 Geprüft am 2026-10-23 anhand der Liste vom 18.10.2023: Von den genutzten ENTSO-E-Reihen ist nur die Day-Ahead-Lastprognose (6.1.b, Benchmark `load_da_forecast`) frei. Offen vor der ersten Veröffentlichung bleibt, bei Netztransparenz (ÜNB) die Nutzungsbedingungen zu erfragen.
 
@@ -1403,7 +1404,7 @@ champion-2027-03-06     # Rückkehr nach Winter
 champion                # aktuell
 ```
 
-Die Datums-Tags sind in UTC und nennen den Tag, an dem die Registry den Wechsel vollzogen hat (`registry promote`, 7.7 und `docs/PROGNOSEMODELLE.md` Kap. 7). Eine Krönung setzt in einem Schritt `champion` und `champion-JJJJ-MM-TT` am Neuen und `honor-JJJJ-MM-TT` am Abgelösten, beide mit demselben Datum. Ein mit `--force` erzwungener Wechsel bekommt dieselben Tags; der Grund steht in der Zeitleiste (7.11.4). Alle Tags erfüllen die OCI-Regeln (`[A-Za-z0-9_.-]`, höchstens 128 Zeichen). Die vollständige Geschichte eines Marktes lässt sich jederzeit aus der Tag-Liste rekonstruieren (`oras repo tags ghcr.io/the78mole/predictiondb-models/de_lu`), der Abgleich mit der Registry ist damit prüfbar.
+Die Datums-Tags sind in UTC und nennen den Tag, an dem die Registry den Wechsel vollzogen hat (`registry promote`, 7.7 und `docs/PROGNOSEMODELLE.md` Kap. 7; dieselbe Aktion bietet die optionale Steuer-UI, [STEUER-UI.md](STEUER-UI.md) Kap. 4.4). Eine Krönung setzt in einem Schritt `champion` und `champion-JJJJ-MM-TT` am Neuen und `honor-JJJJ-MM-TT` am Abgelösten, beide mit demselben Datum. Ein mit `--force` erzwungener Wechsel bekommt dieselben Tags; der Grund steht in der Zeitleiste (7.11.4). Alle Tags erfüllen die OCI-Regeln (`[A-Za-z0-9_.-]`, höchstens 128 Zeichen). Die vollständige Geschichte eines Marktes lässt sich jederzeit aus der Tag-Liste rekonstruieren (`oras repo tags ghcr.io/the78mole/predictiondb-models/de_lu`), der Abgleich mit der Registry ist damit prüfbar.
 
 #### 7.11.4 Beschreibung, Kennzahlen und Champion-Zeitleiste
 
@@ -1471,7 +1472,7 @@ flowchart TB
     U(("Browser / Clients")) --> API & MLF & GR
 ```
 
-\* über Compose-Profile (`extended`, `train`) nur bei Bedarf gestartet.
+\* über Compose-Profile (`extended`, `train`) nur bei Bedarf gestartet. Die optionale Steuer-UI (Dienst `control`) läuft im eigenen Profil `control` und ist im Bild nicht enthalten ([STEUER-UI.md](STEUER-UI.md) Kap. 7).
 
 
 ```yaml
@@ -1569,6 +1570,8 @@ Regeln:
 - Die VM selbst bekommt vorerst kein OpenBao-Token; die `.env` wird von der Entwicklungsmaschine
   aus geschrieben. Bei der Cloud-Migration (Kapitel 9) ersetzt ein Agent mit eigenem, nur
   lesendem Token oder der Secret-Store des Anbieters diesen Schritt.
+- Die optionale Steuer-UI legt keine Geheimnisse im Klartext in der Datenbank ab; auf der VM
+  zeigt sie nur an, ob ein Wert per `.env` gesetzt ist ([STEUER-UI.md](STEUER-UI.md) Kap. 6).
 
 ---
 
@@ -1612,6 +1615,7 @@ Datenabfluss beachten: Bei S3-Diensten mit Egress-Kosten (AWS) sollten Training 
 - **Alarme:** „Kein vollständiger GFS-Lauf seit 12 h“, „ENTSO-E-Daten älter als 2 h“, „Garage-Füllstand > 80 %“.
 - **Tests:** Unit-Tests für `.idx`-Parser und Range-Merging mit aufgezeichneten Fixtures; Integrationstest gegen echte Endpunkte als separater, manuell ausgelöster CI-Job (nicht in jedem Lauf, wegen Rate-Limits).
 - **Prognose-Dashboard:** Ausblick Last und Preis DE-LU von −2 bis +7 Tage und Vortagesvergleich mit Fehlerschlauch (7.10).
+- **Monitoring bleibt Grafana.** Die optionale Steuer-UI dient nur dem Steuern (Quellen, Input-Sets, Trainingsläufe, Champion/Challenger) und verlinkt für Verläufe auf Grafana und MLflow ([STEUER-UI.md](STEUER-UI.md)).
 - **Analysen:** Auswertungen laufen als Analyse-Jobs mit Ergebnisordner unter `docs/analysen/` (7.9).
 - **Lizenzen:** Quellenvermerke (DWD, ECMWF CC BY 4.0, SMARD/Energy-Charts CC BY 4.0, MaStR DL-DE BY 2.0) in API-Antworten und Dashboards mitführen.
 
@@ -1633,6 +1637,7 @@ Datenabfluss beachten: Bei S3-Diensten mit Egress-Kosten (AWS) sollten Training 
 | **7b – Datenaustausch** | `wx-publish` (Silber nach GHCR, Backfill monatsweise, cosign), `wx-import` als Quelle `ghcr` mit Fallback auf eigenen Download; vorher Quantisierung Silber gegen Bronze prüfen und GHCR-Grenzen verifizieren (5.5) | neue Instanzen ohne GFS-Download |
 | **7c – Modell-Releases** | Prüfung `meta.source.free` beim Veröffentlichen, `pdb-model publish/pull`, Modellkarte aus `manifest.json`, Tags und Champion-Zeitleiste (7.11); erst ab drei Jahren GFS-Trainingsdaten | Modelle ohne eigenes Training nutzbar |
 | **8 – API & Härtung** | FastAPI, Auth, Alarme, Backups, Cloud-Probelauf | betriebsbereit |
+| **später – Steuer-UI** | optionales Dashboard mit FastAPI-Backend `control`, ENV-Vorrang, Lizenzklasse je Modell, später Keycloak/OIDC ([STEUER-UI.md](STEUER-UI.md) Kap. 9) | Bedienung ohne CLI, abschaltbar |
 | **später – Wärme/Kälte** | Wärme-/Kältelast für Gebäude und Netze, Strombedarf von Wärmepumpen, Betriebsoptimierung (7.8); Architektur noch offen | geplant |
 
 ```mermaid
@@ -1664,3 +1669,4 @@ flowchart LR
 8. **Anlagen-API (7.6):** Nur eigene Anlagen oder auch Anlagen weiterer Nutzer? Mehrere Nutzer bzw. fremde Anlagen fallen nicht unter den Additional Use Grant (nur intern). Lizenz der Turbinen-Leistungskurven (oedb) vor Übernahme prüfen.
 9. ~~Datenlizenz der GHCR-Artefakte~~ **Entschieden (2026-10-23):** Die aufbereiteten Daten in GHCR (Silber, Bronze, Features, 5.5) stehen unter CC BY 4.0, mit Weitergabe der Quellenvermerke; die BSL gilt nur für den Code. Namensraum: unter dem Konto `the78mole` (`ghcr.io/the78mole/predictiondb-data/*` und `…/predictiondb-models/<markt>`), nicht unter der Bizzmark UG.
 10. ~~Lizenz veröffentlichter Modelle~~ **Entschieden (2026-10-23):** CC BY 4.0, wie die Daten. Die Modelle sollen frei sein; Voraussetzung ist das Training nur aus freien Quellen (7.11.1). Offen bleiben die Bedingungen von Netztransparenz; bis dahin rechnet `pdb_marktwert` die Marktwerte selbst.
+11. **Steuer-UI (optional):** Konzept in [STEUER-UI.md](STEUER-UI.md), noch nicht umgesetzt. Festgelegt: ENV-Variablen haben Vorrang, die UI ist zuschaltbar und das System läuft ohne sie; Grafana bleibt für Monitoring; Auth zunächst zurückgestellt, später Keycloak per OIDC mit Rollen aus Claims. Entschieden (2026-10-25): Unfreie Quellen werden ausschließlich per ENV (`PDB_ALLOW_*`) freigegeben, die UI kann sie nur ausschließen. Offen: SPA-Framework, eine UI je Instanz oder instanzübergreifend, Zeitpunkt der Auth-Pflicht (STEUER-UI Kap. 10).
