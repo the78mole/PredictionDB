@@ -1,0 +1,46 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "dependencyDashboard": true,
+  "dependencyDashboardTitle": "📦 Dependency Dashboard",
+  "labels": ["dependencies"],
+  "timezone": "Europe/Berlin",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"]
+  },
+  "packageRules": [
+    {
+      "description": "Python-Pakete (uv-Workspace): Minor und Patch in einem PR",
+      "matchManagers": ["pep621"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "Python-Abhängigkeiten (minor/patch)",
+      "groupSlug": "python-minor-patch"
+    },
+    {
+      "description": "Container-Images (Dockerfiles, Compose): Minor und Patch in einem PR",
+      "matchManagers": ["dockerfile", "docker-compose"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "Container-Images (minor/patch)",
+      "groupSlug": "docker-minor-patch"
+    },
+    {
+      "description": "GitHub Actions: Minor und Patch in einem PR",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "GitHub Actions (minor/patch)",
+      "groupSlug": "actions-minor-patch"
+    },
+    {
+      "description": "Python-Laufzeit (Basis-Image, .python-version) eigenständig, weil ein Sprung 3.14 -> 3.15 für Docker als Minor zählt",
+      "matchDepNames": ["python"],
+      "groupName": "Python-Laufzeit",
+      "groupSlug": "python-runtime"
+    },
+    {
+      "description": "Major-Updates bleiben einzelne PRs und werden markiert",
+      "matchUpdateTypes": ["major"],
+      "addLabels": ["major"]
+    }
+  ]
+}
