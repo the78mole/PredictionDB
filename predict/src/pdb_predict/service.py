@@ -35,15 +35,16 @@ SCHEMA = "predictiondb.forecast.v1"
 
 
 def needs(pkg: ModelPackage, issue: datetime) -> dict[str, Window]:
-    """Zeitfenster je Reihe: Lags 45 Tage, Reihen der ``asof``-Gruppen so weit wie nötig."""
+    """Zeitfenster je Reihe: Lags 45 Tage, Reihen der ``asof``- und ``outlook``-Gruppen so weit
+    wie nötig."""
     cfg = pkg.cfg
     end = issue + timedelta(days=max(cfg.issue.lead_days) + 2)
     lag_start = issue - timedelta(days=45)
     asof = {
         c
         for name in pkg.model.variant.groups
-        if (g := cfg.series_groups.get(name)) is not None and g.mode == "asof"
-        for c in g.codes
+        if (g := cfg.series_groups.get(name)) is not None and g.mode in ("asof", "outlook")
+        for c in g.stored_codes
     }
     long_start = issue - timedelta(days=int(pkg.info.get("lookback_days", 45)))
     return {c: Window(long_start if c in asof else lag_start, end) for c in pkg.codes}

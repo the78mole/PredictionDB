@@ -38,6 +38,7 @@ from energy_ingest.sources.marktwert import Marktwert
 from energy_ingest.sources.netztransparenz import Netztransparenz
 from energy_ingest.sources.oil_bulletin import OilBulletin
 from energy_ingest.sources.smard import Smard
+from energy_ingest.sources.steo import EiaSteo
 from energy_ingest.sources.the import The
 from energy_ingest.sources.worldbank import WorldBank
 from energy_ingest.store import EnergyStore
@@ -134,6 +135,8 @@ def build_sources(
             sources.append(Eia(http, eia_key, eia_bulk))
         elif code == "eia_reuters":
             sources.append(EiaReuters(http, eia_key, eia_bulk))
+        elif code == "eia_steo":
+            sources.append(EiaSteo(http))
         elif code == "ecb":
             sources.append(Ecb(http))
         elif code == "worldbank":

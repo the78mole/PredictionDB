@@ -42,8 +42,13 @@
       "automerge": true
     },
     {
-      "description": "Python-Laufzeit (Basis-Image, .python-version) eigenständig, weil ein Sprung 3.14 -> 3.15 für Docker als Minor zählt",
+      "description": [
+        "Python-Laufzeit (Basis-Image, .python-version) eigenständig, weil ein Sprung 3.14 -> 3.15 für Docker als Minor zählt.",
+        "MERKER: auf 3.14.x festgehalten, weil eccodeslib/eckitlib noch keine Wheels für 3.15 liefern (https://github.com/ecmwf/eccodes/issues/629).",
+        "allowedVersions entfernen, sobald alle Abhängigkeiten 3.15 können (Issue #84)."
+      ],
       "matchDepNames": ["python"],
+      "allowedVersions": "/^3\\.14(\\.\\d+)?(-|$)/",
       "groupName": "Python-Laufzeit",
       "groupSlug": "python-runtime",
       "automerge": false

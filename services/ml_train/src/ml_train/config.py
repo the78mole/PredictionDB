@@ -63,15 +63,28 @@ class SeriesGroup(BaseModel):
     - ``asof``: letzter zum Ausgabezeitpunkt veröffentlichter Wert (Spalte ``published`` im
       Snapshot) und seine Änderung gegenüber dem Stand ``change_days`` Tage davor; für Tages-,
       Wochen- und Monatswerte wie Brennstoffpreise und Marktwerte.
+    - ``outlook``: erwartete Änderung aus der jüngsten veröffentlichten Ausgabe einer
+      Monatsprognose (EIA STEO). ``codes`` sind die Stämme (``steo_brent``), gespeichert je
+      Vorlauf k als ``<stamm>_h<kk>``; Merkmal ``ol_<stamm>_h<k>`` = log(Prognose Vorlauf k /
+      Prognose laufender Monat) für jedes k in ``horizons``.
     """
 
-    mode: Literal["lags", "forecast", "asof"]
+    mode: Literal["lags", "forecast", "asof", "outlook"]
     codes: list[str]
     lags: list[LagKind] = Field(
         default_factory=lambda: list[LagKind](["day", "mean_day", "mean_7d"])
     )
     known_local_hour: int = Field(default=10, ge=0, le=23)
     change_days: int = Field(default=28, ge=1)
+    horizons: list[int] = Field(default_factory=lambda: [1, 2, 3])
+
+    @property
+    def stored_codes(self) -> list[str]:
+        """Reihen in ``energy.value_best``, die die Gruppe braucht."""
+        if self.mode != "outlook":
+            return list(self.codes)
+        ks = sorted({0, *self.horizons})
+        return [f"{c}_h{k:02d}" for c in self.codes for k in ks]
 
 
 class LgbmParams(BaseModel):
@@ -156,7 +169,7 @@ class ModelConfig(BaseModel):
     @property
     def series_codes(self) -> list[str]:
         """Alle Reihen der Reihengruppen (für den Snapshot)."""
-        return list(dict.fromkeys(c for g in self.series_groups.values() for c in g.codes))
+        return list(dict.fromkeys(c for g in self.series_groups.values() for c in g.stored_codes))
 
     @property
     def targets(self) -> list[str]:

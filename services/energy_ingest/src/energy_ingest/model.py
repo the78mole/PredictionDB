@@ -36,6 +36,8 @@ GAS_DAY_DELAY = timedelta(hours=14)
 MONTHLY_STAT_DELAY = timedelta(days=90)
 # Öl- und Kohlebilanz der EU und Kohle je Land: Eurostat braucht bis zu vier Monate
 MONTHLY_STAT_DELAY_SLOW = timedelta(days=150)
+# Short-Term Energy Outlook der EIA: erscheint in der ersten Monatshälfte (meist 6.-12.)
+OUTLOOK_DELAY = timedelta(days=14)
 
 UNIT_MW = "MW"
 UNIT_EUR_MWH = "EUR/MWh"
@@ -162,6 +164,17 @@ COAL_BALANCE: dict[str, str] = {
     "consumption": "GID_OBS",  # Bruttoinlandslieferungen (DE meldet hier die Einfuhr)
     "power_heat": "TI_EHG_MAP",  # Einsatz in Strom- und Wärmeerzeugung (Versorger)
 }
+#: Prognosen des EIA Short-Term Energy Outlook: Kürzel im Reihen-Code -> Einheit. Je Ausgabe
+#: (Zeitstempel = Ausgabemonat) und Vorlauf k Monate eine Reihe ``steo_<kürzel>_h<kk>`` mit
+#: der Prognose für den Monat Ausgabemonat + k. So bleibt jede Ausgabe erhalten (``energy.value``
+#: hat nur einen Wert je Reihe und Zeitstempel). Der STEO reicht bis Dezember des Folgejahrs,
+#: also 12 bis 23 Monate.
+OUTLOOK_SERIES: dict[str, str] = {"brent": UNIT_USD_BBL, "henry_hub": UNIT_USD_MMBTU}
+OUTLOOK_HORIZONS = range(24)
+
+
+def outlook_code(name: str, horizon: int) -> str:
+    return f"steo_{name}_h{horizon:02d}"
 
 
 class Kind(StrEnum):
@@ -182,6 +195,7 @@ class Kind(StrEnum):
     PRICE_MONTHLY_STAT = "price_monthly_stat"  # Monatsmittel aus der Statistik (Eurostat)
     STOCK_MONTHLY_SLOW = "stock_monthly_slow"  # wie STOCK_MONTHLY, später veröffentlicht
     FLOW_MONTHLY_SLOW = "flow_monthly_slow"  # wie FLOW_MONTHLY, später veröffentlicht
+    OUTLOOK_MONTHLY = "outlook_monthly"  # Prognose je Ausgabe, Zeitstempel = Ausgabemonat (STEO)
 
 
 @dataclass(frozen=True)
@@ -355,6 +369,12 @@ SERIES: dict[str, SeriesInfo] = {
         ),
         # Kohlebestände meldet DE seit 2019 nicht mehr (Wert 0), daher nur EU
         SeriesInfo("coal_hard_stock_eu_m", Kind.STOCK_MONTHLY_SLOW, UNIT_KT),
+        # Prognosen der EIA (STEO) je Ausgabe und Vorlauf
+        *(
+            SeriesInfo(outlook_code(n, k), Kind.OUTLOOK_MONTHLY, unit)
+            for n, unit in OUTLOOK_SERIES.items()
+            for k in OUTLOOK_HORIZONS
+        ),
     ]
 }
 
@@ -391,6 +411,7 @@ def estimate_published(kind: Kind, ts: datetime, resolution: timedelta) -> datet
     - Monatsmengen und -preise (Eurostat, Zeitstempel am Monatsbeginn): 90 Tage nach
       Monatsende.
     - Öl- und Kohlebilanz der EU, Kohle je Land (Eurostat): wie oben, aber 150 Tage.
+    - STEO-Prognosen (Zeitstempel am Beginn des Ausgabemonats): 14 Tage danach.
     """
     match kind:
         case Kind.PRICE_DA:
@@ -421,6 +442,8 @@ def estimate_published(kind: Kind, ts: datetime, resolution: timedelta) -> datet
             return ts + MONTHLY_STAT_DELAY_SLOW
         case Kind.FLOW_MONTHLY_SLOW:
             return next_period(ts, 1) + MONTHLY_STAT_DELAY_SLOW
+        case Kind.OUTLOOK_MONTHLY:
+            return ts + OUTLOOK_DELAY
 
 
 def published_at(kind: Kind, ts: datetime, resolution: timedelta, fetched: datetime) -> datetime:

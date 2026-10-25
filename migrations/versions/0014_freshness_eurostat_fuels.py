@@ -35,7 +35,8 @@ _VIEW = """
       ) last ON true"""
 
 _SLOW = r"""WHEN s.resolution <= interval '31 days' AND src.code = 'eurostat'
-                     AND (s.code LIKE 'coal\_%' OR (s.code LIKE 'oil\_%' AND s.code LIKE '%\_eu\_m'))
+                     AND (s.code LIKE 'coal\_%'
+                          OR (s.code LIKE 'oil\_%' AND s.code LIKE '%\_eu\_m'))
                      THEN interval '240 days'
                 """
 

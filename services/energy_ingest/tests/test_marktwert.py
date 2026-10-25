@@ -110,6 +110,7 @@ def test_unfree_sources_need_allow(monkeypatch: pytest.MonkeyPatch) -> None:
         "smard",
         "energy_charts",
         "eia",
+        "eia_steo",
         "ecb",
         "worldbank",
         "oil_bulletin",

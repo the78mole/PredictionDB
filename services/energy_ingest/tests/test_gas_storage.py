@@ -388,3 +388,18 @@ def test_eurostat_coal(make_http: MakeHttp) -> None:
     stock = es.fetch("coal_stock", start, start + 273 * DAY)
     assert [s.code for s in stock] == ["coal_hard_stock_eu_m"]
     assert stock[0].info.unit == "kt"
+
+
+@pytest.mark.parametrize("status", [200, 403])
+def test_gie_error_hides_key(make_http: MakeHttp, status: int) -> None:
+    key = "0123456789abcdef0123456789abcdef"
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        body = {"last_page": 0, "error": f"key {key} blocked", "message": key, "data": []}
+        return httpx.Response(status, json=body)
+
+    with pytest.raises(SourceError) as info:
+        GieAgsi(make_http(handler), key).fetch("storage_de", GAS_DAY_22, GAS_DAY_22 + DAY)
+    assert key not in str(info.value)
+    assert "***" in str(info.value)
+    assert info.value.__cause__ is None and info.value.__suppress_context__
