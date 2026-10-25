@@ -1,5 +1,15 @@
 # PredictionDB
 
+[![CI](https://github.com/the78mole/PredictionDB/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/the78mole/PredictionDB/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/the78mole/PredictionDB?filter=v*&sort=semver)](https://github.com/the78mole/PredictionDB/releases)
+[![Lizenz: BSL 1.1](https://img.shields.io/badge/Lizenz-BSL%201.1-blue)](LICENSE)
+[![Python 3.14](https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white)](.python-version)
+[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](.pre-commit-config.yaml)
+[![Renovate](https://img.shields.io/badge/Renovate-enabled-brightgreen?logo=renovatebot)](renovate.json)
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/the78mole/PredictionDB?utm_source=oss&utm_medium=github&utm_campaign=the78mole%2FPredictionDB&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+
 Strombedarfs- und Strompreisprognose für Deutschland auf Basis kostenfreier Wettermodelle
 (NOAA GFS u. a.) und Energiedaten. Architektur: [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md), Prognosemodelle:
 [docs/PROGNOSEMODELLE.md](docs/PROGNOSEMODELLE.md). Quellen mit

@@ -1,0 +1,145 @@
+# CodeRabbit: automatische Reviews für Pull Requests.
+# Schema: https://docs.coderabbit.ai/reference/configuration
+#
+# CodeRabbit ist ein reiner Hinweisgeber. Es setzt keinen Commit-Status und
+# ist kein Pflicht-Check, damit der Automerge von Renovate nie auf ein Review
+# wartet (Renovate prüft wegen platformAutomerge=false alle Checks selbst).
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+language: de-DE
+tone_instructions: >-
+  Sachlich, knapp und auf Deutsch. Nur Hinweise mit echtem Nutzen: Fehler,
+  Datenverlust, Lizenzverstöße, Sicherheitslücken, fehlende Tests. Keine
+  Stilkritik, die ruff oder mypy schon abdecken.
+early_access: false
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  review_status: true
+  # Kein Commit-Status, sonst warten Renovate-Automerges darauf.
+  commit_status: false
+  fail_commit_status: false
+  collapse_walkthrough: true
+  changed_files_summary: true
+  sequence_diagrams: false
+  poem: false
+  suggested_labels: false
+  suggested_reviewers: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+    # Renovate-PRs nicht reviewen: sie werden bei grünen Checks automatisch
+    # gemergt, ein Review bringt dort nichts.
+    ignore_usernames:
+      - renovate[bot]
+      - renovate
+    ignore_title_keywords:
+      - "chore(deps)"
+
+  path_filters:
+    - "!uv.lock"
+    - "!**/uv.lock"
+    # Ergebnisse der Analyse-Skripte (Grafiken, Tabellen, PDFs) sind erzeugt.
+    - "!docs/analysen/**/grafiken/**"
+    - "!docs/analysen/**/tabellen/**"
+    - "!**/*.pdf"
+    - "!**/*.png"
+    - "!**/*.csv"
+    - "!**/*.parquet"
+    - "!**/*.grib2"
+    - "!services/**/tests/fixtures/**"
+
+  path_instructions:
+    - path: "**/*.py"
+      instructions: |
+        Python 3.14 im uv-Workspace. ruff (Lint und Format) und mypy laufen
+        über pre-commit und in der CI; Formatierung und Importreihenfolge
+        nicht kommentieren. Achte auf Typen an öffentlichen Funktionen,
+        Zeitzonen (Zeitstempel immer timezone-aware, UTC in der Datenbank),
+        Einheiten (MW/MWh, EUR/MWh) und robuste Wiederholungen bei HTTP-
+        Abrufen. Docstrings und Kommentare sind auf Deutsch.
+    - path: "services/energy_ingest/src/energy_ingest/sources/**"
+      instructions: |
+        Datenquellen. Leitprinzip: Modelle und Daten werden öffentlich frei
+        veröffentlicht. Prüfe bei neuen oder geänderten Quellen:
+        - Abruf vollautomatisch über eine API, kein Parsing von PDFs oder
+          HTML-Seiten, keine manuell gepflegten CSV-Dateien.
+        - Ist die Lizenz frei (oder erlaubt sie nicht-kommerzielle Nutzung
+          ausdrücklich), läuft die Quelle ohne Schalter. Unfreie Reihen
+          dürfen nur hinter einem Schalter PDB_ALLOW_* (Vorgabe false)
+          laufen; fehlt dieser, ist das ein Fehler.
+        - Lizenz und Herkunft der Reihe sind im Modul-Docstring genannt.
+    - path: "services/energy_ingest/src/energy_ingest/config.py"
+      instructions: |
+        Neue PDB_ALLOW_*-Schalter müssen mit false vorbelegt sein und in
+        .env.example sowie docs/DATENQUELLEN-ZUGANG.md auftauchen.
+    - path: "migrations/versions/**"
+      instructions: |
+        Alembic-Migrationen. Prüfe, dass downgrade() die Änderung umkehrt,
+        große Tabellen nicht unnötig umgeschrieben werden und Indizes zu den
+        Abfragen passen. Bereits gemergte Migrationen nicht ändern.
+    - path: "config/grafana/dashboards/**/*.json"
+      instructions: |
+        Provisionierte Grafana-Dashboards. Prüfe nur die SQL-Abfragen
+        (Zeitfilter $__timeFilter, Zeitzonen, Einheiten) und die
+        Panel-Einheiten. Layout-Koordinaten (gridPos), ids und Versionsfelder
+        nicht kommentieren.
+    - path: "docs/analysen/*/auswertung.py"
+      instructions: |
+        Analyse-Skripte, die Grafiken und Tabellen im selben Ordner erzeugen.
+        Prüfe Nachvollziehbarkeit und ob die Aussagen in der README des
+        Ordners zu den berechneten Zahlen passen.
+    - path: "**/*.md"
+      instructions: |
+        Doku auf Deutsch. Prüfe inhaltliche Stimmigkeit mit dem Code (Namen
+        von Umgebungsvariablen, Diensten, Befehlen), nicht Stil oder
+        Rechtschreibung. Den Namen des Altsystems nicht wieder einführen.
+    - path: "{compose.yaml,compose.override.yaml,predict/compose.yaml}"
+      instructions: |
+        Docker Compose für eine VM auf Proxmox. Geheimnisse nur über die
+        .env, keine Klartext-Passwörter. Images mit festem Tag.
+    - path: ".github/workflows/**"
+      instructions: |
+        Actions mit festen Versionen, minimale permissions je Job. Releases
+        laufen über Conventional Commits.
+
+  pre_merge_checks:
+    docstrings:
+      mode: "off"
+    title:
+      mode: warning
+      requirements: |
+        Conventional Commit: typ(scope): Beschreibung, Typ einer von feat,
+        fix, docs, chore, refactor, test, ci, build, perf. Beschreibung auf
+        Deutsch, klein beginnend, ohne Punkt am Ende.
+    description:
+      mode: "off"
+
+  tools:
+    ruff:
+      enabled: true
+    hadolint:
+      enabled: true
+    actionlint:
+      enabled: true
+    gitleaks:
+      enabled: true
+    yamllint:
+      enabled: true
+    shellcheck:
+      enabled: true
+    markdownlint:
+      enabled: false
+    languagetool:
+      enabled: false
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  opt_out: false
