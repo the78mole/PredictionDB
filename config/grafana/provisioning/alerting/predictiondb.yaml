@@ -144,7 +144,8 @@ groups:
 
       # Quelle hat bereits gespeicherte Ist-Lastwerte nachträglich korrigiert oder entfernt
       # (energy.value_revision). Nur Änderungen über 1 % an Werten, die beim Abruf schon älter
-      # als 2 h waren, damit das laufende Auffüllen frischer Viertelstunden nicht meldet.
+      # als 12 h waren: Energy-Charts liefert frische Viertelstunden zunächst vorläufig (bis
+      # +20 % binnen weniger Stunden), echte Nachbesserungen kommen erst später.
       - uid: pdb-load-revised
         title: Datenquelle - Ist-Last korrigiert
         condition: B
@@ -165,7 +166,7 @@ groups:
                     JOIN meta.source src ON src.source_id = s.source_id
                    WHERE s.code = 'load_actual' AND src.enabled
                      AND r.revised_at > now() - interval '24 hours'
-                     AND r.ts < r.revised_at - interval '2 hours'
+                     AND r.ts < r.revised_at - interval '12 hours'
                      AND (r.old_value IS NULL OR r.new_value IS NULL
                           OR abs(r.new_value - r.old_value) > 0.01 * abs(r.old_value))
                 )
