@@ -43,7 +43,7 @@ env:
 jobs:
   plan:
     name: Lücken planen
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       block1: ${{ steps.plan.outputs.block1 }}
       block2: ${{ steps.plan.outputs.block2 }}

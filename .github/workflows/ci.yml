@@ -16,7 +16,7 @@ permissions:
 jobs:
   lint:
     name: Lint und Typen
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.2
@@ -30,7 +30,7 @@ jobs:
 
   test:
     name: Unit-Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.2
@@ -41,7 +41,7 @@ jobs:
 
   stack:
     name: Image und Compose-Stack
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.2
