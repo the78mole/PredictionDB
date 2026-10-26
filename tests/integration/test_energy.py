@@ -135,6 +135,7 @@ def test_prune_clears_removed_values(engine: Engine) -> None:
 
     # viele fehlende Werte auf einmal: eher gestörte Antwort, nichts leeren
     short = load([100.0] * 100)
+    del short.points[50]  # bleibt entfernt, sonst wäre das Wiederherstellen eine Änderung
     del short.points[10:40]
     store.write(sid, [short], fetched, prune=True)
     assert len(revisions(engine, sid)) == 1
