@@ -235,7 +235,7 @@ def run(args: argparse.Namespace, settings: EnergySettings) -> int:
             try:
                 ingestor.check(days=2)
                 if not args.no_backfill:
-                    bf = ingestor.backfill_step()
+                    bf = ingestor.backfill_step(deadline=started + args.watch)
                     if bf:
                         log.info("energy.backfill_step", **_summary(bf))
             except Exception:

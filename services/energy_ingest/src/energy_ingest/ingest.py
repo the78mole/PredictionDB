@@ -9,6 +9,7 @@ Formatabweichungen und anhaltenden Fehlern.
 
 from __future__ import annotations
 
+import time
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from itertools import zip_longest
@@ -251,14 +252,23 @@ class EnergyIngestor:
         force: bool = False,
         limit: int | None = None,
         final_only: bool = False,
+        deadline: float | None = None,
     ) -> list[DatasetResult]:
+        """Lädt fehlende Blöcke in ``[start, end)``. Mit ``deadline`` (``time.monotonic()``)
+        endet der Lauf nach dem Block, in dem die Frist abläuft; mindestens ein Block wird
+        immer geladen, damit die Historie auch bei langsamen Quellen vorankommt."""
         now = now or datetime.now(UTC)
         final = now - timedelta(days=self.settings.final_after_days)
         todo = self.pending(
             start, end, now=now, datasets=datasets, force=force, final_only=final_only
         )
-        results = []
+        results: list[DatasetResult] = []
         for t in todo[:limit]:
+            if results and deadline is not None and time.monotonic() >= deadline:
+                log.info(
+                    "energy.backfill_deadline", done=len(results), left=len(todo) - len(results)
+                )
+                break
             res = self.fetch(t.source, t.dataset, t.start, t.end, now)
             results.append(res)
             # Als geladen gilt nur, was lückenlos ab Blockbeginn (oder ab dem bisher geladenen
@@ -276,8 +286,14 @@ class EnergyIngestor:
                 )
         return results
 
-    def backfill_step(self, now: datetime | None = None) -> list[DatasetResult]:
-        """Ein Häppchen Historie im Dauerbetrieb (``backfill_chunks_per_cycle`` Blöcke)."""
+    def backfill_step(
+        self, now: datetime | None = None, deadline: float | None = None
+    ) -> list[DatasetResult]:
+        """Ein Häppchen Historie im Dauerbetrieb (``backfill_chunks_per_cycle`` Blöcke).
+
+        ``deadline`` ist das Ende des Abgleich-Intervalls: Der Backfill darf den nächsten
+        Abgleich nicht verzögern, sonst kommen z. B. die Day-Ahead-Preise erst eine Stunde
+        nach der Auktion an (2026-10-26: 48 Blöcke à ~35 s hielten den Zyklus über 60 min)."""
         now = now or datetime.now(UTC)
         return self.backfill(
             self.settings.backfill_from,
@@ -285,6 +301,7 @@ class EnergyIngestor:
             now=now,
             limit=self.settings.backfill_chunks_per_cycle,
             final_only=True,
+            deadline=deadline,
         )
 
     def check(self, now: datetime | None = None, days: int = 7) -> list[Deviation]:

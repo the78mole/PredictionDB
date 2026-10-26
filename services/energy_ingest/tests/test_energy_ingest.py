@@ -1,3 +1,4 @@
+import time
 from datetime import UTC, datetime, timedelta
 from itertools import pairwise
 
@@ -222,6 +223,16 @@ def test_backfill_step_newest_first_round_robin() -> None:
     # nur endgültige Blöcke, neueste zuerst
     assert results[0].end <= NOW - timedelta(days=7)
     assert results[0].start >= results[2].start
+
+
+def test_backfill_step_stops_at_deadline() -> None:
+    """Der Backfill hält den nächsten Abgleich nicht auf: Nach Ablauf der Frist ist Schluss,
+    ein Block wird aber immer geladen, damit die Historie vorankommt."""
+    src = FakeSource("a")
+    settings = EnergySettings(backfill_from=NOW - timedelta(days=100), backfill_chunks_per_cycle=4)
+    ing = EnergyIngestor([src], FakeStore(), settings)
+    assert len(ing.backfill_step(NOW, deadline=time.monotonic() - 1)) == 1
+    assert len(ing.backfill_step(NOW, deadline=time.monotonic() + 3600)) == 4
 
 
 def test_failed_chunk_not_marked() -> None:
