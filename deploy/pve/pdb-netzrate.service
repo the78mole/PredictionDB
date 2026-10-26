@@ -1,0 +1,6 @@
+[Unit]
+Description=PredictionDB: Bandbreite der VM nach Tageszeit setzen
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/pdb-netzrate.sh
