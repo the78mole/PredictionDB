@@ -34,6 +34,7 @@ class FakeStore:
         self.values: dict[tuple[datetime, int, int, datetime], float] = {}
         self.done: dict[tuple[datetime, str], dict[str, Any]] = {}
         self.features: dict[str, int] = {}
+        self.silver: dict[datetime, tuple[str, str]] = {}
 
     def source_id(self, code: str) -> int:
         return 3
@@ -75,6 +76,10 @@ class FakeStore:
     def mark_processed(self, source_id, run, version, fv, key, n, stats, bronze) -> None:  # type: ignore[no-untyped-def]
         self.done[(run, version)] = {"features_version": fv, "key": key, "n": n, "stats": stats}
 
+    def mark_silver(self, source_id, runs, status, origin) -> None:  # type: ignore[no-untyped-def]
+        for r in runs:
+            self.silver[r] = (status, origin)
+
 
 @pytest.fixture
 def setup():  # type: ignore[no-untyped-def]
@@ -107,6 +112,7 @@ def test_process_writes_features_and_skips_afterwards(setup) -> None:  # type: i
     done = store.done[(RUN, "v2099Q1")]
     assert done["features_version"] == FEATURES_VERSION and done["n"] == r.n_values > 0
     assert done["key"] == "gfs/0p25/2099/01/02/06.zarr"
+    assert store.silver == {RUN: ("present", "bronze")}
     # biomass ist nicht konfiguriert und fehlt
     assert {rid for (_, _, rid, _) in store.values} == {11, 12}
 
@@ -183,6 +189,7 @@ def test_imported_silver_without_bronze(setup) -> None:  # type: ignore[no-untyp
     r = pipeline.process(RUN)
     assert (r.status, r.silver) == ("processed", "reused")
     assert store.done[(RUN, "v2099Q1")]["n"] > 0
+    assert store.silver == {RUN: ("present", "ghcr")}
     assert pipeline.process(RUN, force=True).silver == "reused"
     # ohne Silber und ohne Bronze bleibt der Lauf offen
     assert pipeline.process(RUN - timedelta(hours=6)).status == "not_ready"

@@ -12,7 +12,7 @@ import json
 from collections import defaultdict
 from collections.abc import Iterable
 from datetime import date, datetime
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -20,6 +20,9 @@ from psycopg import Connection as PgConnection
 from sqlalchemy import Engine, text
 
 from wx_process.features import ClusterWeights
+
+SilverStatus = Literal["loading", "present"]
+SilverOrigin = Literal["bronze", "ghcr"]
 
 
 def _idx(col: str, res_param: str = ":res") -> str:
@@ -261,3 +264,45 @@ class Store:
                 },
             )
             c.execute(text("SELECT pg_notify('features_ready', :p)"), {"p": payload})
+
+    # --- Silber-Bestand (meta.silver_run, nur für das Status-Dashboard) ---------------------
+
+    def silver_runs(self, source_id: int) -> dict[datetime, str]:
+        with self.engine.connect() as c:
+            rows = c.execute(
+                text("SELECT run_time, status FROM meta.silver_run WHERE source_id = :s"),
+                {"s": source_id},
+            ).all()
+        return {r[0]: str(r[1]) for r in rows}
+
+    def mark_silver(
+        self,
+        source_id: int,
+        runs: Iterable[datetime],
+        status: SilverStatus,
+        origin: SilverOrigin,
+    ) -> None:
+        params = [{"s": source_id, "r": r, "st": status, "o": origin} for r in runs]
+        if not params:
+            return
+        with self.engine.begin() as c:
+            c.execute(
+                text("""
+                INSERT INTO meta.silver_run (source_id, run_time, status, origin)
+                VALUES (:s, :r, :st, :o)
+                ON CONFLICT (source_id, run_time) DO UPDATE SET status = EXCLUDED.status,
+                  origin = EXCLUDED.origin, updated_at = now()"""),
+                params,
+            )
+
+    def clear_silver_loading(self, source_id: int, runs: Iterable[datetime] | None = None) -> None:
+        """``loading`` zurücknehmen: für ``runs`` oder alle (neuer Import-Durchgang)."""
+        sql = "DELETE FROM meta.silver_run WHERE source_id = :s AND status = 'loading'"
+        params: dict[str, Any] = {"s": source_id}
+        if runs is not None:
+            params["r"] = list(runs)
+            if not params["r"]:
+                return
+            sql += " AND run_time = ANY(:r)"
+        with self.engine.begin() as c:
+            c.execute(text(sql), params)

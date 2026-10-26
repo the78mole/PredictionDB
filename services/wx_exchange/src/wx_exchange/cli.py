@@ -31,6 +31,7 @@ from pathlib import Path
 
 import httpx
 
+from predictiondb_core.db import create_db_engine
 from predictiondb_core.log import configure_logging
 from predictiondb_core.s3 import s3_store
 from predictiondb_core.settings import get_settings
@@ -40,6 +41,7 @@ from wx_exchange.publish import Publisher, plan
 from wx_ingest.cli import DEFAULT_CONFIG, parse_run
 from wx_ingest.config import GfsConfig
 from wx_process.config import ProcessConfig, WxProcessSettings
+from wx_process.store import Store
 
 DEFAULT_REPOSITORY = "the78mole/predictiondb-data/gfs-0p25-silver"
 SOURCE_URL = "https://github.com/the78mole/predictiondb"
@@ -161,7 +163,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd == "publish":
             return asyncio.run(_publish(args, config, registry))
 
-        importer_ = _importer(registry, config)
+        importer_ = _importer(registry, config, ledger=args.cmd == "import")
         if args.cmd == "verify":
             verified = importer_.verify(
                 args.start, _end(args, config), args.runs, details=args.details
@@ -177,9 +179,16 @@ def main(argv: list[str] | None = None) -> int:
             time.sleep(args.watch)
 
 
-def _importer(registry: Registry, config: GfsConfig) -> Importer:
+def _importer(registry: Registry, config: GfsConfig, *, ledger: bool = False) -> Importer:
+    """``ledger``: lokalen Bestand nach ``meta.silver_run`` melden (Status-Dashboard)."""
+    settings = get_settings()
     return Importer(
-        registry, s3_store(get_settings().buckets.silver), config.model, config.resolution
+        registry,
+        s3_store(settings.buckets.silver),
+        config.model,
+        config.resolution,
+        ledger=Store(create_db_engine(settings)) if ledger else None,
+        source=config.code,
     )
 
 
