@@ -1,0 +1,109 @@
+name: GFS-Historie
+
+# Baut die GFS-Historie im Runner statt auf der gedrosselten VM: Je Job ein Monat einer
+# Laufzeit, Bronze nur im Runner, Silber als OCI-Artefakt nach
+# ghcr.io/the78mole/predictiondb-data/gfs-0p25-silver (Tag JJJJ-MM-HHz). Die VM holt das
+# Silber mit `wx-exchange gfs import` (Compose-Profil history).
+#
+# Reihenfolge: Blöcke zu block_years Jahren vom jüngsten Monat rückwärts; im Block erst alle
+# Monate der ersten Laufzeit in `runs` (jüngste zuerst), dann der nächsten. Der Plan liest den
+# Stand aus den Manifesten in GHCR und nimmt nur Monate mit Lücken auf; ein erneuter Start
+# setzt also fort, wo der letzte aufgehört hat.
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: Frühester Lauf (GFS v16 ab 2021-03-22T12)
+        default: 2021-03-22T12
+      end:
+        description: Spätester Lauf (leer = vor dem 30-h-Live-Fenster)
+        default: ""
+      runs:
+        description: Laufzeiten in Reihenfolge der Priorität
+        default: 0,12,6,18
+      block_years:
+        description: Jahre je Block (jüngster Block zuerst)
+        default: "3"
+      rebuild:
+        description: Vorhandene Läufe neu bauen, nur Änderungen hochladen
+        type: boolean
+        default: false
+
+concurrency:
+  group: gfs-history
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  WX_EXCHANGE_REPOSITORY: the78mole/predictiondb-data/gfs-0p25-silver
+  PDB_LOG_JSON: "false"
+
+jobs:
+  plan:
+    name: Lücken planen
+    runs-on: ubuntu-latest
+    outputs:
+      block1: ${{ steps.plan.outputs.block1 }}
+      block2: ${{ steps.plan.outputs.block2 }}
+      block3: ${{ steps.plan.outputs.block3 }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          enable-cache: true
+          save-cache: false
+      - run: uv sync --locked --no-dev --package wx-exchange
+      - id: plan
+        env:
+          START: ${{ inputs.start }}
+          END: ${{ inputs.end }}
+          RUNS: ${{ inputs.runs }}
+          BLOCK_YEARS: ${{ inputs.block_years }}
+          REBUILD: ${{ inputs.rebuild }}
+        run: |
+          args=(gfs plan "$START")
+          [ -n "$END" ] && args+=("$END")
+          args+=(--runs "$RUNS" --block-years "$BLOCK_YEARS" --blocks 3)
+          [ "$REBUILD" = "true" ] && args+=(--all)
+          uv run --no-sync wx-exchange "${args[@]}"
+
+  block1:
+    needs: plan
+    if: needs.plan.outputs.block1 != '[]'
+    uses: ./.github/workflows/gfs-history-block.yml
+    with:
+      matrix: ${{ needs.plan.outputs.block1 }}
+      start: ${{ inputs.start }}
+      end: ${{ inputs.end }}
+      rebuild: ${{ inputs.rebuild }}
+    permissions:
+      contents: read
+      packages: write
+
+  block2:
+    needs: [plan, block1]
+    if: ${{ !cancelled() && needs.plan.outputs.block2 != '[]' }}
+    uses: ./.github/workflows/gfs-history-block.yml
+    with:
+      matrix: ${{ needs.plan.outputs.block2 }}
+      start: ${{ inputs.start }}
+      end: ${{ inputs.end }}
+      rebuild: ${{ inputs.rebuild }}
+    permissions:
+      contents: read
+      packages: write
+
+  block3:
+    needs: [plan, block2]
+    if: ${{ !cancelled() && needs.plan.outputs.block3 != '[]' }}
+    uses: ./.github/workflows/gfs-history-block.yml
+    with:
+      matrix: ${{ needs.plan.outputs.block3 }}
+      start: ${{ inputs.start }}
+      end: ${{ inputs.end }}
+      rebuild: ${{ inputs.rebuild }}
+    permissions:
+      contents: read
+      packages: write

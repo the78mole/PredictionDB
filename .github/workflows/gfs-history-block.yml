@@ -1,0 +1,58 @@
+name: GFS-Historie (Block)
+
+# Ein Block des Workflows gfs-history.yml: je Matrix-Eintrag ein Monat einer Laufzeit.
+# Höchstens 8 Jobs gleichzeitig, damit Actions und das AWS-Archiv nicht überlastet werden.
+on:
+  workflow_call:
+    inputs:
+      matrix:
+        type: string
+        required: true
+      start:
+        type: string
+        required: true
+      end:
+        type: string
+        default: ""
+      rebuild:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  month:
+    name: ${{ matrix.month }} ${{ matrix.hour }}Z
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      max-parallel: 8
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.matrix) }}
+    env:
+      WX_EXCHANGE_REPOSITORY: the78mole/predictiondb-data/gfs-0p25-silver
+      WX_EXCHANGE_USERNAME: ${{ github.actor }}
+      WX_EXCHANGE_TOKEN: ${{ github.token }}
+      PDB_LOG_JSON: "false"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          enable-cache: true
+          save-cache: false
+      - run: uv sync --locked --no-dev --package wx-exchange
+      - name: Monat laden, verdichten und nach GHCR
+        env:
+          MONTH: ${{ matrix.month }}
+          HOUR: ${{ matrix.hour }}
+          START: ${{ inputs.start }}
+          END: ${{ inputs.end }}
+          REBUILD: ${{ inputs.rebuild }}
+        run: |
+          args=(gfs publish "$MONTH" "$HOUR" --start "$START" --parallel-runs 2)
+          [ -n "$END" ] && args+=(--end "$END")
+          [ "$REBUILD" = "true" ] && args+=(--rebuild)
+          uv run --no-sync wx-exchange "${args[@]}"

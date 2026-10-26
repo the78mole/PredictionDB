@@ -50,6 +50,9 @@ Jobs. Ohne erreichbare Datenbank wird nur gewarnt und weitergeladen; `--no-job-l
 Protokoll ab. Ein Job, der ohne Abschluss endet (Container hart beendet), gilt beim nächsten Start
 nach einer Stunde ohne Lebenszeichen als abgebrochen.
 
+Läufe, deren Silber schon vorliegt (z. B. aus GHCR importiert, `services/wx_exchange`), lädt der
+Backfill nicht; `--bronze-with-silver` bzw. `GFS_BACKFILL_BRONZE=true` lädt auch für sie Bronze.
+
 Für den Dauerbetrieb gibt es das Compose-Profil `backfill` (`gfs-backfill` und
 `wx-process-backfill`, Zeitraum und Läufe über `GFS_BACKFILL_START`, `GFS_BACKFILL_RUNS`,
 `GFS_BACKFILL_PARALLEL`).

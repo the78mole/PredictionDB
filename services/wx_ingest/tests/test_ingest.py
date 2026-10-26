@@ -1,6 +1,6 @@
 import hashlib
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 import httpx
@@ -179,6 +179,37 @@ async def test_backfill_parallel_runs_and_resume(bronze: Bronze) -> None:
     assert first[-1].complete and again[-1].complete
     # vollständiger Lauf: keine Anfrage mehr an den Spiegel
     assert len(aws.requests) - n == 3 * len(ALL_STEPS)
+
+
+async def test_backfill_skips_runs_with_silver(bronze: Bronze) -> None:
+    aws = FakeGfsHost("aws.test", ALL_STEPS)
+
+    async def has_silver(run: datetime) -> bool:
+        return run == RUN
+
+    async with make_client(aws) as client:
+        ing = ingestor(bronze, client, archive_only=True)
+        results = await ing.backfill(RUN - timedelta(hours=6), RUN, skip_run=has_silver)
+    assert results[1].complete and results[1].counts() == {"skipped": len(ALL_STEPS)}
+    assert all(f"/gfs.{RUN:%Y%m%d}/06/" not in r.url.path for r in aws.requests)
+    assert await bronze.run_manifest(RUN) is None
+
+
+async def test_silver_marker() -> None:
+    import json
+
+    import obstore
+    from obstore.store import MemoryStore
+
+    from wx_ingest.bronze import SilverMarker
+
+    store = MemoryStore()
+    marker = SilverMarker(store, make_config())
+    assert not await marker.complete(RUN)
+    obstore.put(store, marker.key(RUN), json.dumps({"attributes": {}}).encode())
+    assert not await marker.complete(RUN)
+    obstore.put(store, marker.key(RUN), json.dumps({"attributes": {"complete": True}}).encode())
+    assert await marker.complete(RUN)
 
 
 async def test_nomads_filter(bronze: Bronze) -> None:

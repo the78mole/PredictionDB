@@ -554,6 +554,13 @@ Mit ECMWF, ICON-EU (höhere Auflösung, aber kürzerer Horizont) und GEFS-Mittel
 
 ### 5.5 Datenaustausch zwischen Instanzen über GHCR (geplant)
 
+> **Stand der Umsetzung:** Die Historie baut bereits der Workflow `gfs-history.yml` im
+> GitHub-Actions-Runner (`services/wx_exchange`), die VM holt sie mit `wx-import`. Abweichend
+> vom Entwurf unten gibt es ein Manifest je Monat **und Laufzeit** (Tag `JJJJ-MM-HHz`), damit jeder
+> Matrix-Job genau ein Manifest schreibt; der Stand steht in den Manifest-Annotationen, die
+> Tag-Liste ersetzt den Index. Noch offen sind `wx-publish` für den laufenden Betrieb, das
+> Bronze-Artefakt und die `cosign`-Signatur. Einzelheiten: `services/wx_exchange/README.md`.
+
 Eine neue Instanz müsste für die GFS-Historie ab 2021-03 heute rund 8 000 Läufe selbst laden: je Lauf etwa 3,3 GB Transfer und 3 300 Range-Anfragen, zusammen rund 27 TB und 27 Mio. Anfragen gegen AWS. Die verdichteten Silber-Stores derselben Läufe sind zusammen nur gut 100 GB groß. Deshalb veröffentlicht die Hauptinstanz ihre verdichteten Wetterdaten als **OCI-Artefakte in der GitHub Container Registry** (`ghcr.io/the78mole/predictiondb-data/…`), und andere Instanzen importieren sie dort, statt GFS selbst herunterzuladen.
 
 #### 5.5.1 Datenqualität ohne Bronze

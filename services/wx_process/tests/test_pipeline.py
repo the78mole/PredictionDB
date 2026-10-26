@@ -171,3 +171,18 @@ def test_backfill_run_selection(setup) -> None:  # type: ignore[no-untyped-def]
         (RUN, "processed"),
         (RUN - timedelta(hours=6), "not_ready"),
     ]
+
+
+def test_imported_silver_without_bronze(setup) -> None:  # type: ignore[no-untyped-def]
+    """Silber aus GHCR ohne Bronze: nur Gold rechnen, Silber nie überschreiben (auch mit force)."""
+    pipeline, _, store = setup
+    other = MemoryStore()
+    fill_bronze(other, STEPS)
+    WxPipeline(pipeline.config, pipeline.source, other, pipeline.silver, None).process(RUN)
+
+    r = pipeline.process(RUN)
+    assert (r.status, r.silver) == ("processed", "reused")
+    assert store.done[(RUN, "v2099Q1")]["n"] > 0
+    assert pipeline.process(RUN, force=True).silver == "reused"
+    # ohne Silber und ohne Bronze bleibt der Lauf offen
+    assert pipeline.process(RUN - timedelta(hours=6)).status == "not_ready"

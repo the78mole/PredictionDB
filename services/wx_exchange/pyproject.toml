@@ -1,0 +1,29 @@
+[project]
+name = "wx-exchange"
+version = "0.1.0"
+description = "Silber-Datenaustausch über GHCR: GFS-Historie im Runner verdichten, auf der VM importieren"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "LicenseRef-BUSL-1.1"
+dependencies = [
+    "predictiondb-core",
+    "wx-ingest",
+    "wx-process",
+    "httpx>=0.27",
+    "obstore>=0.6",
+]
+
+[project.scripts]
+wx-exchange = "wx_exchange.cli:main"
+
+[tool.uv.sources]
+predictiondb-core = { workspace = true }
+wx-ingest = { workspace = true }
+wx-process = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wx_exchange"]

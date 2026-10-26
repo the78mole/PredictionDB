@@ -95,3 +95,27 @@ class Bronze:
         await obstore.put_async(
             self.store, self.run_key(run), json.dumps(summary, indent=1).encode()
         )
+
+
+class SilverMarker:
+    """Prüft nur, ob für einen Lauf schon ein vollständiges Silber liegt (Bucket ``wx-silver``).
+
+    Liest das Attribut ``complete`` aus ``zarr.json`` des Laufs, ohne von ``wx_process``
+    abzuhängen (das Silber-Layout gehört dorthin, siehe ``wx_process.silver``).
+    """
+
+    def __init__(self, store: ObjectStore, config: Any) -> None:
+        self.store = store
+        self.model = config.model
+        self.resolution = config.resolution
+
+    def key(self, run: datetime) -> str:
+        return f"{self.model}/{self.resolution}/{run:%Y/%m/%d/%H}.zarr/zarr.json"
+
+    async def complete(self, run: datetime) -> bool:
+        try:
+            result = await obstore.get_async(self.store, self.key(run))
+        except FileNotFoundError:
+            return False
+        meta = json.loads(bytes(await result.bytes_async()))
+        return bool(meta.get("attributes", {}).get("complete"))
