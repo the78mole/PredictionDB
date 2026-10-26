@@ -35,6 +35,7 @@ TABLES = {
     "EinheitenWasser": "EinheitWasser",
 }
 _MEMBER = re.compile(r"^(?P<table>Einheiten[A-Za-z]+?)(?:_(?P<n>\d+))?\.xml$")
+_ANY_MEMBER = re.compile(r"^(?P<table>[A-Za-z]+?)(?:_(?P<n>\d+))?\.xml$")
 
 #: Betriebsstatus (Katalogtext) → Kurzform in ``assets.unit.status``
 STATUS = {
@@ -66,9 +67,27 @@ class Unit:
     rotor_diameter_m: float | None
     azimuth: str | None
     tilt: str | None
+    lokation_nr: str | None = None
 
 
 Catalog = dict[str, str]
+
+#: Regelzonen der Übertragungsnetzbetreiber: Teil des Katalogtexts → Code in ``assets.unit``
+REGELZONEN = {
+    "50hertz": "50hertz",
+    "amprion": "amprion",
+    "tennet": "tennet",
+    "transnet": "transnetbw",
+}
+
+
+@dataclass(slots=True)
+class GridConnection:
+    """Netzanschlusspunkt einer Lokation (``Netzanschlusspunkte_*.xml``)."""
+
+    lokation_nr: str
+    regelzone: str | None
+    netzbetreiber_nr: str | None
 
 
 def unit_members(zf: zipfile.ZipFile) -> list[tuple[str, str]]:
@@ -79,6 +98,16 @@ def unit_members(zf: zipfile.ZipFile) -> list[tuple[str, str]]:
         if m and m["table"] in TABLES:
             out.append((m["table"], int(m["n"] or 0), name))
     return [(name, TABLES[table]) for table, _, name in sorted(out)]
+
+
+def table_members(zf: zipfile.ZipFile, table: str) -> list[str]:
+    """Dateien einer (ggf. nummerierten) Tabelle des Exports in Reihenfolge."""
+    out = []
+    for name in zf.namelist():
+        m = _ANY_MEMBER.match(name.rsplit("/", 1)[-1])
+        if m and m["table"] == table:
+            out.append((int(m["n"] or 0), name))
+    return [name for _, name in sorted(out)]
 
 
 def _iter_records(source: IO[bytes], tag: str) -> Iterator[dict[str, str]]:
@@ -191,6 +220,7 @@ def to_unit(table: str, rec: dict[str, str], catalog: Catalog) -> Unit | None:
         rotor_diameter_m=_float(rec.get("Rotordurchmesser")),
         azimuth=_text(catalog, rec.get("Hauptausrichtung")),
         tilt=_text(catalog, rec.get("HauptausrichtungNeigungswinkel")),
+        lokation_nr=(rec.get("LokationMaStRNummer") or "").strip() or None,
     )
 
 
@@ -209,3 +239,33 @@ def iter_units(zf: zipfile.ZipFile, catalog: Catalog | None = None) -> Iterator[
                 n += 1
                 yield unit
         log.info("mastr.parse.file", file=name, units=n, skipped=skipped)
+
+
+def regelzone(text: str | None) -> str | None:
+    """Code der Regelzone aus dem Katalogtext (``TenneT`` → ``tennet``)."""
+    low = (text or "").lower().replace(" ", "")
+    return next((code for key, code in REGELZONEN.items() if key in low), None)
+
+
+def iter_grid_connections(
+    zf: zipfile.ZipFile, catalog: Catalog | None = None
+) -> Iterator[GridConnection]:
+    """Netzanschlusspunkte mit Regelzone und Netzbetreiber, je Lokation der Einheiten.
+
+    Strom-Netzanschlusspunkte tragen die Regelzone des ÜNB (``RegelzoneNetzanschlusspunkt``)
+    und die MaStR-Nummer des Netzbetreibers; Einheiten verweisen über
+    ``LokationMaStRNummer`` darauf. Punkte ohne beides (Gas) werden übersprungen.
+    """
+    catalog = read_catalog(zf) if catalog is None else catalog
+    for name in table_members(zf, "Netzanschlusspunkte"):
+        n = 0
+        with zf.open(name) as f:
+            for rec in _iter_records(f, "Netzanschlusspunkt"):
+                lok = (rec.get("LokationMaStRNummer") or "").strip()
+                zone = regelzone(_text(catalog, rec.get("RegelzoneNetzanschlusspunkt")))
+                nb = (rec.get("NetzbetreiberMaStRNummer") or "").strip() or None
+                if not lok or (zone is None and nb is None):
+                    continue
+                n += 1
+                yield GridConnection(lok, zone, nb)
+        log.info("mastr.parse.file", file=name, grid_connections=n)

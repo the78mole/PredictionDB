@@ -2,8 +2,16 @@ import zipfile
 from datetime import date
 from pathlib import Path
 
-from mastr_ingest.testing import CATALOG, make_export, unit
-from mastr_ingest.units import classify, iter_units, read_catalog, to_unit, unit_members
+from mastr_ingest.testing import CATALOG, make_export, nap, unit
+from mastr_ingest.units import (
+    classify,
+    iter_grid_connections,
+    iter_units,
+    read_catalog,
+    regelzone,
+    to_unit,
+    unit_members,
+)
 
 
 def test_members_sorted_and_filtered(tmp_path: Path) -> None:
@@ -146,3 +154,38 @@ def test_iter_units_over_split_files(tmp_path: Path) -> None:
     assert len(units) == 121
     assert {u.technology for u in units} == {"pv_roof", "hydro"}
     assert units[0].ags == "09162000" and units[0].plz == "80331" and units[0].lat is None
+
+
+def test_regelzone_from_catalog_text() -> None:
+    assert [regelzone(CATALOG[i]) for i in ("1000001", "1000010", "1001564", "1001572")] == [
+        "50hertz",
+        "amprion",
+        "tennet",
+        "transnetbw",
+    ]
+    assert regelzone("Transnet BW") == "transnetbw"
+    assert regelzone(None) is None and regelzone("Gaspool") is None
+
+
+def test_grid_connections_and_unit_lokation(tmp_path: Path) -> None:
+    path = make_export(
+        tmp_path,
+        {
+            "EinheitenWind": [unit("SEE1", 3000, LokationMaStRNummer="SEL1")],
+            "Netzanschlusspunkte": [
+                nap("SAN1", "SEL1", "1000010"),
+                nap("SAN2", "SEL2", None),  # nur Netzbetreiber
+                nap("SAN3", "SEL3", None, NetzbetreiberMaStRNummer=None),  # z. B. Gas: verworfen
+                *[nap(f"SAN9{i}", f"SEL9{i}") for i in range(5)],
+            ],
+        },
+        split=3,
+    )
+    with zipfile.ZipFile(path) as zf:
+        assert unit_members(zf) == [("EinheitenWind_1.xml", "EinheitWind")]
+        (u,) = list(iter_units(zf))
+        gcs = list(iter_grid_connections(zf))
+    assert u.lokation_nr == "SEL1"
+    assert [(g.lokation_nr, g.regelzone) for g in gcs[:2]] == [("SEL1", "amprion"), ("SEL2", None)]
+    assert gcs[1].netzbetreiber_nr == "SNB900000000001"
+    assert len(gcs) == 7 and {g.regelzone for g in gcs[2:]} == {"tennet"}

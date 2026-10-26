@@ -21,7 +21,7 @@ from mastr_ingest.cluster import nearest, weighted_kmeans
 from mastr_ingest.config import MastrConfig
 from mastr_ingest.download import Bronze, Downloader, ExportManifest, parse_export_name
 from mastr_ingest.store import Store
-from mastr_ingest.units import iter_units
+from mastr_ingest.units import iter_grid_connections, iter_units, read_catalog
 from predictiondb_core.log import get_logger
 
 log = get_logger(__name__)
@@ -106,10 +106,16 @@ class MastrPipeline:
         )
         try:
             with zipfile.ZipFile(path) as zf:
-                n = self.store.load_units(sid, iter_units(zf))
+                catalog = read_catalog(zf)
+                n = self.store.load_units(sid, iter_units(zf, catalog))
+                naps = self.store.assign_zones(sid, iter_grid_connections(zf, catalog))
+            log.info("mastr.zones.assigned", grid_connections=naps)
             sea = {k: (p.lat, p.lon) for k, p in self.config.sea_areas.items()}
             self.store.geolocate(sid, sea)
-            stats: dict[str, Any] = {"units": self.store.unit_stats(sid, day)}
+            stats: dict[str, Any] = {
+                "units": self.store.unit_stats(sid, day),
+                "zones": self.store.zone_stats(sid, day),
+            }
             prev = self.store.latest_imported(before=day)
             if prev is not None and prev["status"] == "imported":
                 stats["diff"] = {
@@ -203,6 +209,8 @@ class MastrPipeline:
                 version, snapshot_id, grid.res, wg.name, wg.res, export_date
             )
             log.info("mastr.weights.written", version=version, grid=wg.name, rows=n)
+        n = self.store.write_zone_weights(version, snapshot_id, grid.res, export_date)
+        log.info("mastr.zones.written", version=version, rows=n)
         n = self.write_capacity(version, snapshot_id, export_date)
         log.info("mastr.capacity.written", version=version, rows=n)
         return version

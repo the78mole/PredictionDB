@@ -93,6 +93,27 @@ def engine() -> Iterator[Engine]:
                         "snap": snap or 0,
                     },
                 )
+            # Regelzonen: Zelle 1 TenneT, Zelle 2 bei Wind 2,0 MW TenneT und 0,5 MW 50Hertz,
+            # bei PV ohne Zuordnung
+            zones = (
+                [("tennet", 53.75, 9.25, 2.0), ("50hertz", 53.75, 9.25, 0.5)]
+                if tech == "wind_on"
+                else [("unbekannt", 53.75, 9.25, 2.5)]
+            )
+            for zone, clat, clon, cap in [("tennet", 53.5, 9.5, 7.5), *zones]:
+                c.execute(
+                    text("""INSERT INTO assets.zone_weight
+                            VALUES (:v, :t, 0, :z, :lat, :lon, :cap, :snap)"""),
+                    {
+                        "v": VERSION,
+                        "t": tech,
+                        "z": zone,
+                        "lat": clat,
+                        "lon": clon,
+                        "cap": cap,
+                        "snap": snap or 0,
+                    },
+                )
             c.execute(
                 text("""INSERT INTO assets.capacity_daily VALUES (:v, :t, 0, :d, 10, :snap)"""),
                 {"v": VERSION, "t": tech, "d": DAY, "snap": snap or 0},
@@ -124,6 +145,9 @@ def engine() -> Iterator[Engine]:
         )
         c.execute(
             text("DELETE FROM assets.grid_weight WHERE clustering_version = :v"), {"v": VERSION}
+        )
+        c.execute(
+            text("DELETE FROM assets.zone_weight WHERE clustering_version = :v"), {"v": VERSION}
         )
         c.execute(
             text("DELETE FROM assets.clustering WHERE clustering_version = :v"), {"v": VERSION}
@@ -184,3 +208,30 @@ def test_cluster_table_and_days(engine: Engine) -> None:
         for m, d in [(10, i) for i in range(26, 32)] + [(11, i) for i in range(1, 11)]
     ]
     assert days[1:] == sorted(days[1:])
+
+
+def test_regelzonen_map_and_energy_per_tso(engine: Engine) -> None:
+    cells = {(float(r["lat"]), float(r["lon"])): r for r in _rows(engine, _panel_sql(11))}
+    assert cells[(53.5, 9.5)]["Regelzone"] == "TenneT"
+    assert cells[(53.5, 9.5)]["Leistung"] == pytest.approx(15.0)
+    # Zelle 2: TenneT 2,0 MW gegen 50Hertz 0,5 MW; ohne Zuordnung zählt nicht mit
+    assert cells[(53.75, 9.25)]["Regelzone"] == "TenneT"
+    assert float(cells[(53.75, 9.25)]["Anteil"]) == pytest.approx(80.0)
+
+    centres = {r["Regelzone"]: r for r in _rows(engine, _panel_sql(11, "B"))}
+    assert set(centres) == {"50Hertz", "TenneT"}
+    assert centres["50Hertz"]["Energiemenge"] == pytest.approx(24 * WIND_MW * 0.05, rel=1e-6)
+    assert float(centres["50Hertz"]["lat"]) == pytest.approx(53.75)
+
+    bars = {r["ÜNB"]: r for r in _rows(engine, _panel_sql(12))}
+    assert list(bars) == ["50Hertz", "TenneT", "nicht zugeordnet"]
+    assert bars["TenneT"]["Wind an Land"] == pytest.approx(24 * WIND_MW * 0.95, rel=1e-6)
+    assert bars["TenneT"]["PV Dach"] == pytest.approx(24 * PV_MW * 0.75, rel=1e-6)
+    assert bars["nicht zugeordnet"]["PV Dach"] == pytest.approx(24 * PV_MW * 0.25, rel=1e-6)
+    # Summe über die ÜNB = Deutschland
+    total = sum(r["Energiemenge"] for r in _rows(engine, _panel_sql(2)))
+    assert sum(r["Gesamt"] for r in bars.values()) == pytest.approx(total, rel=1e-6)
+
+    cap = {r["ÜNB"]: r for r in _rows(engine, _panel_sql(13))}
+    assert cap["TenneT"]["Gesamt"] == pytest.approx(17.0)
+    assert cap["50Hertz"]["Wind Land"] == pytest.approx(0.5)
