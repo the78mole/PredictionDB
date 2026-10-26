@@ -1,0 +1,1319 @@
+{
+  "uid": "pdb-karte",
+  "title": "PredictionDB Karte",
+  "tags": [
+    "predictiondb"
+  ],
+  "timezone": "",
+  "schemaVersion": 41,
+  "version": 1,
+  "editable": false,
+  "refresh": "",
+  "time": {
+    "from": "now-2d",
+    "to": "now"
+  },
+  "timepicker": {
+    "hidden": true
+  },
+  "links": [
+    {
+      "type": "link",
+      "title": "Status",
+      "url": "/d/pdb-status/predictiondb-status",
+      "icon": "dashboard",
+      "tooltip": "PredictionDB Status",
+      "targetBlank": false,
+      "includeVars": false,
+      "keepTime": false,
+      "asDropdown": false,
+      "tags": []
+    }
+  ],
+  "panels": [
+    {
+      "type": "geomap",
+      "title": "Energiemenge am ${tag:text} je Rasterfeld (${raster}°)",
+      "id": 1,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 20,
+        "w": 16,
+        "x": 0,
+        "y": 0
+      },
+      "description": "Prognostizierte Erzeugung aus Wind und PV am gewählten Tag (Europe/Berlin) aus dem gewählten GFS-Lauf. Je Cluster: mittlere Leistung aus wind_power/pv_power mal Tageslänge, verteilt auf die 0,25°-Zellen nach Anteil an der Clusterleistung (MaStR) und auf das Raster summiert. Kreisgröße = Energiemenge, Farbe = Windanteil (gelb Sonne, blau Wind). Mouseover zeigt die Aufteilung nach Erzeugungsart. Biomasse und Wasserkraft haben keine Wetter-Leistungsprognose.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "-- Energie je Cluster auf die 0,25°-Zellen verteilen (Anteil an der Clusterleistung),\n-- dann auf das gewählte Raster summieren. Biomasse und Wasserkraft haben keine\n-- Leistungsprognose aus dem Wetter und fehlen daher.\nWITH tag AS (\n  SELECT '$tag'::date::timestamp AT TIME ZONE 'Europe/Berlin' AS t0,\n         ('$tag'::date + 1)::timestamp AT TIME ZONE 'Europe/Berlin' AS t1),\ne AS (\n  SELECT cl.technology, cl.cluster_no,\n         avg(v.value) * extract(epoch FROM tag.t1 - tag.t0) / 3600 AS mwh\n    FROM feat.nwp_value v\n    JOIN meta.feature f USING (feature_id)\n    JOIN assets.cluster cl ON cl.region_id = v.region_id AND cl.clustering_version = '$version'\n   CROSS JOIN tag\n   WHERE f.source_id = (SELECT source_id FROM meta.source WHERE code = 'gfs_0p25')\n     AND f.code IN ('wind_power', 'pv_power')\n     AND v.run_time = '$lauf'::timestamptz\n     AND v.valid_time > tag.t0 AND v.valid_time <= tag.t1\n   GROUP BY 1, 2, tag.t0, tag.t1),\nz AS (\n  SELECT e.technology,\n         floor(g.lat / $raster) * $raster + $raster / 2.0 AS lat,\n         floor(g.lon / $raster) * $raster + $raster / 2.0 AS lon,\n         e.mwh * g.share AS mwh\n    FROM e\n    JOIN assets.grid_weight g\n      ON g.clustering_version = '$version' AND g.grid = 'gfs_0p25'\n     AND g.technology = e.technology AND g.cluster_no = e.cluster_no)\nSELECT lat, lon,\n       sum(mwh) AS \"Gesamt\",\n       sum(mwh) FILTER (WHERE technology = 'wind_on') AS \"Wind an Land\",\n       sum(mwh) FILTER (WHERE technology = 'wind_off') AS \"Wind auf See\",\n       sum(mwh) FILTER (WHERE technology = 'pv_ground') AS \"PV Freifläche\",\n       sum(mwh) FILTER (WHERE technology = 'pv_roof') AS \"PV Dach\",\n       100 * coalesce(sum(mwh) FILTER (WHERE technology LIKE 'wind%'), 0)\n           / nullif(sum(mwh), 0) AS \"Windanteil\"\n  FROM z\n GROUP BY 1, 2\nHAVING sum(mwh) > 0\n ORDER BY 3"
+        }
+      ],
+      "options": {
+        "view": {
+          "id": "coords",
+          "lat": 51.15,
+          "lon": 10.45,
+          "zoom": 5.7,
+          "allLayers": true
+        },
+        "controls": {
+          "showZoom": true,
+          "mouseWheelZoom": true,
+          "showAttribution": true,
+          "showScale": true,
+          "showMeasure": false,
+          "showDebug": false
+        },
+        "basemap": {
+          "type": "default",
+          "name": "Hintergrund",
+          "config": {}
+        },
+        "layers": [
+          {
+            "type": "markers",
+            "name": "Energiemenge (Farbe: Windanteil)",
+            "config": {
+              "showLegend": true,
+              "style": {
+                "size": {
+                  "field": "Gesamt",
+                  "fixed": 6,
+                  "min": 3,
+                  "max": 30
+                },
+                "color": {
+                  "field": "Windanteil",
+                  "fixed": "dark-green"
+                },
+                "opacity": 0.7,
+                "symbol": {
+                  "mode": "fixed",
+                  "fixed": "img/icons/marker/circle.svg"
+                },
+                "symbolAlign": {
+                  "horizontal": "center",
+                  "vertical": "center"
+                },
+                "rotation": {
+                  "fixed": 0,
+                  "mode": "mod",
+                  "min": -360,
+                  "max": 360
+                },
+                "textConfig": {
+                  "fontSize": 12,
+                  "offsetX": 0,
+                  "offsetY": 0,
+                  "textAlign": "center",
+                  "textBaseline": "middle"
+                }
+              }
+            },
+            "location": {
+              "mode": "coords",
+              "latitude": "lat",
+              "longitude": "lon"
+            },
+            "filterData": {
+              "id": "byRefId",
+              "options": "A"
+            },
+            "tooltip": true
+          }
+        ],
+        "tooltip": {
+          "mode": "details"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "mwatth",
+          "decimals": 1,
+          "noValue": "–",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Windanteil"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-YlBl"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "lat"
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "tooltip": true,
+                  "viz": false,
+                  "legend": true
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "lon"
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "tooltip": true,
+                  "viz": false,
+                  "legend": true
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Deutschland am ${tag:text}",
+      "id": 2,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "description": "Summe der Cluster je Erzeugungsart (Wind und PV) für den gewählten Tag und GFS-Lauf.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH tag AS (\n  SELECT '$tag'::date::timestamp AT TIME ZONE 'Europe/Berlin' AS t0,\n         ('$tag'::date + 1)::timestamp AT TIME ZONE 'Europe/Berlin' AS t1),\ne AS (\n  SELECT cl.technology, cl.cluster_no,\n         avg(v.value) * extract(epoch FROM tag.t1 - tag.t0) / 3600 AS mwh\n    FROM feat.nwp_value v\n    JOIN meta.feature f USING (feature_id)\n    JOIN assets.cluster cl ON cl.region_id = v.region_id AND cl.clustering_version = '$version'\n   CROSS JOIN tag\n   WHERE f.source_id = (SELECT source_id FROM meta.source WHERE code = 'gfs_0p25')\n     AND f.code IN ('wind_power', 'pv_power')\n     AND v.run_time = '$lauf'::timestamptz\n     AND v.valid_time > tag.t0 AND v.valid_time <= tag.t1\n   GROUP BY 1, 2, tag.t0, tag.t1)\nSELECT CASE technology\n  WHEN 'wind_on' THEN 'Wind an Land' WHEN 'wind_off' THEN 'Wind auf See'\n  WHEN 'pv_ground' THEN 'PV Freifläche' WHEN 'pv_roof' THEN 'PV Dach'\n  WHEN 'biomass' THEN 'Biomasse' WHEN 'hydro' THEN 'Wasserkraft' ELSE technology END AS \"Erzeugungsart\", sum(mwh) AS \"Energiemenge\"\n  FROM e GROUP BY technology\n ORDER BY CASE technology WHEN 'wind_on' THEN 1 WHEN 'wind_off' THEN 2\n                          WHEN 'pv_ground' THEN 3 ELSE 4 END"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "values": true,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "valueMode": "color",
+        "namePlacement": "top",
+        "sizing": "auto",
+        "legend": {
+          "showLegend": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "mwatth",
+          "decimals": 1,
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "table",
+      "title": "Cluster am ${tag:text}",
+      "id": 3,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 13,
+        "w": 8,
+        "x": 16,
+        "y": 7
+      },
+      "description": "Alle Cluster der Clusterung ${version} mit installierter Leistung (MaStR, rekonstruiert zum Tag) und prognostizierter Energiemenge.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH tag AS (\n  SELECT '$tag'::date::timestamp AT TIME ZONE 'Europe/Berlin' AS t0,\n         ('$tag'::date + 1)::timestamp AT TIME ZONE 'Europe/Berlin' AS t1),\ne AS (\n  SELECT cl.technology, cl.cluster_no,\n         avg(v.value) * extract(epoch FROM tag.t1 - tag.t0) / 3600 AS mwh\n    FROM feat.nwp_value v\n    JOIN meta.feature f USING (feature_id)\n    JOIN assets.cluster cl ON cl.region_id = v.region_id AND cl.clustering_version = '$version'\n   CROSS JOIN tag\n   WHERE f.source_id = (SELECT source_id FROM meta.source WHERE code = 'gfs_0p25')\n     AND f.code IN ('wind_power', 'pv_power')\n     AND v.run_time = '$lauf'::timestamptz\n     AND v.valid_time > tag.t0 AND v.valid_time <= tag.t1\n   GROUP BY 1, 2, tag.t0, tag.t1),\ncap AS (\n  SELECT DISTINCT ON (technology, cluster_no) technology, cluster_no, capacity_mw\n    FROM assets.capacity_daily\n   WHERE clustering_version = '$version' AND day <= '$tag'::date\n   ORDER BY technology, cluster_no, day DESC)\nSELECT CASE cl.technology\n  WHEN 'wind_on' THEN 'Wind an Land' WHEN 'wind_off' THEN 'Wind auf See'\n  WHEN 'pv_ground' THEN 'PV Freifläche' WHEN 'pv_roof' THEN 'PV Dach'\n  WHEN 'biomass' THEN 'Biomasse' WHEN 'hydro' THEN 'Wasserkraft' ELSE cl.technology END AS \"Erzeugungsart\",\n       'c' || lpad(cl.cluster_no::text, 2, '0') AS \"Cluster\",\n       cap.capacity_mw AS \"Leistung\",\n       e.mwh AS \"Energiemenge\",\n       e.mwh / nullif(cap.capacity_mw, 0) AS \"Volllaststunden\"\n  FROM assets.cluster cl\n  LEFT JOIN cap USING (technology, cluster_no)\n  LEFT JOIN e USING (technology, cluster_no)\n WHERE cl.clustering_version = '$version'\n ORDER BY e.mwh DESC NULLS LAST, cap.capacity_mw DESC"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Leistung"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "megwatt"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Energiemenge"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "mwatth"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Volllaststunden"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "h"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Erzeugungsart"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "Wind an Land": {
+                        "index": 0,
+                        "color": "#5794F2"
+                      },
+                      "Wind auf See": {
+                        "index": 1,
+                        "color": "#1F60C4"
+                      },
+                      "PV Freifläche": {
+                        "index": 2,
+                        "color": "#FF9830"
+                      },
+                      "PV Dach": {
+                        "index": 3,
+                        "color": "#FADE2A"
+                      },
+                      "Biomasse": {
+                        "index": 4,
+                        "color": "#73BF69"
+                      },
+                      "Wasserkraft": {
+                        "index": 5,
+                        "color": "#8AB8FF"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "row",
+      "title": "Clusterung und Wetter",
+      "id": 6,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 20
+      },
+      "panels": []
+    },
+    {
+      "type": "geomap",
+      "title": "Clusterung ${technologie:text} (${version})",
+      "id": 4,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 20,
+        "w": 12,
+        "x": 0,
+        "y": 21
+      },
+      "description": "Leistungsgewichtetes k-Means aus mastr-ingest: Quadrate sind die 0,25°-Zellen des GFS-Gitters mit Anlagen, eingefärbt nach Cluster; Kreise sind die Clusterzentren, Größe nach installierter Leistung. Mouseover am Zentrum zeigt Leistung und die prognostizierte Energiemenge am gewählten Tag. Die Wetterfeatures werden auf genau diese Cluster gemittelt.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT lat, lon, cluster_no AS \"Cluster\"\n  FROM assets.cluster_cell\n WHERE clustering_version = '$version' AND technology = '$technologie'"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH tag AS (\n  SELECT '$tag'::date::timestamp AT TIME ZONE 'Europe/Berlin' AS t0,\n         ('$tag'::date + 1)::timestamp AT TIME ZONE 'Europe/Berlin' AS t1),\ne AS (\n  SELECT cl.technology, cl.cluster_no,\n         avg(v.value) * extract(epoch FROM tag.t1 - tag.t0) / 3600 AS mwh\n    FROM feat.nwp_value v\n    JOIN meta.feature f USING (feature_id)\n    JOIN assets.cluster cl ON cl.region_id = v.region_id AND cl.clustering_version = '$version'\n   CROSS JOIN tag\n   WHERE f.source_id = (SELECT source_id FROM meta.source WHERE code = 'gfs_0p25')\n     AND f.code IN ('wind_power', 'pv_power')\n     AND v.run_time = '$lauf'::timestamptz\n     AND v.valid_time > tag.t0 AND v.valid_time <= tag.t1\n   GROUP BY 1, 2, tag.t0, tag.t1),\ncap AS (\n  SELECT DISTINCT ON (cluster_no) cluster_no, capacity_mw\n    FROM assets.capacity_daily\n   WHERE clustering_version = '$version' AND technology = '$technologie'\n     AND day <= '$tag'::date\n   ORDER BY cluster_no, day DESC)\nSELECT cl.centroid_lat AS lat, cl.centroid_lon AS lon, cl.cluster_no AS \"Cluster\",\n       cap.capacity_mw AS \"Leistung\",\n       e.mwh AS \"Energiemenge\",\n       e.mwh / nullif(cap.capacity_mw, 0) AS \"Volllaststunden\"\n  FROM assets.cluster cl\n  LEFT JOIN cap USING (cluster_no)\n  LEFT JOIN e ON e.technology = cl.technology AND e.cluster_no = cl.cluster_no\n WHERE cl.clustering_version = '$version' AND cl.technology = '$technologie'"
+        }
+      ],
+      "options": {
+        "view": {
+          "id": "coords",
+          "lat": 51.15,
+          "lon": 10.45,
+          "zoom": 5.7,
+          "allLayers": true
+        },
+        "controls": {
+          "showZoom": true,
+          "mouseWheelZoom": true,
+          "showAttribution": true,
+          "showScale": true,
+          "showMeasure": false,
+          "showDebug": false
+        },
+        "basemap": {
+          "type": "default",
+          "name": "Hintergrund",
+          "config": {}
+        },
+        "layers": [
+          {
+            "type": "markers",
+            "name": "Gitterzellen",
+            "config": {
+              "showLegend": false,
+              "style": {
+                "size": {
+                  "fixed": 5,
+                  "min": 2,
+                  "max": 15
+                },
+                "color": {
+                  "field": "Cluster",
+                  "fixed": "dark-green"
+                },
+                "opacity": 0.55,
+                "symbol": {
+                  "mode": "fixed",
+                  "fixed": "img/icons/marker/square.svg"
+                },
+                "symbolAlign": {
+                  "horizontal": "center",
+                  "vertical": "center"
+                },
+                "rotation": {
+                  "fixed": 0,
+                  "mode": "mod",
+                  "min": -360,
+                  "max": 360
+                },
+                "textConfig": {
+                  "fontSize": 12,
+                  "offsetX": 0,
+                  "offsetY": 0,
+                  "textAlign": "center",
+                  "textBaseline": "middle"
+                }
+              }
+            },
+            "location": {
+              "mode": "coords",
+              "latitude": "lat",
+              "longitude": "lon"
+            },
+            "filterData": {
+              "id": "byRefId",
+              "options": "A"
+            },
+            "tooltip": true
+          },
+          {
+            "type": "markers",
+            "name": "Clusterzentren",
+            "config": {
+              "showLegend": false,
+              "style": {
+                "size": {
+                  "field": "Leistung",
+                  "fixed": 8,
+                  "min": 6,
+                  "max": 30
+                },
+                "color": {
+                  "field": "Cluster",
+                  "fixed": "dark-green"
+                },
+                "opacity": 0.9,
+                "symbol": {
+                  "mode": "fixed",
+                  "fixed": "img/icons/marker/circle.svg"
+                },
+                "symbolAlign": {
+                  "horizontal": "center",
+                  "vertical": "center"
+                },
+                "rotation": {
+                  "fixed": 0,
+                  "mode": "mod",
+                  "min": -360,
+                  "max": 360
+                },
+                "textConfig": {
+                  "fontSize": 12,
+                  "offsetX": 0,
+                  "offsetY": 0,
+                  "textAlign": "center",
+                  "textBaseline": "middle"
+                }
+              }
+            },
+            "location": {
+              "mode": "coords",
+              "latitude": "lat",
+              "longitude": "lon"
+            },
+            "filterData": {
+              "id": "byRefId",
+              "options": "B"
+            },
+            "tooltip": true
+          }
+        ],
+        "tooltip": {
+          "mode": "details"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Cluster"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "index": 0,
+                        "text": "c00",
+                        "color": "#c81c1c"
+                      },
+                      "1": {
+                        "index": 1,
+                        "text": "c01",
+                        "color": "#55e67f"
+                      },
+                      "2": {
+                        "index": 2,
+                        "text": "c02",
+                        "color": "#6716a0"
+                      },
+                      "3": {
+                        "index": 3,
+                        "text": "c03",
+                        "color": "#c8b31c"
+                      },
+                      "4": {
+                        "index": 4,
+                        "text": "c04",
+                        "color": "#55cee6"
+                      },
+                      "5": {
+                        "index": 5,
+                        "text": "c05",
+                        "color": "#a01661"
+                      },
+                      "6": {
+                        "index": 6,
+                        "text": "c06",
+                        "color": "#47c81c"
+                      },
+                      "7": {
+                        "index": 7,
+                        "text": "c07",
+                        "color": "#5b55e6"
+                      },
+                      "8": {
+                        "index": 8,
+                        "text": "c08",
+                        "color": "#a04416"
+                      },
+                      "9": {
+                        "index": 9,
+                        "text": "c09",
+                        "color": "#1cc888"
+                      },
+                      "10": {
+                        "index": 10,
+                        "text": "c10",
+                        "color": "#da55e6"
+                      },
+                      "11": {
+                        "index": 11,
+                        "text": "c11",
+                        "color": "#83a016"
+                      },
+                      "12": {
+                        "index": 12,
+                        "text": "c12",
+                        "color": "#1c72c8"
+                      },
+                      "13": {
+                        "index": 13,
+                        "text": "c13",
+                        "color": "#e65573"
+                      },
+                      "14": {
+                        "index": 14,
+                        "text": "c14",
+                        "color": "#16a022"
+                      },
+                      "15": {
+                        "index": 15,
+                        "text": "c15",
+                        "color": "#5d1cc8"
+                      },
+                      "16": {
+                        "index": 16,
+                        "text": "c16",
+                        "color": "#e6b655"
+                      },
+                      "17": {
+                        "index": 17,
+                        "text": "c17",
+                        "color": "#16a09b"
+                      },
+                      "18": {
+                        "index": 18,
+                        "text": "c18",
+                        "color": "#c81c9d"
+                      },
+                      "19": {
+                        "index": 19,
+                        "text": "c19",
+                        "color": "#97e655"
+                      },
+                      "20": {
+                        "index": 20,
+                        "text": "c20",
+                        "color": "#162da0"
+                      },
+                      "21": {
+                        "index": 21,
+                        "text": "c21",
+                        "color": "#c8321c"
+                      },
+                      "22": {
+                        "index": 22,
+                        "text": "c22",
+                        "color": "#55e692"
+                      },
+                      "23": {
+                        "index": 23,
+                        "text": "c23",
+                        "color": "#7816a0"
+                      },
+                      "24": {
+                        "index": 24,
+                        "text": "c24",
+                        "color": "#c8c81c"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Leistung"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "megwatt"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Energiemenge"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "mwatth"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Volllaststunden"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "h"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "lat"
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "tooltip": true,
+                  "viz": false,
+                  "legend": true
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "lon"
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "tooltip": true,
+                  "viz": false,
+                  "legend": true
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "geomap",
+      "title": "${merkmal:text} am ${tag:text} je Cluster ${technologie:text}",
+      "id": 5,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 20,
+        "w": 12,
+        "x": 12,
+        "y": 21
+      },
+      "description": "Tagesmittel des gewählten GFS-Merkmals am gewählten Tag (Europe/Berlin), leistungsgewichtet über die Zellen des Clusters gemittelt (wx-process). Auslastung und Schneeanteil in %, Niederschlag als Tagessumme.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "-- Tagesmittel des Merkmals je Cluster; Anteile in %, Niederschlag als Tagessumme\nWITH tag AS (\n  SELECT '$tag'::date::timestamp AT TIME ZONE 'Europe/Berlin' AS t0,\n         ('$tag'::date + 1)::timestamp AT TIME ZONE 'Europe/Berlin' AS t1)\nSELECT cl.centroid_lat AS lat, cl.centroid_lon AS lon, cl.cluster_no AS \"Cluster\",\n       avg(v.value) * CASE WHEN f.code IN ('wind_cf', 'pv_cf', 'snow_fraction') THEN 100\n                           WHEN f.code = 'precip' THEN extract(epoch FROM tag.t1 - tag.t0) / 3600\n                           ELSE 1 END AS \"Wert\"\n  FROM assets.cluster cl\n  JOIN feat.nwp_value v ON v.region_id = cl.region_id\n  JOIN meta.feature f USING (feature_id)\n CROSS JOIN tag\n WHERE cl.clustering_version = '$version' AND cl.technology = '$technologie'\n   AND f.source_id = (SELECT source_id FROM meta.source WHERE code = 'gfs_0p25')\n   AND f.code = '$merkmal'\n   AND v.run_time = '$lauf'::timestamptz\n   AND v.valid_time > tag.t0 AND v.valid_time <= tag.t1\n GROUP BY cl.centroid_lat, cl.centroid_lon, cl.cluster_no, f.code, tag.t0, tag.t1"
+        }
+      ],
+      "options": {
+        "view": {
+          "id": "coords",
+          "lat": 51.15,
+          "lon": 10.45,
+          "zoom": 5.7,
+          "allLayers": true
+        },
+        "controls": {
+          "showZoom": true,
+          "mouseWheelZoom": true,
+          "showAttribution": true,
+          "showScale": true,
+          "showMeasure": false,
+          "showDebug": false
+        },
+        "basemap": {
+          "type": "default",
+          "name": "Hintergrund",
+          "config": {}
+        },
+        "layers": [
+          {
+            "type": "markers",
+            "name": "Wetter",
+            "config": {
+              "showLegend": true,
+              "style": {
+                "size": {
+                  "fixed": 22,
+                  "min": 2,
+                  "max": 15
+                },
+                "color": {
+                  "field": "Wert",
+                  "fixed": "dark-green"
+                },
+                "opacity": 0.85,
+                "symbol": {
+                  "mode": "fixed",
+                  "fixed": "img/icons/marker/circle.svg"
+                },
+                "symbolAlign": {
+                  "horizontal": "center",
+                  "vertical": "center"
+                },
+                "rotation": {
+                  "fixed": 0,
+                  "mode": "mod",
+                  "min": -360,
+                  "max": 360
+                },
+                "textConfig": {
+                  "fontSize": 12,
+                  "offsetX": 0,
+                  "offsetY": 0,
+                  "textAlign": "center",
+                  "textBaseline": "middle"
+                }
+              }
+            },
+            "location": {
+              "mode": "coords",
+              "latitude": "lat",
+              "longitude": "lon"
+            },
+            "filterData": {
+              "id": "byRefId",
+              "options": "A"
+            },
+            "tooltip": true
+          },
+          {
+            "type": "markers",
+            "name": "Werte",
+            "config": {
+              "showLegend": false,
+              "style": {
+                "size": {
+                  "fixed": 1
+                },
+                "color": {
+                  "fixed": "#ffffff"
+                },
+                "opacity": 1,
+                "symbol": {
+                  "mode": "fixed",
+                  "fixed": "img/icons/marker/circle.svg"
+                },
+                "symbolAlign": {
+                  "horizontal": "center",
+                  "vertical": "center"
+                },
+                "rotation": {
+                  "fixed": 0,
+                  "mode": "mod",
+                  "min": -360,
+                  "max": 360
+                },
+                "textConfig": {
+                  "fontSize": 11,
+                  "offsetX": 0,
+                  "offsetY": 0,
+                  "textAlign": "center",
+                  "textBaseline": "middle"
+                },
+                "text": {
+                  "field": "Wert",
+                  "fixed": "",
+                  "mode": "field"
+                }
+              }
+            },
+            "location": {
+              "mode": "coords",
+              "latitude": "lat",
+              "longitude": "lon"
+            },
+            "filterData": {
+              "id": "byRefId",
+              "options": "A"
+            },
+            "tooltip": false
+          }
+        ],
+        "tooltip": {
+          "mode": "details"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "color": {
+            "mode": "continuous-BlYlRd"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Cluster"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "index": 0,
+                        "text": "c00",
+                        "color": "#c81c1c"
+                      },
+                      "1": {
+                        "index": 1,
+                        "text": "c01",
+                        "color": "#55e67f"
+                      },
+                      "2": {
+                        "index": 2,
+                        "text": "c02",
+                        "color": "#6716a0"
+                      },
+                      "3": {
+                        "index": 3,
+                        "text": "c03",
+                        "color": "#c8b31c"
+                      },
+                      "4": {
+                        "index": 4,
+                        "text": "c04",
+                        "color": "#55cee6"
+                      },
+                      "5": {
+                        "index": 5,
+                        "text": "c05",
+                        "color": "#a01661"
+                      },
+                      "6": {
+                        "index": 6,
+                        "text": "c06",
+                        "color": "#47c81c"
+                      },
+                      "7": {
+                        "index": 7,
+                        "text": "c07",
+                        "color": "#5b55e6"
+                      },
+                      "8": {
+                        "index": 8,
+                        "text": "c08",
+                        "color": "#a04416"
+                      },
+                      "9": {
+                        "index": 9,
+                        "text": "c09",
+                        "color": "#1cc888"
+                      },
+                      "10": {
+                        "index": 10,
+                        "text": "c10",
+                        "color": "#da55e6"
+                      },
+                      "11": {
+                        "index": 11,
+                        "text": "c11",
+                        "color": "#83a016"
+                      },
+                      "12": {
+                        "index": 12,
+                        "text": "c12",
+                        "color": "#1c72c8"
+                      },
+                      "13": {
+                        "index": 13,
+                        "text": "c13",
+                        "color": "#e65573"
+                      },
+                      "14": {
+                        "index": 14,
+                        "text": "c14",
+                        "color": "#16a022"
+                      },
+                      "15": {
+                        "index": 15,
+                        "text": "c15",
+                        "color": "#5d1cc8"
+                      },
+                      "16": {
+                        "index": 16,
+                        "text": "c16",
+                        "color": "#e6b655"
+                      },
+                      "17": {
+                        "index": 17,
+                        "text": "c17",
+                        "color": "#16a09b"
+                      },
+                      "18": {
+                        "index": 18,
+                        "text": "c18",
+                        "color": "#c81c9d"
+                      },
+                      "19": {
+                        "index": 19,
+                        "text": "c19",
+                        "color": "#97e655"
+                      },
+                      "20": {
+                        "index": 20,
+                        "text": "c20",
+                        "color": "#162da0"
+                      },
+                      "21": {
+                        "index": 21,
+                        "text": "c21",
+                        "color": "#c8321c"
+                      },
+                      "22": {
+                        "index": 22,
+                        "text": "c22",
+                        "color": "#55e692"
+                      },
+                      "23": {
+                        "index": 23,
+                        "text": "c23",
+                        "color": "#7816a0"
+                      },
+                      "24": {
+                        "index": 24,
+                        "text": "c24",
+                        "color": "#c8c81c"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Wert"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "${merkmal:text}"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "lat"
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "tooltip": true,
+                  "viz": false,
+                  "legend": true
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "lon"
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "tooltip": true,
+                  "viz": false,
+                  "legend": true
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "type": "query",
+        "name": "version",
+        "label": "Clusterung",
+        "hide": 2,
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "pdb-postgres"
+        },
+        "query": "-- Clusterung des jüngsten verarbeiteten GFS-Laufs\nSELECT clustering_version FROM meta.nwp_feature_run\n WHERE source_id = (SELECT source_id FROM meta.source WHERE code = 'gfs_0p25')\n ORDER BY run_time DESC, processed_at DESC LIMIT 1",
+        "definition": "-- Clusterung des jüngsten verarbeiteten GFS-Laufs\nSELECT clustering_version FROM meta.nwp_feature_run\n WHERE source_id = (SELECT source_id FROM meta.source WHERE code = 'gfs_0p25')\n ORDER BY run_time DESC, processed_at DESC LIMIT 1",
+        "refresh": 1,
+        "includeAll": false,
+        "multi": false,
+        "options": [],
+        "current": {},
+        "sort": 0
+      },
+      {
+        "type": "query",
+        "name": "lauf",
+        "label": "GFS-Lauf",
+        "hide": 0,
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "pdb-postgres"
+        },
+        "query": "SELECT to_char(run_time AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') AS __text,\n       to_char(run_time AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24\":00:00Z\"') AS __value\n  FROM meta.nwp_feature_run\n WHERE source_id = (SELECT source_id FROM meta.source WHERE code = 'gfs_0p25')\n   AND clustering_version = '$version'\n ORDER BY run_time DESC LIMIT 28",
+        "definition": "SELECT to_char(run_time AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') AS __text,\n       to_char(run_time AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24\":00:00Z\"') AS __value\n  FROM meta.nwp_feature_run\n WHERE source_id = (SELECT source_id FROM meta.source WHERE code = 'gfs_0p25')\n   AND clustering_version = '$version'\n ORDER BY run_time DESC LIMIT 28",
+        "refresh": 1,
+        "includeAll": false,
+        "multi": false,
+        "options": [],
+        "current": {},
+        "sort": 0
+      },
+      {
+        "type": "query",
+        "name": "tag",
+        "label": "Prognosetag",
+        "hide": 0,
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "pdb-postgres"
+        },
+        "query": "-- Tage (Europe/Berlin), die der Lauf (384 h) ganz abdeckt; der Tag des Laufs zählt mit, wenn\n-- höchstens die ersten drei Stunden fehlen. \"morgen\" steht vorn und ist damit vorausgewählt.\nWITH r AS (SELECT '$lauf'::timestamptz AS rt),\nd AS (\n  SELECT d::date AS d\n    FROM r, generate_series(((r.rt - interval '3 hours') AT TIME ZONE 'Europe/Berlin')::date,\n                            ((r.rt + interval '384 hours') AT TIME ZONE 'Europe/Berlin')::date,\n                            interval '1 day') AS d\n   WHERE d::date::timestamp AT TIME ZONE 'Europe/Berlin' >= r.rt - interval '3 hours'\n     AND (d::date + 1)::timestamp AT TIME ZONE 'Europe/Berlin' <= r.rt + interval '384 hours'),\nm AS (SELECT (now() AT TIME ZONE 'Europe/Berlin')::date + 1 AS morgen)\nSELECT (ARRAY['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'])[extract(dow FROM d)::int + 1]\n       || ' ' || to_char(d, 'DD.MM.')\n       || CASE d - m.morgen WHEN -1 THEN ' (heute)' WHEN 0 THEN ' (morgen)' ELSE '' END\n         AS __text,\n       to_char(d, 'YYYY-MM-DD') AS __value\n  FROM d, m\n ORDER BY d = m.morgen DESC, d",
+        "definition": "-- Tage (Europe/Berlin), die der Lauf (384 h) ganz abdeckt; der Tag des Laufs zählt mit, wenn\n-- höchstens die ersten drei Stunden fehlen. \"morgen\" steht vorn und ist damit vorausgewählt.\nWITH r AS (SELECT '$lauf'::timestamptz AS rt),\nd AS (\n  SELECT d::date AS d\n    FROM r, generate_series(((r.rt - interval '3 hours') AT TIME ZONE 'Europe/Berlin')::date,\n                            ((r.rt + interval '384 hours') AT TIME ZONE 'Europe/Berlin')::date,\n                            interval '1 day') AS d\n   WHERE d::date::timestamp AT TIME ZONE 'Europe/Berlin' >= r.rt - interval '3 hours'\n     AND (d::date + 1)::timestamp AT TIME ZONE 'Europe/Berlin' <= r.rt + interval '384 hours'),\nm AS (SELECT (now() AT TIME ZONE 'Europe/Berlin')::date + 1 AS morgen)\nSELECT (ARRAY['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'])[extract(dow FROM d)::int + 1]\n       || ' ' || to_char(d, 'DD.MM.')\n       || CASE d - m.morgen WHEN -1 THEN ' (heute)' WHEN 0 THEN ' (morgen)' ELSE '' END\n         AS __text,\n       to_char(d, 'YYYY-MM-DD') AS __value\n  FROM d, m\n ORDER BY d = m.morgen DESC, d",
+        "refresh": 1,
+        "includeAll": false,
+        "multi": false,
+        "options": [],
+        "current": {},
+        "sort": 0
+      },
+      {
+        "type": "custom",
+        "name": "raster",
+        "label": "Raster (Grad)",
+        "query": "0.5,1,2",
+        "options": [
+          {
+            "text": "0.5",
+            "value": "0.5",
+            "selected": false
+          },
+          {
+            "text": "1",
+            "value": "1",
+            "selected": true
+          },
+          {
+            "text": "2",
+            "value": "2",
+            "selected": false
+          }
+        ],
+        "current": {
+          "text": "1",
+          "value": "1",
+          "selected": true
+        },
+        "includeAll": false,
+        "multi": false,
+        "hide": 0
+      },
+      {
+        "type": "query",
+        "name": "technologie",
+        "label": "Technologie",
+        "hide": 0,
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "pdb-postgres"
+        },
+        "query": "SELECT CASE technology\n  WHEN 'wind_on' THEN 'Wind an Land' WHEN 'wind_off' THEN 'Wind auf See'\n  WHEN 'pv_ground' THEN 'PV Freifläche' WHEN 'pv_roof' THEN 'PV Dach'\n  WHEN 'biomass' THEN 'Biomasse' WHEN 'hydro' THEN 'Wasserkraft' ELSE technology END AS __text, technology AS __value\n  FROM (SELECT DISTINCT technology FROM assets.cluster WHERE clustering_version = '$version') t\n ORDER BY array_position(ARRAY['wind_on', 'wind_off', 'pv_ground', 'pv_roof', 'biomass',\n                               'hydro'], technology)",
+        "definition": "SELECT CASE technology\n  WHEN 'wind_on' THEN 'Wind an Land' WHEN 'wind_off' THEN 'Wind auf See'\n  WHEN 'pv_ground' THEN 'PV Freifläche' WHEN 'pv_roof' THEN 'PV Dach'\n  WHEN 'biomass' THEN 'Biomasse' WHEN 'hydro' THEN 'Wasserkraft' ELSE technology END AS __text, technology AS __value\n  FROM (SELECT DISTINCT technology FROM assets.cluster WHERE clustering_version = '$version') t\n ORDER BY array_position(ARRAY['wind_on', 'wind_off', 'pv_ground', 'pv_roof', 'biomass',\n                               'hydro'], technology)",
+        "refresh": 1,
+        "includeAll": false,
+        "multi": false,
+        "options": [],
+        "current": {},
+        "sort": 0
+      },
+      {
+        "type": "query",
+        "name": "merkmal",
+        "label": "Wettermerkmal",
+        "hide": 0,
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "pdb-postgres"
+        },
+        "query": "-- Merkmale, die wx-process für die Art der Technologie rechnet (config/process/gfs_0p25.yaml)\nSELECT label AS __text, code AS __value\n  FROM (VALUES\n    ('wind', 1, 'wind_speed_hub', 'Wind in Nabenhöhe (m/s)'),\n    ('wind', 2, 'wind_cf', 'Auslastung Wind (%)'),\n    ('wind', 3, 'wind_power', 'Mittlere Leistung (MW)'),\n    ('wind', 4, 'wind_speed_100m', 'Wind in 100 m (m/s)'),\n    ('wind', 5, 'wind_speed_10m', 'Wind in 10 m (m/s)'),\n    ('wind', 6, 'gust', 'Böen (m/s)'),\n    ('pv', 1, 'ghi', 'Globalstrahlung (W/m²)'),\n    ('pv', 2, 'pv_cf', 'Auslastung PV (%)'),\n    ('pv', 3, 'pv_power', 'Mittlere Leistung (MW)'),\n    ('pv', 4, 'cloud_cover', 'Bewölkung (%)'),\n    ('pv', 5, 'snow_fraction', 'Schneeanteil (%)'),\n    ('hydro', 1, 'precip', 'Niederschlag (mm/Tag)'),\n    ('hydro', 2, 'snow_fraction', 'Schneeanteil (%)'),\n    ('*', 9, 't2m', 'Temperatur in 2 m (°C)')) AS m(kind, pos, code, label)\n WHERE kind IN ('*', CASE WHEN '$technologie' LIKE 'wind%' THEN 'wind'\n                          WHEN '$technologie' LIKE 'pv%' THEN 'pv'\n                          WHEN '$technologie' = 'hydro' THEN 'hydro' END)\n ORDER BY pos",
+        "definition": "-- Merkmale, die wx-process für die Art der Technologie rechnet (config/process/gfs_0p25.yaml)\nSELECT label AS __text, code AS __value\n  FROM (VALUES\n    ('wind', 1, 'wind_speed_hub', 'Wind in Nabenhöhe (m/s)'),\n    ('wind', 2, 'wind_cf', 'Auslastung Wind (%)'),\n    ('wind', 3, 'wind_power', 'Mittlere Leistung (MW)'),\n    ('wind', 4, 'wind_speed_100m', 'Wind in 100 m (m/s)'),\n    ('wind', 5, 'wind_speed_10m', 'Wind in 10 m (m/s)'),\n    ('wind', 6, 'gust', 'Böen (m/s)'),\n    ('pv', 1, 'ghi', 'Globalstrahlung (W/m²)'),\n    ('pv', 2, 'pv_cf', 'Auslastung PV (%)'),\n    ('pv', 3, 'pv_power', 'Mittlere Leistung (MW)'),\n    ('pv', 4, 'cloud_cover', 'Bewölkung (%)'),\n    ('pv', 5, 'snow_fraction', 'Schneeanteil (%)'),\n    ('hydro', 1, 'precip', 'Niederschlag (mm/Tag)'),\n    ('hydro', 2, 'snow_fraction', 'Schneeanteil (%)'),\n    ('*', 9, 't2m', 'Temperatur in 2 m (°C)')) AS m(kind, pos, code, label)\n WHERE kind IN ('*', CASE WHEN '$technologie' LIKE 'wind%' THEN 'wind'\n                          WHEN '$technologie' LIKE 'pv%' THEN 'pv'\n                          WHEN '$technologie' = 'hydro' THEN 'hydro' END)\n ORDER BY pos",
+        "refresh": 1,
+        "includeAll": false,
+        "multi": false,
+        "options": [],
+        "current": {},
+        "sort": 0
+      }
+    ]
+  },
+  "annotations": {
+    "list": []
+  }
+}

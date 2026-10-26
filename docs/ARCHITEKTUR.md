@@ -1339,6 +1339,15 @@ Weitere Prognosequellen (z. B. Wind/PV der ÜNB oder Prognosen anderer Anbieter,
 - Die Week-Ahead-Lastprognose von ENTSO-E (Tagesminimum und -maximum je Tag) wird als zusätzliche Reihe geladen.
 - Das Dashboard liegt als JSON unter `config/grafana/dashboards/prognose.json` und wird wie das Status-Dashboard provisioniert. Quellenvermerke (ENTSO-E, SMARD) stehen im Panel-Text.
 
+### 7.10.1 Karten-Dashboard (Cluster, Wetter, Erzeugung)
+
+Das Dashboard `config/grafana/dashboards/karte.json` („PredictionDB Karte“) zeigt die Gebietscluster aus 7.5 und die daraus gerechneten Wetter-Features auf einer Deutschlandkarte (Grafana-Geomap, Hintergrund CARTO/OpenStreetMap, lädt der Browser). Eine eigene Wetter-Clusterung gibt es nicht: `wx-process` mittelt die GFS-Felder leistungsgewichtet auf die MaStR-Cluster.
+
+- **Energiemenge am Prognosetag je Rasterfeld:** je Cluster mittlere Leistung (`wind_power`, `pv_power`) über die Gültigkeitszeiten des Tages (Europe/Berlin) mal Tageslänge, nach `assets.grid_weight` auf die 0,25°-Zellen verteilt und auf ein wählbares Raster (0,5/1/2°) summiert. Kreisgröße = Energiemenge, Farbe = Windanteil, Mouseover nach Erzeugungsart. Biomasse und Wasserkraft haben keine Leistungsprognose aus dem Wetter und fehlen dort.
+- **Clusterung je Technologie:** Zellen aus `assets.cluster_cell` nach Cluster eingefärbt, Zentren nach installierter Leistung (`assets.capacity_daily`).
+- **Wetter je Cluster:** Tagesmittel eines wählbaren Merkmals aus `feat.nwp_value` an den Clusterzentren.
+- Variablen: GFS-Lauf (Standard der jüngste verarbeitete), Prognosetag (Standard morgen), Raster, Technologie, Wettermerkmal. Die Abfragen prüft `tests/integration/test_karte_dashboard.py`.
+
 ### 7.11 Veröffentlichung trainierter Modelle (geplant)
 
 Fertig trainierte Modelle (zuerst `de_lu_v1`: Last DE und Day-Ahead-Preis DE-LU, 7.3/7.7) sollen andere Instanzen ohne eigenes Training nutzen können. Sie werden als **eigene Modell-Releases in GHCR** veröffentlicht, getrennt von den Code-Releases, weil sich Modelle häufiger und unabhängig vom Code ändern (neuer Datenstand, Fine-Tuning, Champion-Wechsel).

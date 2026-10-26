@@ -13,6 +13,20 @@
     "from": "now-2d",
     "to": "now"
   },
+  "links": [
+    {
+      "type": "link",
+      "title": "Karte",
+      "url": "/d/pdb-karte/predictiondb-karte",
+      "icon": "external link",
+      "tooltip": "Cluster, Wetter und Erzeugung auf der Deutschlandkarte",
+      "targetBlank": false,
+      "includeVars": false,
+      "keepTime": false,
+      "asDropdown": false,
+      "tags": []
+    }
+  ],
   "panels": [
     {
       "type": "row",
