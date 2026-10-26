@@ -109,7 +109,8 @@ services:
 
   # GFS-Historie aus dem AWS-Archiv (nur bei Bedarf: docker compose --profile backfill up -d).
   # Ab GFS v16 (2021-03-22 12Z) bis vor das 30-h-Fenster von ingest-gfs, jüngste Läufe zuerst;
-  # ein Neustart setzt dort fort, wo er stand.
+  # ein Neustart setzt dort fort, wo er stand. Läufe, deren Silber schon vorliegt (z. B. von
+  # wx-import aus GHCR), werden übersprungen; GFS_BACKFILL_BRONZE=true lädt auch für sie Bronze.
   # Läufe per GFS_BACKFILL_RUNS wählbar (Standard 0,12), danach z. B. 6,18 nachziehen.
   # Tempo: GFS_BACKFILL_PARALLEL Läufe gleichzeitig, GFS_BACKFILL_CONCURRENCY Anfragen je
   # Archiv-Endpunkt für alle Läufe zusammen (Engpass ist die Latenz zum Archiv, nicht die CPU).
@@ -132,11 +133,11 @@ services:
       garage-init: {condition: service_completed_successfully}
       migrate: {condition: service_completed_successfully}
 
-  # Rechnet die nachgeladenen Läufe stündlich nach Silber und Features (wx-process latest
-  # schaut nur 48 h zurück).
+  # Rechnet die nachgeladenen bzw. importierten Läufe stündlich nach Silber und Features
+  # (wx-process latest schaut nur 48 h zurück).
   wx-process-backfill:
     <<: *app
-    profiles: [backfill]
+    profiles: [backfill, history]
     command:
       - wx-process
       - gfs
@@ -148,6 +149,22 @@ services:
     depends_on:
       garage-init: {condition: service_completed_successfully}
       migrate: {condition: service_completed_successfully}
+
+  # GFS-Historie als Silber aus GHCR (gebaut vom Workflow gfs-history.yml), statt sie über die
+  # gedrosselte Leitung aus dem AWS-Archiv zu laden: docker compose --profile history up -d.
+  # Holt stündlich neue Läufe nach wx-silver; wx-process-backfill rechnet daraus die Features.
+  wx-import:
+    <<: *app
+    profiles: [history]
+    command:
+      - wx-exchange
+      - gfs
+      - import
+      - ${GFS_BACKFILL_START:-2021-03-22T12}
+      - --runs=${GFS_HISTORY_RUNS:-0,12,6,18}
+      - --watch=3600
+    depends_on:
+      garage-init: {condition: service_completed_successfully}
 
   # Prognosemodell Last/Preis DE-LU (services/ml_train, config/ml/de_lu_v1.yaml). Einmalige Jobs:
   #   docker compose --profile ml run --rm ml-train snapshot --out /data/snap

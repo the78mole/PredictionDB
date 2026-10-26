@@ -243,6 +243,7 @@ class GfsIngestor:
         on_run: Callable[[RunResult], Awaitable[None]] | None = None,
         on_start: Callable[[datetime, int], Awaitable[None]] | None = None,
         on_step: Callable[[datetime, StepResult], Awaitable[None]] | None = None,
+        skip_run: Callable[[datetime], Awaitable[bool]] | None = None,
     ) -> list[RunResult]:
         """Archiv-Modus: alle (bzw. die in ``hours`` gewählten) Läufe im Zeitraum.
 
@@ -250,13 +251,17 @@ class GfsIngestor:
         jederzeit mit demselben Aufruf fortgesetzt werden. ``parallel_runs`` lädt mehrere
         Läufe gleichzeitig; die Grenzen je Endpunkt gelten weiterhin für alle zusammen.
         ``on_start`` (Lauf, Schrittzahl), ``on_step`` und ``on_run`` melden Beginn, jeden
-        Schritt und das Ende eines Laufs (Fortschrittsprotokoll).
+        Schritt und das Ende eines Laufs (Fortschrittsprotokoll). Läufe, für die ``skip_run``
+        wahr liefert (z. B. Silber schon aus GHCR importiert), werden nicht geladen.
         """
         runs = self.backfill_runs(start, end, hours=hours, newest_first=newest_first)
         sem = asyncio.Semaphore(max(1, parallel_runs))
 
         async def one(run: datetime) -> RunResult:
             async with sem:
+                if skip_run is not None and await skip_run(run):
+                    steps = [StepResult(s, "skipped") for s in self.config.step_list()]
+                    return RunResult(run, steps, complete=True)
                 if on_start is not None:
                     await on_start(run, len(self.config.step_list()))
                 result = await self.ingest_run(run, stop_on_pending=False, on_step=on_step)

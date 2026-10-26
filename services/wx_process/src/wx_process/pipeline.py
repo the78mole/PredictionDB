@@ -1,10 +1,12 @@
 """Ablauf je Lauf: Bronze vollständig? → Silber bauen (oder wiederverwenden) → Features je Cluster.
 
 Ein Lauf ist fällig, sobald in Bronze sein ``run.json`` liegt (``wx-ingest`` schreibt es, wenn
-alle Schritte gespeichert sind). Gerechnet ist er, wenn ``meta.nwp_feature_run`` einen Eintrag
-für die aktuelle Clusterung und Feature-Version hat. Silber wird nur neu gebaut, wenn es fehlt,
-die Kodierung sich geändert hat oder Bronze neuer ist; danach entstehen die Features aus den
-quantisierten Silber-Werten, sodass eine spätere Neuberechnung aus Silber dasselbe ergibt.
+alle Schritte gespeichert sind) oder ohne Bronze ein vollständiges Silber der aktuellen
+``SILVER_VERSION`` vorliegt (aus GHCR importiert, ``wx-exchange``). Gerechnet ist er, wenn
+``meta.nwp_feature_run`` einen Eintrag für die aktuelle Clusterung und Feature-Version hat.
+Silber wird nur neu gebaut, wenn es fehlt, die Kodierung sich geändert hat oder Bronze neuer
+ist; danach entstehen die Features aus den quantisierten Silber-Werten, sodass eine spätere
+Neuberechnung aus Silber dasselbe ergibt.
 """
 
 from __future__ import annotations
@@ -128,10 +130,23 @@ class WxPipeline:
         log.info("silver.written", run=f"{run:%Y%m%d%H}", key=key, steps=len(ds.steps))
         return ds
 
+    def imported_silver(self, run: datetime) -> dict[str, Any] | None:
+        """Ersatz für das Bronze-Laufmanifest, wenn nur Silber vorliegt (Import aus GHCR)."""
+        attrs = self.silver.attrs(self.source.model, self.source.resolution, run)
+        if attrs is None or attrs.get("silver_version") != SILVER_VERSION:
+            return None
+        return {
+            "completed_at": attrs.get("bronze_completed_at"),
+            "steps": len(self.source.step_list()) - len(attrs.get("missing_steps") or []),
+            "endpoints": {"ghcr": 1},
+            "imported": True,
+        }
+
     def load_silver(
         self, run: datetime, manifest: dict[str, Any], *, force: bool = False
     ) -> tuple[Dataset, bool]:
-        if not force and self.silver_current(run, manifest):
+        # Importiertes Silber hat kein Bronze, aus dem es neu gebaut werden könnte
+        if manifest.get("imported") or (not force and self.silver_current(run, manifest)):
             return self.silver.read(self.source.model, self.source.resolution, run), False
         return self.build_silver(run, manifest), True
 
@@ -177,6 +192,8 @@ class WxPipeline:
     ) -> RunOutcome:
         run = run.astimezone(UTC)
         manifest = self.run_manifest(run)
+        if manifest is None:
+            manifest = self.imported_silver(run)
         if manifest is None:
             return RunOutcome(run, "not_ready")
         version = clustering

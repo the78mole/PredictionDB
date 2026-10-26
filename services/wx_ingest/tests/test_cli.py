@@ -26,3 +26,14 @@ def test_backfill_concurrency() -> None:
 def test_invalid_hours(text: str) -> None:
     with pytest.raises(argparse.ArgumentTypeError):
         parse_hours(text)
+
+
+def test_bronze_with_silver_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    args = build_parser().parse_args(["gfs", "backfill", "2021-03-22T12"])
+    assert args.bronze_with_silver is False
+    monkeypatch.setenv("GFS_BACKFILL_BRONZE", "true")
+    args = build_parser().parse_args(["gfs", "backfill", "2021-03-22T12"])
+    assert args.bronze_with_silver is True
+    argv = ["gfs", "backfill", "2021-03-22T12", "--no-bronze-with-silver"]
+    args = build_parser().parse_args(argv)
+    assert args.bronze_with_silver is False

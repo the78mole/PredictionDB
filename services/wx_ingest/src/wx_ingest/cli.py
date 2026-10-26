@@ -26,12 +26,16 @@ from predictiondb_core.db import create_db_engine
 from predictiondb_core.log import configure_logging
 from predictiondb_core.s3 import s3_store
 from predictiondb_core.settings import get_settings
-from wx_ingest.bronze import Bronze
+from wx_ingest.bronze import Bronze, SilverMarker
 from wx_ingest.config import GfsConfig
 from wx_ingest.ingest import GfsIngestor, RunResult, StepResult, result_dict
 from wx_ingest.jobs import JobLog
 
 DEFAULT_CONFIG = Path(os.environ.get("WX_GFS_CONFIG", "config/sources/gfs_0p25.yaml"))
+
+
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
 
 
 def parse_run(text: str) -> datetime:
@@ -107,6 +111,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="gleichzeitige Anfragen je Archiv-Endpunkt (Standard aus der Konfiguration)",
     )
     bf.add_argument("--no-job-log", action="store_true", help="ohne Protokoll in meta.backfill_job")
+    bf.add_argument(
+        "--bronze-with-silver",
+        action=argparse.BooleanOptionalAction,
+        default=_env_flag("GFS_BACKFILL_BRONZE"),
+        help="Bronze auch für Läufe laden, deren Silber schon vorliegt, z. B. aus GHCR importiert "
+        "(Standard: GFS_BACKFILL_BRONZE, sonst aus)",
+    )
     return p
 
 
@@ -205,6 +216,13 @@ async def _backfill(
     async def progress(r: RunResult) -> None:
         await asyncio.to_thread(jobs.progress, r)
 
+    skip_run = None
+    if not args.bronze_with_silver:
+        silver = SilverMarker(s3_store(get_settings().buckets.silver), config)
+
+        async def skip_run(run: datetime) -> bool:
+            return await silver.complete(run)
+
     try:
         results = await ingestor.backfill(
             args.start,
@@ -215,6 +233,7 @@ async def _backfill(
             on_run=progress,
             on_start=started,
             on_step=step_done,
+            skip_run=skip_run,
         )
     except (KeyboardInterrupt, asyncio.CancelledError):
         jobs.finish("aborted", "abgebrochen")
