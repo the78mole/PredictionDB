@@ -42,7 +42,7 @@ jobs:
     name: Analysen-PDFs auswählen und übernehmen
     # Releases des Prognose-Stacks (predict/v*, predict.yml) tragen keine Analysen
     if: ${{ !startsWith(github.event.release.tag_name || inputs.tag || '', 'predict/') }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     concurrency:
       group: analysen-pdf-auswahl-${{ github.event.release.tag_name || inputs.tag || github.ref }}
       cancel-in-progress: true
@@ -99,7 +99,7 @@ jobs:
     name: Analysen-PDFs rendern
     needs: auswahl
     if: needs.auswahl.outputs.rendern != ''
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     # Pandoc, Chromium, git und gh fertig installiert (the78mole/docker-images).
     container: ghcr.io/the78mole/pandoc-chromium:latest
     defaults:
