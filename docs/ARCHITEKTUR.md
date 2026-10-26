@@ -1341,7 +1341,7 @@ Weitere Prognosequellen (z. B. Wind/PV der ÜNB oder Prognosen anderer Anbieter,
 
 ### 7.10.1 Karten-Dashboard (Cluster, Wetter, Erzeugung)
 
-Das Dashboard `config/grafana/dashboards/karte.json` („PredictionDB Karte“) zeigt die Gebietscluster aus 7.5 und die daraus gerechneten Wetter-Features auf einer Deutschlandkarte (Grafana-Geomap, Hintergrund CARTO/OpenStreetMap, lädt der Browser). Eine eigene Wetter-Clusterung gibt es nicht: `wx-process` mittelt die GFS-Felder leistungsgewichtet auf die MaStR-Cluster.
+Das Dashboard `config/grafana/dashboards/karte.json` („PredictionDB Karte“) zeigt die Gebietscluster aus 7.5 und die daraus gerechneten Wetter-Features auf einer Deutschlandkarte (Grafana-Geomap, Hintergrund OpenStreetMap ohne API-Key, lädt der Browser; die CARTO-Standardkarte von Grafana verlangt inzwischen einen Key). Eine eigene Wetter-Clusterung gibt es nicht: `wx-process` mittelt die GFS-Felder leistungsgewichtet auf die MaStR-Cluster.
 
 - **Energiemenge am Prognosetag je Rasterfeld:** je Cluster mittlere Leistung (`wind_power`, `pv_power`) über die Gültigkeitszeiten des Tages (Europe/Berlin) mal Tageslänge, nach `assets.grid_weight` auf die 0,25°-Zellen verteilt und auf ein wählbares Raster (0,5/1/2°) summiert. Kreisgröße = Energiemenge, Farbe = Windanteil, Mouseover nach Erzeugungsart. Biomasse und Wasserkraft haben keine Leistungsprognose aus dem Wetter und fehlen dort.
 - **Clusterung je Technologie:** Zellen aus `assets.cluster_cell` nach Cluster eingefärbt, Zentren nach installierter Leistung (`assets.capacity_daily`).
