@@ -26,20 +26,27 @@ passend zum GFS-Gitter. Grundlage: `docs/ARCHITEKTUR.md` Kap. 7.5; Konfiguration
 
    Status: endgültig stillgelegt ohne Datum gilt ab der letzten Aktualisierung als stillgelegt,
    vorübergehend stillgelegt ab Beginn der Stilllegung (oder letzter Aktualisierung).
-3. **Verorten** (`geo_precision`): eigene Koordinaten (vertauschte werden korrigiert) →
+3. **Regelzone und Netzbetreiber.** `Netzanschlusspunkte_*.xml` tragen je Lokation die Regelzone
+   des Übertragungsnetzbetreibers (`RegelzoneNetzanschlusspunkt`: 50Hertz, Amprion, TenneT,
+   TransnetBW) und die MaStR-Nummer des Netzbetreibers; Einheiten verweisen über
+   `LokationMaStRNummer` darauf (`regelzone_source = 'nap'`). Einheiten ohne Netzanschlusspunkt
+   übernehmen die nach Leistung häufigste Regelzone direkt zugeordneter Einheiten derselben
+   Gemeinde → PLZ → Kreis → Seegebiet → Bundesland. Leistung je Regelzone in `assets.snapshot.stats`
+   (`zones`), je Cluster und Zelle in `assets.zone_weight` (Grafana-Karte, Aufteilung je ÜNB).
+4. **Verorten** (`geo_precision`): eigene Koordinaten (vertauschte werden korrigiert) →
    Seegebiet für Offshore ohne Koordinaten → Gemeinde (`assets.gemeinde`, sonst Mittel der
    Einheiten mit Koordinaten derselben Gemeinde) → PLZ → Kreis → Bundesland. Kleine Anlagen
    (bis 30 kW, vor allem Dach-PV) haben im öffentlichen Export keine Koordinaten.
-4. **Kennzahlen** je Technologie (Anzahl, aktive Leistung, Leistung je Verortungsstufe) und
+5. **Kennzahlen** je Technologie (Anzahl, aktive Leistung, Leistung je Verortungsstufe) und
    Unterschied zum Vorgänger (neue, entfallene, nachgemeldete Einheiten) landen in
    `assets.snapshot.stats` und im Log. Einheiten älterer Snapshots werden nach
    `keep_snapshots` gelöscht, das ZIP bleibt.
-5. **Cluster.** Leistung je Zelle des 0,25°-Gitters summieren, leistungsgewichtetes k-Means je
+6. **Cluster.** Leistung je Zelle des 0,25°-Gitters summieren, leistungsgewichtetes k-Means je
    Technologie (Zahl je Technologie in der YAML). Cluster 0 ist das mit der meisten Leistung;
    Region-Codes `wind_on:v2026Q4:c07` in `meta.region`. Eine Clusterung bleibt
    `recluster_after_days` (365) lang bestehen, neue Zellen kommen zum nächstgelegenen Zentrum.
    Ein älterer Export (Nachimport) ändert die Clusterung nicht.
-6. **Gewichte und Bestand.** `assets.grid_weight`: Leistung und Anteil je Gitterzelle und
+7. **Gewichte und Bestand.** `assets.grid_weight`: Leistung und Anteil je Gitterzelle und
    Cluster für jedes Gitter aus `weight_grids` (Anteile je Cluster summieren sich auf 1).
    `assets.capacity_daily`: installierte Leistung je Cluster und Tag ab `history_start` bis zum
    Exportdatum, aus Inbetriebnahme, Stilllegung und Wiederaufnahme. Für spätere Tage gilt der

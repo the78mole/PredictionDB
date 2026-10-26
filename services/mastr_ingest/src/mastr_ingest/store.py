@@ -19,7 +19,7 @@ from numpy.typing import NDArray
 from psycopg import Connection as PgConnection
 from sqlalchemy import Connection, Engine, text
 
-from mastr_ingest.units import Unit
+from mastr_ingest.units import GridConnection, Unit
 
 UNIT_COLUMNS = [f.name for f in fields(Unit)]
 
@@ -207,6 +207,69 @@ class Store:
                     p,
                 )
 
+    def assign_zones(self, snapshot_id: int, connections: Iterable[GridConnection]) -> int:
+        """Setzt ``regelzone``/``netzbetreiber_nr``/``regelzone_source`` aller Einheiten.
+
+        Direkt über den Netzanschlusspunkt der Lokation (bei mehreren der Lokation der erste mit
+        Regelzone). Einheiten ohne Netzanschlusspunkt übernehmen die nach Leistung häufigste
+        Regelzone direkt zugeordneter Einheiten derselben Gemeinde → PLZ → Kreis → Seegebiet →
+        Bundesland. Gibt die Zahl der gelesenen Netzanschlusspunkte zurück.
+        """
+        p = {"id": snapshot_id}
+        n = 0
+        with self.engine.begin() as c:
+            c.execute(
+                text("""CREATE TEMP TABLE nap (lokation_nr text, regelzone text,
+                        netzbetreiber_nr text) ON COMMIT DROP""")
+            )
+            pg = cast(PgConnection[Any], c.connection.driver_connection)
+            with pg.cursor().copy("COPY nap FROM STDIN") as copy:
+                for gc in connections:
+                    copy.write_row((gc.lokation_nr, gc.regelzone, gc.netzbetreiber_nr))
+                    n += 1
+            c.execute(
+                text("""UPDATE assets.unit SET regelzone = NULL, netzbetreiber_nr = NULL,
+                        regelzone_source = NULL WHERE snapshot_id = :id
+                        AND (regelzone_source IS NOT NULL OR netzbetreiber_nr IS NOT NULL)"""),
+                p,
+            )
+            c.execute(text("ANALYZE nap"))
+            c.execute(
+                text("""
+                UPDATE assets.unit u
+                SET regelzone = n.regelzone, netzbetreiber_nr = n.netzbetreiber_nr,
+                    regelzone_source = CASE WHEN n.regelzone IS NOT NULL THEN 'nap' END
+                FROM (SELECT DISTINCT ON (lokation_nr) * FROM nap
+                      ORDER BY lokation_nr, regelzone NULLS LAST, netzbetreiber_nr) n
+                WHERE u.snapshot_id = :id AND u.lokation_nr = n.lokation_nr"""),
+                p,
+            )
+            for source, key, unit_key in (
+                ("gemeinde", "ags", "u.ags"),
+                ("plz", "plz", "u.plz"),
+                ("kreis", "left(ags, 5)", "left(u.ags, 5)"),
+                ("seegebiet", "sea_area", "u.sea_area"),
+                ("land", "bundesland", "u.bundesland"),
+            ):
+                c.execute(
+                    text(f"""
+                    WITH ref AS (
+                      SELECT DISTINCT ON (k) k, regelzone
+                      FROM (SELECT {key} AS k, regelzone, sum(capacity_kw) AS kw
+                            FROM assets.unit
+                            WHERE snapshot_id = :id AND regelzone_source = 'nap'
+                              AND {key} IS NOT NULL
+                            GROUP BY 1, 2) s
+                      ORDER BY k, kw DESC, regelzone)
+                    UPDATE assets.unit u SET regelzone = ref.regelzone,
+                                             regelzone_source = '{source}'
+                    FROM ref
+                    WHERE u.snapshot_id = :id AND u.regelzone IS NULL
+                      AND {unit_key} = ref.k"""),
+                    p,
+                )
+        return n
+
     def unit_stats(self, snapshot_id: int, export_date: date) -> dict[str, Any]:
         """Kennzahlen je Technologie: Anzahl, aktive Leistung, Verortungsgüte."""
         with self.engine.connect() as c:
@@ -241,6 +304,25 @@ class Store:
         }
         for tech, prec, mw in geo:
             out[tech]["geo_mw"][prec] = float(mw)
+        return out
+
+    def zone_stats(self, snapshot_id: int, export_date: date) -> dict[str, Any]:
+        """Aktive Leistung (MW) je Technologie, Regelzone und Herkunft der Zuordnung."""
+        with self.engine.connect() as c:
+            rows = c.execute(
+                text(f"""
+                SELECT technology, COALESCE(regelzone, 'unbekannt'),
+                       COALESCE(regelzone_source, 'none'),
+                       round((sum(capacity_kw) / 1000)::numeric, 1)
+                FROM assets.unit u WHERE snapshot_id = :id AND {ACTIVE_AT}
+                GROUP BY 1, 2, 3"""),
+                {"id": snapshot_id, "d": export_date},
+            ).all()
+        out: dict[str, Any] = {}
+        for tech, zone, source, mw in rows:
+            t = out.setdefault(tech, {"zone_mw": {}, "source_mw": {}})
+            t["zone_mw"][zone] = round(t["zone_mw"].get(zone, 0.0) + float(mw), 1)
+            t["source_mw"][source] = round(t["source_mw"].get(source, 0.0) + float(mw), 1)
         return out
 
     def snapshot_diff(self, new_id: int, old_id: int, old_date: date) -> dict[str, Any]:
@@ -457,6 +539,24 @@ class Store:
                   {self._UNIT_CLUSTER} AND {ACTIVE_AT}
                   GROUP BY 1, 2, 3, 4) s"""),
                 {"v": version, "id": snapshot_id, "res": res, "g": grid, "wres": wres, "d": at},
+            ).rowcount
+        return int(n)
+
+    def write_zone_weights(self, version: str, snapshot_id: int, res: float, at: date) -> int:
+        """Leistung je Cluster, Regelzone und Zelle des Clustergitters am Tag ``at``."""
+        with self.engine.begin() as c:
+            c.execute(
+                text("DELETE FROM assets.zone_weight WHERE clustering_version = :v"), {"v": version}
+            )
+            n = c.execute(
+                text(f"""
+                INSERT INTO assets.zone_weight
+                SELECT :v, u.technology, cc.cluster_no, COALESCE(u.regelzone, 'unbekannt'),
+                       min(cc.lat), min(cc.lon), sum(u.capacity_kw) / 1000, :id
+                {self._UNIT_CLUSTER} AND {ACTIVE_AT}
+                GROUP BY u.technology, cc.cluster_no, COALESCE(u.regelzone, 'unbekannt'),
+                         {_idx("u.lat")}, {_idx("u.lon")}"""),
+                {"v": version, "id": snapshot_id, "res": res, "d": at},
             ).rowcount
         return int(n)
 

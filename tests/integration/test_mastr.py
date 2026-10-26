@@ -19,7 +19,7 @@ from mastr_ingest.config import MastrConfig
 from mastr_ingest.download import Bronze
 from mastr_ingest.pipeline import MastrPipeline
 from mastr_ingest.store import Store
-from mastr_ingest.testing import make_export, unit
+from mastr_ingest.testing import make_export, nap, unit
 from predictiondb_core.db import create_db_engine
 from predictiondb_core.settings import Settings
 
@@ -54,7 +54,14 @@ def tables(extra_wind: list[dict[str, Any]] | None = None) -> dict[str, list[dic
     muc = {"Gemeindeschluessel": "09162000", "Postleitzahl": "80331", "Bundesland": "1403"}
     return {
         "EinheitenWind": [
-            unit("W1", 2000, "2094-03-01", **_coord(54.02, 9.01), WindAnLandOderAufSee="888"),
+            unit(
+                "W1",
+                2000,
+                "2094-03-01",
+                **_coord(54.02, 9.01),
+                WindAnLandOderAufSee="888",
+                LokationMaStRNummer="SELW1",
+            ),
             unit("W2", 2000, "2096-01-01", **_coord(54.10, 9.20), WindAnLandOderAufSee="888"),
             unit(
                 "W3",
@@ -68,7 +75,15 @@ def tables(extra_wind: list[dict[str, Any]] | None = None) -> dict[str, list[dic
             unit("W4", 3000, "2097-01-01", **_coord(48.50, 11.00), WindAnLandOderAufSee="888"),
             # vertauschte Koordinaten werden korrigiert
             unit("W5", 3000, "2097-06-01", **_coord(11.10, 48.60), WindAnLandOderAufSee="888"),
-            unit("O1", 5000, "2097-01-01", **_coord(54.5, 6.3), WindAnLandOderAufSee="889"),
+            unit(
+                "O1",
+                5000,
+                "2097-01-01",
+                **_coord(54.5, 6.3),
+                WindAnLandOderAufSee="889",
+                Seelage="640",
+                LokationMaStRNummer="SELO1",
+            ),
             unit(
                 "O2",
                 5000,
@@ -81,7 +96,15 @@ def tables(extra_wind: list[dict[str, Any]] | None = None) -> dict[str, list[dic
             *(extra_wind or []),
         ],
         "EinheitenSolar": [
-            unit("S1", 100, "2097-01-01", ArtDerSolaranlage="853", **_coord(48.14, 11.58), **muc),
+            unit(
+                "S1",
+                100,
+                "2097-01-01",
+                ArtDerSolaranlage="853",
+                **_coord(48.14, 11.58),
+                **muc,
+                LokationMaStRNummer="SELS1",
+            ),
             unit("S2", 9.9, "2097-05-01", ArtDerSolaranlage="853", **muc),
             unit("S3", 9.9, "2097-05-01", ArtDerSolaranlage="2961", Postleitzahl="80331"),
             unit("S4", 9.9, "2097-05-01", ArtDerSolaranlage="853", Bundesland="1403"),
@@ -99,6 +122,13 @@ def tables(extra_wind: list[dict[str, Any]] | None = None) -> dict[str, list[dic
                 EinheitBetriebsstatus="37",
                 DatumBeginnVoruebergehendeStilllegung="2098-01-01",
             ),
+        ],
+        # Regelzone nur über diese drei Lokationen; der Rest wird aus Nachbarn übernommen
+        "Netzanschlusspunkte": [
+            nap("SANW1", "SELW1", "1001564"),
+            nap("SANO1", "SELO1", "1001564"),
+            nap("SANS1", "SELS1", "1000010"),
+            nap("SANX", "SELX", None),
         ],
     }
 
@@ -186,6 +216,47 @@ def test_snapshot_cluster_capacity(engine: Engine, tmp_path: Path) -> None:
         engine, "SELECT max(day) FROM assets.capacity_daily WHERE clustering_version = 'v2099Q1'"
     )[0][0]
     assert last == date(2099, 1, 15)
+
+    # Regelzonen: direkt über den Netzanschlusspunkt, sonst Mehrheit der Nachbarn
+    zones = dict(
+        _q(
+            engine,
+            """SELECT mastr_nr, COALESCE(regelzone, '-') || '/' || COALESCE(regelzone_source, '-')
+                 FROM assets.unit WHERE snapshot_id = :id""",
+            id=r.snapshot_id,
+        )
+    )
+    assert (zones["W1"], zones["O1"], zones["S1"]) == ("tennet/nap", "tennet/nap", "amprion/nap")
+    assert zones["O2"] == "tennet/seegebiet"
+    assert (zones["S2"], zones["S3"], zones["S4"]) == (
+        "amprion/gemeinde",
+        "amprion/plz",
+        "amprion/land",
+    )
+    assert zones["S5"] == "-/-" and zones["W2"] == "-/-"
+    assert r.stats["zones"]["wind_off"]["zone_mw"] == {"tennet": 10.0}
+    assert _q(
+        engine,
+        """SELECT netzbetreiber_nr FROM assets.unit
+             WHERE snapshot_id = :id AND mastr_nr = 'S1'""",
+        id=r.snapshot_id,
+    ) == [("SNB900000000001",)]
+    # Leistung je Regelzone ergibt in Summe die Clusterleistung des Gitters
+    zw = _q(
+        engine,
+        """SELECT z.technology, z.regelzone, sum(z.capacity_mw),
+                  (SELECT sum(capacity_mw) FROM assets.grid_weight g
+                    WHERE g.clustering_version = 'v2099Q1' AND g.grid = 'gfs_0p25'
+                      AND g.technology = z.technology)
+             FROM assets.zone_weight z WHERE clustering_version = 'v2099Q1'
+            GROUP BY 1, 2""",
+    )
+    by = {(t, z): mw for t, z, mw, _ in zw}
+    assert by[("wind_off", "tennet")] == pytest.approx(10.0)
+    assert by[("pv_roof", "amprion")] == pytest.approx(0.1 + 3 * 0.0099, rel=1e-4)
+    for tech in {t for t, *_ in zw}:
+        rows = [x for x in zw if x[0] == tech]
+        assert sum(x[2] for x in rows) == pytest.approx(rows[0][3], rel=1e-4)
 
     # Gewichte je Cluster summieren sich auf 1, auch auf dem feineren Gitter
     sums = _q(

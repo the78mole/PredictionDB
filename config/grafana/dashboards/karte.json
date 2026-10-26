@@ -1303,6 +1303,581 @@
           }
         ]
       }
+    },
+    {
+      "type": "row",
+      "title": "Übertragungsnetzbetreiber (Regelzonen)",
+      "id": 10,
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 41
+      }
+    },
+    {
+      "type": "geomap",
+      "title": "Regelzonen der Übertragungsnetzbetreiber (MaStR, ${version})",
+      "id": 11,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 20,
+        "w": 12,
+        "x": 0,
+        "y": 42
+      },
+      "description": "Gebiete der vier ÜNB, abgeleitet aus dem Marktstammdatenregister: Jede Einheit verweist über ihre Lokation auf einen Netzanschlusspunkt, der die Regelzone des Übertragungsnetzbetreibers trägt. Einheiten ohne Netzanschlusspunkt übernehmen die häufigste Regelzone ihrer Gemeinde (sonst PLZ, Kreis, Seegebiet, Bundesland). Quadrate sind die 0,25°-Zellen mit Erzeugungsanlagen, eingefärbt nach der Regelzone mit der meisten installierten Leistung (Mouseover: Anteil dieser Zone). Kreise sitzen im Leistungsschwerpunkt jeder Regelzone (ohne Offshore), Größe = prognostizierte Energiemenge aus Wind und PV am gewählten Tag. Zellen ohne Anlagen bleiben leer.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "-- Regelzone je 0,25°-Zelle: die mit der meisten installierten Leistung (alle\n-- Erzeugungsarten). Die Zuordnung stammt aus dem MaStR (Regelzone am Netzanschlusspunkt).\nWITH z AS (\n  SELECT lat, lon, regelzone, sum(capacity_mw) AS mw\n    FROM assets.zone_weight\n   WHERE clustering_version = '$version' AND regelzone <> 'unbekannt'\n   GROUP BY 1, 2, 3)\nSELECT DISTINCT ON (lat, lon) lat, lon,\n       CASE regelzone WHEN '50hertz' THEN '50Hertz' WHEN 'amprion' THEN 'Amprion'\n                 WHEN 'tennet' THEN 'TenneT' WHEN 'transnetbw' THEN 'TransnetBW'\n                 ELSE 'nicht zugeordnet' END AS \"Regelzone\",\n       100 * mw / sum(mw) OVER (PARTITION BY lat, lon) AS \"Anteil\",\n       sum(mw) OVER (PARTITION BY lat, lon) AS \"Leistung\"\n  FROM z\n ORDER BY lat, lon, mw DESC"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH tag AS (\n  SELECT '$tag'::date::timestamp AT TIME ZONE 'Europe/Berlin' AS t0,\n         ('$tag'::date + 1)::timestamp AT TIME ZONE 'Europe/Berlin' AS t1),\ne AS (\n  SELECT cl.technology, cl.cluster_no,\n         avg(v.value) * extract(epoch FROM tag.t1 - tag.t0) / 3600 AS mwh\n    FROM feat.nwp_value v\n    JOIN meta.feature f USING (feature_id)\n    JOIN assets.cluster cl ON cl.region_id = v.region_id AND cl.clustering_version = '$version'\n   CROSS JOIN tag\n   WHERE f.source_id = (SELECT source_id FROM meta.source WHERE code = 'gfs_0p25')\n     AND f.code IN ('wind_power', 'pv_power')\n     AND v.run_time = '$lauf'::timestamptz\n     AND v.valid_time > tag.t0 AND v.valid_time <= tag.t1\n   GROUP BY 1, 2, tag.t0, tag.t1),\n-- Anteil jeder Regelzone an der Leistung eines Clusters (MaStR, Netzanschlusspunkt)\nzs AS (\n  SELECT technology, cluster_no, regelzone, sum(capacity_mw) AS mw,\n         sum(capacity_mw * lat) AS mw_lat, sum(capacity_mw * lon) AS mw_lon\n    FROM assets.zone_weight\n   WHERE clustering_version = '$version'\n   GROUP BY 1, 2, 3),\nx AS (\n  SELECT zs.regelzone, zs.technology, zs.mw, zs.mw_lat, zs.mw_lon,\n         e.mwh * zs.mw / nullif(sum(zs.mw) OVER (PARTITION BY zs.technology, zs.cluster_no), 0)\n           AS mwh\n    FROM zs LEFT JOIN e USING (technology, cluster_no))\n-- je Regelzone: leistungsgewichteter Schwerpunkt an Land, Energiemenge am Tag\nSELECT sum(mw_lat) FILTER (WHERE technology <> 'wind_off')\n         / sum(mw) FILTER (WHERE technology <> 'wind_off') AS lat,\n       sum(mw_lon) FILTER (WHERE technology <> 'wind_off')\n         / sum(mw) FILTER (WHERE technology <> 'wind_off') AS lon,\n       CASE regelzone WHEN '50hertz' THEN '50Hertz' WHEN 'amprion' THEN 'Amprion'\n                 WHEN 'tennet' THEN 'TenneT' WHEN 'transnetbw' THEN 'TransnetBW'\n                 ELSE 'nicht zugeordnet' END AS \"Regelzone\",\n       sum(mwh) AS \"Energiemenge\",\n       sum(mwh) FILTER (WHERE technology = 'wind_on') AS \"Wind an Land\",\n       sum(mwh) FILTER (WHERE technology = 'wind_off') AS \"Wind auf See\",\n       sum(mwh) FILTER (WHERE technology = 'pv_ground') AS \"PV Freifläche\",\n       sum(mwh) FILTER (WHERE technology = 'pv_roof') AS \"PV Dach\",\n       sum(mw) AS \"Leistung\"\n  FROM x\n WHERE regelzone <> 'unbekannt'\n GROUP BY regelzone"
+        }
+      ],
+      "options": {
+        "view": {
+          "id": "coords",
+          "lat": 51.15,
+          "lon": 10.45,
+          "zoom": 5.7,
+          "allLayers": true
+        },
+        "controls": {
+          "showZoom": true,
+          "mouseWheelZoom": true,
+          "showAttribution": true,
+          "showScale": true,
+          "showMeasure": false,
+          "showDebug": false
+        },
+        "basemap": {
+          "type": "geojson",
+          "name": "Umrisse",
+          "config": {
+            "src": "public/maps/umrisse-de.geojson",
+            "rules": [
+              {
+                "check": {
+                  "property": "ebene",
+                  "operation": "eq",
+                  "value": "land"
+                },
+                "style": {
+                  "color": {
+                    "fixed": "#8e8e8e"
+                  },
+                  "opacity": 0.06,
+                  "lineWidth": 1
+                }
+              },
+              {
+                "check": {
+                  "property": "de",
+                  "operation": "eq",
+                  "value": 1
+                },
+                "style": {
+                  "color": {
+                    "fixed": "#d0d0d0"
+                  },
+                  "opacity": 0.04,
+                  "lineWidth": 2
+                }
+              }
+            ],
+            "style": {
+              "color": {
+                "fixed": "#6e6e6e"
+              },
+              "opacity": 0.0,
+              "lineWidth": 1
+            }
+          }
+        },
+        "layers": [
+          {
+            "type": "markers",
+            "name": "Regelzone je Zelle",
+            "config": {
+              "showLegend": true,
+              "style": {
+                "size": {
+                  "fixed": 5,
+                  "min": 2,
+                  "max": 15
+                },
+                "color": {
+                  "field": "Regelzone",
+                  "fixed": "dark-green"
+                },
+                "opacity": 0.55,
+                "symbol": {
+                  "mode": "fixed",
+                  "fixed": "img/icons/marker/square.svg"
+                },
+                "symbolAlign": {
+                  "horizontal": "center",
+                  "vertical": "center"
+                },
+                "rotation": {
+                  "fixed": 0,
+                  "mode": "mod",
+                  "min": -360,
+                  "max": 360
+                },
+                "textConfig": {
+                  "fontSize": 12,
+                  "offsetX": 0,
+                  "offsetY": 0,
+                  "textAlign": "center",
+                  "textBaseline": "middle"
+                }
+              }
+            },
+            "location": {
+              "mode": "coords",
+              "latitude": "lat",
+              "longitude": "lon"
+            },
+            "filterData": {
+              "id": "byRefId",
+              "options": "A"
+            },
+            "tooltip": true
+          },
+          {
+            "type": "markers",
+            "name": "Energiemenge je Regelzone",
+            "config": {
+              "showLegend": false,
+              "style": {
+                "size": {
+                  "field": "Energiemenge",
+                  "fixed": 10,
+                  "min": 12,
+                  "max": 40
+                },
+                "color": {
+                  "field": "Regelzone",
+                  "fixed": "dark-green"
+                },
+                "opacity": 0.9,
+                "symbol": {
+                  "mode": "fixed",
+                  "fixed": "img/icons/marker/circle.svg"
+                },
+                "symbolAlign": {
+                  "horizontal": "center",
+                  "vertical": "center"
+                },
+                "rotation": {
+                  "fixed": 0,
+                  "mode": "mod",
+                  "min": -360,
+                  "max": 360
+                },
+                "textConfig": {
+                  "fontSize": 13,
+                  "offsetX": 0,
+                  "offsetY": -42,
+                  "textAlign": "center",
+                  "textBaseline": "bottom"
+                },
+                "text": {
+                  "mode": "field",
+                  "field": "Regelzone",
+                  "fixed": ""
+                }
+              }
+            },
+            "location": {
+              "mode": "coords",
+              "latitude": "lat",
+              "longitude": "lon"
+            },
+            "filterData": {
+              "id": "byRefId",
+              "options": "B"
+            },
+            "tooltip": true
+          }
+        ],
+        "tooltip": {
+          "mode": "details"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "mwatth",
+          "decimals": 0,
+          "noValue": "–",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Regelzone"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "nicht zugeordnet": {
+                        "color": "#8e8e8e",
+                        "index": 0
+                      },
+                      "50Hertz": {
+                        "color": "#3274d9",
+                        "index": 1
+                      },
+                      "Amprion": {
+                        "color": "#ff9830",
+                        "index": 2
+                      },
+                      "TenneT": {
+                        "color": "#56a64b",
+                        "index": 3
+                      },
+                      "TransnetBW": {
+                        "color": "#a352cc",
+                        "index": 4
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Anteil"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Leistung"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "megwatt"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "lat"
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "tooltip": true,
+                  "viz": false,
+                  "legend": true
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "lon"
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "tooltip": true,
+                  "viz": false,
+                  "legend": true
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "barchart",
+      "title": "Energiemenge am ${tag:text} je Übertragungsnetzbetreiber",
+      "id": 12,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 42
+      },
+      "description": "Prognostizierte Erzeugung aus Wind und PV am gewählten Tag (GFS-Lauf ${lauf}), je Cluster nach dem Leistungsanteil der Regelzonen aufgeteilt (MaStR). \"nicht zugeordnet\": Anlagen, für die sich weder über den Netzanschlusspunkt noch über Nachbarn eine Regelzone finden ließ. Die Summe entspricht \"Deutschland\" oben.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "WITH tag AS (\n  SELECT '$tag'::date::timestamp AT TIME ZONE 'Europe/Berlin' AS t0,\n         ('$tag'::date + 1)::timestamp AT TIME ZONE 'Europe/Berlin' AS t1),\ne AS (\n  SELECT cl.technology, cl.cluster_no,\n         avg(v.value) * extract(epoch FROM tag.t1 - tag.t0) / 3600 AS mwh\n    FROM feat.nwp_value v\n    JOIN meta.feature f USING (feature_id)\n    JOIN assets.cluster cl ON cl.region_id = v.region_id AND cl.clustering_version = '$version'\n   CROSS JOIN tag\n   WHERE f.source_id = (SELECT source_id FROM meta.source WHERE code = 'gfs_0p25')\n     AND f.code IN ('wind_power', 'pv_power')\n     AND v.run_time = '$lauf'::timestamptz\n     AND v.valid_time > tag.t0 AND v.valid_time <= tag.t1\n   GROUP BY 1, 2, tag.t0, tag.t1),\n-- Anteil jeder Regelzone an der Leistung eines Clusters (MaStR, Netzanschlusspunkt)\nzs AS (\n  SELECT technology, cluster_no, regelzone, sum(capacity_mw) AS mw,\n         sum(capacity_mw * lat) AS mw_lat, sum(capacity_mw * lon) AS mw_lon\n    FROM assets.zone_weight\n   WHERE clustering_version = '$version'\n   GROUP BY 1, 2, 3),\nx AS (\n  SELECT zs.regelzone, zs.technology, zs.mw, zs.mw_lat, zs.mw_lon,\n         e.mwh * zs.mw / nullif(sum(zs.mw) OVER (PARTITION BY zs.technology, zs.cluster_no), 0)\n           AS mwh\n    FROM zs LEFT JOIN e USING (technology, cluster_no))\nSELECT CASE regelzone WHEN '50hertz' THEN '50Hertz' WHEN 'amprion' THEN 'Amprion'\n                 WHEN 'tennet' THEN 'TenneT' WHEN 'transnetbw' THEN 'TransnetBW'\n                 ELSE 'nicht zugeordnet' END AS \"ÜNB\",\n       sum(mwh) FILTER (WHERE technology = 'wind_on') AS \"Wind an Land\",\n       sum(mwh) FILTER (WHERE technology = 'wind_off') AS \"Wind auf See\",\n       sum(mwh) FILTER (WHERE technology = 'pv_ground') AS \"PV Freifläche\",\n       sum(mwh) FILTER (WHERE technology = 'pv_roof') AS \"PV Dach\",\n       sum(mwh) AS \"Gesamt\"\n  FROM x\n GROUP BY regelzone\nHAVING sum(mwh) > 0\n ORDER BY CASE regelzone WHEN '50hertz' THEN 1 WHEN 'amprion' THEN 2 WHEN 'tennet' THEN 3\n                       WHEN 'transnetbw' THEN 4 ELSE 9 END"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "xField": "ÜNB",
+        "stacking": "normal",
+        "showValue": "never",
+        "groupWidth": 0.7,
+        "barWidth": 0.9,
+        "barRadius": 0,
+        "fullHighlight": false,
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0,
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "mwatth",
+          "decimals": 0,
+          "min": 0,
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "gradientMode": "none",
+            "axisPlacement": "auto",
+            "axisSoftMin": 0
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Wind an Land"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Wind auf See"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8ab8ff"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "PV Freifläche"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "PV Dach"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Gesamt"
+            },
+            "properties": [
+              {
+                "id": "custom.stacking",
+                "value": {
+                  "mode": "none",
+                  "group": "A"
+                }
+              },
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "tooltip": false,
+                  "viz": true,
+                  "legend": true
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "table",
+      "title": "Installierte Leistung je Übertragungsnetzbetreiber (MaStR)",
+      "id": 13,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 52
+      },
+      "description": "Installierte Leistung der verorteten Einheiten je Regelzone und Erzeugungsart zum Exportdatum des MaStR-Snapshots, auf dem die Clusterung ${version} zuletzt fortgeschrieben wurde. Wind Land/See = Wind an Land/auf See, PV Frei = PV-Freiflächenanlagen.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "-- Installierte Leistung am Exportdatum des Snapshots der Clusterung (verortete Einheiten)\nSELECT CASE regelzone WHEN '50hertz' THEN '50Hertz' WHEN 'amprion' THEN 'Amprion'\n                 WHEN 'tennet' THEN 'TenneT' WHEN 'transnetbw' THEN 'TransnetBW'\n                 ELSE 'nicht zugeordnet' END AS \"ÜNB\",\n       sum(capacity_mw) FILTER (WHERE technology = 'wind_on') AS \"Wind Land\",\n       sum(capacity_mw) FILTER (WHERE technology = 'wind_off') AS \"Wind See\",\n       sum(capacity_mw) FILTER (WHERE technology = 'pv_ground') AS \"PV Frei\",\n       sum(capacity_mw) FILTER (WHERE technology = 'pv_roof') AS \"PV Dach\",\n       sum(capacity_mw) FILTER (WHERE technology = 'biomass') AS \"Biomasse\",\n       sum(capacity_mw) FILTER (WHERE technology = 'hydro') AS \"Wasser\",\n       sum(capacity_mw) AS \"Gesamt\"\n  FROM assets.zone_weight\n WHERE clustering_version = '$version'\n GROUP BY regelzone\n ORDER BY CASE regelzone WHEN '50hertz' THEN 1 WHEN 'amprion' THEN 2 WHEN 'tennet' THEN 3\n                       WHEN 'transnetbw' THEN 4 ELSE 9 END"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": true,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "megwatt",
+          "decimals": 1,
+          "noValue": "–",
+          "custom": {
+            "align": "auto",
+            "minWidth": 70
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ÜNB"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 130
+              }
+            ]
+          }
+        ]
+      }
     }
   ],
   "templating": {

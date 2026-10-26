@@ -27,6 +27,10 @@ CATALOG = {
     "1403": "Bayern",
     "1408": "Niedersachsen",
     "1416": "Ausschließliche Wirtschaftszone",
+    "1000001": "50Hertz",
+    "1000010": "Amprion",
+    "1001564": "TenneT",
+    "1001572": "TransnetBW",
 }
 
 ELEMENT = {
@@ -34,6 +38,7 @@ ELEMENT = {
     "EinheitenWind": "EinheitWind",
     "EinheitenBiomasse": "EinheitBiomasse",
     "EinheitenWasser": "EinheitWasser",
+    "Netzanschlusspunkte": "Netzanschlusspunkt",
 }
 
 ENERGIETRAEGER = {
@@ -70,6 +75,19 @@ def unit(
     return rec
 
 
+def nap(nr: str, lokation: str, zone: str | None = "1001564", **fields: Any) -> dict[str, Any]:
+    """Netzanschlusspunkt (Standard: Regelzone TenneT)."""
+    rec: dict[str, Any] = {
+        "NetzanschlusspunktMastrNummer": nr,
+        "LokationMaStRNummer": lokation,
+        "RegelzoneNetzanschlusspunkt": zone,
+        "NetzMaStRNummer": "SNE900000000001",
+        "NetzbetreiberMaStRNummer": "SNB900000000001",
+    }
+    rec.update(fields)
+    return rec
+
+
 def make_export(
     directory: Path,
     tables: dict[str, list[dict[str, Any]]],
@@ -95,7 +113,11 @@ def make_export(
         )
         zf.writestr("Marktakteure.xml", xml_bytes("Marktakteure", "Marktakteur", []))
         for table, records in tables.items():
-            recs = [{**r, "Energietraeger": ENERGIETRAEGER[table]} for r in records]
+            recs = (
+                [{**r, "Energietraeger": ENERGIETRAEGER[table]} for r in records]
+                if table in ENERGIETRAEGER
+                else records
+            )
             if split:
                 for n, start in enumerate(range(0, len(recs), split), 1):
                     zf.writestr(
