@@ -59,7 +59,7 @@ uv run ml-train predict --dry-run                                  # aktive Vers
 
 Auf der VM laufen dieselben Befehle über das Compose-Profil `ml` (`docker compose --profile ml
 run --rm ml-train …`, Ordner `/data` im Volume `ml-data`), die Inferenz als Dienst
-`ml-predict` (stündlich). Der Trainings-Container hat eine feste CPU-Grenze
+`ml-predict` (jede volle Stunde, verpasste Stunden bis 24 h zurück werden nachgeholt). Der Trainings-Container hat eine feste CPU-Grenze
 (`ML_TRAIN_CPUS`, Vorgabe 4), damit Ingest und Verarbeitung nebenher weiterlaufen.
 
 | Variable | Standard |

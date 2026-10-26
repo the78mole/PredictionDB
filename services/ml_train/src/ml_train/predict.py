@@ -3,6 +3,11 @@
 Für die Merkmale reicht ein kleiner Snapshot um den Ausgabezeitpunkt (Energie der letzten
 Wochen, Wetterläufe der letzten Tage, Bestand). Je Version, Ziel, Zeitpunkt und Quantil wird
 ein Wert geschrieben; ein erneuter Lauf zum selben Ausgabezeitpunkt überschreibt.
+
+Im Dauerbetrieb (``--watch``) läuft jede volle Stunde ein Ausgabezeitpunkt. Verpasste Stunden
+(Neustart, langer Lauf) werden nachgeholt, damit z. B. der Lauf um 10 Uhr Ortszeit, zeitgleich
+mit der Day-Ahead-Lastprognose der ÜNB, für den Vergleich im Dashboard nie fehlt. Nachholen
+ist leakage-sicher: Merkmale nutzen nur Werte, die zum Ausgabezeitpunkt veröffentlicht waren.
 """
 
 from __future__ import annotations
@@ -40,6 +45,30 @@ def lookback_days(cfg: ModelConfig, variant: Variant) -> int:
         if g is not None and g.mode == "outlook":
             back = max(back, OUTLOOK_BACK_DAYS)
     return back
+
+
+def due_issues(now: pd.Timestamp, last: pd.Timestamp | None, catch_up_h: int) -> list[pd.Timestamp]:
+    """Volle Stunden seit ``last`` bis ``now``, höchstens ``catch_up_h`` Stunden zurück."""
+    cur = now.floor("h")
+    first = cur if last is None else last + pd.Timedelta(hours=1)
+    first = max(first, cur - pd.Timedelta(hours=catch_up_h))
+    return list(pd.date_range(first, cur, freq="h")) if first <= cur else []
+
+
+def next_wake(now: pd.Timestamp, every_s: int, delay_s: int = 60) -> pd.Timestamp:
+    """Nächster Weckzeitpunkt auf dem Raster ``every_s`` (ab Epoche) plus ``delay_s``."""
+    step = pd.Timedelta(seconds=every_s)
+    return (now - pd.Timedelta(seconds=delay_s)).floor(step) + step + pd.Timedelta(seconds=delay_s)
+
+
+def last_issue(engine: Engine, versions: list[str]) -> pd.Timestamp | None:
+    """Jüngster bereits geschriebener Ausgabezeitpunkt dieser Versionen."""
+    with engine.connect() as c:
+        t = c.execute(
+            text("SELECT max(issue_time) FROM fcst.prediction WHERE model_version = ANY(:v)"),
+            {"v": versions},
+        ).scalar()
+    return None if t is None else pd.Timestamp(t).tz_convert("UTC")
 
 
 def live_snapshot(engine: Engine, cfg: ModelConfig, issue: pd.Timestamp) -> Snapshot:

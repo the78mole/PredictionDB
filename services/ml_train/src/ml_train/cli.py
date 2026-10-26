@@ -11,7 +11,7 @@ Beispiele::
     ml-train registry promote de_lu_v1-wetter-202611010800-ab12cd
     ml-train registry sync                                     # Spiegel für Grafana
     ml-train predict                                           # aktive Versionen, jetzt
-    ml-train predict --watch 3600
+    ml-train predict --watch 3600 --catch-up 24                # stündlich, Lücken nachholen
     ml-train bundle de_lu_v2-frei-202610241200-ab12cd --out /data/pakete/de_lu_v2-frei
 """
 
@@ -110,7 +110,16 @@ def build_parser() -> argparse.ArgumentParser:
     pr.add_argument("--issue", help="Ausgabezeitpunkt UTC, z. B. 2026-10-22T08 (Vorgabe: jetzt)")
     pr.add_argument("--version", action="append", help="statt der aktiven Versionen")
     pr.add_argument("--dry-run", action="store_true", help="nur ausgeben, nicht schreiben")
-    pr.add_argument("--watch", type=int, default=0, help="Sekunden zwischen Läufen")
+    pr.add_argument(
+        "--watch", type=int, default=0, help="Sekunden zwischen Läufen, auf dieses Raster"
+    )
+    pr.add_argument(
+        "--catch-up",
+        type=int,
+        default=0,
+        metavar="STUNDEN",
+        help="verpasste volle Stunden nachholen, höchstens so weit zurück (auch nach Neustart)",
+    )
     pr.add_argument(
         "--also-config",
         action="append",
@@ -275,17 +284,24 @@ def cmd_registry(cfg: ModelConfig, a: argparse.Namespace) -> int:
 
 
 def cmd_predict(cfg: ModelConfig, a: argparse.Namespace) -> int:
-    from ml_train.predict import live_snapshot, predict_versions, write_predictions
+    from ml_train.predict import (
+        due_issues,
+        last_issue,
+        live_snapshot,
+        next_wake,
+        predict_versions,
+        write_predictions,
+    )
     from predictiondb_core.db import create_db_engine
 
     engine = create_db_engine()
     # Jede Konfiguration ist eine eigene Registry-Linie mit eigenem Champion/Challenger
     lines = [(cfg, Registry(a.registry, cfg))]
     lines += [(c, Registry(a.registry, c)) for c, _ in map(load_config, a.also_config)]
+    # Zuletzt gerechneter Ausgabezeitpunkt je Linie; beim Start aus der Datenbank
+    last: dict[str, pd.Timestamp | None] = {}
     while True:
-        issue = (
-            pd.Timestamp(a.issue, tz="UTC") if a.issue else pd.Timestamp.now(tz="UTC").floor("h")
-        )
+        now = pd.Timestamp.now(tz="UTC")
         found = False
         for line_cfg, reg in lines:
             try_sync(reg, engine)
@@ -295,19 +311,31 @@ def cmd_predict(cfg: ModelConfig, a: argparse.Namespace) -> int:
                 log.warning("predict.no_versions", registry=a.registry, config=line_cfg.name)
                 continue
             found = True
-            snap = live_snapshot(engine, line_cfg, issue)
-            df = predict_versions(snap, line_cfg, reg, versions, issue, Path(DEFAULT_CACHE))
-            if a.dry_run:
-                print(df.to_string(index=False, max_rows=60))
+            if a.issue:
+                issues = [pd.Timestamp(a.issue, tz="UTC")]
             else:
-                n = write_predictions(engine, df)
-                log.info("predict.done", issue=str(issue), versions=versions, rows=n)
+                if line_cfg.name not in last:
+                    last[line_cfg.name] = (
+                        last_issue(engine, versions) if a.catch_up and not a.dry_run else None
+                    )
+                issues = due_issues(now, last[line_cfg.name], a.catch_up)
+            for issue in issues:
+                snap = live_snapshot(engine, line_cfg, issue)
+                df = predict_versions(snap, line_cfg, reg, versions, issue, Path(DEFAULT_CACHE))
+                if a.dry_run:
+                    print(df.to_string(index=False, max_rows=60))
+                else:
+                    n = write_predictions(engine, df)
+                    log.info("predict.done", issue=str(issue), versions=versions, rows=n)
+                last[line_cfg.name] = issue
         if not found:
             log.error("predict.no_versions", registry=a.registry)
             return 1
         if not a.watch:
             return 0
-        time.sleep(a.watch)
+        # Auf dem Raster wecken (volle Stunde plus eine Minute), damit keine Stunde ausfällt
+        wake = next_wake(pd.Timestamp.now(tz="UTC"), a.watch)
+        time.sleep(max(0.0, (wake - pd.Timestamp.now(tz="UTC")).total_seconds()))
 
 
 def cmd_bundle(cfg: ModelConfig, a: argparse.Namespace) -> int:
