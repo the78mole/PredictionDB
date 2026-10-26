@@ -97,6 +97,10 @@ class EnergySettings(BaseSettings):
     # Laufender Abgleich: Fenster [heute - lookback, heute + horizon)
     lookback_days: int = 3
     horizon_days: int = 2
+    # Nachträgliche Korrekturen der Quellen: einmal je Intervall die letzten revision_days Tage
+    # erneut abfragen (nur Datensätze, deren Abgleich nicht ohnehin so weit zurückreicht)
+    revision_days: int = 30
+    revision_interval_hours: int = 24
     # Historie, die im Dauerbetrieb schrittweise nachgeladen wird
     backfill_from: datetime = datetime(2015, 1, 1, tzinfo=UTC)
     backfill_chunks_per_cycle: int = 6

@@ -46,6 +46,12 @@ def engine() -> Iterator[Engine]:
                 f"(SELECT series_id FROM energy.series WHERE source_id IN ({ids}))"
             )
         )
+        conn.execute(
+            text(
+                "DELETE FROM energy.value_revision WHERE series_id IN "
+                f"(SELECT series_id FROM energy.series WHERE source_id IN ({ids}))"
+            )
+        )
         conn.execute(text(f"DELETE FROM energy.series WHERE source_id IN ({ids})"))
         conn.execute(text(f"DELETE FROM meta.energy_fetch WHERE source_id IN ({ids})"))
         conn.execute(text("DELETE FROM meta.source WHERE code LIKE 'test\\_%'"))
@@ -80,6 +86,58 @@ def test_upsert_keeps_earliest_published(engine: Engine) -> None:
         (120, early),
         (200, T0 + 2 * QUARTER_HOUR + HOUR),
     ]
+
+
+def revisions(engine: Engine, sid: int) -> list[tuple[datetime, float | None, float | None]]:
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text("""
+                SELECT r.ts, r.old_value, r.new_value FROM energy.value_revision r
+                  JOIN energy.series s USING (series_id)
+                 WHERE s.source_id = :sid ORDER BY r.revised_at, r.ts"""),
+            {"sid": sid},
+        ).all()
+    return [(r.ts, r.old_value, r.new_value) for r in rows]
+
+
+def test_corrections_are_logged(engine: Engine) -> None:
+    store = EnergyStore(engine)
+    sid = store.source_id(Src(priority=5))
+    fetched = T0 + timedelta(days=1)
+    store.write(sid, [load([100, 200, 300])], fetched)
+    assert revisions(engine, sid) == []
+    # unveränderter Wert wird nicht protokolliert, korrigierter schon
+    store.write(sid, [load([100, 250, 300])], fetched)
+    assert revisions(engine, sid) == [(T0 + QUARTER_HOUR, 200, 250)]
+
+
+def test_prune_clears_removed_values(engine: Engine) -> None:
+    store = EnergyStore(engine)
+    sid = store.source_id(Src(priority=5))
+    fetched = T0 + timedelta(days=1)
+    store.write(sid, [load([100.0] * 100)], fetched)
+    # Quelle liefert den Wert an Position 50 nicht mehr: ohne prune bleibt er stehen
+    gap = load([100.0] * 100)
+    del gap.points[50]
+    store.write(sid, [gap], fetched)
+    assert revisions(engine, sid) == []
+    store.write(sid, [gap], fetched, prune=True)
+    ts = T0 + 50 * QUARTER_HOUR
+    assert revisions(engine, sid) == [(ts, 100.0, None)]
+    with engine.connect() as conn:
+        value = conn.execute(
+            text("""
+                SELECT v.value FROM energy.value v JOIN energy.series s USING (series_id)
+                 WHERE s.source_id = :sid AND v.ts = :ts"""),
+            {"sid": sid, "ts": ts},
+        ).scalar_one()
+    assert value is None
+
+    # viele fehlende Werte auf einmal: eher gestörte Antwort, nichts leeren
+    short = load([100.0] * 100)
+    del short.points[10:40]
+    store.write(sid, [short], fetched, prune=True)
+    assert len(revisions(engine, sid)) == 1
 
 
 def test_value_best_and_compare(engine: Engine) -> None:

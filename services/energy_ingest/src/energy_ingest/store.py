@@ -2,7 +2,8 @@
 
 Werte gehen per ``COPY`` in eine temporäre Tabelle und von dort per Upsert nach
 ``energy.value``. ``published`` behält beim Überschreiben den frühesten Zeitpunkt, damit
-der Leakage-Schutz nicht durch spätere Abrufe aufgeweicht wird.
+der Leakage-Schutz nicht durch spätere Abrufe aufgeweicht wird. Jede Änderung eines schon
+gespeicherten Werts wird mit altem und neuem Wert in ``energy.value_revision`` protokolliert.
 """
 
 from __future__ import annotations
@@ -15,9 +16,32 @@ from sqlalchemy import Engine, text
 
 from energy_ingest.model import SeriesData, published_at
 from energy_ingest.sources import SourceMeta
+from predictiondb_core.log import get_logger
+
+log = get_logger(__name__)
 
 # Leere Blöcke (Quelle hatte nichts oder war gestört) später noch einmal versuchen
 EMPTY_RETRY = timedelta(days=30)
+
+# Vor dem Upsert: geänderte Werte mit altem und neuem Stand protokollieren
+_LOG_REVISIONS = """
+    INSERT INTO energy.value_revision (series_id, ts, old_value, new_value)
+    SELECT v.series_id, v.ts, v.value, i.value
+      FROM _energy_in i
+      JOIN energy.value v USING (series_id, ts)
+     WHERE v.value IS DISTINCT FROM i.value
+"""
+
+# Werte innerhalb der gelieferten Spanne einer Reihe, die die Quelle nicht mehr liefert
+_GONE = """
+    WITH span AS (SELECT series_id, min(ts) AS lo, max(ts) AS hi FROM _energy_in GROUP BY 1)
+    SELECT v.series_id, v.ts, v.value
+      FROM energy.value v
+      JOIN span s ON s.series_id = v.series_id AND v.ts BETWEEN s.lo AND s.hi
+     WHERE v.value IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM _energy_in i WHERE i.series_id = v.series_id
+                                                   AND i.ts = v.ts)
+"""
 
 _UPSERT = """
     INSERT INTO energy.value (series_id, ts, value, published)
@@ -59,6 +83,11 @@ class Deviation:
     n: int
     mae: float
     rel: float | None
+
+
+#: Entfernte Werte nur leeren, wenn es höchstens so viele sind (Anteil an der Lieferung);
+#: mehr deutet auf eine gestörte Antwort statt auf eine Korrektur
+PRUNE_MAX_SHARE = 0.05
 
 
 class EnergyStore:
@@ -118,8 +147,13 @@ class EnergyStore:
             self._series[key] = int(sid)
         return self._series[key]
 
-    def write(self, source_id: int, batch: list[SeriesData], fetched: datetime) -> int:
-        """Schreibt alle Punkte; gibt die Zahl der gelieferten Werte zurück."""
+    def write(
+        self, source_id: int, batch: list[SeriesData], fetched: datetime, *, prune: bool = False
+    ) -> int:
+        """Schreibt alle Punkte; gibt die Zahl der gelieferten Werte zurück.
+
+        ``prune`` setzt Werte auf NULL, die innerhalb der gelieferten Spanne einer Reihe
+        gespeichert sind, aber nicht mehr geliefert werden (von der Quelle entfernt)."""
         with self.engine.begin() as conn:
             rows: dict[tuple[int, datetime], tuple[float, datetime]] = {}
             for data in batch:
@@ -144,8 +178,31 @@ class EnergyStore:
             ):
                 for (sid, ts), (value, pub) in rows.items():
                     cp.write_row((sid, ts, value, pub))
+            conn.execute(text(_LOG_REVISIONS))
             conn.execute(text(_UPSERT))
+            if prune:
+                self._prune(conn, source_id, len(rows))
         return len(rows)
+
+    def _prune(self, conn: Any, source_id: int, n_rows: int) -> None:
+        gone = conn.execute(text(_GONE)).all()
+        if not gone:
+            return
+        if len(gone) > max(4, PRUNE_MAX_SHARE * n_rows):
+            log.warning("energy.prune_skipped", source_id=source_id, gone=len(gone), n=n_rows)
+            return
+        params = [{"s": r.series_id, "ts": r.ts, "old": r.value} for r in gone]
+        conn.execute(
+            text("""
+                INSERT INTO energy.value_revision (series_id, ts, old_value, new_value)
+                VALUES (:s, :ts, :old, NULL)"""),
+            params,
+        )
+        conn.execute(
+            text("UPDATE energy.value SET value = NULL WHERE series_id = :s AND ts = :ts"),
+            params,
+        )
+        log.info("energy.values_removed", source_id=source_id, n=len(gone))
 
     def done_chunks(self, source_id: int, dataset: str) -> dict[datetime, datetime]:
         """Blockbeginn -> geladen bis (bei vollständigen Blöcken das Blockende); leere

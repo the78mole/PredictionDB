@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from itertools import pairwise
 
 from energy_ingest.config import EnergySettings
 from energy_ingest.ingest import ANCHOR, EnergyIngestor, chunks, day_window
@@ -41,6 +42,7 @@ class FakeStore:
     def __init__(self) -> None:
         self.ids: dict[str, int] = {}
         self.written: list[tuple[int, int]] = []
+        self.pruned: list[bool] = []
         self.done: dict[tuple[int, str], dict[datetime, datetime]] = {}
         self.deviations: list[Deviation] = []
         self.status: dict[tuple[int, str], tuple[str, int, str | None]] = {}
@@ -48,9 +50,12 @@ class FakeStore:
     def source_id(self, source: SourceMeta) -> int:
         return self.ids.setdefault(source.code, len(self.ids) + 1)
 
-    def write(self, source_id: int, batch: list[SeriesData], fetched: datetime) -> int:
+    def write(
+        self, source_id: int, batch: list[SeriesData], fetched: datetime, *, prune: bool = False
+    ) -> int:
         n = sum(len(d.points) for d in batch)
         self.written.append((source_id, n))
+        self.pruned.append(prune)
         return n
 
     def done_chunks(self, source_id: int, dataset: str) -> dict[datetime, datetime]:
@@ -113,6 +118,33 @@ def test_sync_lookback_per_dataset() -> None:
     EnergyIngestor([src], FakeStore(), EnergySettings()).sync(NOW)
     start, end = day_window(NOW, 3, 2)
     assert [c[1:] for c in src.calls] == [(start, end), (start - timedelta(days=95), end)]
+
+
+def test_revise_covers_days_before_sync_window() -> None:
+    src = FakeSource("s")
+    src.sync_lookback = {"b": timedelta(days=95)}  # type: ignore[attr-defined]
+    store = FakeStore()
+    ing = EnergyIngestor([src], store, EnergySettings())
+    assert ing.revise_due(NOW)
+    results = ing.revise(NOW)
+    start, _ = day_window(NOW, 30, 0)
+    sync_start, _ = day_window(NOW, 3, 0)
+    # "b" reicht im Abgleich ohnehin 95 Tage zurück und wird nicht erneut abgefragt
+    assert {c[0] for c in src.calls} == {"a"}
+    # lückenlos in Blöcken des Rasters, ohne Überlappung mit dem Abgleich
+    spans = sorted(c[1:] for c in src.calls)
+    assert spans[0][0] == start and spans[-1][1] == sync_start
+    assert all(a[1] == b[0] for a, b in pairwise(spans))
+    assert all(b - a <= src.max_chunk("a") for a, b in spans)
+    assert all(store.pruned) and all(r.status == "ok" for r in results)
+    assert not ing.revise_due(NOW + timedelta(hours=23))
+    assert ing.revise_due(NOW + timedelta(hours=24))
+
+
+def test_sync_does_not_prune() -> None:
+    store = FakeStore()
+    EnergyIngestor([FakeSource("s")], store, EnergySettings()).sync(NOW)
+    assert store.pruned and not any(store.pruned)
 
 
 def test_backfill_marks_loaded_until_final() -> None:
