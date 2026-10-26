@@ -6,6 +6,7 @@ Beispiele::
     energy-ingest sync                                 # Fenster um heute einmal abgleichen
     energy-ingest sync --watch 900                     # Dauerbetrieb inkl. Backfill-Häppchen
     energy-ingest revise                               # letzte 30 Tage erneut abfragen
+    energy-ingest revise --watch 3600                  # Dauerbetrieb, je Datensatz 1x am Tag
     energy-ingest backfill 2015-01-01 2026-10-01       # Historie gezielt nachladen
     energy-ingest --source smard backfill 2024-01-01 2024-02-01 --dataset da_price_de_lu
     energy-ingest check --days 14                      # Quellen gegeneinander prüfen
@@ -83,7 +84,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-backfill", action="store_true", help="im Dauerbetrieb keine Historie nachladen"
     )
 
-    cmd.add_parser("revise", help="letzte Tage erneut abfragen (Korrekturen der Quellen)")
+    rv = cmd.add_parser("revise", help="letzte Tage erneut abfragen (Korrekturen der Quellen)")
+    rv.add_argument(
+        "--watch",
+        type=int,
+        metavar="SEK",
+        help="im Abstand von SEK Sekunden fällige Datensätze erneut abfragen",
+    )
 
     bf = cmd.add_parser("backfill", help="Zeitraum [START, ENDE) nachladen")
     bf.add_argument("start", type=parse_time)
@@ -204,9 +211,19 @@ def run(args: argparse.Namespace, settings: EnergySettings) -> int:
             return 1 if any(r.status in FAILED for r in results) else 0
 
         if args.cmd == "revise":
-            results = ingestor.revise()
-            print(json.dumps([r.as_dict() for r in results], indent=1))
-            return 1 if any(r.status in FAILED for r in results) else 0
+            if not args.watch:
+                results = ingestor.revise()
+                print(json.dumps([r.as_dict() for r in results], indent=1))
+                return 1 if any(r.status in FAILED for r in results) else 0
+            while True:
+                started = time.monotonic()
+                try:
+                    results = ingestor.revise(due_only=True)
+                    if results:
+                        log.info("energy.revise_done", **_summary(results))
+                except Exception:
+                    log.exception("energy.revise_failed")
+                time.sleep(max(0.0, args.watch - (time.monotonic() - started)))
 
         while True:
             started = time.monotonic()
@@ -217,9 +234,6 @@ def run(args: argparse.Namespace, settings: EnergySettings) -> int:
                 return 1 if any(r.status in FAILED for r in results) else 0
             try:
                 ingestor.check(days=2)
-                if ingestor.revise_due():
-                    rv = ingestor.revise()
-                    log.info("energy.revise_done", **_summary(rv))
                 if not args.no_backfill:
                     bf = ingestor.backfill_step()
                     if bf:

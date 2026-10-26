@@ -251,6 +251,27 @@ class EnergyStore:
                 },
             )
 
+    def revised_at(self, source_id: int, dataset: str) -> datetime | None:
+        """Zeitpunkt des letzten vollständigen Revisionslaufs (``meta.energy_revise``)."""
+        with self.engine.connect() as conn:
+            at = conn.execute(
+                text("""SELECT revised_at FROM meta.energy_revise
+                         WHERE source_id = :s AND dataset = :d"""),
+                {"s": source_id, "d": dataset},
+            ).scalar_one_or_none()
+        return at
+
+    def mark_revised(self, source_id: int, dataset: str, at: datetime) -> None:
+        with self.engine.begin() as conn:
+            conn.execute(
+                text("""
+                    INSERT INTO meta.energy_revise (source_id, dataset, revised_at)
+                    VALUES (:s, :d, :at)
+                    ON CONFLICT (source_id, dataset) DO UPDATE
+                       SET revised_at = EXCLUDED.revised_at"""),
+                {"s": source_id, "d": dataset, "at": at},
+            )
+
     def record_status(
         self, source_id: int, dataset: str, status: str, n_values: int, error: str | None
     ) -> None:

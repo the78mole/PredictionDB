@@ -54,6 +54,7 @@ def engine() -> Iterator[Engine]:
         )
         conn.execute(text(f"DELETE FROM energy.series WHERE source_id IN ({ids})"))
         conn.execute(text(f"DELETE FROM meta.energy_fetch WHERE source_id IN ({ids})"))
+        conn.execute(text(f"DELETE FROM meta.energy_revise WHERE source_id IN ({ids})"))
         conn.execute(text("DELETE FROM meta.source WHERE code LIKE 'test\\_%'"))
     eng.dispose()
 
@@ -203,3 +204,12 @@ def test_fetch_log(engine: Engine) -> None:
             {"s": sid},
         ).scalar_one()
     assert n == 6
+
+
+def test_revise_log(engine: Engine) -> None:
+    store = EnergyStore(engine)
+    sid = store.source_id(Src(priority=3))
+    assert store.revised_at(sid, "x") is None
+    store.mark_revised(sid, "x", T0)
+    store.mark_revised(sid, "x", T0 + HOUR)
+    assert store.revised_at(sid, "x") == T0 + HOUR

@@ -80,6 +80,15 @@ services:
     depends_on:
       migrate: {condition: service_completed_successfully}
 
+  # Nachträgliche Korrekturen der Quellen: letzte 30 Tage je Datensatz einmal am Tag erneut
+  # abfragen (energy.value_revision, Alarm "Ist-Last korrigiert"). Eigener Dienst, damit der
+  # lange Abgleich-Zyklus ihn nicht aufhält; der Stand je Datensatz liegt in meta.energy_revise.
+  energy-revise:
+    <<: *app
+    command: ["energy-ingest", "revise", "--watch", "3600"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+
   # MaStR-Gesamtdatenexport einmal je Quartal: Import, Gebietscluster, Tagesbestand
   # (services/mastr_ingest). Prüft alle 6 h, ob im laufenden Quartal schon ein Snapshot liegt.
   mastr-snapshot:

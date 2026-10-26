@@ -46,6 +46,7 @@ class FakeStore:
         self.done: dict[tuple[int, str], dict[datetime, datetime]] = {}
         self.deviations: list[Deviation] = []
         self.status: dict[tuple[int, str], tuple[str, int, str | None]] = {}
+        self.revised: dict[tuple[int, str], datetime] = {}
 
     def source_id(self, source: SourceMeta) -> int:
         return self.ids.setdefault(source.code, len(self.ids) + 1)
@@ -75,6 +76,12 @@ class FakeStore:
 
     def compare(self, start: datetime, end: datetime) -> list[Deviation]:
         return self.deviations
+
+    def revised_at(self, source_id: int, dataset: str) -> datetime | None:
+        return self.revised.get((source_id, dataset))
+
+    def mark_revised(self, source_id: int, dataset: str, at: datetime) -> None:
+        self.revised[(source_id, dataset)] = at
 
     def record_status(
         self, source_id: int, dataset: str, status: str, n_values: int, error: str | None
@@ -125,7 +132,6 @@ def test_revise_covers_days_before_sync_window() -> None:
     src.sync_lookback = {"b": timedelta(days=95)}  # type: ignore[attr-defined]
     store = FakeStore()
     ing = EnergyIngestor([src], store, EnergySettings())
-    assert ing.revise_due(NOW)
     results = ing.revise(NOW)
     start, _ = day_window(NOW, 30, 0)
     sync_start, _ = day_window(NOW, 3, 0)
@@ -137,8 +143,23 @@ def test_revise_covers_days_before_sync_window() -> None:
     assert all(a[1] == b[0] for a, b in pairwise(spans))
     assert all(b - a <= src.max_chunk("a") for a, b in spans)
     assert all(store.pruned) and all(r.status == "ok" for r in results)
-    assert not ing.revise_due(NOW + timedelta(hours=23))
-    assert ing.revise_due(NOW + timedelta(hours=24))
+    assert store.revised == {(1, "a"): NOW}
+
+
+def test_revise_due_only_resumes_after_restart() -> None:
+    a, b = FakeSource("a"), FakeSource("b", fail=True)
+    store = FakeStore()
+    EnergyIngestor([a, b], store, EnergySettings()).revise(NOW, due_only=True)
+    # fehlgeschlagene Datensätze gelten nicht als erledigt
+    assert set(store.revised) == {(1, "a"), (1, "b")}
+    # neuer Prozess (Neustart): erledigte Datensätze erst nach dem Intervall wieder
+    a.calls.clear()
+    b.calls.clear()
+    ing = EnergyIngestor([a, b], store, EnergySettings())
+    ing.revise(NOW + timedelta(hours=23), due_only=True)
+    assert a.calls == [] and b.calls
+    ing.revise(NOW + timedelta(hours=24), due_only=True)
+    assert a.calls
 
 
 def test_sync_does_not_prune() -> None:
