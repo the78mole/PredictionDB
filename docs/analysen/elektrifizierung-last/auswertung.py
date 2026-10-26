@@ -12,6 +12,10 @@ ein Teil davon durch Großwärmepumpen (Flusswasser, Abwasser). Für jedes Wette
 1991-2025 ergibt das eine stündliche Last aus heutiger Grundlast, Wärmepumpen und E-Autos,
 mit ungesteuertem und netzdienlich gesteuertem Laden.
 
+Teil C (Klimaanlagen): Ausbau der Klimaanlagen in Haushalten in einem wärmeren Klima
+(Trend der Sommertemperatur 1991-2026 fortgeschrieben), siehe klima.py. Dazu der Hitzesommer
+2026 in der gemessenen Last.
+
 Aufruf aus dem Repository-Wurzelverzeichnis (lädt beim ersten Lauf DWD-Temperaturen,
 Energy-Charts-Last und Eurostat-Reihen, einige Minuten)::
 
@@ -39,6 +43,7 @@ import pandas as pd
 HIER = Path(__file__).resolve().parent
 sys.path.insert(0, str(HIER))
 import daten  # noqa: E402
+import klima  # noqa: E402
 
 TZ = "Europe/Berlin"
 HEIZGRENZE = 15.0  # °C, Tagesmittel der gedämpften Temperatur
@@ -767,6 +772,147 @@ def grafik_woche(sz: Szenario, zeitpunkt: str, ziel: Path, name: str, titel: str
     plt.close(fig)
 
 
+def grafik_klima_spitzen(kl: pd.DataFrame, ziel: Path) -> None:
+    fig, ax = plt.subplots(figsize=(10, 4.2))
+    farben = [FARBEN["basis"], FARBEN["wp"], FARBEN["gwp"], FARBEN["ev"]]
+    for (name, d), farbe in zip(kl.groupby("szenario", sort=False), farben, strict=False):
+        ax.plot(
+            d["wetterjahr"],
+            d["spitze_gw"],
+            color=farbe,
+            linewidth=2,
+            marker="o",
+            markersize=3,
+            label=name,
+        )
+    _achsen(ax)
+    ax.set_ylabel("GW", color=FARBEN["text"])
+    ax.set_title(
+        "Sommerhöchstlast (Mai-Sep) je Wetterjahr, Klima und Bestand verschoben",
+        loc="left",
+        fontsize=11,
+    )
+    fig.legend(frameon=False, loc="lower center", fontsize=8, ncol=4)
+    fig.tight_layout(rect=(0, 0.07, 1, 1))
+    fig.savefig(ziel / "klima_sommerspitzen.png", dpi=150)
+    plt.close(fig)
+
+
+def grafik_klima_woche(stunden: dict[str, pd.DataFrame], zeitpunkt: str, ziel: Path) -> None:
+    mitte = pd.Timestamp(zeitpunkt, tz=TZ)
+    namen = list(stunden)
+    fig, axs = plt.subplots(1, 2, figsize=(11, 4), sharey=True)
+    for ax, name in zip(axs, (namen[0], namen[1]), strict=True):
+        d = stunden[name].copy()
+        d.index = lokal(d.index)
+        d = d[(d.index >= mitte - pd.Timedelta(days=3)) & (d.index < mitte + pd.Timedelta(days=4))]
+        ax.stackplot(
+            d.index,
+            d["basis"],
+            d["klima_zusatz"],
+            colors=[FARBEN["basis"], FARBEN["wp"]],
+            labels=["heutige Last im Szenarioklima", "zusätzliche Klimaanlagen"],
+            edgecolor="white",
+            linewidth=0.3,
+        )
+        _achsen(ax)
+        ax.set_title(name, loc="left", fontsize=10)
+        ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%d.%m.", tz=TZ))
+    axs[0].set_ylabel("GW", color=FARBEN["text"])
+    griffe, beschr = axs[0].get_legend_handles_labels()
+    fig.legend(griffe, beschr, frameon=False, loc="lower center", ncol=2, fontsize=9)
+    fig.suptitle(f"Hitzewoche um {zeitpunkt}", x=0.01, ha="left", fontsize=11)
+    fig.tight_layout(rect=(0, 0.07, 1, 1))
+    fig.savefig(ziel / "klima_hitzewoche.png", dpi=150)
+    plt.close(fig)
+
+
+def grafik_pv_tag(
+    df: pd.DataFrame, pv_cf: pd.Series, stufen: list[klima.Ausbaustufe], ziel: Path
+) -> str:
+    """Heißester Tag (ab 2015, PV-Profil vorhanden): Last, Klimaanlagen, PV, Residuallast."""
+    d = df.join(pv_cf.rename("cf"), how="inner")
+    lok = lokal(d.index)
+    tage = pd.DatetimeIndex(lok.date)
+    # Tagesmitteltemperatur, weil die Klimalast an vielen Tagen in die Sättigung läuft
+    tag = d.groupby(tage)["temperatur"].mean().idxmax()
+    # Tag plus Folgetag, damit der Abend vollständig ist
+    m = (tage >= tag) & (tage <= tag + pd.Timedelta(days=1))
+    d, lok = d[m], lok[m]
+    last = d["basis"] + d["klima_zusatz"]
+    fig, axs = plt.subplots(1, 2, figsize=(11, 4), sharey=True)
+    for ax, stufe in zip(axs, (stufen[0], stufen[2]), strict=True):
+        pv = d["cf"] * stufe.pv_gw
+        r = (last - pv).to_numpy()
+        nach = r.copy()
+        tg = pd.DatetimeIndex(lok.date)
+        for t_ in np.unique(tg):
+            mm = np.asarray(tg == t_)
+            ent = klima._kappen(r[mm], stufe.speicher_gwh * 0.9, stufe.speicher_gw)
+            lad = klima._laden(r[mm], ent.sum() / 0.9, stufe.speicher_gw)
+            nach[mm] = r[mm] - ent + lad
+        ax.plot(lok, last, color=FARBEN["basis"], linewidth=2, label="Last mit Klimaanlagen")
+        ax.plot(
+            lok,
+            d["klima_gesamt"],
+            color=FARBEN["wp"],
+            linewidth=2,
+            label="davon Klimaanlagen Haushalte",
+        )
+        ax.plot(lok, pv, color=FARBEN["ev"], linewidth=2, label="PV-Erzeugung")
+        ax.plot(
+            lok, nach, color=FARBEN["gesteuert"], linewidth=2, label="Last minus PV, nach Speicher"
+        )
+        ax.axhline(0, color=FARBEN["text"], linewidth=0.8)
+        _achsen(ax)
+        ax.set_title(
+            f"{stufe.name}: PV {stufe.pv_gw:.0f} GW, Speicher {stufe.speicher_gw:.0f} GW"
+            f" / {stufe.speicher_gwh:.0f} GWh",
+            loc="left",
+            fontsize=9,
+        )
+        ax.xaxis.set_major_locator(matplotlib.dates.HourLocator(byhour=(0, 6, 12, 18), tz=TZ))
+        ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%d.%m.\n%H h", tz=TZ))
+    axs[0].set_ylabel("GW", color=FARBEN["text"])
+    griffe, beschr = axs[0].get_legend_handles_labels()
+    fig.legend(griffe, beschr, frameon=False, loc="lower center", ncol=4, fontsize=9)
+    datum = str(pd.Timestamp(tag).strftime("%d.%m.%Y"))
+    fig.suptitle(
+        f"Heißester Tag {datum}, Klima und Bestand 2050 (Trend fortgesetzt)",
+        x=0.01,
+        ha="left",
+        fontsize=11,
+    )
+    fig.tight_layout(rect=(0, 0.07, 1, 1))
+    fig.savefig(ziel / "pv_speicher_hitzetag.png", dpi=150)
+    plt.close(fig)
+    return datum
+
+
+def hitze_2026(lst_h: pd.Series, pred: pd.Series, tag: pd.DataFrame) -> pd.DataFrame:
+    """Abweichung Ist minus Lastmodell an heißen und milden Sommertagen je Jahr."""
+    res = (lst_h - pred).copy()
+    res.index = lokal(res.index)
+    t_tag = tag["t"].reindex(pd.DatetimeIndex(res.index.date)).to_numpy()
+    df = pd.DataFrame({"res": res.to_numpy(), "t": t_tag, "h": res.index.hour}, index=res.index)
+    df = df[df.index.month.isin((6, 7, 8))]
+    zeilen = []
+    for y in range(2023, 2027):
+        d = df[df.index.year == y]
+        heiss, mild = d[d["t"] >= 24], d[d["t"] < 20]
+        zeilen.append(
+            {
+                "jahr": y,
+                "heisse_tage": len(heiss) // 24,
+                "abweichung_heiss_gw": heiss["res"].mean(),
+                "abweichung_mild_gw": mild["res"].mean(),
+                "abweichung_heiss_18_22_uhr_gw": heiss[heiss["h"].between(18, 22)]["res"].mean(),
+                "zusatz_heiss_gegen_mild_gw": heiss["res"].mean() - mild["res"].mean(),
+            }
+        )
+    return pd.DataFrame(zeilen).set_index("jahr")
+
+
 # --------------------------------------------------------------------------- Ablauf
 
 
@@ -869,6 +1015,90 @@ def main() -> None:
         )
     pd.DataFrame(sens).set_index("variante").round(2).to_csv(tab / "sensitivitaet.csv")
 
+    # Teil C: Klimaanlagen
+    h26 = hitze_2026(lst_h, pred, tag)
+    h26.round(3).to_csv(tab / "hitze_sommer_2023_2026.csv")
+    ka = klima.Klimaanlagen()
+    t24 = t[lokal(t.index).year == 2024]
+    steigung = klima.eichen(t24, ka)
+    kl_sz, kl_info = klima.szenarien(t, ka)
+
+    def basis_fn(idx: pd.DatetimeIndex, tg: pd.DataFrame) -> np.ndarray:
+        return np.asarray(merkmale(idx, tg) @ beta + niveau)
+
+    kl, kl_stunden = klima.rechnen(t, tagesmerkmale, basis_fn, ka, kl_sz, steigung)
+    kl.round(3).to_csv(tab / "klima_wetterjahre.csv", index=False)
+    kl_sum = kl.groupby("szenario", sort=False).agg(
+        delta_k=("delta_k", "first"),
+        anteil_haushalte=("anteil_haushalte", "first"),
+        klima_twh_mittel=("klima_twh", "mean"),
+        spitze_basis_median_gw=("spitze_basis_gw", "median"),
+        spitze_median_gw=("spitze_gw", "median"),
+        spitze_max_gw=("spitze_gw", "max"),
+        klima_max_gw=("klima_max_gw", "max"),
+        klima_bei_spitze_median_gw=("klima_bei_spitze_gw", "median"),
+    )
+    kl_sum.round(2).to_csv(tab / "klima_szenarien.csv")
+    pfad = klima.ausbaupfad(ka, kl_sz[1].anteil, kl_sz[1].anteil_mobil, (320_000, 480_000, 640_000))
+    pfad.round(2).to_csv(tab / "klima_ausbaupfad.csv", index=False)
+    grafik_klima_spitzen(kl, graf)
+    trend = kl[kl["szenario"] == kl_sz[2].name]
+    heissest = trend.loc[trend["spitze_gw"].idxmax(), "zeitpunkt"]
+    grafik_klima_woche(
+        {kl_sz[0].name: kl_stunden[kl_sz[0].name], kl_sz[2].name: kl_stunden[kl_sz[2].name]},
+        heissest,
+        graf,
+    )
+
+    # Teil D: PV und Speicher gegen die abendliche Klimalast
+    inst = daten.installiert(args.cache)
+    pv = daten.pv_erzeugung(args.cache, 2026)
+    monat = pv.index.tz_convert(TZ).tz_localize(None).to_period("M")
+    pv_cf = pv / inst["pv_gw"].reindex(monat).to_numpy()
+    hw = daten.HANDWERTE
+    jetzt = inst.iloc[-1]
+    heim_je_gw = hw["heimspeicher_gwh_2026"] / float(jetzt["pv_gw"])
+
+    def stufe(name: str, pv_gw: float, gross_gw: float) -> klima.Ausbaustufe:
+        heim_gwh = heim_je_gw * pv_gw
+        # Großspeicher 2 h, Heimspeicher 0,5 C
+        return klima.Ausbaustufe(name, pv_gw, gross_gw + heim_gwh / 2, 2 * gross_gw + heim_gwh)
+
+    stufen = [
+        klima.Ausbaustufe(
+            f"Stand {inst.index[-1]}",
+            float(jetzt["pv_gw"]),
+            float(jetzt["speicher_gw"]),
+            float(jetzt["speicher_gwh"]),
+        ),
+        klima.Ausbaustufe(
+            "PV NEP 2037 B, Speicher wie heute",
+            hw["nep_b"][2037]["pv_gw"],
+            float(jetzt["speicher_gw"]),
+            float(jetzt["speicher_gwh"]),
+        ),
+        stufe("NEP 2037 B", hw["nep_b"][2037]["pv_gw"], hw["nep_b"][2037]["grossspeicher_gw"]),
+        stufe("NEP 2045 B", hw["nep_b"][2045]["pv_gw"], hw["nep_b"][2045]["grossspeicher_gw"]),
+    ]
+    ps = klima.pv_speicher(kl_stunden, pv_cf.dropna(), stufen)
+    ps.round(3).to_csv(tab / "pv_speicher_wetterjahre.csv", index=False)
+    ps_sum = (
+        ps.groupby(["klimaszenario", "ausbau", "mit_klima"], sort=False)
+        .agg(
+            rl_ohne_speicher_median=("rl_spitze_ohne_speicher_gw", "median"),
+            rl_abend_ohne_speicher_median=("rl_abend_max_ohne_speicher_gw", "median"),
+            rl_mit_speicher_median=("rl_spitze_mit_speicher_gw", "median"),
+            rl_mit_speicher_max=("rl_spitze_mit_speicher_gw", "max"),
+            stunde_spitze=("stunde_spitze_mit_speicher", lambda x: int(x.mode().iloc[0])),
+        )
+        .reset_index()
+    )
+    ps_sum.round(2).to_csv(tab / "pv_speicher_szenarien.csv", index=False)
+    pv_tag = grafik_pv_tag(kl_stunden[kl_sz[2].name], pv_cf.dropna(), stufen, graf)
+    pd.DataFrame([s.__dict__ for s in stufen]).round(1).to_csv(
+        tab / "pv_speicher_stufen.csv", index=False
+    )
+
     lauf = {
         "temperatur_von": str(t.index.min()),
         "temperatur_bis": str(t.index.max()),
@@ -880,6 +1110,9 @@ def main() -> None:
         **{k: round(v, 4) for k, v in sz.kennzahlen.items()},
         "wetterjahr_hoechste_spitze": int(schlimmst),
         "wetterjahr_typisch": int(typisch),
+        "klima_steigung_je_k": round(steigung, 4),
+        **{k: round(v, 3) for k, v in kl_info.items()},
+        "pv_hitzetag": pv_tag,
     }
     (tab / "lauf.json").write_text(json.dumps(lauf, indent=2, ensure_ascii=False) + "\n")
     print(json.dumps(lauf, indent=2, ensure_ascii=False))
@@ -888,6 +1121,11 @@ def main() -> None:
     print(abw_df.round(1).to_string())
     print(wj.round(1).to_string())
     print(pd.DataFrame(sens).round(1).to_string())
+    print(h26.round(2).to_string())
+    print(kl_sum.round(2).to_string())
+    print(pfad.round(2).to_string())
+    print(pd.DataFrame([s.__dict__ for s in stufen]).round(1).to_string())
+    print(ps_sum.round(1).to_string())
 
 
 if __name__ == "__main__":

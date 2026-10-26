@@ -155,6 +155,27 @@ HANDWERTE: dict[str, Any] = {
     # ADAC über ecomento: Ladeverluste 10-25 %
     # https://ecomento.de/2020/07/23/adac-ermittelt-elektroauto-ladeverluste/
     "ladeverlust": (0.10, 0.25),
+    # Verivox/Innofact-Umfrage Juli 2026: 23,4 % der Haushalte mit Klimaanlage (2025: 17,9 %),
+    # davon 69,2 % mobile Monoblockgeräte; 24,9 % planen eine Anschaffung
+    # https://www.heidelberg24.de/politik-und-wirtschaft/klimaanlagen-boom-immer-mehr-haushalte-kaufen-geraete-zr-94393480.html
+    "klima_anteil_haushalte": {2025: 0.179, 2026: 0.234},
+    "klima_anteil_mobil_2026": 0.692,
+    # FGK über dpa-AFX (15.07.2026): Raumklimageräte (meist Split) 2020 ~350.000, 2023 ~260.000,
+    # 2025 ~320.000 Stück; VDKF: Wartezeit auf Installateure "gut drei Monate"
+    # https://www.boerse-online.de/dpa-afx/roundup-begehrte-kuehlgeraete-vielerorts-vergriffen-und-nun-538041.html
+    "fgk_raumklima_absatz": {2020: 350_000, 2023: 260_000, 2025: 320_000},
+    # Destatis Mikrozensus 2024: 40,8 Mio. Privathaushalte
+    # https://www.drweb.de/41-millionen-haushalte-wie-deutschland-wirklich-wohnt/
+    "haushalte": 40.8e6,
+    # BNetzA, Genehmigung Szenariorahmen NEP Strom 2037/2045 (2025), Szenario B, S. 4
+    # https://www.netzentwicklungsplan.de/sites/default/files/2025-04/Genehmigung%20Szenariorahmen%202025_0.pdf
+    "nep_b": {
+        2037: {"pv_gw": 345.4, "grossspeicher_gw": 67.6},
+        2045: {"pv_gw": 400.0, "grossspeicher_gw": 67.6},
+    },
+    # battery-charts.de über solarserver.de: Juli 2026 29,8 GWh, davon ~22 GWh Heimspeicher
+    # https://www.solarserver.de/2026/07/06/batteriekapazitaet-in-deutschland-waechst-auf-298-gwh-rekordtempo-beim-speicherausbau/
+    "heimspeicher_gwh_2026": 22.0,
 }
 
 
@@ -269,3 +290,43 @@ def haushalte_waerme(cache: Path) -> pd.DataFrame:
     out.index = out.index.astype(int)
     out.to_csv(datei)
     return out
+
+
+def installiert(cache: Path) -> pd.DataFrame:
+    """Installierte Leistung je Monat: PV (GW DC), Batteriespeicher (GW, GWh); Energy-Charts."""
+    datei = cache / "installed_power.csv"
+    if datei.exists():
+        df = pd.read_csv(datei, index_col=0)
+        df.index = pd.PeriodIndex(df.index, freq="M")
+        return df
+    d = _http(
+        f"{ec_daten.API}/installed_power",
+        country="de",
+        time_step="monthly",
+        installation_decommission="false",
+    ).json()
+    idx = pd.PeriodIndex([pd.Period(f"{t[3:]}-{t[:2]}", "M") for t in d["time"]])
+    namen = {
+        "Solar DC": "pv_gw",
+        "Battery storage (power)": "speicher_gw",
+        "Battery storage (capacity)": "speicher_gwh",
+    }
+    out = {
+        spalte: pd.Series(
+            next(p["data"] for p in d["production_types"] if p["name"] == name),
+            index=idx,
+            dtype=float,
+        )
+        for name, spalte in namen.items()
+    }
+    df = pd.DataFrame(out).ffill().fillna(0.0)
+    df.to_csv(datei)
+    return df
+
+
+def pv_erzeugung(cache: Path, bis: int) -> pd.Series:
+    """Stündliche PV-Erzeugung in GW (Energy-Charts, UTC-Index)."""
+    df = ec_daten.lade(cache / "energy_charts", bis)
+    s = df["solar"].dropna()
+    s.index = s.index.tz_convert("UTC")
+    return (s / 1000).rename("pv_gw")

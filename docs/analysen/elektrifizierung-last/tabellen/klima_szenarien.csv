@@ -1,0 +1,5 @@
+szenario,delta_k,anteil_haushalte,klima_twh_mittel,spitze_basis_median_gw,spitze_median_gw,spitze_max_gw,klima_max_gw,klima_bei_spitze_median_gw
+"Bestand 2026, Klima 2026",0.95,0.23,2.51,62.61,62.97,63.96,7.86,7.86
+2050 realistisch (halber Trend),1.6,0.27,3.37,62.36,63.55,64.68,8.39,8.39
+2050 Trend fortgesetzt,2.26,0.31,4.7,62.12,64.86,65.98,9.51,9.51
+"Obergrenze: halbe Haushalte, 2050 Trend",2.26,0.5,7.56,62.12,70.64,71.77,15.3,15.3

@@ -2,7 +2,7 @@
   "temperatur_von": "1991-01-01 00:00:00+00:00",
   "temperatur_bis": "2026-10-25 23:00:00+00:00",
   "last_von": "2015-01-01 00:00:00+00:00",
-  "last_bis": "2026-10-26 07:00:00+00:00",
+  "last_bis": "2026-10-26 09:00:00+00:00",
   "basismodell_r2": 0.9371,
   "basismodell_rmse_gw": 2.291,
   "heizgradtage_referenz": 2092.0,
@@ -13,5 +13,17 @@
   "ev_anteil_heute": 0.0525,
   "jaz_wp": 3.2468,
   "wetterjahr_hoechste_spitze": 1997,
-  "wetterjahr_typisch": 2001
+  "wetterjahr_typisch": 2001,
+  "klima_steigung_je_k": 0.4453,
+  "jja_trend_k_je_jahrzehnt": 0.544,
+  "jja_1991_2020": 18.482,
+  "jja_mittel_wetterjahre": 18.676,
+  "jja_trend_2026": 19.627,
+  "jja_2050_halber_trend": 20.28,
+  "jja_2050_trend": 20.932,
+  "cdd_klima_2026": 234.381,
+  "cdd_2050_halber_trend": 288.681,
+  "cdd_2050_trend": 349.898,
+  "saettigung_mcneil_2026": 0.388,
+  "pv_hitzetag": "27.06.2026"
 }

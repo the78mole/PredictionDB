@@ -1,6 +1,6 @@
 # E-Autos, Wärmepumpen und Klimageräte: Einfluss auf Strombedarf und Lastspitzen
 
-Einmalige Auswertung vom 26.10.2026. Zwei Fragen:
+Einmalige Auswertung vom 26.10.2026. Vier Fragen:
 
 1. Wie stark haben die Zulassungen von E-Autos und die Verkäufe von Wärmepumpen und
    Klimageräten die deutsche Netzlast bis 2025 verändert?
@@ -8,6 +8,10 @@ Einmalige Auswertung vom 26.10.2026. Zwei Fragen:
    und Wärmepumpen überall heizen, wo keine nicht-fossile Alternative zum Einsatz kommt?
    Als Alternative zählen hier nur Wärmenetze (Biomasse, Biogas, Müllverbrennung,
    Abwärme, Flusswasser-Großwärmepumpen) und die heute schon nicht fossilen Heizungen.
+3. Wie entwickelt sich die Sommerlast, wenn Klimaanlagen so verbreitet sind, wie es ein
+   realistisches Klimaszenario für 2050 erwarten lässt? Wie viel davon kann das Handwerk
+   überhaupt installieren?
+4. Wie wirken PV- und Speicherausbau auf diese Last, die vor allem abends anfällt?
 
 Keine der Reihen geht in die Datenbank. Werte, die nur als Webseite oder PDF vorliegen,
 sind von Hand mit Quelle übernommen (Liste unten und in [daten.py](daten.py)).
@@ -50,12 +54,34 @@ Median liegt zwischen 168 und 195 GW (ungesteuert), im Extremjahr zwischen 213 u
 (Tabelle unten). Der stärkste Hebel ist der Wärmebedarf: 25 % weniger Raumwärme durch
 Sanierung senkt die Extremspitze um 29 GW.
 
+**Klimaanlagen bleiben national ein Sommerthema, kein Spitzenlastproblem.** Der Sommer
+2026 war der heißeste der Messreihe, mit 19 Tagen über 24 °C im Tagesmittel. Trotzdem lag
+die Netzlast an diesen Tagen nur 0,3 GW höher als an milden Tagen, abends praktisch gar
+nicht. Wenn sich der Sommertrend (+0,54 K je Jahrzehnt) bis 2050 fortsetzt, steigt der
+Anteil der Haushalte mit Klimaanlage von 23 % auf 31 %. Der Kühlstrom wächst von 2,5 auf
+4,7 TWh, die Sommerhöchstlast um gut 2 GW auf 65–66 GW. Selbst wenn jeder zweite Haushalt
+kühlt, bleibt die Sommerspitze mit 71–72 GW unter der heutigen Winterspitze.
+
+**Das Handwerk begrenzt den Ausbau fest installierter Geräte.** Mit gut 320.000 Raumklima-
+geräten im Jahr und 15 Jahren Lebensdauer pendelt sich der Bestand bei 4,8 Mio. ein. Das
+2050er-Ziel von 6 Mio. Haushalten mit Split-Gerät wird damit nie erreicht, erst mit
+480.000 Installationen im Jahr nach 19 Jahren. Die Lücke füllen mobile Monoblockgeräte,
+die mehr Strom je Kühlleistung brauchen.
+
+**PV allein hilft am Abend nicht, Speicher schon.** Die Residuallast (Last minus PV) hat
+ihre Sommerspitze nach Sonnenuntergang. Ob 132 GW PV wie heute oder 345 GW wie im NEP 2037,
+sie liegt bei 59 GW, und Klimaanlagen heben sie 2050 um 2,5–3,8 GW. Die heutigen Batterien
+(22 GW, 34 GWh) fangen davon zwei Drittel ab. Mit dem Speicherausbau des NEP 2037
+(97 GW, 193 GWh) sinkt die Sommerspitze der Residuallast auf 37 GW in die Nacht, die
+Klimaanlagen tragen dann höchstens 0,4 GW bei, in der Obergrenze 2 GW.
+
 **Folgerung für die Prognose:** Für die Lastprognose zählt vor allem, dass die
 Temperaturempfindlichkeit im Winter zunimmt. Ein Modell, das auf 2015–2020 gelernt hat,
 unterschätzt kalte Tage heute um etwa 0,1 GW je Kelvin Heizgradtag, an einem Tag mit 20 K
 also um 2 GW. Ein Trend in der Temperaturwirkung (oder kurze Trainingsfenster) ist deshalb
 wichtiger als Zulassungszahlen als Merkmal. E-Autos verschieben die Last bisher nicht
-messbar.
+messbar. Im Sommer ist der Kühlgradtag als Merkmal ausreichend; ein eigener Klimaanlagen-
+Bestand als Merkmal lohnt sich erst, wenn die Hitzetage abends sichtbar mehr Last zeigen.
 
 ## Rückblick 2015–2025
 
@@ -140,6 +166,130 @@ Empfindlichkeit (Zusatzbedarf im Mittel der Wetterjahre, Spitzen in GW):
 | Fernwärme ohne Großwärmepumpen | 270 | 179 | 233 | 162 | 217 | 3,2 |
 | fossile Fernwärme ganz aus Großwärmepumpen | 304 | 191 | 251 | 174 | 236 | 3,2 |
 
+## Klimaanlagen im Klimaszenario
+
+![Sommerhöchstlast je Wetterjahr](grafiken/klima_sommerspitzen.png)
+
+![Hitzewoche Juli 2019](grafiken/klima_hitzewoche.png)
+
+**Was der Sommer 2026 zeigt.** Das Stundenmodell der Netzlast (gelernt auf 2023–2025) sagt
+die Last aus Wetter, Tagtyp und Uhrzeit voraus. Wenn die vielen neuen Klimaanlagen die Last
+an Hitzetagen erhöhen, liegt die gemessene Last dort über dem Modell, und zwar stärker als
+an milden Tagen
+([tabellen/hitze_sommer_2023_2026.csv](tabellen/hitze_sommer_2023_2026.csv)):
+
+| Sommer (Jun–Aug) | Tage ≥ 24 °C | Mehrlast heiß gegen mild (GW) | Abweichung heiß 18–22 Uhr (GW) |
+|---|---|---|---|
+| 2023 | 5 | 0,2 | −0,9 |
+| 2024 | 2 | 1,2 | 1,4 |
+| 2025 | 7 | 0,3 | 0,5 |
+| 2026 | 19 | 0,3 | 0,0 |
+
+Die Nachfrage nach Geräten war 2026 hoch: Laut Verivox-Umfrage haben 23,4 % der Haushalte
+eine Klimaanlage (2025: 17,9 %), weitere 24,9 % planen eine. Der Kältefachverband VDKF nennt
+Wartezeiten von gut drei Monaten auf Installateure. In der Netzlast kommt das kaum an. Ein
+Grund: 69 % der Geräte sind mobile Monoblockgeräte, die nur an wenigen Tagen laufen. Ein
+anderer: PV-Anlagen auf dem eigenen Dach decken einen Teil des Kühlstroms, den Energy-Charts
+nicht sieht. Am Abend gibt es diesen Effekt aber nicht, und auch dort fehlt der Ausschlag.
+
+**Klimaszenarien.** Grundlage ist der beobachtete Trend der Sommermitteltemperatur
+(Jun–Aug, 1991–2026): +0,54 K je Jahrzehnt. Das passt zu den RCP4.5- bis RCP8.5-Läufen für
+Deutschland bis zur Jahrhundertmitte. Die Wetterjahre 1991–2026 werden um eine feste
+Differenz verschoben, so dass ihr Mittel dem Zieljahr entspricht:
+
+| Szenario | Sommermittel (°C) | Kühlgradtage | Haushalte mit Klimaanlage | davon mobil |
+|---|---|---|---|---|
+| Bestand 2026, Klima 2026 | 19,6 | 234 | 23 % | 69 % |
+| 2050 realistisch (halber Trend ab 2026) | 20,3 | 289 | 27 % | 45 % |
+| 2050 Trend fortgesetzt | 20,9 | 350 | 31 % | 45 % |
+| Obergrenze: halbe Haushalte, 2050 Trend | 20,9 | 350 | 50 % | 40 % |
+
+Die Ausstattung folgt der Sättigungskurve von McNeil und Letschert (2007), die den Anteil
+gekühlter Haushalte aus den Kühlgradtagen schätzt, hier auf die 23,4 % von 2026 geeicht.
+Ein Gerät zieht 0,90 kW (mobil) oder 0,65 kW (Split). Es läuft, sobald die gedämpfte
+Temperatur (Mittel aus Stundenwert und 24-Stunden-Mittel) 22 °C übersteigt, mit voller
+Leistung ab etwa 24 °C. Die Nutzung folgt der Anwesenheit: nachts und tagsüber halb so oft
+wie zwischen 17 und 20 Uhr. Die Steigung ist so geeicht, dass 2024 bei angenommenen 14 %
+Ausstattung die 1,33 TWh Kühlstrom der Haushalte aus Eurostat herauskommen. Die heutige
+Last im Modell enthält den Bestand 2024 schon, gezählt wird nur der Zuwachs.
+
+| Szenario | Kühlstrom (TWh/a) | Sommerspitze ohne Zuwachs, Median (GW) | Sommerspitze, Median (GW) | Sommerspitze, Max (GW) | alle Klimaanlagen zur Spitze (GW) |
+|---|---|---|---|---|---|
+| Bestand 2026, Klima 2026 | 2,5 | 62,6 | 63,0 | 64,0 | 7,9 |
+| 2050 realistisch | 3,4 | 62,4 | 63,6 | 64,7 | 8,4 |
+| 2050 Trend fortgesetzt | 4,7 | 62,1 | 64,9 | 66,0 | 9,5 |
+| Obergrenze | 7,6 | 62,1 | 70,6 | 71,8 | 15,3 |
+
+Die Sommerspitze liegt um 18 Uhr an Hitzetagen. Ohne Klimaanlagen sinkt sie in wärmerem
+Klima leicht, weil die Heizgrad-Anteile im Mai und September wegfallen. Zum Vergleich: Die
+Winterspitze liegt heute bei 73 GW und im Vollausbau der Wärmepumpen bei 185 GW.
+
+**Installationsleistung.** Fest installierte Split-Geräte brauchen einen Kältetechniker. Der
+FGK meldet 350.000 Raumklimageräte 2020, 260.000 2023 und 320.000 2025, darin sind auch
+Gewerbe und Ersatz enthalten. Gerechnet ist, wie schnell der Bestand der Haushalte mit
+Split-Gerät (heute 2,9 Mio.) das Ziel aus „2050 realistisch“ (6,05 Mio.) erreicht, wenn
+alle Installationen in Haushalte gehen und jedes Gerät 15 Jahre hält
+([tabellen/klima_ausbaupfad.csv](tabellen/klima_ausbaupfad.csv)):
+
+| Installationen je Jahr | Jahre bis 6,05 Mio. | Bestand im Gleichgewicht (Mio.) |
+|---|---|---|
+| 320.000 (heute) | nie | 4,8 |
+| 480.000 (+50 %) | 19 | 7,2 |
+| 640.000 (doppelt) | 10 | 9,6 |
+
+Der Engpass bremst also den Umstieg auf effiziente Split-Geräte, nicht den Kühlbedarf
+selbst. Wer nicht warten will, kauft ein mobiles Gerät. Für die Netzlast ist das ungünstiger
+(0,90 statt 0,65 kW), der Unterschied macht in der Obergrenze aber nur etwa 1 GW aus.
+
+## PV und Speicher
+
+![Heißester Tag mit PV und Speicher](grafiken/pv_speicher_hitzetag.png)
+
+Für die Sommer 2015–2026 wird das stündliche PV-Profil aus Energy-Charts (Erzeugung
+geteilt durch installierte Leistung des Monats) auf vier Ausbaustufen hochgerechnet und
+von der Last mit Klimaanlagen abgezogen. Speicher entladen sich jeden Tag so, dass die
+höchste Residuallast möglichst tief fällt, und laden in den Stunden mit dem meisten
+PV-Überschuss (Wirkungsgrad 90 %, ideale Voraussicht für den Tag):
+
+| Ausbaustufe | PV (GW) | Speicher (GW / GWh) |
+|---|---|---|
+| Stand 10/2026 (Energy-Charts) | 132 | 22 / 34 |
+| PV wie NEP 2037 B, Speicher wie heute | 345 | 22 / 34 |
+| NEP 2037 B | 345 | 97 / 193 |
+| NEP 2045 B | 400 | 101 / 202 |
+
+Großspeicher aus dem Szenariorahmen (67,6 GW) mit zwei Stunden Kapazität, Heimspeicher
+wachsen mit der PV (heute 22 GWh, 0,5 C).
+
+Höchste Residuallast im Sommer, Median der Wetterjahre, Szenario „2050 Trend fortgesetzt“
+([tabellen/pv_speicher_szenarien.csv](tabellen/pv_speicher_szenarien.csv)):
+
+| Ausbaustufe | ohne Speicher, ohne Klimazuwachs (GW) | ohne Speicher, mit Klimazuwachs (GW) | mit Speicher, ohne Klimazuwachs (GW) | mit Speicher, mit Klimazuwachs (GW) | Stunde der Spitze |
+|---|---|---|---|---|---|
+| Stand 10/2026 | 59,1 | 62,9 | 51,4 | 52,7 | 6 Uhr |
+| PV NEP 2037, Speicher heute | 59,0 | 61,6 | 50,4 | 51,3 | 6 Uhr |
+| NEP 2037 B | 59,0 | 61,6 | 37,4 | 37,8 | 0 Uhr |
+| NEP 2045 B | 59,0 | 61,5 | 36,6 | 36,9 | 0 Uhr |
+
+In der Obergrenze (halbe Haushalte) steigt die Spitze mit heutigen Speichern auf 57,2 GW um
+18 Uhr, mit dem Speicherausbau des NEP 2037 nur auf 39,5 GW.
+
+Drei Dinge fallen auf:
+
+1. **Ohne Speicher bringt mehr PV am Abend nichts.** Die Residualspitze liegt immer nach
+   18 Uhr und bleibt bei 59 GW, egal wie viel PV installiert ist. Die Klimaanlagen kommen
+   voll obendrauf.
+2. **Heutige Speicher reichen schon für den Zuwachs bis 2050.** Mit 34 GWh wandert die
+   Residualspitze in den frühen Morgen, die Klimaanlagen erhöhen sie nur noch um 1,3 GW.
+   Der Speicher muss den Abend allerdings fast vollständig decken und ist dann leer.
+3. **Mit dem NEP-Speicherausbau verschwindet das Abendproblem.** Die Spitze liegt um
+   Mitternacht bei 37 GW, also mehr als 20 GW unter heute. Die Klimaanlagen spielen dann
+   praktisch keine Rolle mehr.
+
+Wohngebäude mit eigener PV und Heimspeicher kühlen am Abend zu einem großen Teil aus dem
+eigenen Speicher. Das ist im Modell enthalten, weil die Heimspeicher mitgerechnet sind, aber
+nur unter der Annahme, dass sie netzdienlich entladen.
+
 ## Grenzen
 
 - Der Wärmebedarf wächst linear mit dem Heizgradtag, auch bei −14 °C. Echte Gebäude sind
@@ -155,7 +305,23 @@ Empfindlichkeit (Zusatzbedarf im Mittel der Wetterjahre, Spitzen in GW):
 - Die heutige Last ist als fest angenommen. Effizienzgewinne bei Geräten und Industrie
   sind nicht fortgeschrieben.
 - Die Netzlast von Energy-Charts enthält keinen Eigenverbrauch hinter dem Zähler. Wärmepumpen
-  und Wallboxen, die PV-Strom vom eigenen Dach nutzen, fehlen im Rückblick zum Teil.
+  und Wallboxen, die PV-Strom vom eigenen Dach nutzen, fehlen im Rückblick zum Teil. Dasselbe
+  gilt für die PV-Erzeugung im Teil „PV und Speicher“.
+- Klimaszenarien verschieben das ganze Wetterjahr um eine feste Differenz. Hitzeextreme
+  nehmen in den Klimamodellen stärker zu als das Mittel, die Spitzen sind daher eher
+  unterschätzt. Gleichzeitig laufen im Modell alle Klimaanlagen um 18 Uhr an Hitzetagen
+  zugleich auf voller Leistung, das überschätzt die Spitze.
+- Die Ausstattung 2024 (14 %) ist geschätzt. Bei 10 % wäre die Leistung je Gerät höher, bei
+  18 % niedriger; die Eichung auf 1,33 TWh hält den Kühlstrom gleich.
+- Gewerbe und Büros sind nur über die heutige Last enthalten. Ihr Kühlbedarf liegt tagsüber
+  und fällt mit der PV zusammen.
+- Der Speichereinsatz ist ideal: volle Voraussicht für den Tag und nur auf die nationale
+  Residualspitze optimiert. Im Markt laden Speicher nach Preis, Heimspeicher nach
+  Eigenverbrauch. Netzengpässe, Im- und Export sowie Pumpspeicher sind nicht abgebildet.
+- Im Vollausbau aus Teil 2 laden ungesteuerte E-Autos abends mit bis zu 36 GW. Das ist
+  deutlich mehr als jeder Klimazuwachs und braucht dieselben Speicher.
+- Alle Ergebnisse gelten für Deutschland als Ganzes. In einzelnen Ortsnetzen mit vielen
+  Klimaanlagen und ohne Speicher kann die Abendlast deutlich stärker steigen.
 
 ## Quellen
 
@@ -170,8 +336,11 @@ Frei, maschinell geladen:
   [road_eqs_carpda](https://ec.europa.eu/eurostat/databrowser/view/road_eqs_carpda/default/table),
   [road_eqr_carpda](https://ec.europa.eu/eurostat/databrowser/view/road_eqr_carpda/default/table)
   (CC BY 4.0)
-- Endenergie der Haushalte nach Anwendung: Eurostat
+- Endenergie der Haushalte nach Anwendung, auch Kühlstrom: Eurostat
   [nrg_d_hhq](https://ec.europa.eu/eurostat/databrowser/view/nrg_d_hhq/default/table) (CC BY 4.0)
+- PV-Erzeugung stündlich und installierte Leistung von PV und Batteriespeichern:
+  [Energy-Charts](https://api.energy-charts.info) `/public_power`, `/installed_power`
+  (Fraunhofer ISE, CC BY 4.0)
 
 Von Hand übernommen (nur für diese Analyse):
 
@@ -183,6 +352,15 @@ Von Hand übernommen (nur für diese Analyse):
 - Pkw-Fahrleistung 2024 (KBA): [dpa über autohaus.de](https://www.autohaus.de/nachrichten/autohandel/trendwende-menschen-in-deutschland-fahren-wieder-mehr-auto-3688922)
 - Pkw-Bestand 1.1.2026: [Destatis](https://www.destatis.de/DE/Presse/Pressemitteilungen/2026/07/PD26_N050_46_85.html)
 - Ladeverluste 10–25 %: [ADAC über ecomento.de](https://ecomento.de/2020/07/23/adac-ermittelt-elektroauto-ladeverluste/)
+- Haushalte mit Klimaanlage 2025 und 2026, Anteil mobiler Geräte (Verivox/Innofact):
+  [heidelberg24.de](https://www.heidelberg24.de/politik-und-wirtschaft/klimaanlagen-boom-immer-mehr-haushalte-kaufen-geraete-zr-94393480.html)
+- Absatz Raumklimageräte 2020, 2023, 2025 (FGK) und Wartezeit auf Installateure (VDKF):
+  [dpa-AFX über boerse-online.de](https://www.boerse-online.de/dpa-afx/roundup-begehrte-kuehlgeraete-vielerorts-vergriffen-und-nun-538041.html)
+- Privathaushalte 2024 (Mikrozensus): [drweb.de](https://www.drweb.de/41-millionen-haushalte-wie-deutschland-wirklich-wohnt/)
+- PV und Großspeicher 2037/2045, Szenario B: [BNetzA, Genehmigung Szenariorahmen NEP Strom 2025](https://www.netzentwicklungsplan.de/sites/default/files/2025-04/Genehmigung%20Szenariorahmen%202025_0.pdf)
+- Heimspeicherkapazität Juli 2026 (battery-charts): [solarserver.de](https://www.solarserver.de/2026/07/06/batteriekapazitaet-in-deutschland-waechst-auf-298-gwh-rekordtempo-beim-speicherausbau/)
+- Sättigungskurve der Klimaanlagen: McNeil, Letschert (2007), *Future air conditioning energy
+  consumption in developing countries and what can be done about it*, ECEEE Summer Study
 - Leistungszahlkurven: Ruhnau, Hirth, Praktiknjo (2019), *Time series of heat demand and
   heat pump efficiency for energy system modeling*, Scientific Data 6:189
 
@@ -197,4 +375,4 @@ uv run --no-project --with pandas --with matplotlib --with httpx --with holidays
 ```
 
 Ergebnisse: [tabellen/](tabellen/) (Jahreswerte, Temperaturempfindlichkeit, Wetterjahre,
-Empfindlichkeit, `lauf.json` mit Kennzahlen) und [grafiken/](grafiken/).
+Empfindlichkeit, Klimaszenarien, PV und Speicher, `lauf.json` mit Kennzahlen) und [grafiken/](grafiken/).

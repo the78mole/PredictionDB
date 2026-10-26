@@ -1,0 +1,385 @@
+klimaszenario,ausbau,mit_klima,wetterjahr,rl_spitze_ohne_speicher_gw,rl_spitze_mit_speicher_gw,rl_abend_max_ohne_speicher_gw,stunde_spitze_mit_speicher
+"Bestand 2026, Klima 2026",Stand 2026-10,False,2015,59.557,51.469,59.557,6
+"Bestand 2026, Klima 2026",Stand 2026-10,False,2016,58.841,50.837,58.841,6
+"Bestand 2026, Klima 2026",Stand 2026-10,False,2017,59.134,51.38,59.134,6
+"Bestand 2026, Klima 2026",Stand 2026-10,False,2018,59.863,51.504,59.863,6
+"Bestand 2026, Klima 2026",Stand 2026-10,False,2019,59.01,51.254,59.01,6
+"Bestand 2026, Klima 2026",Stand 2026-10,False,2020,59.769,52.239,59.769,6
+"Bestand 2026, Klima 2026",Stand 2026-10,False,2021,59.084,51.339,59.084,6
+"Bestand 2026, Klima 2026",Stand 2026-10,False,2022,60.269,53.017,60.269,6
+"Bestand 2026, Klima 2026",Stand 2026-10,False,2023,58.701,51.226,58.701,6
+"Bestand 2026, Klima 2026",Stand 2026-10,False,2024,59.7,52.797,59.7,6
+"Bestand 2026, Klima 2026",Stand 2026-10,False,2025,59.484,52.894,59.484,6
+"Bestand 2026, Klima 2026",Stand 2026-10,False,2026,59.027,51.158,59.027,6
+"Bestand 2026, Klima 2026",Stand 2026-10,True,2015,59.557,51.469,59.557,6
+"Bestand 2026, Klima 2026",Stand 2026-10,True,2016,61.997,51.547,61.997,6
+"Bestand 2026, Klima 2026",Stand 2026-10,True,2017,60.059,51.38,60.059,6
+"Bestand 2026, Klima 2026",Stand 2026-10,True,2018,62.084,51.568,62.084,6
+"Bestand 2026, Klima 2026",Stand 2026-10,True,2019,59.119,51.254,59.119,6
+"Bestand 2026, Klima 2026",Stand 2026-10,True,2020,61.838,52.239,61.838,6
+"Bestand 2026, Klima 2026",Stand 2026-10,True,2021,59.084,51.339,59.084,6
+"Bestand 2026, Klima 2026",Stand 2026-10,True,2022,60.269,53.017,60.269,6
+"Bestand 2026, Klima 2026",Stand 2026-10,True,2023,61.502,51.226,61.502,6
+"Bestand 2026, Klima 2026",Stand 2026-10,True,2024,61.24,52.797,61.24,6
+"Bestand 2026, Klima 2026",Stand 2026-10,True,2025,59.484,52.894,59.484,6
+"Bestand 2026, Klima 2026",Stand 2026-10,True,2026,61.151,51.436,61.151,6
+"Bestand 2026, Klima 2026","PV NEP 2037 B, Speicher wie heute",False,2015,59.515,49.988,59.515,6
+"Bestand 2026, Klima 2026","PV NEP 2037 B, Speicher wie heute",False,2016,58.714,49.773,58.714,6
+"Bestand 2026, Klima 2026","PV NEP 2037 B, Speicher wie heute",False,2017,58.944,49.758,58.944,6
+"Bestand 2026, Klima 2026","PV NEP 2037 B, Speicher wie heute",False,2018,59.787,50.276,59.787,6
+"Bestand 2026, Klima 2026","PV NEP 2037 B, Speicher wie heute",False,2019,58.763,49.902,58.763,6
+"Bestand 2026, Klima 2026","PV NEP 2037 B, Speicher wie heute",False,2020,59.759,51.198,59.759,6
+"Bestand 2026, Klima 2026","PV NEP 2037 B, Speicher wie heute",False,2021,59.074,50.278,59.074,6
+"Bestand 2026, Klima 2026","PV NEP 2037 B, Speicher wie heute",False,2022,60.235,51.785,60.235,6
+"Bestand 2026, Klima 2026","PV NEP 2037 B, Speicher wie heute",False,2023,58.656,50.145,58.656,6
+"Bestand 2026, Klima 2026","PV NEP 2037 B, Speicher wie heute",False,2024,59.607,51.584,59.607,6
+"Bestand 2026, Klima 2026","PV NEP 2037 B, Speicher wie heute",False,2025,59.39,51.364,59.39,6
+"Bestand 2026, Klima 2026","PV NEP 2037 B, Speicher wie heute",False,2026,59.023,50.33,59.023,6
+"Bestand 2026, Klima 2026","PV NEP 2037 B, Speicher wie heute",True,2015,59.515,49.988,59.515,6
+"Bestand 2026, Klima 2026","PV NEP 2037 B, Speicher wie heute",True,2016,61.089,50.31,61.089,6
+"Bestand 2026, Klima 2026","PV NEP 2037 B, Speicher wie heute",True,2017,58.944,49.758,58.944,6
+"Bestand 2026, Klima 2026","PV NEP 2037 B, Speicher wie heute",True,2018,61.893,50.276,61.893,6
+"Bestand 2026, Klima 2026","PV NEP 2037 B, Speicher wie heute",True,2019,58.893,49.902,58.893,6
+"Bestand 2026, Klima 2026","PV NEP 2037 B, Speicher wie heute",True,2020,61.142,51.198,61.142,6
+"Bestand 2026, Klima 2026","PV NEP 2037 B, Speicher wie heute",True,2021,59.074,50.278,59.074,6
+"Bestand 2026, Klima 2026","PV NEP 2037 B, Speicher wie heute",True,2022,60.235,51.785,60.235,6
+"Bestand 2026, Klima 2026","PV NEP 2037 B, Speicher wie heute",True,2023,60.636,50.145,60.636,6
+"Bestand 2026, Klima 2026","PV NEP 2037 B, Speicher wie heute",True,2024,59.645,51.584,59.645,6
+"Bestand 2026, Klima 2026","PV NEP 2037 B, Speicher wie heute",True,2025,59.39,51.364,59.39,6
+"Bestand 2026, Klima 2026","PV NEP 2037 B, Speicher wie heute",True,2026,59.85,50.613,59.85,6
+"Bestand 2026, Klima 2026",NEP 2037 B,False,2015,59.515,37.343,59.515,0
+"Bestand 2026, Klima 2026",NEP 2037 B,False,2016,58.714,36.658,58.714,0
+"Bestand 2026, Klima 2026",NEP 2037 B,False,2017,58.944,37.117,58.944,0
+"Bestand 2026, Klima 2026",NEP 2037 B,False,2018,59.787,37.248,59.787,0
+"Bestand 2026, Klima 2026",NEP 2037 B,False,2019,58.763,37.225,58.763,0
+"Bestand 2026, Klima 2026",NEP 2037 B,False,2020,59.759,38.201,59.759,0
+"Bestand 2026, Klima 2026",NEP 2037 B,False,2021,59.074,37.292,59.074,0
+"Bestand 2026, Klima 2026",NEP 2037 B,False,2022,60.235,38.917,60.235,0
+"Bestand 2026, Klima 2026",NEP 2037 B,False,2023,58.656,37.168,58.656,0
+"Bestand 2026, Klima 2026",NEP 2037 B,False,2024,59.607,39.215,59.607,6
+"Bestand 2026, Klima 2026",NEP 2037 B,False,2025,59.39,39.004,59.39,5
+"Bestand 2026, Klima 2026",NEP 2037 B,False,2026,59.023,37.09,59.023,0
+"Bestand 2026, Klima 2026",NEP 2037 B,True,2015,59.515,37.343,59.515,0
+"Bestand 2026, Klima 2026",NEP 2037 B,True,2016,61.089,36.658,61.089,0
+"Bestand 2026, Klima 2026",NEP 2037 B,True,2017,58.944,37.117,58.944,0
+"Bestand 2026, Klima 2026",NEP 2037 B,True,2018,61.893,37.248,61.893,0
+"Bestand 2026, Klima 2026",NEP 2037 B,True,2019,58.893,37.225,58.893,0
+"Bestand 2026, Klima 2026",NEP 2037 B,True,2020,61.142,38.201,61.142,0
+"Bestand 2026, Klima 2026",NEP 2037 B,True,2021,59.074,37.292,59.074,0
+"Bestand 2026, Klima 2026",NEP 2037 B,True,2022,60.235,38.917,60.235,0
+"Bestand 2026, Klima 2026",NEP 2037 B,True,2023,60.636,37.168,60.636,0
+"Bestand 2026, Klima 2026",NEP 2037 B,True,2024,59.645,39.215,59.645,6
+"Bestand 2026, Klima 2026",NEP 2037 B,True,2025,59.39,39.004,59.39,5
+"Bestand 2026, Klima 2026",NEP 2037 B,True,2026,59.85,37.221,59.85,0
+"Bestand 2026, Klima 2026",NEP 2045 B,False,2015,59.504,36.571,59.504,0
+"Bestand 2026, Klima 2026",NEP 2045 B,False,2016,58.704,35.882,58.704,0
+"Bestand 2026, Klima 2026",NEP 2045 B,False,2017,58.897,36.251,58.897,0
+"Bestand 2026, Klima 2026",NEP 2045 B,False,2018,59.768,36.506,59.768,0
+"Bestand 2026, Klima 2026",NEP 2045 B,False,2019,58.699,36.477,58.699,0
+"Bestand 2026, Klima 2026",NEP 2045 B,False,2020,59.756,37.29,59.756,0
+"Bestand 2026, Klima 2026",NEP 2045 B,False,2021,59.071,36.561,59.071,0
+"Bestand 2026, Klima 2026",NEP 2045 B,False,2022,60.227,38.194,60.227,0
+"Bestand 2026, Klima 2026",NEP 2045 B,False,2023,58.645,36.258,58.645,0
+"Bestand 2026, Klima 2026",NEP 2045 B,False,2024,59.583,38.379,59.583,6
+"Bestand 2026, Klima 2026",NEP 2045 B,False,2025,59.366,38.212,59.366,0
+"Bestand 2026, Klima 2026",NEP 2045 B,False,2026,59.022,36.347,59.022,0
+"Bestand 2026, Klima 2026",NEP 2045 B,True,2015,59.504,36.571,59.504,0
+"Bestand 2026, Klima 2026",NEP 2045 B,True,2016,60.857,35.882,60.857,0
+"Bestand 2026, Klima 2026",NEP 2045 B,True,2017,58.897,36.251,58.897,0
+"Bestand 2026, Klima 2026",NEP 2045 B,True,2018,61.844,36.506,61.844,0
+"Bestand 2026, Klima 2026",NEP 2045 B,True,2019,58.881,36.477,58.881,0
+"Bestand 2026, Klima 2026",NEP 2045 B,True,2020,60.964,37.29,60.964,0
+"Bestand 2026, Klima 2026",NEP 2045 B,True,2021,59.071,36.561,59.071,0
+"Bestand 2026, Klima 2026",NEP 2045 B,True,2022,60.227,38.194,60.227,0
+"Bestand 2026, Klima 2026",NEP 2045 B,True,2023,60.473,36.258,60.473,0
+"Bestand 2026, Klima 2026",NEP 2045 B,True,2024,59.583,38.379,59.583,6
+"Bestand 2026, Klima 2026",NEP 2045 B,True,2025,59.366,38.212,59.366,0
+"Bestand 2026, Klima 2026",NEP 2045 B,True,2026,59.518,36.487,59.518,0
+2050 realistisch (halber Trend),Stand 2026-10,False,2015,59.283,51.209,59.283,6
+2050 realistisch (halber Trend),Stand 2026-10,False,2016,59.025,50.837,59.025,6
+2050 realistisch (halber Trend),Stand 2026-10,False,2017,58.86,51.119,58.86,6
+2050 realistisch (halber Trend),Stand 2026-10,False,2018,59.589,51.24,59.589,6
+2050 realistisch (halber Trend),Stand 2026-10,False,2019,58.736,51.254,58.736,6
+2050 realistisch (halber Trend),Stand 2026-10,False,2020,59.494,51.978,59.494,6
+2050 realistisch (halber Trend),Stand 2026-10,False,2021,58.809,51.339,58.809,6
+2050 realistisch (halber Trend),Stand 2026-10,False,2022,59.994,52.756,59.994,6
+2050 realistisch (halber Trend),Stand 2026-10,False,2023,58.885,51.247,58.885,6
+2050 realistisch (halber Trend),Stand 2026-10,False,2024,59.425,52.685,59.425,7
+2050 realistisch (halber Trend),Stand 2026-10,False,2025,59.21,52.631,59.21,6
+2050 realistisch (halber Trend),Stand 2026-10,False,2026,59.21,51.28,59.21,6
+2050 realistisch (halber Trend),Stand 2026-10,True,2015,60.148,51.209,60.148,6
+2050 realistisch (halber Trend),Stand 2026-10,True,2016,62.713,52.171,62.713,6
+2050 realistisch (halber Trend),Stand 2026-10,True,2017,60.775,51.119,60.775,6
+2050 realistisch (halber Trend),Stand 2026-10,True,2018,62.813,52.283,62.813,6
+2050 realistisch (halber Trend),Stand 2026-10,True,2019,59.834,51.254,59.834,6
+2050 realistisch (halber Trend),Stand 2026-10,True,2020,62.554,51.978,62.554,6
+2050 realistisch (halber Trend),Stand 2026-10,True,2021,60.093,51.339,60.093,6
+2050 realistisch (halber Trend),Stand 2026-10,True,2022,60.951,52.756,60.951,6
+2050 realistisch (halber Trend),Stand 2026-10,True,2023,62.295,51.838,62.295,6
+2050 realistisch (halber Trend),Stand 2026-10,True,2024,61.956,52.685,61.956,7
+2050 realistisch (halber Trend),Stand 2026-10,True,2025,59.959,52.631,59.959,6
+2050 realistisch (halber Trend),Stand 2026-10,True,2026,61.867,51.912,61.867,6
+2050 realistisch (halber Trend),"PV NEP 2037 B, Speicher wie heute",False,2015,59.241,49.722,59.241,6
+2050 realistisch (halber Trend),"PV NEP 2037 B, Speicher wie heute",False,2016,58.898,49.869,58.898,6
+2050 realistisch (halber Trend),"PV NEP 2037 B, Speicher wie heute",False,2017,58.669,49.766,58.669,6
+2050 realistisch (halber Trend),"PV NEP 2037 B, Speicher wie heute",False,2018,59.513,50.011,59.513,6
+2050 realistisch (halber Trend),"PV NEP 2037 B, Speicher wie heute",False,2019,58.488,49.902,58.488,6
+2050 realistisch (halber Trend),"PV NEP 2037 B, Speicher wie heute",False,2020,59.484,50.934,59.484,6
+2050 realistisch (halber Trend),"PV NEP 2037 B, Speicher wie heute",False,2021,58.799,50.126,58.799,6
+2050 realistisch (halber Trend),"PV NEP 2037 B, Speicher wie heute",False,2022,59.961,51.519,59.961,6
+2050 realistisch (halber Trend),"PV NEP 2037 B, Speicher wie heute",False,2023,58.84,50.288,58.84,6
+2050 realistisch (halber Trend),"PV NEP 2037 B, Speicher wie heute",False,2024,59.332,51.32,59.332,6
+2050 realistisch (halber Trend),"PV NEP 2037 B, Speicher wie heute",False,2025,59.116,51.103,59.116,6
+2050 realistisch (halber Trend),"PV NEP 2037 B, Speicher wie heute",False,2026,59.207,50.473,59.207,6
+2050 realistisch (halber Trend),"PV NEP 2037 B, Speicher wie heute",True,2015,59.84,49.722,59.84,6
+2050 realistisch (halber Trend),"PV NEP 2037 B, Speicher wie heute",True,2016,61.848,50.963,61.848,6
+2050 realistisch (halber Trend),"PV NEP 2037 B, Speicher wie heute",True,2017,59.276,49.766,59.276,6
+2050 realistisch (halber Trend),"PV NEP 2037 B, Speicher wie heute",True,2018,62.622,50.575,62.622,6
+2050 realistisch (halber Trend),"PV NEP 2037 B, Speicher wie heute",True,2019,59.582,49.902,59.582,6
+2050 realistisch (halber Trend),"PV NEP 2037 B, Speicher wie heute",True,2020,61.858,50.934,61.858,6
+2050 realistisch (halber Trend),"PV NEP 2037 B, Speicher wie heute",True,2021,58.852,50.126,58.852,6
+2050 realistisch (halber Trend),"PV NEP 2037 B, Speicher wie heute",True,2022,59.961,51.519,59.961,6
+2050 realistisch (halber Trend),"PV NEP 2037 B, Speicher wie heute",True,2023,61.659,50.314,61.659,6
+2050 realistisch (halber Trend),"PV NEP 2037 B, Speicher wie heute",True,2024,60.361,51.32,60.361,6
+2050 realistisch (halber Trend),"PV NEP 2037 B, Speicher wie heute",True,2025,59.536,51.103,59.536,6
+2050 realistisch (halber Trend),"PV NEP 2037 B, Speicher wie heute",True,2026,60.635,51.161,60.635,6
+2050 realistisch (halber Trend),NEP 2037 B,False,2015,59.241,37.096,59.241,0
+2050 realistisch (halber Trend),NEP 2037 B,False,2016,58.898,36.746,58.898,0
+2050 realistisch (halber Trend),NEP 2037 B,False,2017,58.669,36.87,58.669,0
+2050 realistisch (halber Trend),NEP 2037 B,False,2018,59.513,37.001,59.513,0
+2050 realistisch (halber Trend),NEP 2037 B,False,2019,58.488,37.225,58.488,0
+2050 realistisch (halber Trend),NEP 2037 B,False,2020,59.484,37.951,59.484,0
+2050 realistisch (halber Trend),NEP 2037 B,False,2021,58.799,37.382,58.799,0
+2050 realistisch (halber Trend),NEP 2037 B,False,2022,59.961,38.667,59.961,0
+2050 realistisch (halber Trend),NEP 2037 B,False,2023,58.84,37.326,58.84,0
+2050 realistisch (halber Trend),NEP 2037 B,False,2024,59.332,39.215,59.332,6
+2050 realistisch (halber Trend),NEP 2037 B,False,2025,59.116,38.754,59.116,5
+2050 realistisch (halber Trend),NEP 2037 B,False,2026,59.207,37.248,59.207,0
+2050 realistisch (halber Trend),NEP 2037 B,True,2015,59.84,37.096,59.84,0
+2050 realistisch (halber Trend),NEP 2037 B,True,2016,61.848,37.162,61.848,0
+2050 realistisch (halber Trend),NEP 2037 B,True,2017,59.276,36.87,59.276,0
+2050 realistisch (halber Trend),NEP 2037 B,True,2018,62.622,37.152,62.622,0
+2050 realistisch (halber Trend),NEP 2037 B,True,2019,59.582,37.225,59.582,0
+2050 realistisch (halber Trend),NEP 2037 B,True,2020,61.858,37.951,61.858,0
+2050 realistisch (halber Trend),NEP 2037 B,True,2021,58.852,37.382,58.852,0
+2050 realistisch (halber Trend),NEP 2037 B,True,2022,59.961,38.667,59.961,0
+2050 realistisch (halber Trend),NEP 2037 B,True,2023,61.659,37.344,61.659,0
+2050 realistisch (halber Trend),NEP 2037 B,True,2024,60.361,39.215,60.361,6
+2050 realistisch (halber Trend),NEP 2037 B,True,2025,59.536,38.754,59.536,5
+2050 realistisch (halber Trend),NEP 2037 B,True,2026,60.635,37.543,60.635,0
+2050 realistisch (halber Trend),NEP 2045 B,False,2015,59.23,36.324,59.23,0
+2050 realistisch (halber Trend),NEP 2045 B,False,2016,58.888,36.048,58.888,0
+2050 realistisch (halber Trend),NEP 2045 B,False,2017,58.622,36.004,58.622,0
+2050 realistisch (halber Trend),NEP 2045 B,False,2018,59.493,36.259,59.493,0
+2050 realistisch (halber Trend),NEP 2045 B,False,2019,58.425,36.477,58.425,0
+2050 realistisch (halber Trend),NEP 2045 B,False,2020,59.482,37.043,59.482,0
+2050 realistisch (halber Trend),NEP 2045 B,False,2021,58.796,36.561,58.796,0
+2050 realistisch (halber Trend),NEP 2045 B,False,2022,59.952,37.947,59.952,0
+2050 realistisch (halber Trend),NEP 2045 B,False,2023,58.828,36.361,58.828,0
+2050 realistisch (halber Trend),NEP 2045 B,False,2024,59.309,38.379,59.309,6
+2050 realistisch (halber Trend),NEP 2045 B,False,2025,59.092,37.961,59.092,0
+2050 realistisch (halber Trend),NEP 2045 B,False,2026,59.206,36.514,59.206,0
+2050 realistisch (halber Trend),NEP 2045 B,True,2015,59.819,36.324,59.819,0
+2050 realistisch (halber Trend),NEP 2045 B,True,2016,61.678,36.203,61.678,0
+2050 realistisch (halber Trend),NEP 2045 B,True,2017,59.272,36.004,59.272,0
+2050 realistisch (halber Trend),NEP 2045 B,True,2018,62.573,36.33,62.573,0
+2050 realistisch (halber Trend),NEP 2045 B,True,2019,59.57,36.477,59.57,0
+2050 realistisch (halber Trend),NEP 2045 B,True,2020,61.68,37.043,61.68,0
+2050 realistisch (halber Trend),NEP 2045 B,True,2021,58.796,36.561,58.796,0
+2050 realistisch (halber Trend),NEP 2045 B,True,2022,59.952,37.947,59.952,0
+2050 realistisch (halber Trend),NEP 2045 B,True,2023,61.496,36.379,61.496,0
+2050 realistisch (halber Trend),NEP 2045 B,True,2024,60.199,38.379,60.199,6
+2050 realistisch (halber Trend),NEP 2045 B,True,2025,59.428,37.961,59.428,0
+2050 realistisch (halber Trend),NEP 2045 B,True,2026,60.634,36.83,60.634,0
+2050 Trend fortgesetzt,Stand 2026-10,False,2015,59.008,50.948,59.008,6
+2050 Trend fortgesetzt,Stand 2026-10,False,2016,59.208,50.911,59.208,6
+2050 Trend fortgesetzt,Stand 2026-10,False,2017,58.594,50.892,58.594,6
+2050 Trend fortgesetzt,Stand 2026-10,False,2018,59.314,50.976,59.314,6
+2050 Trend fortgesetzt,Stand 2026-10,False,2019,58.461,51.286,58.461,6
+2050 Trend fortgesetzt,Stand 2026-10,False,2020,59.22,51.717,59.22,6
+2050 Trend fortgesetzt,Stand 2026-10,False,2021,58.759,51.401,58.759,6
+2050 Trend fortgesetzt,Stand 2026-10,False,2022,59.72,52.495,59.72,6
+2050 Trend fortgesetzt,Stand 2026-10,False,2023,59.069,51.372,59.069,6
+2050 Trend fortgesetzt,Stand 2026-10,False,2024,59.151,52.691,59.151,7
+2050 Trend fortgesetzt,Stand 2026-10,False,2025,58.935,52.367,58.935,6
+2050 Trend fortgesetzt,Stand 2026-10,False,2026,59.394,51.402,59.394,6
+2050 Trend fortgesetzt,Stand 2026-10,True,2015,61.455,51.159,61.455,6
+2050 Trend fortgesetzt,Stand 2026-10,True,2016,64.02,53.231,64.02,7
+2050 Trend fortgesetzt,Stand 2026-10,True,2017,62.082,51.605,62.082,18
+2050 Trend fortgesetzt,Stand 2026-10,True,2018,64.12,53.447,64.12,7
+2050 Trend fortgesetzt,Stand 2026-10,True,2019,61.141,51.387,61.141,6
+2050 Trend fortgesetzt,Stand 2026-10,True,2020,63.861,52.835,63.861,7
+2050 Trend fortgesetzt,Stand 2026-10,True,2021,62.405,51.401,62.405,6
+2050 Trend fortgesetzt,Stand 2026-10,True,2022,62.488,52.495,62.488,6
+2050 Trend fortgesetzt,Stand 2026-10,True,2023,63.602,52.951,63.602,7
+2050 Trend fortgesetzt,Stand 2026-10,True,2024,63.263,52.984,63.263,7
+2050 Trend fortgesetzt,Stand 2026-10,True,2025,62.027,52.367,62.027,6
+2050 Trend fortgesetzt,Stand 2026-10,True,2026,63.346,52.901,63.346,6
+2050 Trend fortgesetzt,"PV NEP 2037 B, Speicher wie heute",False,2015,58.966,49.457,58.966,6
+2050 Trend fortgesetzt,"PV NEP 2037 B, Speicher wie heute",False,2016,59.081,50.011,59.081,6
+2050 Trend fortgesetzt,"PV NEP 2037 B, Speicher wie heute",False,2017,58.578,49.909,58.578,6
+2050 Trend fortgesetzt,"PV NEP 2037 B, Speicher wie heute",False,2018,59.238,49.745,59.238,6
+2050 Trend fortgesetzt,"PV NEP 2037 B, Speicher wie heute",False,2019,58.371,49.902,58.371,6
+2050 Trend fortgesetzt,"PV NEP 2037 B, Speicher wie heute",False,2020,59.21,50.67,59.21,6
+2050 Trend fortgesetzt,"PV NEP 2037 B, Speicher wie heute",False,2021,58.723,50.269,58.723,6
+2050 Trend fortgesetzt,"PV NEP 2037 B, Speicher wie heute",False,2022,59.686,51.254,59.686,6
+2050 Trend fortgesetzt,"PV NEP 2037 B, Speicher wie heute",False,2023,59.023,50.43,59.023,6
+2050 Trend fortgesetzt,"PV NEP 2037 B, Speicher wie heute",False,2024,59.058,51.187,59.058,6
+2050 Trend fortgesetzt,"PV NEP 2037 B, Speicher wie heute",False,2025,58.841,50.842,58.841,6
+2050 Trend fortgesetzt,"PV NEP 2037 B, Speicher wie heute",False,2026,59.39,50.616,59.39,6
+2050 Trend fortgesetzt,"PV NEP 2037 B, Speicher wie heute",True,2015,61.091,50.225,61.091,6
+2050 Trend fortgesetzt,"PV NEP 2037 B, Speicher wie heute",True,2016,63.155,52.047,63.155,6
+2050 Trend fortgesetzt,"PV NEP 2037 B, Speicher wie heute",True,2017,60.526,50.142,60.526,6
+2050 Trend fortgesetzt,"PV NEP 2037 B, Speicher wie heute",True,2018,63.929,51.625,63.929,6
+2050 Trend fortgesetzt,"PV NEP 2037 B, Speicher wie heute",True,2019,60.833,50.017,60.833,6
+2050 Trend fortgesetzt,"PV NEP 2037 B, Speicher wie heute",True,2020,63.165,51.402,63.165,6
+2050 Trend fortgesetzt,"PV NEP 2037 B, Speicher wie heute",True,2021,61.164,50.269,61.164,6
+2050 Trend fortgesetzt,"PV NEP 2037 B, Speicher wie heute",True,2022,60.918,51.254,60.918,6
+2050 Trend fortgesetzt,"PV NEP 2037 B, Speicher wie heute",True,2023,62.966,51.459,62.966,6
+2050 Trend fortgesetzt,"PV NEP 2037 B, Speicher wie heute",True,2024,61.668,51.311,61.668,6
+2050 Trend fortgesetzt,"PV NEP 2037 B, Speicher wie heute",True,2025,61.603,50.842,61.603,6
+2050 Trend fortgesetzt,"PV NEP 2037 B, Speicher wie heute",True,2026,62.831,52.137,62.831,6
+2050 Trend fortgesetzt,NEP 2037 B,False,2015,58.966,36.849,58.966,0
+2050 Trend fortgesetzt,NEP 2037 B,False,2016,59.081,36.912,59.081,0
+2050 Trend fortgesetzt,NEP 2037 B,False,2017,58.578,36.756,58.578,0
+2050 Trend fortgesetzt,NEP 2037 B,False,2018,59.238,36.753,59.238,0
+2050 Trend fortgesetzt,NEP 2037 B,False,2019,58.371,37.249,58.371,0
+2050 Trend fortgesetzt,NEP 2037 B,False,2020,59.21,37.7,59.21,0
+2050 Trend fortgesetzt,NEP 2037 B,False,2021,58.723,37.539,58.723,0
+2050 Trend fortgesetzt,NEP 2037 B,False,2022,59.686,38.416,59.686,0
+2050 Trend fortgesetzt,NEP 2037 B,False,2023,59.023,37.483,59.023,0
+2050 Trend fortgesetzt,NEP 2037 B,False,2024,59.058,39.223,59.058,6
+2050 Trend fortgesetzt,NEP 2037 B,False,2025,58.841,38.504,58.841,5
+2050 Trend fortgesetzt,NEP 2037 B,False,2026,59.39,37.406,59.39,0
+2050 Trend fortgesetzt,NEP 2037 B,True,2015,61.091,36.849,61.091,0
+2050 Trend fortgesetzt,NEP 2037 B,True,2016,63.155,38.177,63.155,0
+2050 Trend fortgesetzt,NEP 2037 B,True,2017,60.526,36.756,60.526,0
+2050 Trend fortgesetzt,NEP 2037 B,True,2018,63.929,37.903,63.929,0
+2050 Trend fortgesetzt,NEP 2037 B,True,2019,60.833,37.249,60.833,0
+2050 Trend fortgesetzt,NEP 2037 B,True,2020,63.165,37.7,63.165,0
+2050 Trend fortgesetzt,NEP 2037 B,True,2021,61.164,37.539,61.164,0
+2050 Trend fortgesetzt,NEP 2037 B,True,2022,60.918,38.416,60.918,0
+2050 Trend fortgesetzt,NEP 2037 B,True,2023,62.966,37.645,62.966,0
+2050 Trend fortgesetzt,NEP 2037 B,True,2024,61.668,39.223,61.668,6
+2050 Trend fortgesetzt,NEP 2037 B,True,2025,61.603,38.504,61.603,5
+2050 Trend fortgesetzt,NEP 2037 B,True,2026,62.831,38.038,62.831,0
+2050 Trend fortgesetzt,NEP 2045 B,False,2015,58.955,36.077,58.955,0
+2050 Trend fortgesetzt,NEP 2045 B,False,2016,59.072,36.215,59.072,0
+2050 Trend fortgesetzt,NEP 2045 B,False,2017,58.574,35.91,58.574,0
+2050 Trend fortgesetzt,NEP 2045 B,False,2018,59.219,36.012,59.219,0
+2050 Trend fortgesetzt,NEP 2045 B,False,2019,58.369,36.518,58.369,0
+2050 Trend fortgesetzt,NEP 2045 B,False,2020,59.207,36.796,59.207,0
+2050 Trend fortgesetzt,NEP 2045 B,False,2021,58.714,36.642,58.714,0
+2050 Trend fortgesetzt,NEP 2045 B,False,2022,59.678,37.701,59.678,0
+2050 Trend fortgesetzt,NEP 2045 B,False,2023,59.012,36.519,59.012,0
+2050 Trend fortgesetzt,NEP 2045 B,False,2024,59.034,38.386,59.034,6
+2050 Trend fortgesetzt,NEP 2045 B,False,2025,58.817,37.711,58.817,0
+2050 Trend fortgesetzt,NEP 2045 B,False,2026,59.389,36.68,59.389,0
+2050 Trend fortgesetzt,NEP 2045 B,True,2015,61.07,36.077,61.07,0
+2050 Trend fortgesetzt,NEP 2045 B,True,2016,62.985,37.218,62.985,0
+2050 Trend fortgesetzt,NEP 2045 B,True,2017,60.523,35.91,60.523,0
+2050 Trend fortgesetzt,NEP 2045 B,True,2018,63.88,37.081,63.88,0
+2050 Trend fortgesetzt,NEP 2045 B,True,2019,60.821,36.518,60.821,0
+2050 Trend fortgesetzt,NEP 2045 B,True,2020,62.991,36.796,62.991,0
+2050 Trend fortgesetzt,NEP 2045 B,True,2021,60.847,36.642,60.847,0
+2050 Trend fortgesetzt,NEP 2045 B,True,2022,60.735,37.701,60.735,0
+2050 Trend fortgesetzt,NEP 2045 B,True,2023,62.803,36.804,62.803,0
+2050 Trend fortgesetzt,NEP 2045 B,True,2024,61.449,38.386,61.449,6
+2050 Trend fortgesetzt,NEP 2045 B,True,2025,61.495,37.711,61.495,0
+2050 Trend fortgesetzt,NEP 2045 B,True,2026,62.7,37.357,62.7,0
+"Obergrenze: halbe Haushalte, 2050 Trend",Stand 2026-10,False,2015,59.008,50.948,59.008,6
+"Obergrenze: halbe Haushalte, 2050 Trend",Stand 2026-10,False,2016,59.208,50.911,59.208,6
+"Obergrenze: halbe Haushalte, 2050 Trend",Stand 2026-10,False,2017,58.594,50.892,58.594,6
+"Obergrenze: halbe Haushalte, 2050 Trend",Stand 2026-10,False,2018,59.314,50.976,59.314,6
+"Obergrenze: halbe Haushalte, 2050 Trend",Stand 2026-10,False,2019,58.461,51.286,58.461,6
+"Obergrenze: halbe Haushalte, 2050 Trend",Stand 2026-10,False,2020,59.22,51.717,59.22,6
+"Obergrenze: halbe Haushalte, 2050 Trend",Stand 2026-10,False,2021,58.759,51.401,58.759,6
+"Obergrenze: halbe Haushalte, 2050 Trend",Stand 2026-10,False,2022,59.72,52.495,59.72,6
+"Obergrenze: halbe Haushalte, 2050 Trend",Stand 2026-10,False,2023,59.069,51.372,59.069,6
+"Obergrenze: halbe Haushalte, 2050 Trend",Stand 2026-10,False,2024,59.151,52.691,59.151,7
+"Obergrenze: halbe Haushalte, 2050 Trend",Stand 2026-10,False,2025,58.935,52.367,58.935,6
+"Obergrenze: halbe Haushalte, 2050 Trend",Stand 2026-10,False,2026,59.394,51.402,59.394,6
+"Obergrenze: halbe Haushalte, 2050 Trend",Stand 2026-10,True,2015,67.243,56.213,67.243,18
+"Obergrenze: halbe Haushalte, 2050 Trend",Stand 2026-10,True,2016,69.807,58.371,69.807,18
+"Obergrenze: halbe Haushalte, 2050 Trend",Stand 2026-10,True,2017,67.869,56.871,67.869,18
+"Obergrenze: halbe Haushalte, 2050 Trend",Stand 2026-10,True,2018,69.907,58.485,69.907,18
+"Obergrenze: halbe Haushalte, 2050 Trend",Stand 2026-10,True,2019,66.929,56.36,66.929,18
+"Obergrenze: halbe Haushalte, 2050 Trend",Stand 2026-10,True,2020,69.648,57.913,69.648,18
+"Obergrenze: halbe Haushalte, 2050 Trend",Stand 2026-10,True,2021,67.85,54.026,67.85,19
+"Obergrenze: halbe Haushalte, 2050 Trend",Stand 2026-10,True,2022,68.275,56.237,68.275,18
+"Obergrenze: halbe Haushalte, 2050 Trend",Stand 2026-10,True,2023,69.389,57.98,69.389,18
+"Obergrenze: halbe Haushalte, 2050 Trend",Stand 2026-10,True,2024,69.05,58.198,69.05,18
+"Obergrenze: halbe Haushalte, 2050 Trend",Stand 2026-10,True,2025,66.707,55.503,66.707,18
+"Obergrenze: halbe Haushalte, 2050 Trend",Stand 2026-10,True,2026,69.122,57.597,69.122,18
+"Obergrenze: halbe Haushalte, 2050 Trend","PV NEP 2037 B, Speicher wie heute",False,2015,58.966,49.457,58.966,6
+"Obergrenze: halbe Haushalte, 2050 Trend","PV NEP 2037 B, Speicher wie heute",False,2016,59.081,50.011,59.081,6
+"Obergrenze: halbe Haushalte, 2050 Trend","PV NEP 2037 B, Speicher wie heute",False,2017,58.578,49.909,58.578,6
+"Obergrenze: halbe Haushalte, 2050 Trend","PV NEP 2037 B, Speicher wie heute",False,2018,59.238,49.745,59.238,6
+"Obergrenze: halbe Haushalte, 2050 Trend","PV NEP 2037 B, Speicher wie heute",False,2019,58.371,49.902,58.371,6
+"Obergrenze: halbe Haushalte, 2050 Trend","PV NEP 2037 B, Speicher wie heute",False,2020,59.21,50.67,59.21,6
+"Obergrenze: halbe Haushalte, 2050 Trend","PV NEP 2037 B, Speicher wie heute",False,2021,58.723,50.269,58.723,6
+"Obergrenze: halbe Haushalte, 2050 Trend","PV NEP 2037 B, Speicher wie heute",False,2022,59.686,51.254,59.686,6
+"Obergrenze: halbe Haushalte, 2050 Trend","PV NEP 2037 B, Speicher wie heute",False,2023,59.023,50.43,59.023,6
+"Obergrenze: halbe Haushalte, 2050 Trend","PV NEP 2037 B, Speicher wie heute",False,2024,59.058,51.187,59.058,6
+"Obergrenze: halbe Haushalte, 2050 Trend","PV NEP 2037 B, Speicher wie heute",False,2025,58.841,50.842,58.841,6
+"Obergrenze: halbe Haushalte, 2050 Trend","PV NEP 2037 B, Speicher wie heute",False,2026,59.39,50.616,59.39,6
+"Obergrenze: halbe Haushalte, 2050 Trend","PV NEP 2037 B, Speicher wie heute",True,2015,66.589,55.068,66.589,19
+"Obergrenze: halbe Haushalte, 2050 Trend","PV NEP 2037 B, Speicher wie heute",True,2016,68.942,57.01,68.942,19
+"Obergrenze: halbe Haushalte, 2050 Trend","PV NEP 2037 B, Speicher wie heute",True,2017,66.024,55.274,66.024,19
+"Obergrenze: halbe Haushalte, 2050 Trend","PV NEP 2037 B, Speicher wie heute",True,2018,69.716,56.175,69.716,18
+"Obergrenze: halbe Haushalte, 2050 Trend","PV NEP 2037 B, Speicher wie heute",True,2019,66.331,54.768,66.331,19
+"Obergrenze: halbe Haushalte, 2050 Trend","PV NEP 2037 B, Speicher wie heute",True,2020,68.952,55.827,68.952,19
+"Obergrenze: halbe Haushalte, 2050 Trend","PV NEP 2037 B, Speicher wie heute",True,2021,66.609,51.184,66.609,20
+"Obergrenze: halbe Haushalte, 2050 Trend","PV NEP 2037 B, Speicher wie heute",True,2022,66.705,53.855,66.705,19
+"Obergrenze: halbe Haushalte, 2050 Trend","PV NEP 2037 B, Speicher wie heute",True,2023,68.753,56.299,68.753,19
+"Obergrenze: halbe Haushalte, 2050 Trend","PV NEP 2037 B, Speicher wie heute",True,2024,67.455,56.356,67.455,19
+"Obergrenze: halbe Haushalte, 2050 Trend","PV NEP 2037 B, Speicher wie heute",True,2025,65.786,53.112,65.786,19
+"Obergrenze: halbe Haushalte, 2050 Trend","PV NEP 2037 B, Speicher wie heute",True,2026,68.608,55.84,68.608,19
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2037 B,False,2015,58.966,36.849,58.966,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2037 B,False,2016,59.081,36.912,59.081,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2037 B,False,2017,58.578,36.756,58.578,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2037 B,False,2018,59.238,36.753,59.238,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2037 B,False,2019,58.371,37.249,58.371,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2037 B,False,2020,59.21,37.7,59.21,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2037 B,False,2021,58.723,37.539,58.723,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2037 B,False,2022,59.686,38.416,59.686,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2037 B,False,2023,59.023,37.483,59.023,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2037 B,False,2024,59.058,39.223,59.058,6
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2037 B,False,2025,58.841,38.504,58.841,5
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2037 B,False,2026,59.39,37.406,59.39,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2037 B,True,2015,66.589,39.454,66.589,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2037 B,True,2016,68.942,41.079,68.942,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2037 B,True,2017,66.024,37.764,66.024,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2037 B,True,2018,69.716,39.769,69.716,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2037 B,True,2019,66.331,39.678,66.331,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2037 B,True,2020,68.952,39.251,68.952,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2037 B,True,2021,66.609,37.539,66.609,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2037 B,True,2022,66.705,39.286,66.705,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2037 B,True,2023,68.753,39.665,68.753,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2037 B,True,2024,67.455,40.146,67.455,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2037 B,True,2025,65.786,38.643,65.786,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2037 B,True,2026,68.608,39.526,68.608,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2045 B,False,2015,58.955,36.077,58.955,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2045 B,False,2016,59.072,36.215,59.072,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2045 B,False,2017,58.574,35.91,58.574,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2045 B,False,2018,59.219,36.012,59.219,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2045 B,False,2019,58.369,36.518,58.369,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2045 B,False,2020,59.207,36.796,59.207,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2045 B,False,2021,58.714,36.642,58.714,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2045 B,False,2022,59.678,37.701,59.678,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2045 B,False,2023,59.012,36.519,59.012,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2045 B,False,2024,59.034,38.386,59.034,6
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2045 B,False,2025,58.817,37.711,58.817,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2045 B,False,2026,59.389,36.68,59.389,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2045 B,True,2015,66.568,38.527,66.568,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2045 B,True,2016,68.772,40.12,68.772,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2045 B,True,2017,66.021,36.816,66.021,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2045 B,True,2018,69.667,38.948,69.667,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2045 B,True,2019,66.319,38.717,66.319,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2045 B,True,2020,68.778,38.255,68.778,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2045 B,True,2021,66.292,36.642,66.292,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2045 B,True,2022,66.304,38.294,66.304,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2045 B,True,2023,68.59,38.824,68.59,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2045 B,True,2024,67.048,39.237,67.048,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2045 B,True,2025,65.678,37.711,65.678,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2045 B,True,2026,68.476,38.339,68.476,0
