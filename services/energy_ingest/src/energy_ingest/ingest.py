@@ -34,7 +34,9 @@ Status = Literal["ok", "empty", "failed", "format"]
 
 class Store(Protocol):
     def source_id(self, source: SourceMeta) -> int: ...
-    def write(self, source_id: int, batch: list[SeriesData], fetched: datetime) -> int: ...
+    def write(
+        self, source_id: int, batch: list[SeriesData], fetched: datetime, *, prune: bool = False
+    ) -> int: ...
     def done_chunks(self, source_id: int, dataset: str) -> dict[datetime, datetime]: ...
     def mark_chunk(
         self,
@@ -108,13 +110,21 @@ class EnergyIngestor:
         self.sources = sources
         self.store = store
         self.settings = settings
+        self.revised_at: datetime | None = None
 
     def fetch(
-        self, source: Source, dataset: str, start: datetime, end: datetime, now: datetime
+        self,
+        source: Source,
+        dataset: str,
+        start: datetime,
+        end: datetime,
+        now: datetime,
+        *,
+        prune: bool = False,
     ) -> DatasetResult:
         try:
             batch = source.fetch(dataset, start, end)
-            n = self.store.write(self.store.source_id(source), batch, now)
+            n = self.store.write(self.store.source_id(source), batch, now, prune=prune)
         except Exception as exc:
             status: Status = "format" if isinstance(exc, FormatError) else "failed"
             log.warning(
@@ -158,6 +168,30 @@ class EnergyIngestor:
             for src in self.sources
             for ds in src.datasets()
         ]
+
+    def revise(self, now: datetime | None = None) -> list[DatasetResult]:
+        """Fragt die letzten ``revision_days`` Tage erneut ab, damit nachträgliche Korrekturen
+        der Quellen (z. B. Ausreißer in der Ist-Last) übernommen werden. Von der Quelle
+        entfernte Werte werden geleert. Datensätze, deren Abgleich ohnehin so weit zurückreicht,
+        bleiben außen vor; das Fenster des Abgleichs selbst ebenfalls."""
+        now = now or datetime.now(UTC)
+        sync_start, _ = day_window(now, self.settings.lookback_days, 0)
+        start, _ = day_window(now, self.settings.revision_days, 0)
+        results = []
+        for src in self.sources:
+            for ds in src.datasets():
+                end = sync_start - sync_lookback(src, ds)
+                if end <= start:
+                    continue
+                for a, b in chunks(src.max_chunk(ds), start, end):
+                    results.append(self.fetch(src, ds, max(a, start), min(b, end), now, prune=True))
+        self.revised_at = now
+        return results
+
+    def revise_due(self, now: datetime | None = None) -> bool:
+        now = now or datetime.now(UTC)
+        interval = timedelta(hours=self.settings.revision_interval_hours)
+        return self.revised_at is None or now - self.revised_at >= interval
 
     def pending(
         self,

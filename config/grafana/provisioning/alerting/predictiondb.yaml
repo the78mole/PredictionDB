@@ -142,6 +142,62 @@ groups:
         labels:
           severity: warning
 
+      # Quelle hat bereits gespeicherte Ist-Lastwerte nachträglich korrigiert oder entfernt
+      # (energy.value_revision). Nur Änderungen über 1 % an Werten, die beim Abruf schon älter
+      # als 2 h waren, damit das laufende Auffüllen frischer Viertelstunden nicht meldet.
+      - uid: pdb-load-revised
+        title: Datenquelle - Ist-Last korrigiert
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: pdb-postgres
+            model:
+              refId: A
+              format: table
+              rawQuery: true
+              editorMode: code
+              rawSql: |
+                WITH r AS (
+                  SELECT src.code AS source, r.ts, r.old_value, r.new_value
+                    FROM energy.value_revision r
+                    JOIN energy.series s USING (series_id)
+                    JOIN meta.source src ON src.source_id = s.source_id
+                   WHERE s.code = 'load_actual' AND src.enabled
+                     AND r.revised_at > now() - interval '24 hours'
+                     AND r.ts < r.revised_at - interval '2 hours'
+                     AND (r.old_value IS NULL OR r.new_value IS NULL
+                          OR abs(r.new_value - r.old_value) > 0.01 * abs(r.old_value))
+                )
+                SELECT source,
+                       to_char(min(ts) AT TIME ZONE 'Europe/Berlin', 'DD.MM.YYYY HH24:MI') AS von,
+                       to_char(max(ts) AT TIME ZONE 'Europe/Berlin', 'DD.MM.YYYY HH24:MI') AS bis,
+                       coalesce(round(max(abs(new_value - old_value)))::text, '-') AS max_mw,
+                       count(*) FILTER (WHERE new_value IS NULL)::text AS entfernt,
+                       count(*) AS value
+                  FROM r
+                 GROUP BY source
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+        noDataState: OK
+        execErrState: Error
+        for: 0m
+        annotations:
+          summary: "Ist-Last von {{ $labels.source }} nachträglich korrigiert"
+          description: >-
+            {{ $values.A.Value }} Werte zwischen {{ $labels.von }} und
+            {{ $labels.bis }} (Ortszeit) haben sich geändert, davon {{ $labels.entfernt }}
+            entfernt; größte Änderung {{ $labels.max_mw }} MW. Alte und neue Werte stehen in
+            energy.value_revision.
+        labels:
+          severity: info
+
   - orgId: 1
     name: System
     folder: PredictionDB
