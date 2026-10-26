@@ -2789,6 +2789,113 @@
       }
     },
     {
+      "type": "barchart",
+      "title": "Silber lokal je Monat (Anteil der GFS-Läufe)",
+      "id": 46,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 89
+      },
+      "description": "Je Monat der Anteil der erwarteten GFS-Läufe (ab v16, 22.03.2021 12Z, bis zum jüngsten veröffentlichten Lauf; Laufzeiten oben unter „GFS-Läufe“ wählbar), deren Silber vollständig in Garage wx-silver liegt. Grün = fertig, gelb = gerade im Download: im laufenden Import-Durchgang aus GHCR (wx-import) vorgesehen oder im Bronze-Backfill (gfs-backfill) in Arbeit. Läufe, die im NOAA-Archiv fehlen, bleiben offen, daher erreichen manche Monate keine 100 %.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "-- Erwartet: alle GFS-Läufe ab v16 (22.03.2021 12Z) bis zum jüngsten, der veröffentlicht sein sollte\n-- (NOAA ca. 3,5-5 h nach Laufzeit), nur die gewählten Laufzeiten. Grün: Silber liegt vollständig\n-- in wx-silver (meta.silver_run present). Gelb: im laufenden Import-Durchgang aus GHCR vorgesehen\n-- (loading, höchstens 12 h alt) oder gerade im Bronze-Download (meta.backfill_run running).\nWITH soll AS (\n  SELECT t FROM generate_series(timestamptz '2021-03-22 12:00+00',\n                                date_bin('6 hours', now() - interval '5 hours', timestamptz '2000-01-01'),\n                                interval '6 hours') t\n   WHERE extract(hour FROM t AT TIME ZONE 'UTC')::int::text IN ($gfs_lauf)),\ns AS (SELECT r.run_time, r.status, r.updated_at\n        FROM meta.silver_run r JOIN meta.source q USING (source_id)\n       WHERE q.code = 'gfs_0p25'),\nbronze AS (SELECT DISTINCT run_time FROM meta.backfill_run WHERE status = 'running'),\nz AS (\n  SELECT soll.t,\n         CASE WHEN s.status = 'present' THEN 'fertig'\n              WHEN s.status = 'loading' AND s.updated_at > now() - interval '12 hours' THEN 'laden'\n              WHEN bronze.run_time IS NOT NULL THEN 'laden' END AS zustand\n    FROM soll LEFT JOIN s ON s.run_time = soll.t LEFT JOIN bronze ON bronze.run_time = soll.t)\nSELECT to_char(t AT TIME ZONE 'UTC', 'YYYY-MM') AS \"Monat\",\n       round(100.0 * count(*) FILTER (WHERE zustand = 'fertig') / count(*), 1) AS \"Fertig\",\n       round(100.0 * count(*) FILTER (WHERE zustand = 'laden') / count(*), 1) AS \"Im Download\"\n  FROM z\n GROUP BY 1\n ORDER BY 1"
+        }
+      ],
+      "options": {
+        "orientation": "vertical",
+        "stacking": "normal",
+        "showValue": "never",
+        "groupWidth": 0.8,
+        "barWidth": 0.9,
+        "barRadius": 0,
+        "xField": "Monat",
+        "xTickLabelRotation": -45,
+        "xTickLabelSpacing": 0,
+        "fullHighlight": false,
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "decimals": 1,
+          "color": {
+            "mode": "fixed"
+          },
+          "custom": {
+            "fillOpacity": 85,
+            "lineWidth": 0,
+            "gradientMode": "none",
+            "axisSoftMin": 0,
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Fertig"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Im Download"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "type": "row",
       "title": "Anlagenbestand (MaStR)",
       "id": 10,
@@ -2797,7 +2904,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 89
+        "y": 98
       },
       "panels": []
     },
@@ -2813,7 +2920,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 90
+        "y": 99
       },
       "targets": [
         {
@@ -2934,7 +3041,7 @@
         "h": 8,
         "w": 16,
         "x": 8,
-        "y": 90
+        "y": 99
       },
       "targets": [
         {
@@ -3039,7 +3146,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 98
+        "y": 107
       },
       "panels": []
     },
@@ -3055,7 +3162,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 99
+        "y": 108
       },
       "targets": [
         {
@@ -3117,7 +3224,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 99
+        "y": 108
       },
       "targets": [
         {
@@ -3179,7 +3286,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 103
+        "y": 112
       },
       "targets": [
         {
@@ -3222,7 +3329,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 103
+        "y": 112
       },
       "targets": [
         {
@@ -3265,7 +3372,7 @@
         "h": 8,
         "w": 16,
         "x": 8,
-        "y": 99
+        "y": 108
       },
       "targets": [
         {
@@ -3316,7 +3423,7 @@
         "h": 14,
         "w": 8,
         "x": 0,
-        "y": 107
+        "y": 116
       },
       "targets": [
         {
@@ -3402,7 +3509,7 @@
         "h": 14,
         "w": 8,
         "x": 8,
-        "y": 107
+        "y": 116
       },
       "targets": [
         {
@@ -3488,7 +3595,7 @@
         "h": 14,
         "w": 8,
         "x": 16,
-        "y": 107
+        "y": 116
       },
       "targets": [
         {
@@ -3599,7 +3706,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 121
+        "y": 130
       },
       "targets": [
         {
@@ -3675,7 +3782,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 121
+        "y": 130
       },
       "targets": [
         {
@@ -3747,7 +3854,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 129
+        "y": 138
       },
       "panels": []
     },
@@ -3764,7 +3871,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 130
+        "y": 139
       },
       "targets": [
         {
@@ -3856,7 +3963,7 @@
         "h": 8,
         "w": 16,
         "x": 8,
-        "y": 130
+        "y": 139
       },
       "targets": [
         {
@@ -4131,7 +4238,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 138
+        "y": 147
       },
       "targets": [
         {
@@ -4264,7 +4371,7 @@
         "h": 8,
         "w": 6,
         "x": 0,
-        "y": 146
+        "y": 155
       },
       "targets": [
         {
@@ -4307,7 +4414,7 @@
         "h": 8,
         "w": 18,
         "x": 6,
-        "y": 146
+        "y": 155
       },
       "targets": [
         {
@@ -4378,6 +4485,51 @@
         "multi": false,
         "options": [],
         "current": {}
+      },
+      {
+        "type": "custom",
+        "name": "gfs_lauf",
+        "label": "GFS-Läufe (Silber je Monat)",
+        "query": "00Z : 0, 06Z : 6, 12Z : 12, 18Z : 18",
+        "multi": true,
+        "includeAll": true,
+        "hide": 0,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          {
+            "selected": false,
+            "text": "00Z",
+            "value": "0"
+          },
+          {
+            "selected": false,
+            "text": "06Z",
+            "value": "6"
+          },
+          {
+            "selected": false,
+            "text": "12Z",
+            "value": "12"
+          },
+          {
+            "selected": false,
+            "text": "18Z",
+            "value": "18"
+          }
+        ]
       }
     ]
   },

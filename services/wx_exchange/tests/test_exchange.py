@@ -212,6 +212,53 @@ async def test_import_fills_silver_and_skips_present(tmp_path: Path) -> None:
     assert imp.run(start, end, [0]).runs == {}
 
 
+class FakeLedger:
+    """``meta.silver_run`` im Arbeitsspeicher, protokolliert die Meldungen."""
+
+    def __init__(self, rows: dict[datetime, str] | None = None) -> None:
+        self.rows = dict(rows or {})
+        self.events: list[tuple[str, list[datetime]]] = []
+
+    def source_id(self, code: str) -> int:
+        return 3
+
+    def silver_runs(self, source_id: int) -> dict[datetime, str]:
+        return dict(self.rows)
+
+    def mark_silver(self, source_id, runs, status, origin) -> None:  # type: ignore[no-untyped-def]
+        runs = list(runs)
+        self.events.append((status, runs))
+        for r in runs:
+            self.rows[r] = status
+
+    def clear_silver_loading(self, source_id, runs=None) -> None:  # type: ignore[no-untyped-def]
+        drop = [r for r, st in self.rows.items() if st == "loading"]
+        if runs is not None:
+            drop = [r for r in drop if r in list(runs)]
+        for r in drop:
+            del self.rows[r]
+
+
+async def test_import_reports_local_silver(tmp_path: Path) -> None:
+    fake = FakeRegistry()
+    pub = _publisher(fake, host(), tmp_path)
+    await pub.publish_month("2026-10", 6, RUN, RUN)
+    start, end = datetime(2026, 1, 1, tzinfo=UTC), datetime(2026, 12, 31, tzinfo=UTC)
+
+    stale = datetime(2026, 9, 1, tzinfo=UTC)
+    ledger = FakeLedger({stale: "loading"})
+    imp = Importer(registry(fake, write=False), MemoryStore(), ledger=ledger)  # type: ignore[arg-type]
+    imp.run(start, end)
+    # erst angekündigt, dann vorhanden; der Rest des abgebrochenen Durchgangs ist weg
+    assert ("loading", [RUN]) in ledger.events and ledger.events[-1] == ("present", [RUN])
+    assert ledger.rows == {RUN: "present"}
+
+    # vorhandenes Silber ohne Eintrag (z. B. vor der Tabelle importiert) wird nachgetragen
+    ledger.rows.clear()
+    assert imp.run(start, end).runs == {"2026102006": "present"}
+    assert ledger.rows == {RUN: "present"}
+
+
 async def test_verify_local_build_against_ghcr(tmp_path: Path) -> None:
     fake = FakeRegistry()
     pub = _publisher(fake, host(), tmp_path)

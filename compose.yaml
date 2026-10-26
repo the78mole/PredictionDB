@@ -165,6 +165,7 @@ services:
       - --watch=3600
     depends_on:
       garage-init: {condition: service_completed_successfully}
+      migrate: {condition: service_completed_successfully}
 
   # Prognosemodell Last/Preis DE-LU (services/ml_train, config/ml/de_lu_v1.yaml). Einmalige Jobs:
   #   docker compose --profile ml run --rm ml-train snapshot --out /data/snap
