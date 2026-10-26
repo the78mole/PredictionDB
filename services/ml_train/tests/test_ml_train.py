@@ -14,6 +14,7 @@ from ml_train.calendar import calendar_features
 from ml_train.config import ModelConfig, load_config
 from ml_train.dataset import FeatureBuilder, WeatherTable, local_day_hours
 from ml_train.models import TwoStageModel
+from ml_train.predict import due_issues, next_wake
 from ml_train.registry import Registry, compare
 from ml_train.snapshot import load_snapshot
 from ml_train.testing import synthetic_snapshot
@@ -314,3 +315,27 @@ def test_dbsync_roles_and_metrics() -> None:
     assert set(rows) == {0, 1, 2}
     assert rows[1]["mae"] == 1.0 and rows[2]["mae"] == 3.0 and rows[0]["mae"] == 2.0
     assert rows[0]["n"] == 48 and rows[1]["coverage80"] == 1.0
+
+
+def test_due_issues_catches_up_missed_hours() -> None:
+    now = pd.Timestamp("2026-10-26T10:01:30", tz="UTC")
+    assert due_issues(now, None, 24) == [pd.Timestamp("2026-10-26T10", tz="UTC")]
+    last = pd.Timestamp("2026-10-26T07", tz="UTC")
+    assert due_issues(now, last, 24) == list(
+        pd.date_range("2026-10-26T08", "2026-10-26T10", freq="h", tz="UTC")
+    )
+    assert due_issues(now, pd.Timestamp("2026-10-26T10", tz="UTC"), 24) == []
+    # Nachholen ist nach hinten begrenzt
+    assert len(due_issues(now, pd.Timestamp("2026-10-20T00", tz="UTC"), 3)) == 4
+
+
+def test_next_wake_on_full_hour() -> None:
+    assert next_wake(pd.Timestamp("2026-10-26T09:59", tz="UTC"), 3600) == pd.Timestamp(
+        "2026-10-26T10:01", tz="UTC"
+    )
+    assert next_wake(pd.Timestamp("2026-10-26T10:00:30", tz="UTC"), 3600) == pd.Timestamp(
+        "2026-10-26T10:01", tz="UTC"
+    )
+    assert next_wake(pd.Timestamp("2026-10-26T10:05", tz="UTC"), 3600) == pd.Timestamp(
+        "2026-10-26T11:01", tz="UTC"
+    )

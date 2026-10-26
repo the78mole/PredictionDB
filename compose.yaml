@@ -167,7 +167,7 @@ services:
   ml-predict:
     <<: *app
     profiles: [ml]
-    command: ["ml-train", "predict", "--watch", "3600", "--also-config", "config/ml/de_lu_v2.yaml"]
+    command: ["ml-train", "predict", "--watch", "3600", "--catch-up", "24", "--also-config", "config/ml/de_lu_v2.yaml"]
     environment:
       <<: *app-env
       PDB_ML_REGISTRY: s3://ml-artifacts/models

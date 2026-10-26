@@ -758,6 +758,259 @@
       }
     },
     {
+      "type": "timeseries",
+      "title": "Lastprognose: eigene Modelle gegen ÜNB (Vortag 10 Uhr, gestern bis Tagesende)",
+      "id": 44,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 17
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT ts AS time, code AS metric, value\n  FROM energy.value_best\n WHERE code IN ('load_actual', 'load_da_forecast') AND $__timeFilter(ts)\n ORDER BY 1"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "-- Je Liefertag die eigene Prognose vom Vortag 10:00 Ortszeit, zeitgleich mit der\n-- Day-Ahead-Lastprognose der ÜNB (bis 10:00 am Vortag, VO 543/2013 Art. 6.1 b)\nSELECT p.valid_time AS time,\n       v.config || ' ' || v.variant || ' · ' || CASE v.role WHEN 'champion' THEN 'Champion' ELSE 'Challenger' END AS metric, p.value\n  FROM fcst.prediction p JOIN meta.model_version v ON v.version = p.model_version\n WHERE p.target = 'load_actual' AND p.quantile = 0.5 AND v.role IN ('champion', 'challenger')\n   AND extract(hour FROM p.issue_time AT TIME ZONE 'Europe/Berlin') = 10\n   AND (p.valid_time AT TIME ZONE 'Europe/Berlin')::date\n         - (p.issue_time AT TIME ZONE 'Europe/Berlin')::date = 1\n   AND $__timeFilter(p.valid_time)\n ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "megwatt",
+          "custom": {
+            "lineWidth": 1
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "load_actual"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Last"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "load_da_forecast"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Lastprognose (ÜNB)"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    6,
+                    4
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*Champion$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*Challenger$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "description": "Fairer Vergleich zum selben Zeitpunkt: Für jeden Liefertag zeigt die Grafik die Medianprognose (P50) unserer aktiven Modelle (Champion und Challenger je Linie), die am Vortag um 10:00 Ortszeit gerechnet wurde. Bis dahin veröffentlichen die Übertragungsnetzbetreiber ihre Day-Ahead-Lastprognose (gestrichelt). Zeitbereich wie im Preis-Panel: gestern und heute, ab 12 Uhr auch morgen.",
+      "timeFrom": "${preis_bis}",
+      "timeShift": "${preis_ab}",
+      "hideTimeOverride": true,
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Preisprognose: eigene Modelle gegen Day-Ahead-Preis (Vortag 10 Uhr, gestern bis Tagesende)",
+      "id": 45,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 17
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT ts AS time, code AS metric, value\n  FROM energy.value_best\n WHERE code = 'da_price_de_lu' AND $__timeFilter(ts)\n ORDER BY 1"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "-- Je Liefertag die eigene Prognose vom Vortag 10:00 Ortszeit, zeitgleich mit der\n-- Day-Ahead-Lastprognose der ÜNB (bis 10:00 am Vortag, VO 543/2013 Art. 6.1 b)\nSELECT p.valid_time AS time,\n       v.config || ' ' || v.variant || ' · ' || CASE v.role WHEN 'champion' THEN 'Champion' ELSE 'Challenger' END AS metric, p.value\n  FROM fcst.prediction p JOIN meta.model_version v ON v.version = p.model_version\n WHERE p.target = 'da_price_de_lu' AND p.quantile = 0.5 AND v.role IN ('champion', 'challenger')\n   AND extract(hour FROM p.issue_time AT TIME ZONE 'Europe/Berlin') = 10\n   AND (p.valid_time AT TIME ZONE 'Europe/Berlin')::date\n         - (p.issue_time AT TIME ZONE 'Europe/Berlin')::date = 1\n   AND $__timeFilter(p.valid_time)\n ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix:€/MWh",
+          "custom": {
+            "lineWidth": 1
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "da_price_de_lu"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Preis"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*Champion$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*Challenger$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "description": "Medianprognose (P50) unserer aktiven Modelle für jeden Liefertag, gerechnet am Vortag um 10:00 Ortszeit (zeitgleich mit der ÜNB-Lastprognose und vor Gebotsschluss der Day-Ahead-Auktion um 12 Uhr), gegen den Auktionspreis DE-LU. Die ÜNB veröffentlichen keine Preisprognose. Zeitbereich wie im Preis-Panel.",
+      "timeFrom": "${preis_bis}",
+      "timeShift": "${preis_ab}",
+      "hideTimeOverride": true,
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
       "type": "table",
       "title": "Champion und Challenger im Backtest (MAE)",
       "id": 41,
@@ -769,7 +1022,7 @@
         "h": 8,
         "w": 10,
         "x": 0,
-        "y": 17
+        "y": 25
       },
       "description": "MAE der Medianprognose je Vorlauftag aus dem Backtest der aktiven Versionen (meta.model_metric). Gesamt und RMSE über alle Vorlauftage. P10–P90 = Anteil der Ist-Werte im 80-%-Band (Soll 80 %). Last in MW, Preis in €/MWh.",
       "targets": [
@@ -852,7 +1105,7 @@
         "h": 8,
         "w": 9,
         "x": 10,
-        "y": 17
+        "y": 25
       },
       "description": "Wie der Backtest, aber aus den gespeicherten Live-Prognosen (fcst.prediction) der letzten 14 Liefertage gegen die Ist-Werte, Ausgabe um 08 UTC. Bias = mittlere Abweichung (positiv: Prognose zu hoch).",
       "targets": [
@@ -931,7 +1184,7 @@
         "h": 8,
         "w": 5,
         "x": 19,
-        "y": 17
+        "y": 25
       },
       "description": "Registrierungen und Rollenwechsel (meta.model_event).",
       "targets": [
@@ -1002,7 +1255,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 25
+        "y": 33
       },
       "panels": []
     },
@@ -1018,7 +1271,7 @@
         "h": 10,
         "w": 14,
         "x": 0,
-        "y": 26
+        "y": 34
       },
       "targets": [
         {
@@ -1160,7 +1413,7 @@
         "h": 10,
         "w": 10,
         "x": 14,
-        "y": 26
+        "y": 34
       },
       "targets": [
         {
@@ -1229,7 +1482,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 36
+        "y": 44
       },
       "targets": [
         {
@@ -1318,7 +1571,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 36
+        "y": 44
       },
       "targets": [
         {
@@ -1449,7 +1702,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 44
+        "y": 52
       },
       "panels": []
     },
@@ -1465,7 +1718,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 45
+        "y": 53
       },
       "targets": [
         {
@@ -1508,7 +1761,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 49
+        "y": 57
       },
       "targets": [
         {
@@ -1569,7 +1822,7 @@
         "h": 8,
         "w": 18,
         "x": 6,
-        "y": 45
+        "y": 53
       },
       "targets": [
         {
@@ -1597,7 +1850,7 @@
         "h": 5,
         "w": 24,
         "x": 0,
-        "y": 53
+        "y": 61
       },
       "description": "Neu = neu geladene Läufe, Da = schon vorhanden, Unv. = unvollständig, Fehler = fehlgeschlagene Schritte. Zeitraum und Zuletzt in UTC, Start und Fertig ca. lokal.",
       "targets": [
@@ -1881,7 +2134,7 @@
         "h": 12,
         "w": 14,
         "x": 0,
-        "y": 58
+        "y": 66
       },
       "description": "Oben die Live-Läufe (ingest-gfs, eigener Dienst mit eigener Quelle NOMADS, unabhängig vom Backfill): „NOAA ab hh:mm“ = Lauf noch nicht veröffentlicht, frühestens ab dieser lokalen Zeit; „wartet (NOAA)“ = teilweise veröffentlicht. Darunter laufende Backfill-Läufe und die nächsten der Warteschlange. Lauf in UTC, Start lokal.",
       "targets": [
@@ -2064,7 +2317,7 @@
         "h": 12,
         "w": 10,
         "x": 14,
-        "y": 58
+        "y": 66
       },
       "description": "Die letzten 50 abgeschlossenen Läufe aller Jobs, neueste oben. Neu = neu geladene Schritte; Lauf in UTC, Fertig in lokaler Zeit. übergeben = vom nächsten Live-Job geladen.",
       "targets": [
@@ -2217,7 +2470,7 @@
         "h": 11,
         "w": 24,
         "x": 0,
-        "y": 70
+        "y": 78
       },
       "description": "Neu = neu geladene Läufe, Da = schon vorhanden, Unv. = unvollständig, Überg. = offene Läufe eines beendeten Live-Jobs, die der nächste Job lädt (meist der jüngste, bei NOAA noch nicht veröffentlichte; zählen nicht zum Fortschritt), Fehler = fehlgeschlagene Schritte, abgebr. = abgebrochen. Dauer in Stunden:Minuten. Fehlermeldungen stehen in meta.backfill_job.error.",
       "targets": [
@@ -2530,7 +2783,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 81
+        "y": 89
       },
       "panels": []
     },
@@ -2546,7 +2799,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 82
+        "y": 90
       },
       "targets": [
         {
@@ -2667,7 +2920,7 @@
         "h": 8,
         "w": 16,
         "x": 8,
-        "y": 82
+        "y": 90
       },
       "targets": [
         {
@@ -2772,7 +3025,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 90
+        "y": 98
       },
       "panels": []
     },
@@ -2788,7 +3041,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 91
+        "y": 99
       },
       "targets": [
         {
@@ -2850,7 +3103,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 91
+        "y": 99
       },
       "targets": [
         {
@@ -2912,7 +3165,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 95
+        "y": 103
       },
       "targets": [
         {
@@ -2955,7 +3208,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 95
+        "y": 103
       },
       "targets": [
         {
@@ -2998,7 +3251,7 @@
         "h": 8,
         "w": 16,
         "x": 8,
-        "y": 91
+        "y": 99
       },
       "targets": [
         {
@@ -3049,7 +3302,7 @@
         "h": 14,
         "w": 8,
         "x": 0,
-        "y": 99
+        "y": 107
       },
       "targets": [
         {
@@ -3135,7 +3388,7 @@
         "h": 14,
         "w": 8,
         "x": 8,
-        "y": 99
+        "y": 107
       },
       "targets": [
         {
@@ -3221,7 +3474,7 @@
         "h": 14,
         "w": 8,
         "x": 16,
-        "y": 99
+        "y": 107
       },
       "targets": [
         {
@@ -3332,7 +3585,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 113
+        "y": 121
       },
       "targets": [
         {
@@ -3408,7 +3661,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 113
+        "y": 121
       },
       "targets": [
         {
@@ -3480,7 +3733,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 121
+        "y": 129
       },
       "panels": []
     },
@@ -3497,7 +3750,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 122
+        "y": 130
       },
       "targets": [
         {
@@ -3589,7 +3842,7 @@
         "h": 8,
         "w": 16,
         "x": 8,
-        "y": 122
+        "y": 130
       },
       "targets": [
         {
@@ -3864,7 +4117,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 130
+        "y": 138
       },
       "targets": [
         {
@@ -3997,7 +4250,7 @@
         "h": 8,
         "w": 6,
         "x": 0,
-        "y": 138
+        "y": 146
       },
       "targets": [
         {
@@ -4040,7 +4293,7 @@
         "h": 8,
         "w": 18,
         "x": 6,
-        "y": 138
+        "y": 146
       },
       "targets": [
         {

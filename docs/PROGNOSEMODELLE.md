@@ -382,7 +382,16 @@ Eingerichtet wird das erst, wenn mindestens drei Jahre GFS-Trainingsdaten vorlie
   (`--also-config config/ml/de_lu_v2.yaml`). Jede Version schreibt unter eigenem `model_version` nach
   `fcst.prediction` (Ziel, Ausgabezeitpunkt, Gültigkeitszeit, Quantil, Wert). Ein erneuter Lauf
   zum selben Ausgabezeitpunkt überschreibt. Eine Wetter-Variante wird übersprungen, wenn kein
-  passender Lauf vorliegt.
+  passender Lauf vorliegt. Der Dienst weckt jede volle Stunde (plus eine Minute) und holt
+  verpasste Stunden bis 24 h zurück nach (`--catch-up 24`, auch nach einem Neustart), damit
+  jeder Ausgabezeitpunkt vorliegt. Nachholen ist leakage-sicher, weil die Merkmale nur Werte
+  nutzen, die zum Ausgabezeitpunkt veröffentlicht waren.
+- **Vergleich mit der ÜNB-Prognose:** Die Übertragungsnetzbetreiber veröffentlichen ihre
+  Day-Ahead-Lastprognose bis 10:00 Ortszeit am Vortag (VO 543/2013 Art. 6.1 b). Die Panels
+  „Lastprognose: eigene Modelle gegen ÜNB“ und „Preisprognose: eigene Modelle gegen
+  Day-Ahead-Preis“ im Status-Dashboard zeigen deshalb je Liefertag die P50-Prognose des Laufs
+  vom Vortag 10:00 Ortszeit. Hinweis: `de_lu_v2` nutzt die ÜNB-Prognose selbst als Merkmal,
+  sofern sie zum Ausgabezeitpunkt schon veröffentlicht war.
 - **Registry:** Verzeichnisbaum lokal oder in Garage:
 
   ```text
