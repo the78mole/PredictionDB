@@ -216,6 +216,8 @@ services:
     volumes:
       - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./config/grafana/dashboards:/var/lib/grafana-dashboards:ro
+      # Umrisskarte (Natural Earth, gemeinfrei) als Hintergrund des Karten-Dashboards
+      - ./config/grafana/maps/umrisse-de.geojson:/usr/share/grafana/public/maps/umrisse-de.geojson:ro
       - grafana-data:/var/lib/grafana
     depends_on:
       migrate: {condition: service_completed_successfully}
