@@ -188,6 +188,9 @@ services:
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      # SQLite im WAL-Modus: Schreibzugriffe (Alarm-Auswertung, Sessions) sperren sonst bei
+      # ausgelasteter Platte (Backfills) alle Lesezugriffe, Grafana antwortet dann mit 500.
+      GF_DATABASE_WAL: "true"
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana-dashboards/status.json
       # Deutsches Datums- und Zeitformat an Achsen und in Tabellen
       GF_DATE_FORMATS_FULL_DATE: DD.MM.YYYY HH:mm:ss
