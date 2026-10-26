@@ -80,7 +80,8 @@ def fingerprint(config: GfsConfig) -> str:
 # --- Packen ----------------------------------------------------------------------------------
 
 
-def _objects(store: ObjectStore, prefix: str) -> dict[str, bytes]:
+def read_files(store: ObjectStore, prefix: str) -> dict[str, bytes]:
+    """Alle Dateien eines Stores unter ``prefix``, Schlüssel relativ dazu."""
     out: dict[str, bytes] = {}
     for batch in obstore.list(store, prefix=prefix + "/"):
         for meta in batch:
@@ -103,9 +104,47 @@ def content_hash(files: dict[str, bytes]) -> str:
     return h.hexdigest()
 
 
+def files_from_tar(data: bytes) -> dict[str, bytes]:
+    with tarfile.open(fileobj=io.BytesIO(data), mode="r") as tar:
+        out = {}
+        for m in tar.getmembers():
+            f = tar.extractfile(m) if m.isfile() else None
+            if f is not None:
+                out[m.name] = f.read()
+        return out
+
+
+def compare(local: dict[str, bytes], remote: dict[str, bytes]) -> dict[str, Any]:
+    """Unterschiede zweier Stores: fehlende und abweichende Dateien, abweichende Attribute."""
+
+    def attrs(files: dict[str, bytes]) -> dict[str, Any]:
+        meta = json.loads(files.get("zarr.json", b"{}"))
+        out: dict[str, Any] = meta.get("attributes", {})
+        return {k: v for k, v in out.items() if k not in VOLATILE}
+
+    def data(files: dict[str, bytes]) -> dict[str, str]:
+        return {
+            k: hashlib.sha256(v).hexdigest() for k, v in files.items() if not k.endswith("json")
+        }
+
+    a, b = attrs(local), attrs(remote)
+    da, db = data(local), data(remote)
+    return {
+        "attributes": sorted(k for k in a.keys() | b.keys() if a.get(k) != b.get(k)),
+        "only_local": sorted(da.keys() - db.keys()),
+        "only_remote": sorted(db.keys() - da.keys()),
+        "different": sorted(k for k in da.keys() & db.keys() if da[k] != db[k]),
+        "metadata": sorted(
+            k
+            for k in local.keys() | remote.keys()
+            if k.endswith("json") and k != "zarr.json" and local.get(k) != remote.get(k)
+        ),
+    }
+
+
 def pack(store: ObjectStore, prefix: str) -> tuple[bytes, str]:
     """Silber-Store unter ``prefix`` als reproduzierbarer Tar plus Inhalts-Hash."""
-    files = _objects(store, prefix)
+    files = read_files(store, prefix)
     if "zarr.json" not in files:
         raise FileNotFoundError(f"kein Silber unter {prefix}")
     buf = io.BytesIO()

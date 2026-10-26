@@ -9,6 +9,9 @@ Beispiele::
     # VM: Silber aus GHCR nach wx-silver holen, stündlich wiederholen
     wx-exchange gfs import 2021-03-22T12 --runs 0,12,6,18 --watch 3600
 
+    # VM: selbst aus Bronze gebautes Silber mit dem aus GHCR vergleichen
+    wx-exchange gfs verify 2026-01-01T00 --runs 0,12
+
 Registry und Repository kommen aus ``WX_EXCHANGE_REGISTRY`` (``ghcr.io``) und
 ``WX_EXCHANGE_REPOSITORY``, die Anmeldung zum Schreiben aus ``WX_EXCHANGE_USERNAME`` und
 ``WX_EXCHANGE_TOKEN`` (in Actions ``github.actor`` und ``GITHUB_TOKEN``). Lesen geht anonym.
@@ -86,6 +89,12 @@ def build_parser() -> argparse.ArgumentParser:
     _range_args(imp)
     imp.add_argument("--force", action="store_true", help="auch vorhandenes Silber ersetzen")
     imp.add_argument("--watch", type=int, metavar="SEK", help="wiederholen im Abstand von SEK")
+
+    ver = cmd.add_parser("verify", help="lokales Silber mit GHCR vergleichen")
+    _range_args(ver)
+    ver.add_argument(
+        "--details", type=int, default=5, metavar="N", help="für N Abweichungen Datei für Datei"
+    )
     return p
 
 
@@ -153,6 +162,13 @@ def main(argv: list[str] | None = None) -> int:
             return asyncio.run(_publish(args, config, registry))
 
         importer_ = _importer(registry, config)
+        if args.cmd == "verify":
+            verified = importer_.verify(
+                args.start, _end(args, config), args.runs, details=args.details
+            )
+            out = verified.as_dict()
+            print(json.dumps(out, indent=1))
+            return 1 if out["different"] else 0
         while True:
             result = importer_.run(args.start, _end(args, config), args.runs, force=args.force)
             print(json.dumps(result.as_dict()), flush=True)

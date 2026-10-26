@@ -76,6 +76,22 @@ importierte Läufe ohne Bronze, nimmt das Silber unverändert und rechnet nur Go
 Der Bronze-Backfill (`--profile backfill`) überspringt Läufe, deren Silber schon vorliegt. Wer
 trotzdem Bronze auf der VM haben will, setzt `GFS_BACKFILL_BRONZE=true` in der `.env`.
 
+### Bronze behalten und GitHub gegen lokal prüfen
+
+Mit `GFS_BACKFILL_BRONZE=true` und beiden Profilen (`--profile history --profile backfill`) holt
+die VM das Silber sofort aus GHCR und lädt Bronze im Hintergrund nach. Sobald für einen Lauf
+Bronze vollständig ist, baut `wx-process-backfill` das Silber daraus selbst (das importierte wird
+ersetzt). `verify` vergleicht dann den eigenen Bau mit GHCR:
+
+```bash
+docker compose run --rm wx-import wx-exchange gfs verify 2021-03-22T12 --runs 0,12
+```
+
+Je Lauf: `equal` (gleicher Inhalts-Hash), `different` (für die ersten fünf mit den abweichenden
+Dateien bzw. Attributen), `imported` (noch die Kopie aus GHCR, kein eigener Bau) oder
+`local_missing`. Verglichen wird ohne Download über die Annotation `content`; nur für Abweichungen
+wird der Layer geladen.
+
 ## Aufruf
 
 ```bash

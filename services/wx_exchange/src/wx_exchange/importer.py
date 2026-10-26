@@ -2,13 +2,15 @@
 
 Liest die Tag-Liste, wählt die Manifeste im Zeitraum und für die gewünschten Laufzeiten und
 holt jeden Lauf, der lokal nicht als vollständiges Silber der aktuellen ``SILVER_VERSION``
-vorliegt. Bronze bleibt dabei leer; ``wx-process`` rechnet aus dem importierten Silber nur die
-Gold-Features (``WxPipeline.imported_silver``).
+vorliegt. Ohne Bronze rechnet ``wx-process`` aus dem importierten Silber nur die Gold-Features
+(``WxPipeline.imported_silver``); liegt auch Bronze vor (``GFS_BACKFILL_BRONZE=true``), baut
+``wx-process`` das Silber daraus selbst, und ``verify`` vergleicht es mit dem aus GHCR.
 """
 
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal
@@ -17,14 +19,40 @@ import obstore
 from obstore.store import ObjectStore
 
 from predictiondb_core.log import get_logger
-from wx_exchange.artifact import MonthArtifact, month_bounds, parse_tag, unpack
-from wx_exchange.oci import Registry, RegistryError
+from wx_exchange.artifact import (
+    Layer,
+    MonthArtifact,
+    compare,
+    files_from_tar,
+    month_bounds,
+    pack,
+    parse_tag,
+    read_files,
+    unpack,
+)
+from wx_exchange.oci import Registry, RegistryError, digest
 from wx_process.silver import Silver
 from wx_process.variables import SILVER_VERSION
 
 log = get_logger(__name__)
 
 ImportStatus = Literal["imported", "present", "other_version", "failed"]
+
+
+VerifyStatus = Literal["equal", "different", "imported", "local_missing"]
+
+
+@dataclass
+class VerifyResult:
+    runs: dict[str, VerifyStatus] = field(default_factory=dict)
+    details: dict[str, dict[str, Any]] = field(default_factory=dict)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "counts": dict(Counter(self.runs.values())),
+            "different": sorted(r for r, s in self.runs.items() if s == "different"),
+            "details": self.details,
+        }
 
 
 @dataclass
@@ -58,6 +86,24 @@ class Importer:
         for batch in obstore.list(self.store, prefix=prefix + "/"):
             obstore.delete(self.store, [m["path"] for m in batch])
 
+    def layers(
+        self, start: datetime, end: datetime, hours: list[int] | None = None
+    ) -> Iterator[tuple[str, Layer]]:
+        """Alle Layer im Zeitraum, jüngste Monate und Läufe zuerst, mit ihrem Tag."""
+        tags = []
+        for t in self.registry.tags():
+            parsed = parse_tag(t)
+            if parsed is None or (hours is not None and parsed[1] not in hours):
+                continue
+            a, b = month_bounds(parsed[0])
+            if b >= start and a <= end:
+                tags.append((t, *parsed))
+        for t, month, hour in sorted(tags, reverse=True):
+            art = MonthArtifact.from_manifest(month, hour, self.registry.manifest(t))
+            for run in sorted(art.layers, reverse=True):
+                if start <= run <= end:
+                    yield t, art.layers[run]
+
     def run(
         self,
         start: datetime,
@@ -67,37 +113,59 @@ class Importer:
         force: bool = False,
     ) -> ImportResult:
         result = ImportResult()
-        tags = []
-        for t in self.registry.tags():
-            parsed = parse_tag(t)
-            if parsed is None or (hours is not None and parsed[1] not in hours):
+        for t, layer in self.layers(start, end, hours):
+            run = layer.run
+            name = f"{run:%Y%m%d%H}"
+            if layer.silver_version != SILVER_VERSION:
+                result.runs[name] = "other_version"
                 continue
-            a, b = month_bounds(parsed[0])
-            if b >= start and a <= end:
-                tags.append((t, *parsed))
-        for t, month, hour in sorted(tags, reverse=True):  # jüngste Monate zuerst
-            art = MonthArtifact.from_manifest(month, hour, self.registry.manifest(t))
-            for run in sorted(art.layers, reverse=True):
-                if not start <= run <= end:
-                    continue
-                name = f"{run:%Y%m%d%H}"
-                layer = art.layers[run]
-                if layer.silver_version != SILVER_VERSION:
-                    result.runs[name] = "other_version"
-                    continue
-                if not force and self.present(run):
-                    result.runs[name] = "present"
-                    continue
-                try:
-                    data = self.registry.blob(layer.digest)
-                    prefix = self.silver.key(self.model, self.resolution, run)
-                    self._clear(prefix)
-                    unpack(data, self.store, prefix)
-                except (RegistryError, ValueError, OSError) as exc:
-                    log.warning("import_failed", run=name, error=str(exc))
-                    result.runs[name] = "failed"
-                    continue
+            if not force and self.present(run):
+                result.runs[name] = "present"
+                continue
+            try:
+                data = self.registry.blob(layer.digest)
+                prefix = self.silver.key(self.model, self.resolution, run)
+                self._clear(prefix)
+                unpack(data, self.store, prefix)
+            except (RegistryError, ValueError, OSError) as exc:
+                log.warning("import_failed", run=name, error=str(exc))
+                result.runs[name] = "failed"
+                continue
+            result.runs[name] = "imported"
+            result.bytes += len(data)
+            log.info("run_imported", run=name, tag=t, bytes=len(data))
+        return result
+
+    def verify(
+        self,
+        start: datetime,
+        end: datetime,
+        hours: list[int] | None = None,
+        *,
+        details: int = 5,
+    ) -> VerifyResult:
+        """Vergleicht lokales Silber mit GHCR über den Inhalts-Hash (ohne Download).
+
+        Für die ersten ``details`` abweichenden Läufe wird der Layer geladen und Datei für
+        Datei verglichen, damit sichtbar wird, welche Variablen oder Attribute abweichen.
+        """
+        result = VerifyResult()
+        for _, layer in self.layers(start, end, hours):
+            name = f"{layer.run:%Y%m%d%H}"
+            if not self.present(layer.run):
+                result.runs[name] = "local_missing"
+                continue
+            prefix = self.silver.key(self.model, self.resolution, layer.run)
+            tar, content = pack(self.store, prefix)
+            if digest(tar) == layer.digest:
+                # byte-gleich, also eine Kopie aus GHCR und kein eigener Bau aus Bronze
                 result.runs[name] = "imported"
-                result.bytes += len(data)
-                log.info("run_imported", run=name, tag=t, bytes=len(data))
+                continue
+            if content == layer.content:
+                result.runs[name] = "equal"
+                continue
+            result.runs[name] = "different"
+            if len(result.details) < details:
+                remote = files_from_tar(self.registry.blob(layer.digest))
+                result.details[name] = compare(read_files(self.store, prefix), remote)
         return result
