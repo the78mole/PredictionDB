@@ -1,0 +1,25 @@
+vnb,art,stand,netzentgelt_ohne_14a,ersparnis_modul1,ersparnis_modul2,ersparnis_modul3_passiv,ersparnis_modul3_aktiv,mehrwert_modul3_aktiv,beste_wahl,winterfenster
+Bayernwerk Netz,wp,endgültig,252.76,122.13,121.8,120.88,132.66,10.53,modul3_aktiv,False
+Bayernwerk Netz,ev,endgültig,112.34,122.13,37.6,105.53,122.13,0.0,modul1,False
+NEW Netz,wp,endgültig,383.95,143.99,200.51,174.41,244.7,44.18,modul3_aktiv,True
+NEW Netz,ev,endgültig,170.65,143.99,72.59,110.83,289.88,145.89,modul3_aktiv,True
+Stromnetz Berlin,wp,endgültig,399.48,146.58,210.15,179.93,246.85,36.69,modul3_aktiv,True
+Stromnetz Berlin,ev,endgültig,177.55,146.58,76.87,114.57,262.01,115.43,modul3_aktiv,True
+Avacon Netz,wp,vorläufig,323.44,133.91,164.64,155.0,199.64,35.0,modul3_aktiv,True
+Avacon Netz,ev,vorläufig,143.75,133.91,56.64,124.4,201.24,67.33,modul3_aktiv,True
+Netze ODR,wp,endgültig,314.34,132.39,158.75,131.84,142.03,-16.71,modul2,False
+Netze ODR,ev,endgültig,139.71,132.39,54.03,135.38,132.39,0.0,modul1,False
+Netz Leipzig,wp,vorläufig,229.73,118.29,107.87,95.66,107.9,-10.38,modul1,True
+Netz Leipzig,ev,vorläufig,102.1,118.29,31.42,106.72,124.7,6.41,modul3_aktiv,True
+enercity Netz,wp,vorläufig,457.32,156.22,244.43,202.59,281.36,36.93,modul3_aktiv,True
+enercity Netz,ev,vorläufig,203.25,156.22,92.11,124.2,339.01,182.78,modul3_aktiv,True
+EAM Netz,wp,vorläufig,293.45,128.91,146.43,153.11,233.19,86.76,modul3_aktiv,True
+EAM Netz,ev,vorläufig,130.42,128.91,48.55,92.97,220.3,91.39,modul3_aktiv,True
+RheinNetz,wp,endgültig,202.42,113.74,91.81,127.18,156.52,42.78,modul3_aktiv,True
+RheinNetz,ev,endgültig,89.96,113.74,24.28,100.42,176.81,63.07,modul3_aktiv,True
+WEMAG Netz,wp,endgültig,274.71,125.79,135.18,136.35,189.17,53.99,modul3_aktiv,True
+WEMAG Netz,ev,endgültig,122.09,125.79,43.55,124.17,165.15,39.36,modul3_aktiv,True
+Netze Duisburg,wp,endgültig,371.64,141.94,193.02,167.73,210.79,17.77,modul3_aktiv,True
+Netze Duisburg,ev,endgültig,165.17,141.94,69.26,133.45,201.97,60.02,modul3_aktiv,True
+e-regio Netz,wp,endgültig,483.02,160.47,259.96,150.61,251.91,-8.04,modul2,True
+e-regio Netz,ev,endgültig,214.68,160.47,99.01,98.05,289.23,128.76,modul3_aktiv,True
