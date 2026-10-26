@@ -1,0 +1,37 @@
+{
+  "fensterabdeckung_winter": 0.833,
+  "spitze_zeitpunkt": "1997-01-02 08:00",
+  "spitze_gw": 312.3,
+  "heizstab_bei_spitze_gw": 143.5,
+  "wp_bei_spitze_gw": 63.5,
+  "ev_hause_bei_spitze_gw": 1.7,
+  "ev_ct_je_kwh": 2.5,
+  "ev_eur_a": 59.48,
+  "wp_spanne_ct": 8.09,
+  "wp_eur_a": 86.61,
+  "stunde_jahresspitze": {
+    "monovalent (wie elektrifizierung-last)": {
+      "8": 6,
+      "18": 27,
+      "19": 2
+    },
+    "bivalent, Bivalenzpunkt -5 bis 0 °C": {
+      "8": 26,
+      "18": 8,
+      "19": 1
+    },
+    "bivalent, Bivalenzpunkt -10 bis -5 °C": {
+      "8": 15,
+      "18": 18,
+      "19": 2
+    }
+  },
+  "annahmen": {
+    "e_wp_kwh": 4500.0,
+    "e_ev_kwh": 2000.0,
+    "zaehler_modul2_eur": 25.0,
+    "wp_nt_anteil": 0.1,
+    "wp_flex_anteil_dynamisch": 0.2,
+    "kap_gradient": 0.025
+  }
+}

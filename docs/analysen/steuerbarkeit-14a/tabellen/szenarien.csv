@@ -1,0 +1,10 @@
+szenario,spitze_median_gw,spitze_max_gw,spitze_1997_gw,aenderung_median_gw
+"bivalent, ungesteuert",210.9,312.3,312.3,0.0
+"Modul 3: 30 % der E-Autos, Start bei NT-Beginn",210.5,311.9,311.9,-0.4
+"Modul 3: 30 % der E-Autos, über das NT verteilt",210.5,311.9,311.9,-0.4
+"Modul 3: alle E-Autos, Start bei NT-Beginn",236.7,323.9,323.9,25.8
+"Modul 3: alle E-Autos, über das NT verteilt",209.6,310.9,310.9,-1.3
+Modul 3: 30 % der Wärmepumpen heizen vor,210.9,312.3,312.3,0.0
+Modul 3: alle Wärmepumpen heizen vor,210.9,312.3,312.3,0.0
+E-Autos systemdienlich (Lastglättung wie elektrifizierung-last),198.2,300.3,300.3,-12.7
+"Obergrenze Dimmung: Heizstab aus, Wallboxen auf 4,2 kW",159.6,169.8,169.8,-51.3
