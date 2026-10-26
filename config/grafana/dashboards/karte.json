@@ -6,7 +6,7 @@
   ],
   "timezone": "",
   "schemaVersion": 41,
-  "version": 2,
+  "version": 3,
   "editable": false,
   "refresh": "",
   "time": {
@@ -70,15 +70,54 @@
         "controls": {
           "showZoom": true,
           "mouseWheelZoom": true,
-          "showAttribution": true,
+          "showAttribution": false,
           "showScale": true,
           "showMeasure": false,
           "showDebug": false
         },
         "basemap": {
-          "type": "osm-standard",
-          "name": "OpenStreetMap",
-          "config": {}
+          "type": "geojson",
+          "name": "Umrisse",
+          "config": {
+            "src": "public/maps/umrisse-de.geojson",
+            "rules": [
+              {
+                "check": {
+                  "property": "ebene",
+                  "operation": "eq",
+                  "value": "land"
+                },
+                "style": {
+                  "color": {
+                    "fixed": "#8e8e8e"
+                  },
+                  "opacity": 0.06,
+                  "lineWidth": 1
+                }
+              },
+              {
+                "check": {
+                  "property": "de",
+                  "operation": "eq",
+                  "value": 1
+                },
+                "style": {
+                  "color": {
+                    "fixed": "#d0d0d0"
+                  },
+                  "opacity": 0.04,
+                  "lineWidth": 2
+                }
+              }
+            ],
+            "style": {
+              "color": {
+                "fixed": "#6e6e6e"
+              },
+              "opacity": 0.0,
+              "lineWidth": 1
+            }
+          }
         },
         "layers": [
           {
@@ -486,15 +525,54 @@
         "controls": {
           "showZoom": true,
           "mouseWheelZoom": true,
-          "showAttribution": true,
+          "showAttribution": false,
           "showScale": true,
           "showMeasure": false,
           "showDebug": false
         },
         "basemap": {
-          "type": "osm-standard",
-          "name": "OpenStreetMap",
-          "config": {}
+          "type": "geojson",
+          "name": "Umrisse",
+          "config": {
+            "src": "public/maps/umrisse-de.geojson",
+            "rules": [
+              {
+                "check": {
+                  "property": "ebene",
+                  "operation": "eq",
+                  "value": "land"
+                },
+                "style": {
+                  "color": {
+                    "fixed": "#8e8e8e"
+                  },
+                  "opacity": 0.06,
+                  "lineWidth": 1
+                }
+              },
+              {
+                "check": {
+                  "property": "de",
+                  "operation": "eq",
+                  "value": 1
+                },
+                "style": {
+                  "color": {
+                    "fixed": "#d0d0d0"
+                  },
+                  "opacity": 0.04,
+                  "lineWidth": 2
+                }
+              }
+            ],
+            "style": {
+              "color": {
+                "fixed": "#6e6e6e"
+              },
+              "opacity": 0.0,
+              "lineWidth": 1
+            }
+          }
         },
         "layers": [
           {
@@ -871,15 +949,54 @@
         "controls": {
           "showZoom": true,
           "mouseWheelZoom": true,
-          "showAttribution": true,
+          "showAttribution": false,
           "showScale": true,
           "showMeasure": false,
           "showDebug": false
         },
         "basemap": {
-          "type": "osm-standard",
-          "name": "OpenStreetMap",
-          "config": {}
+          "type": "geojson",
+          "name": "Umrisse",
+          "config": {
+            "src": "public/maps/umrisse-de.geojson",
+            "rules": [
+              {
+                "check": {
+                  "property": "ebene",
+                  "operation": "eq",
+                  "value": "land"
+                },
+                "style": {
+                  "color": {
+                    "fixed": "#8e8e8e"
+                  },
+                  "opacity": 0.06,
+                  "lineWidth": 1
+                }
+              },
+              {
+                "check": {
+                  "property": "de",
+                  "operation": "eq",
+                  "value": 1
+                },
+                "style": {
+                  "color": {
+                    "fixed": "#d0d0d0"
+                  },
+                  "opacity": 0.04,
+                  "lineWidth": 2
+                }
+              }
+            ],
+            "style": {
+              "color": {
+                "fixed": "#6e6e6e"
+              },
+              "opacity": 0.0,
+              "lineWidth": 1
+            }
+          }
         },
         "layers": [
           {
