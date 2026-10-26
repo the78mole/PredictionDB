@@ -1,0 +1,17 @@
+{
+  "temperatur_von": "1991-01-01 00:00:00+00:00",
+  "temperatur_bis": "2026-10-25 23:00:00+00:00",
+  "last_von": "2015-01-01 00:00:00+00:00",
+  "last_bis": "2026-10-26 07:00:00+00:00",
+  "basismodell_r2": 0.9371,
+  "basismodell_rmse_gw": 2.291,
+  "heizgradtage_referenz": 2092.0,
+  "waerme_rw_twh": 441.6985,
+  "waerme_ww_twh": 67.925,
+  "waerme_fw_gwp_twh": 41.4295,
+  "ev_twh_zusaetzlich": 112.5686,
+  "ev_anteil_heute": 0.0525,
+  "jaz_wp": 3.2468,
+  "wetterjahr_hoechste_spitze": 1997,
+  "wetterjahr_typisch": 2001
+}
