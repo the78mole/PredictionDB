@@ -49,6 +49,8 @@ class Store(Protocol):
         resume: bool = False,
     ) -> None: ...
     def compare(self, start: datetime, end: datetime) -> list[Deviation]: ...
+    def revised_at(self, source_id: int, dataset: str) -> datetime | None: ...
+    def mark_revised(self, source_id: int, dataset: str, at: datetime) -> None: ...
     def record_status(
         self, source_id: int, dataset: str, status: str, n_values: int, error: str | None
     ) -> None: ...
@@ -110,7 +112,6 @@ class EnergyIngestor:
         self.sources = sources
         self.store = store
         self.settings = settings
-        self.revised_at: datetime | None = None
 
     def fetch(
         self,
@@ -169,29 +170,37 @@ class EnergyIngestor:
             for ds in src.datasets()
         ]
 
-    def revise(self, now: datetime | None = None) -> list[DatasetResult]:
+    def revise(self, now: datetime | None = None, *, due_only: bool = False) -> list[DatasetResult]:
         """Fragt die letzten ``revision_days`` Tage erneut ab, damit nachträgliche Korrekturen
         der Quellen (z. B. Ausreißer in der Ist-Last) übernommen werden. Von der Quelle
         entfernte Werte werden geleert. Datensätze, deren Abgleich ohnehin so weit zurückreicht,
-        bleiben außen vor; das Fenster des Abgleichs selbst ebenfalls."""
+        bleiben außen vor; das Fenster des Abgleichs selbst ebenfalls.
+
+        ``due_only`` überspringt Datensätze, die innerhalb von ``revision_interval_hours``
+        schon vollständig erneut abgefragt wurden (``meta.energy_revise``); so setzt ein
+        Neustart dort fort, wo der vorige Lauf aufgehört hat."""
         now = now or datetime.now(UTC)
+        interval = timedelta(hours=self.settings.revision_interval_hours)
         sync_start, _ = day_window(now, self.settings.lookback_days, 0)
         start, _ = day_window(now, self.settings.revision_days, 0)
         results = []
         for src in self.sources:
+            sid = self.store.source_id(src)
             for ds in src.datasets():
                 end = sync_start - sync_lookback(src, ds)
                 if end <= start:
                     continue
-                for a, b in chunks(src.max_chunk(ds), start, end):
-                    results.append(self.fetch(src, ds, max(a, start), min(b, end), now, prune=True))
-        self.revised_at = now
+                last = self.store.revised_at(sid, ds) if due_only else None
+                if last is not None and now - last < interval:
+                    continue
+                res = [
+                    self.fetch(src, ds, max(a, start), min(b, end), now, prune=True)
+                    for a, b in chunks(src.max_chunk(ds), start, end)
+                ]
+                results.extend(res)
+                if all(r.status in ("ok", "empty") for r in res):
+                    self.store.mark_revised(sid, ds, now)
         return results
-
-    def revise_due(self, now: datetime | None = None) -> bool:
-        now = now or datetime.now(UTC)
-        interval = timedelta(hours=self.settings.revision_interval_hours)
-        return self.revised_at is None or now - self.revised_at >= interval
 
     def pending(
         self,
