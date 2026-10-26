@@ -463,7 +463,7 @@
         "y": 9
       },
       "timeFrom": "30d",
-      "description": "Tagesmittel des Fehlers der Medianprognose (P50) für den Folgetag (D+1) aus der Ausgabe um 08 UTC (wie im Backtest) gegen den Ist-Wert, je Modellversion aus fcst.prediction_error. RMSE gestrichelt. Ohne Gesamtsumme, da sich Fehler verschiedener Modelle nicht addieren. ENTSO-E Day-Ahead als Vergleich. Gepunktet auf der rechten Achse: relativer Fehler in Prozent, gerechnet als Tages-MAE geteilt durch den mittleren Betrag des Ist-Last am selben Tag (WAPE = Σ|Prognose − Ist| / Σ|Ist|), gekappt bei 100 %. Für ENTSO-E Day-Ahead genauso berechnet.",
+      "description": "**Was die Linien zeigen**\n\nFehler der Medianprognose (P50) für den Folgetag (D+1) aus der Ausgabe um 08 UTC (wie im Backtest) gegen den Ist-Wert, als Tagesmittel je Modellversion aus fcst.prediction_error. Ohne Gesamtsumme, da sich Fehler verschiedener Modelle nicht addieren. ENTSO-E Day-Ahead dient als Vergleich und wird genauso berechnet.\n\n**Kennzahlen**\n\n- **MAE** (mittlerer absoluter Fehler, durchgezogen, linke Achse in MW): Um wie viel die Prognose im Tagesmittel danebenliegt, egal ob zu hoch oder zu niedrig. Beispiel: MAE 1.500 MW heißt, jede Stunde liegt im Schnitt 1.500 MW neben dem Ist-Wert.\n- **RMSE** (Wurzel aus dem mittleren quadrierten Fehler, gestrichelt, linke Achse): Wie MAE, aber große Ausreißer zählen überproportional. RMSE ist immer mindestens so groß wie MAE. Liegt RMSE deutlich über MAE, stecken einzelne grobe Fehlstunden im Tag; liegen beide nah beieinander, ist der Fehler gleichmäßig verteilt.\n- **Fehler %** (WAPE, gepunktet, rechte Achse): Tages-MAE geteilt durch den mittleren Betrag des Ist-Werts der Last am selben Tag (WAPE = Σ|Prognose − Ist| / Σ|Ist|), gekappt bei 100 %. Macht Tage mit unterschiedlichem Niveau vergleichbar: 10 % heißt, die Prognose liegt im Schnitt um ein Zehntel des Ist-Werts daneben.",
       "targets": [
         {
           "refId": "A",
@@ -628,7 +628,7 @@
         "y": 9
       },
       "timeFrom": "30d",
-      "description": "Tagesmittel des Fehlers der Medianprognose (P50) für den Folgetag (D+1) aus der Ausgabe um 08 UTC (wie im Backtest) gegen den Ist-Wert, je Modellversion aus fcst.prediction_error. RMSE gestrichelt. Ohne Gesamtsumme, da sich Fehler verschiedener Modelle nicht addieren. Gepunktet auf der rechten Achse: relativer Fehler in Prozent, gerechnet als Tages-MAE geteilt durch den mittleren Betrag des Ist-Preises am selben Tag (WAPE = Σ|Prognose − Ist| / Σ|Ist|), gekappt bei 100 %. Bewusst kein stundenweiser MAPE: Preise liegen oft nahe 0 € oder sind negativ, einzelne Stunden würden den Mittelwert sonst sprengen. An Tagen mit durchweg niedrigen Preisen fällt die Prozentzahl trotzdem hoch aus, daher die Kappung bei 100 %.",
+      "description": "**Was die Linien zeigen**\n\nFehler der Medianprognose (P50) für den Folgetag (D+1) aus der Ausgabe um 08 UTC (wie im Backtest) gegen den Ist-Wert, als Tagesmittel je Modellversion aus fcst.prediction_error. Ohne Gesamtsumme, da sich Fehler verschiedener Modelle nicht addieren.\n\n**Kennzahlen**\n\n- **MAE** (mittlerer absoluter Fehler, durchgezogen, linke Achse in €/MWh): Um wie viel die Prognose im Tagesmittel danebenliegt, egal ob zu hoch oder zu niedrig. Beispiel: MAE 20 €/MWh heißt, jede Stunde liegt im Schnitt 20 €/MWh neben dem Ist-Wert.\n- **RMSE** (Wurzel aus dem mittleren quadrierten Fehler, gestrichelt, linke Achse): Wie MAE, aber große Ausreißer zählen überproportional. RMSE ist immer mindestens so groß wie MAE. Liegt RMSE deutlich über MAE, stecken einzelne grobe Fehlstunden im Tag; liegen beide nah beieinander, ist der Fehler gleichmäßig verteilt.\n- **Fehler %** (WAPE, gepunktet, rechte Achse): Tages-MAE geteilt durch den mittleren Betrag des Ist-Preises am selben Tag (WAPE = Σ|Prognose − Ist| / Σ|Ist|), gekappt bei 100 %. Macht Tage mit unterschiedlichem Niveau vergleichbar: 10 % heißt, die Prognose liegt im Schnitt um ein Zehntel des Ist-Werts daneben.\n\nBewusst kein stundenweiser MAPE: Preise liegen oft nahe 0 € oder sind negativ, einzelne Stunden würden den Mittelwert sonst sprengen. An Tagen mit durchweg niedrigen Preisen fällt die Prozentzahl trotzdem hoch aus, daher die Kappung bei 100 %.",
       "targets": [
         {
           "refId": "A",
@@ -1107,7 +1107,7 @@
         "x": 10,
         "y": 25
       },
-      "description": "Wie der Backtest, aber aus den gespeicherten Live-Prognosen (fcst.prediction) der letzten 14 Liefertage gegen die Ist-Werte, Ausgabe um 08 UTC. Bias = mittlere Abweichung (positiv: Prognose zu hoch).",
+      "description": "Wie der Backtest, aber aus den gespeicherten Live-Prognosen (fcst.prediction) der letzten 14 Liefertage gegen die Ist-Werte, Ausgabe um 08 UTC.\n\n- **D+1, D+2, D+7**: MAE (mittlerer absoluter Fehler) für den 1., 2. bzw. 7. Tag nach der Ausgabe, also um wie viel die Prognose im Mittel danebenliegt, egal in welche Richtung (Last in MW, Preis in €/MWh).\n- **Bias**: mittlere Abweichung mit Vorzeichen (positiv: Prognose im Schnitt zu hoch, negativ: zu niedrig). Ein Bias nahe 0 bei hohem MAE heißt: die Fehler streuen, sind aber nicht systematisch.\n- **Werte**: Anzahl der verglichenen Stundenwerte.",
       "targets": [
         {
           "refId": "A",
