@@ -1,0 +1,33 @@
+klimaszenario,ausbau,mit_klima,rl_ohne_speicher_median,rl_abend_ohne_speicher_median,rl_mit_speicher_median,rl_mit_speicher_max,stunde_spitze
+"Bestand 2026, Klima 2026",Stand 2026-10,False,59.31,59.31,51.42,53.02,6
+"Bestand 2026, Klima 2026",Stand 2026-10,True,60.71,60.71,51.51,53.02,6
+"Bestand 2026, Klima 2026","PV NEP 2037 B, Speicher wie heute",False,59.23,59.23,50.28,51.78,6
+"Bestand 2026, Klima 2026","PV NEP 2037 B, Speicher wie heute",True,59.75,59.75,50.29,51.78,6
+"Bestand 2026, Klima 2026",NEP 2037 B,False,59.23,59.23,37.27,39.22,0
+"Bestand 2026, Klima 2026",NEP 2037 B,True,59.75,59.75,37.27,39.22,0
+"Bestand 2026, Klima 2026",NEP 2045 B,False,59.22,59.22,36.53,38.38,0
+"Bestand 2026, Klima 2026",NEP 2045 B,True,59.55,59.55,36.53,38.38,0
+2050 realistisch (halber Trend),Stand 2026-10,False,59.21,59.21,51.27,52.76,6
+2050 realistisch (halber Trend),Stand 2026-10,True,61.41,61.41,51.94,52.76,6
+2050 realistisch (halber Trend),"PV NEP 2037 B, Speicher wie heute",False,59.16,59.16,50.21,51.52,6
+2050 realistisch (halber Trend),"PV NEP 2037 B, Speicher wie heute",True,60.16,60.16,50.75,51.52,6
+2050 realistisch (halber Trend),NEP 2037 B,False,59.16,59.16,37.29,39.22,0
+2050 realistisch (halber Trend),NEP 2037 B,True,60.16,60.16,37.36,39.22,0
+2050 realistisch (halber Trend),NEP 2045 B,False,59.15,59.15,36.5,38.38,0
+2050 realistisch (halber Trend),NEP 2045 B,True,60.08,60.08,36.52,38.38,0
+2050 Trend fortgesetzt,Stand 2026-10,False,59.11,59.11,51.39,52.69,6
+2050 Trend fortgesetzt,Stand 2026-10,True,62.88,62.88,52.66,53.45,6
+2050 Trend fortgesetzt,"PV NEP 2037 B, Speicher wie heute",False,59.04,59.04,50.35,51.25,6
+2050 Trend fortgesetzt,"PV NEP 2037 B, Speicher wie heute",True,61.64,61.64,51.28,52.14,6
+2050 Trend fortgesetzt,NEP 2037 B,False,59.04,59.04,37.44,39.22,0
+2050 Trend fortgesetzt,NEP 2037 B,True,61.64,61.64,37.8,39.22,0
+2050 Trend fortgesetzt,NEP 2045 B,False,59.02,59.02,36.58,38.39,0
+2050 Trend fortgesetzt,NEP 2045 B,True,61.47,61.47,36.94,38.39,0
+"Obergrenze: halbe Haushalte, 2050 Trend",Stand 2026-10,False,59.11,59.11,51.39,52.69,6
+"Obergrenze: halbe Haushalte, 2050 Trend",Stand 2026-10,True,68.66,68.66,57.23,58.49,18
+"Obergrenze: halbe Haushalte, 2050 Trend","PV NEP 2037 B, Speicher wie heute",False,59.04,59.04,50.35,51.25,6
+"Obergrenze: halbe Haushalte, 2050 Trend","PV NEP 2037 B, Speicher wie heute",True,67.08,67.08,55.55,57.01,19
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2037 B,False,59.04,59.04,37.44,39.22,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2037 B,True,67.08,67.08,39.49,41.08,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2045 B,False,59.02,59.02,36.58,38.39,0
+"Obergrenze: halbe Haushalte, 2050 Trend",NEP 2045 B,True,66.81,66.81,38.43,40.12,0
