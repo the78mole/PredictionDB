@@ -210,3 +210,43 @@ async def test_import_fills_silver_and_skips_present(tmp_path: Path) -> None:
     assert imp.present(RUN)
     assert imp.run(start, end, [0, 6]).runs == {"2026102006": "present"}
     assert imp.run(start, end, [0]).runs == {}
+
+
+async def test_verify_local_build_against_ghcr(tmp_path: Path) -> None:
+    fake = FakeRegistry()
+    pub = _publisher(fake, host(), tmp_path)
+    await pub.publish_month("2026-10", 6, RUN, RUN)
+    start, end = datetime(2026, 10, 1, tzinfo=UTC), datetime(2026, 10, 31, tzinfo=UTC)
+
+    silver = MemoryStore()
+    imp = Importer(registry(fake, write=False), silver)
+    assert imp.verify(start, end).runs == {"2026102006": "local_missing"}
+    imp.run(start, end)
+    assert imp.verify(start, end).runs == {"2026102006": "imported"}
+
+    # eigener Bau aus Bronze (anderer Abschlusszeitpunkt): gleicher Inhalt
+    key = Silver.key("gfs", "0p25", RUN)
+    ok = StepHost("aws.test", available={0, 1, 2, 3}, runs={RUN})
+    again = _publisher(FakeRegistry(), ok, tmp_path / "b")
+    await again.ingestor.ingest_run(RUN, stop_on_pending=False)
+    run_key = again.bronze.run_key(RUN)
+    summary = json.loads(bytes(obstore.get(again.bronze_store, run_key).bytes()))
+    summary["completed_at"] = "2000-01-01T00:00:00+00:00"
+    obstore.put(again.bronze_store, run_key, json.dumps(summary).encode())
+    again.pipeline.process(RUN, force=True)
+    tar, _ = pack(again.silver_store, key)
+    imp._clear(key)
+    unpack(tar, silver, key)
+    assert imp.verify(start, end).runs == {"2026102006": "equal"}
+
+    # ein abweichender Chunk wird mit Dateinamen gemeldet
+    chunk = next(
+        m["path"]
+        for batch in obstore.list(silver, prefix=key + "/t2m/")
+        for m in batch
+        if not m["path"].endswith("zarr.json")
+    )
+    obstore.put(silver, chunk, b"kaputt")
+    result = imp.verify(start, end)
+    assert result.runs == {"2026102006": "different"}
+    assert result.details["2026102006"]["different"] == [chunk[len(key) + 1 :]]
