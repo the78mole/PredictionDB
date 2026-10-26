@@ -6,7 +6,7 @@
   ],
   "timezone": "",
   "schemaVersion": 41,
-  "version": 1,
+  "version": 2,
   "editable": false,
   "refresh": "",
   "time": {
@@ -76,8 +76,8 @@
           "showDebug": false
         },
         "basemap": {
-          "type": "default",
-          "name": "Hintergrund",
+          "type": "osm-standard",
+          "name": "OpenStreetMap",
           "config": {}
         },
         "layers": [
@@ -492,8 +492,8 @@
           "showDebug": false
         },
         "basemap": {
-          "type": "default",
-          "name": "Hintergrund",
+          "type": "osm-standard",
+          "name": "OpenStreetMap",
           "config": {}
         },
         "layers": [
@@ -877,8 +877,8 @@
           "showDebug": false
         },
         "basemap": {
-          "type": "default",
-          "name": "Hintergrund",
+          "type": "osm-standard",
+          "name": "OpenStreetMap",
           "config": {}
         },
         "layers": [
