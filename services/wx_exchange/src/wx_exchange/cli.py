@@ -39,7 +39,7 @@ import httpx
 from obstore.store import MemoryStore
 
 from predictiondb_core.db import create_db_engine
-from predictiondb_core.log import configure_logging
+from predictiondb_core.log import configure_logging, get_logger
 from predictiondb_core.s3 import s3_store
 from predictiondb_core.settings import get_settings
 from wx_exchange.importer import Importer
@@ -51,6 +51,8 @@ from wx_ingest.config import GfsConfig
 from wx_ingest.ingest import GfsIngestor
 from wx_process.config import ProcessConfig, WxProcessSettings
 from wx_process.store import Store
+
+log = get_logger(__name__)
 
 DEFAULT_REPOSITORY = "the78mole/predictiondb-data/gfs-0p25-silver"
 SOURCE_URL = "https://github.com/the78mole/predictiondb"
@@ -232,7 +234,7 @@ async def _templates(args: argparse.Namespace, config: GfsConfig) -> int:
             print("keine header_scan-Endpunkte in der Konfiguration", file=sys.stderr)
             return 1
         steps = config.step_list()
-        built = await scan[0].build_templates(args.run, steps)
+        built = await scan[0].build_templates(args.run, steps, config.step_concurrency)
     data = {"run": f"{args.run:%Y-%m-%dT%H}", "steps": scan[0].export_templates()}
     args.out.write_text(json.dumps(data, separators=(",", ":")), encoding="utf-8")
     print(json.dumps({"run": data["run"], "steps": len(built), "of": len(steps)}))
@@ -262,7 +264,8 @@ async def _publish(args: argparse.Namespace, config: GfsConfig, registry: Regist
             if templates:
                 for ep in publisher.ingestor.endpoints:
                     if ep.config.kind == "header_scan":
-                        ep.import_templates(templates)
+                        n = ep.import_templates(templates)
+                        log.info("templates_loaded", endpoint=ep.name, steps=n)
             # Nie ins Live-Fenster: noch nicht veröffentlichte Läufe gälten sonst als fehlend
             result = await publisher.publish_month(
                 args.month, args.hour, args.start, _end(args, config), rebuild=args.rebuild

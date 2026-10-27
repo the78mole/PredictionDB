@@ -58,6 +58,8 @@ permissions:
 env:
   WX_EXCHANGE_REPOSITORY: the78mole/predictiondb-data/gfs-0p25-silver
   PDB_LOG_JSON: "false"
+  # Log sofort zeigen, nicht erst gepuffert am Ende
+  PYTHONUNBUFFERED: "1"
 
 jobs:
   plan:
