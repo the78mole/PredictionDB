@@ -476,8 +476,15 @@ class Endpoint:
             return step
 
         log.info("templates_start", run=f"{run:%Y%m%d%H}", steps=len(steps))
-        done = await asyncio.gather(*(one(s) for s in steps))
-        return [s for s in done if s is not None]
+        built = [s for s in await asyncio.gather(*(one(s) for s in steps)) if s is not None]
+        failed = [s for s in steps if s not in built]
+        if failed:
+            # zweiter Durchgang für Schritte, die an einer trägen OSDF-Phase scheiterten;
+            # was dann noch fehlt, bauen die Monatsjobs selbst
+            log.info("templates_retry", run=f"{run:%Y%m%d%H}", steps=failed)
+            finished, steps = 0, failed
+            built += [s for s in await asyncio.gather(*(one(s) for s in failed)) if s is not None]
+        return sorted(built)
 
     def export_templates(self) -> dict[str, Any]:
         """Vorlagen als JSON-taugliches Objekt, damit andere Jobs sie nicht neu bauen müssen."""
