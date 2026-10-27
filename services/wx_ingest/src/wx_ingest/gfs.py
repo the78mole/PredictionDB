@@ -98,6 +98,8 @@ _MAX_JUMPS = 8
 _MAX_LEAD = 3
 #: Höchstens so viele Köpfe ablaufen, wenn die Sprünge das Ziel nur einschließen
 _MAX_WALK = 32
+#: Höchstens so viele mehrdeutige Köpfe nach einem Sprung überspringen
+_MAX_SKIP = 8
 
 
 @dataclass(frozen=True)
@@ -350,6 +352,7 @@ class Endpoint:
         if not wanted:
             raise _TemplateMiss("Vorlage enthält keine gewählte Nachricht")
         index = template.index()
+        keys = {e.key for e in tmpl}
         scale = size / template.size
 
         def aim(anchor_off: int, anchor_i: int, target: int) -> int:
@@ -359,40 +362,51 @@ class Endpoint:
             return anchor_off + int((mid - tmpl[anchor_i].offset) * scale)
 
         async def locate(est: int) -> tuple[int, int]:
-            """Nächster Nachrichtenanfang ab ``est`` und seine Position in der Vorlage."""
+            """Nächster wiedererkennbarer Nachrichtenanfang ab ``est`` und seine Position.
+
+            Mehrdeutige Schlüssel (z. B. Schichten, deren Fläche keinen Namen hat) werden
+            übersprungen, indem über die folgenden Köpfe gelaufen wird.
+            """
             found = await self._boundary(url, max(0, min(est, size - 1)), size)
             if found is None:
                 raise _TemplateMiss(f"kein Nachrichtenanfang ab Byte {est}")
-            data = (await self._range(url, found, found + HEAD_BYTES - 1)).content
-            try:
-                key = entry(0, found, parse_head(data)).key
-            except HeaderError as exc:
-                raise _TemplateMiss(f"Kopf an Byte {found}: {exc}") from exc
-            if key not in index:
-                raise _TemplateMiss(f"{key} an Byte {found} fehlt in der Vorlage")
-            return found, index[key]
+            for _ in range(_MAX_SKIP + 1):
+                data = (await self._range(url, found, found + HEAD_BYTES - 1)).content
+                try:
+                    head = parse_head(data)
+                except HeaderError as exc:
+                    raise _TemplateMiss(f"Kopf an Byte {found}: {exc}") from exc
+                key = entry(0, found, head).key
+                if key in index:
+                    return found, index[key]
+                if key not in keys:
+                    raise _TemplateMiss(f"{key} an Byte {found} fehlt in der Vorlage")
+                found += head.length
+                if found >= size:
+                    break
+            raise _TemplateMiss(f"ab Byte {est} kein eindeutiger Schlüssel")
 
         async def start(a: int) -> tuple[int, int]:
             """Ein Nachrichtenanfang höchstens ``_MAX_LEAD`` Nachrichten vor ``a``."""
-            if a == 0:
-                return 0, 0
-            lo: tuple[int, int] | None = None  # bester Anfang vor dem Ziel
+            lo = (0, 0)  # bester bekannter Anfang vor dem Ziel; der Dateianfang gilt immer
             back = 1
             est = aim(0, 0, a)
             for _ in range(_MAX_JUMPS):
+                if a - lo[1] <= _MAX_LEAD:
+                    break
                 pos, i = await locate(est)
                 if i <= a:
                     if a - i <= _MAX_LEAD:
                         return pos, i
-                    lo = (pos, i) if lo is None or i > lo[1] else lo
+                    lo = max(lo, (pos, i), key=lambda p: p[1])
                     est = aim(pos, i, a)
-                elif lo is not None:
+                elif a - lo[1] <= _MAX_WALK:
                     break  # Ziel liegt zwischen zwei gefundenen Anfängen: ablaufen
                 else:
                     # zu weit: immer weiter vor dem Ziel ansetzen, bis ein Anfang davor liegt
                     est = aim(pos, i, max(1, a - back))
                     back *= 2
-            if lo is None or a - lo[1] > _MAX_WALK:
+            if a - lo[1] > _MAX_WALK:
                 raise _TemplateMiss(f"Nachricht {tmpl[a].key} nach {_MAX_JUMPS} Sprüngen")
             return lo
 

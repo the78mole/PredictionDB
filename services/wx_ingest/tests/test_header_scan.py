@@ -141,3 +141,24 @@ async def test_template_with_other_lengths(monkeypatch: pytest.MonkeyPatch, fact
         again = await _fetch(ep, 12)
     assert again.messages == full.messages and again.grib == full.grib
     assert ep._templates[12].entries == skewed  # gezielt gefunden, nicht neu inventarisiert
+
+
+async def test_template_skips_ambiguous_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Gewählte und benachbarte Nachrichten ohne eindeutigen Schlüssel: Sprung überspringt sie
+    # oder läuft vom letzten bekannten Anfang
+    monkeypatch.setattr(gfs, "SCAN_WINDOW", 1024)
+    monkeypatch.setattr(gfs, "_MAX_LEAD", 0)
+    index = gfs._Template.index
+
+    def ambiguous(self: gfs._Template) -> dict[str, int]:
+        return {k: i for k, i in index(self).items() if not k.startswith(("CLMR", "TMP", "DPT"))}
+
+    monkeypatch.setattr(gfs._Template, "index", ambiguous)
+    host = FakeGfsHost("gdex.test", STEPS, index=False)
+    async with make_client(host) as client:
+        ep = ingestor(Bronze(MemoryStore()), client).endpoints[0]
+        full = await _fetch(ep, 6)
+        template = ep._templates[6]
+        again = await _fetch(ep, 6)
+    assert again.messages == full.messages and again.grib == full.grib
+    assert ep._templates[6] is template
