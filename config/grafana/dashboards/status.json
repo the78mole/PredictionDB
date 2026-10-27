@@ -494,7 +494,8 @@
         "defaults": {
           "custom": {
             "minWidth": 30
-          }
+          },
+          "noValue": "Kein ml-train-Job in den letzten 24 Stunden. Erscheint hier, sobald snapshot, backtest oder fit mit dem aktuellen Image starten (Jobs aus älteren Images melden keinen Fortschritt)."
         },
         "overrides": [
           {
