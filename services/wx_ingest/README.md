@@ -17,6 +17,10 @@ Ausschnitt zugeschnittenen Schritte in Garage (Bucket `wx-bronze`) ab. Grundlage
    Damit die Köpfe nicht nacheinander gelesen werden, wird die Datei in bis zu 16 Abschnitte
    geteilt; an jedem Schnitt wird der nächste Nachrichtenanfang (`7777GRIB`) gesucht. Landet der
    Lauf über die Köpfe nicht genau am nächsten Anfang, wird die ganze Datei geladen.
+   Das vollständige Inventar eines Schritts dient als Vorlage für denselben Schritt späterer
+   Läufe (Reihenfolge innerhalb einer Modellversion fest): Die Lage der gewählten Nachrichten
+   wird aus der Vorlage geschätzt, dort angesprungen und nur über wenige Köpfe gelaufen, statt
+   alle Köpfe zu lesen. Passt die Vorlage nicht, entsteht ein neues vollständiges Inventar.
    NOMADS liefert Süd→Nord und einfache Packung; die Antwort wird auf Nord→Süd gedreht
    und verlustfrei mit CCSDS gepackt, damit Bronze unabhängig vom Endpunkt einheitlich ist.
    Der Filter kombiniert jede Variable mit jedem Level und liefert daher einzelne
