@@ -40,6 +40,9 @@ on:
       block_years:
         description: Jahre je Block (jüngster Block zuerst)
         default: "3"
+      concurrency:
+        description: Gleichzeitige Anfragen je Job ans Archiv (leer = 16 bei aws, 96 bei gdex)
+        default: ""
       rebuild:
         description: Vorhandene Läufe neu bauen, nur Änderungen hochladen
         type: boolean
@@ -80,13 +83,14 @@ jobs:
           SOURCE: ${{ inputs.source || 'aws' }}
           START: ${{ inputs.start }}
           END: ${{ inputs.end }}
+          CONCURRENCY: ${{ inputs.concurrency }}
         run: |
           if [ "$SOURCE" = "gdex" ]; then
             config=config/sources/gfs_0p25_gdex.yaml
-            start=${START:-2019-06-12T12}; end=${END:-2021-03-22T06}; concurrency=24
+            start=${START:-2019-06-12T12}; end=${END:-2021-03-22T06}; concurrency=${CONCURRENCY:-96}
           else
             config=config/sources/gfs_0p25.yaml
-            start=${START:-2021-03-22T12}; end=$END; concurrency=16
+            start=${START:-2021-03-22T12}; end=$END; concurrency=${CONCURRENCY:-16}
           fi
           { echo "config=$config"; echo "start=$start"; echo "end=$end"
             echo "concurrency=$concurrency"; } >> "$GITHUB_OUTPUT"

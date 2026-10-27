@@ -200,7 +200,12 @@ async def _publish(args: argparse.Namespace, config: GfsConfig, registry: Regist
     with tempfile.TemporaryDirectory(prefix="wx-exchange-") as tmp:
         workdir = args.workdir or Path(tmp)
         timeout = httpx.Timeout(60.0, connect=15.0)
-        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+        # Ohne .idx (GDEX) laufen viele kleine Range-Anfragen; der Pool darf nicht bremsen
+        pool = max(100, sum(ep.concurrency for ep in config.endpoints))
+        limits = httpx.Limits(max_connections=pool, max_keepalive_connections=pool)
+        async with httpx.AsyncClient(
+            timeout=timeout, follow_redirects=True, limits=limits
+        ) as client:
             publisher = Publisher(
                 registry,
                 config,
