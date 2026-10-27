@@ -124,6 +124,13 @@ bei langem Vorlauf noch geben kann.
 | `weather` | `wx_<technologie>_<feature>`, `wx_interp`, `wx_lead_h` | GFS-Features je Technologie, über die MaStR-Cluster zusammengefasst (siehe unten), Kennzeichen für interpolierte Stunden, Vorlauf des Wetterlaufs |
 | `stage1` | `s1_load_actual`, `s1_gen_*`, `s1_residual_load` | nur Stufe 2: P50 der Stufe 1 und daraus Residuallast = Last − Wind an Land − Wind auf See − PV |
 
+**Lags über die Zeitumstellung.** `_day` und `_week` greifen standardmäßig k·24 h zurück. Für
+Reihen in `lag_local_time` (in `de_lu_v1`/`v2`: die Last) nehmen sie stattdessen dieselbe
+Uhrzeit in Ortszeit, die doppelte Stunde im Oktober gemittelt. Sonst liegt der Morgenanstieg
+der Last nach einer Umstellung eine Woche lang eine Stunde daneben. PV folgt dem Sonnenstand und
+bleibt deshalb bei k·24 h; Preis und Residuallast sind in beiden Varianten gleich gut. Befund in
+[analysen/zeitumstellung](analysen/zeitumstellung/README.md).
+
 **Wetter-Features.** `wx-process` rechnet jeden GFS-Lauf auf die Anlagen-Cluster aus dem MaStR
 um (ARCHITEKTUR.md 7.5). Je Technologie stehen bereit:
 
@@ -579,6 +586,7 @@ entscheidet dann im Betrieb.
 | `issue.nwp_delay_h` | Verzug, ab dem ein Wetterlauf verarbeitet vorliegt |
 | `stage1[]`, `stage2[]` | Zielgrößen: `code`, `role` (`load`, `generation`, `price`, `other`), `benchmarks`, `normalize_by`, `center` |
 | `lag_series` | weitere Reihen mit Lags (z. B. `residual_load`) |
+| `lag_local_time` | Reihen, deren Lags `_day`/`_week` dieselbe Ortsuhrzeit statt k·24 h nehmen (z. B. `load_actual`) |
 | `weather_features` | Auswahl der Wetter-Features, leer = alle |
 | `series_groups` | ab `de_lu_v2`: Reihengruppen mit `mode`, `codes`, `lags`, `known_local_hour`, `change_days` |
 | `variants[]` | `name`, `groups`, `requires_weather`, `train_from` |

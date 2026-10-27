@@ -58,6 +58,19 @@ def local_day_hours(day: date) -> pd.DatetimeIndex:
     return pd.date_range(start.tz_convert("UTC"), end.tz_convert("UTC"), freq="h", inclusive="left")
 
 
+def same_local_time(ts: pd.DatetimeIndex, days: np.ndarray) -> tuple[pd.DatetimeIndex, ...]:
+    """Dieselbe Uhrzeit (Europe/Berlin) ``days`` Ortstage vor ``ts``, als UTC-Stundenbeginne.
+
+    Gibt es die Uhrzeit am Bezugstag doppelt (Oktober, 02 Uhr), kommen beide Stunden zurück
+    (erste und zweite); sonst sind beide gleich. Fehlt sie (März, 02 Uhr), gilt 03 Uhr.
+    """
+    wall = ts.tz_convert(BERLIN).tz_localize(None) - pd.to_timedelta(np.asarray(days), unit="D")
+    n = len(wall)
+    first = wall.tz_localize(BERLIN, ambiguous=np.ones(n, bool), nonexistent="shift_forward")
+    second = wall.tz_localize(BERLIN, ambiguous=np.zeros(n, bool), nonexistent="shift_forward")
+    return first.tz_convert("UTC"), second.tz_convert("UTC")
+
+
 def issue_time(day: date, hour_utc: int) -> pd.Timestamp:
     return pd.Timestamp(day).tz_localize("UTC") + pd.Timedelta(hours=hour_utc)
 
@@ -296,13 +309,18 @@ class FeatureBuilder:
             k_days = ((target_day - full_arr) / DAY).astype(int)
             s = self.energy[code]
             dm = self.daily_mean[code]
+            local = code in self.cfg.lag_local_time
             if "day" in kinds:
-                out[f"lag_{code}_day"] = s.reindex(ts - k_days.to_numpy() * DAY).to_numpy()
+                out[f"lag_{code}_day"] = self._back(s, ts, k_days.to_numpy(), local)
             if "week" in kinds:
                 # gleiche Stunde vor m Wochen, kleinstes m mit bekanntem Wert
                 m = np.ceil((ts - known_arr + H) / (7 * DAY)).astype(int)
                 m = np.maximum(m, 1)
-                out[f"lag_{code}_week"] = s.reindex(ts - m * 7 * DAY).to_numpy()
+                if local:
+                    # Ortszeit kann eine Stunde später in UTC liegen als m·168 h
+                    _, later = same_local_time(ts, 7 * m)
+                    m = np.where(later >= known_arr, m + 1, m)
+                out[f"lag_{code}_week"] = self._back(s, ts, 7 * m, local)
             if "mean_day" in kinds:
                 out[f"lag_{code}_mean_day"] = dm.reindex(full_arr).to_numpy()
             if "mean_7d" in kinds:
@@ -315,6 +333,20 @@ class FeatureBuilder:
                 out[f"lag_{code}_last"] = s.reindex(known_arr - H).to_numpy()
         df = pd.DataFrame(out, index=meta.index).astype(np.float32)
         return df
+
+    @staticmethod
+    def _back(s: pd.Series, ts: pd.DatetimeIndex, days: np.ndarray, local: bool) -> np.ndarray:
+        """Wert ``days`` Tage vor ``ts``: feste 24 h je Tag oder dieselbe Ortsuhrzeit."""
+        out: np.ndarray
+        if not local:
+            out = s.reindex(ts - days * DAY).to_numpy()
+            return out
+        first, second = same_local_time(ts, days)
+        a = s.reindex(first).to_numpy(np.float64)
+        b = s.reindex(second).to_numpy(np.float64)
+        # doppelte Stunde im Oktober: Mittel beider Stunden
+        out = np.where(np.isnan(a), b, np.where(np.isnan(b), a, (a + b) / 2))
+        return out
 
     # --- Reihengruppen -----------------------------------------------------------------------
 

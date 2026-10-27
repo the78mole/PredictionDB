@@ -12,7 +12,7 @@ import pytest
 from ml_train.backtest import make_folds, run_backtest
 from ml_train.calendar import calendar_features
 from ml_train.config import ModelConfig, load_config
-from ml_train.dataset import FeatureBuilder, WeatherTable, local_day_hours
+from ml_train.dataset import FeatureBuilder, WeatherTable, local_day_hours, same_local_time
 from ml_train.models import TwoStageModel
 from ml_train.predict import due_issues, next_wake
 from ml_train.registry import Registry, compare
@@ -83,6 +83,49 @@ def test_lags_only_use_known_values(snap, cfg) -> None:  # type: ignore[no-untyp
         lagged = frame.X[f"lag_{code}_week"].to_numpy()
         direct = fb.energy[code].reindex(week_src).to_numpy()
         np.testing.assert_allclose(lagged[known.to_numpy()], direct[known.to_numpy()], rtol=1e-5)
+
+
+def test_same_local_time_across_dst() -> None:
+    ts = pd.DatetimeIndex(
+        ["2026-10-26 04:00", "2026-10-25 01:00", "2026-03-30 01:00"], tz="UTC"
+    )  # Mo 05 Uhr MEZ, So 02 Uhr MEZ (zweite), Mo 03 Uhr MESZ
+    first, second = same_local_time(ts, np.array([7, 1, 1]))
+    # 19.10. 05 Uhr MESZ; 24.10. 02 Uhr MESZ; 29.3. 03 Uhr MESZ (02 Uhr gibt es nicht)
+    assert list(first) == list(
+        pd.DatetimeIndex(["2026-10-19 03:00", "2026-10-24 00:00", "2026-03-29 01:00"], tz="UTC")
+    )
+    assert (first == second).all()
+    # Bezugstag mit doppelter 02-Uhr-Stunde: beide Stunden
+    a, b = same_local_time(pd.DatetimeIndex(["2026-10-26 01:00"], tz="UTC"), np.array([1]))
+    assert (a[0], b[0]) == (
+        pd.Timestamp("2026-10-25 00:00", tz="UTC"),
+        pd.Timestamp("2026-10-25 01:00", tz="UTC"),
+    )
+
+
+def test_load_lags_keep_local_time_across_dst(snap, cfg) -> None:  # type: ignore[no-untyped-def]
+    assert cfg.lag_local_time == ["load_actual"]
+    fb = FeatureBuilder(snap, cfg)
+    frame = fb.build([date(2022, 10, 31)])  # Montag nach der Umstellung am 30.10.
+    meta, X = frame.meta, frame.X
+    ts = pd.DatetimeIndex(meta["ts"])
+    d1 = (meta["lead_day"] == 1).to_numpy()
+    load, price = fb.energy["load_actual"], fb.energy["da_price_de_lu"]
+    # Vorwoche der Last: 25.10. zur selben Ortsuhrzeit, also eine Stunde früher in UTC
+    expect = load.reindex(ts[d1] - pd.Timedelta(days=7) - pd.Timedelta(hours=1)).to_numpy()
+    np.testing.assert_allclose(X.loc[d1, "lag_load_actual_week"], expect, rtol=1e-5)
+    # Preis und Erzeugung bleiben bei festen 7·24 h
+    expect = price.reindex(ts[d1] - pd.Timedelta(days=7)).to_numpy()
+    np.testing.assert_allclose(X.loc[d1, "lag_da_price_de_lu_week"], expect, rtol=1e-5)
+    # kleinstes m, dessen Ortsuhrzeit vor dem Ausgabezeitpunkt bekannt war
+    known = meta["issue_time"].iloc[0] - pd.Timedelta(hours=2)
+    expect = np.full(len(ts), np.nan)
+    for m in (3, 2, 1):
+        first, second = same_local_time(ts, np.full(len(ts), 7 * m))
+        ok = np.asarray(second < known)
+        # doppelte 02-Uhr-Stunde (30.10.): Mittel beider Stunden
+        expect[ok] = (load.reindex(first[ok]).to_numpy() + load.reindex(second[ok]).to_numpy()) / 2
+    np.testing.assert_allclose(X["lag_load_actual_week"], expect, rtol=1e-5)
 
 
 @pytest.fixture

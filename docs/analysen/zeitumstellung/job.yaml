@@ -1,0 +1,23 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; ausgeführt von auswertung.py im selben Ordner
+id: zeitumstellung
+title: Zeitumstellung und Lag-Merkmale im Prognosemodell
+question: >
+  Hat die Umstellung MESZ -> MEZ am 25.10.2026 die Prognose verschlechtert, und warum? Fehlt dem
+  Modell die gültige Zeit als Ortszeit, oder greifen Merkmale über die Umstellung hinweg falsch?
+requested_by: Maulwurf
+kind: custom
+inputs:
+  predictions: {table: fcst.prediction_error, issue_hour_utc: 8, valid: 2026-10-26}
+  series:
+    source: smard                 # CC BY 4.0, Bundesnetzagentur | SMARD.de
+    codes: {load: 410/DE, residual_load: 4359/DE, pv: 4068/DE, price: 4169/DE-LU}
+    period: {from: 2018-10-01, to: 2026-10-26}
+method:
+  lags: {tag_k1: 1, tag_k2: 2, woche: 7}   # Tage zurück
+  compare: [k*24h in UTC, gleiche Uhrzeit Europe/Berlin k Ortstage zurück]
+  window: Umstellungstag bis k Tage danach, je Umstellung 2019-2026
+  metrics: [mae_utc, mae_ortszeit, gewinn_% = 1 - mae_ortszeit/mae_utc]
+outputs:
+  tables: [zusammenfassung, je_umstellung, je_ortsstunde]
+  figures: [mehrfehler_je_stunde, beispiel_26_10_2026]
+schedule: once
