@@ -235,3 +235,20 @@ async def test_template_timeout_skips_step(monkeypatch: pytest.MonkeyPatch) -> N
     async with make_client(host) as client:
         ep = ingestor(Bronze(MemoryStore()), client).endpoints[0]
         assert await ep.build_templates(RUN, [3, 6]) == [3]
+
+
+async def test_template_retries_failed_step_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    scan = gfs.Endpoint.scan
+    calls: list[str] = []
+
+    async def flaky_once(self: gfs.Endpoint, url: str) -> tuple[str, list[IdxEntry]]:
+        calls.append(url)
+        if url.endswith("f006.grib2") and calls.count(url) == 1:
+            raise httpx.ReadTimeout("zu langsam")
+        return await scan(self, url)
+
+    monkeypatch.setattr(gfs.Endpoint, "scan", flaky_once)
+    host = FakeGfsHost("gdex.test", {3, 6}, index=False)
+    async with make_client(host) as client:
+        ep = ingestor(Bronze(MemoryStore()), client).endpoints[0]
+        assert await ep.build_templates(RUN, [3, 6]) == [3, 6]
