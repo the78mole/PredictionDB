@@ -52,8 +52,9 @@ NOMADS_PACKING = "grid_ccsds"
 #: HTTP-Status, bei denen eine Wiederholung sinnvoll ist.
 RETRY_STATUS = frozenset({408, 425, 429, 500, 502, 503, 504})
 
-#: Höchstens so viele ganze GRIB-Dateien (je rund 500 MB) gleichzeitig im Speicher
-FULL_DOWNLOADS = 2
+#: Ganze GRIB-Dateien (je rund 540 MB) nur einzeln im Speicher, über alle Endpunkte und Läufe;
+#: mehrere gleichzeitig ließen den Actions-Runner abstürzen
+_FULL_DOWNLOAD = asyncio.Semaphore(1)
 
 
 class StepUnavailable(Exception):
@@ -108,7 +109,6 @@ class Endpoint:
         self._limiter = AsyncLimiter(config.rate_per_min, 60) if config.rate_per_min else None
         self._retry_attempts = retry_attempts
         self._retry_wait_max = retry_wait_max
-        self._full = asyncio.Semaphore(FULL_DOWNLOADS)
 
     @property
     def name(self) -> str:
@@ -194,11 +194,14 @@ class Endpoint:
     async def _fetch_realigned(
         self, url: str, entries: list[IdxEntry], chosen: list[IdxEntry], bbox: BBox
     ) -> bytes:
-        async with self._full:
+        async with _FULL_DOWNLOAD:
             resp = await self.get(url)
             if resp.status_code != 200:
                 raise FetchError(f"ganze Datei {url}: HTTP {resp.status_code}")
-            grib = await asyncio.to_thread(_realign, resp.content, entries, chosen, bbox)
+            data = resp.content
+            del resp
+            grib = await asyncio.to_thread(_realign, data, entries, chosen, bbox)
+            del data
         log.info("idx_realigned", url=url, messages=len(chosen))
         return grib
 
@@ -252,16 +255,28 @@ def _crop_checked(raw: bytes, bbox: BBox, expected: int) -> bytes:
         raise FetchError(str(exc)) from exc
 
 
+def _message_bounds(data: bytes) -> list[tuple[int, int]]:
+    """Anfang und Ende jeder GRIB2-Nachricht, ohne die Nachrichten zu kopieren."""
+    bounds = []
+    pos, n = 0, len(data)
+    while pos < n:
+        if data[pos : pos + 4] != b"GRIB" or n - pos < 16:
+            raise FetchError(f"GRIB-Datei unbrauchbar: keine Nachricht an Byte {pos}")
+        end = pos + int.from_bytes(data[pos + 8 : pos + 16], "big")
+        if end > n or data[end - 4 : end] != b"7777":
+            raise FetchError(f"GRIB-Datei unbrauchbar: Nachricht an Byte {pos} unvollständig")
+        bounds.append((pos, end))
+        pos = end
+    return bounds
+
+
 def _realign(data: bytes, entries: list[IdxEntry], chosen: list[IdxEntry], bbox: BBox) -> bytes:
     """Wählt die Nachrichten aus der ganzen Datei über ihre Position in der ``.idx``.
 
     Das gilt nur, wenn die Datei genau so viele Nachrichten hat wie die ``.idx`` Offsets;
     zusätzlich muss der Prognosezeitraum jeder gewählten Nachricht zur Zeile passen.
     """
-    try:
-        messages = list(iter_messages(data))
-    except GribError as exc:
-        raise FetchError(f"GRIB-Datei unbrauchbar: {exc}") from exc
+    messages = _message_bounds(data)
     offsets = sorted({e.offset for e in entries})
     if len(messages) != len(offsets):
         raise FetchError(
@@ -270,7 +285,8 @@ def _realign(data: bytes, entries: list[IdxEntry], chosen: list[IdxEntry], bbox:
     position = {o: i for i, o in enumerate(offsets)}
     picked = []
     for e in chosen:
-        msg = messages[position[e.offset]]
+        start, end = messages[position[e.offset]]
+        msg = data[start:end]
         m = re.match(r"(\d+(?:-\d+)?) hour", e.fcst)
         if m and describe(msg).step_range.split("-")[-1] != m[1].split("-")[-1]:
             raise FetchError(f".idx veraltet: {e.key} passt nicht zur Nachricht an Position")
