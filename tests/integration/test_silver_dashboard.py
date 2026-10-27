@@ -1,4 +1,4 @@
-"""Silber-Bestand je Lauf (``meta.silver_run``) und das Monatsbalken-Panel im Status-Dashboard.
+"""Silber-Bestand je Lauf (``meta.silver_run``) und die Monatsbalken für Silber und Gold.
 
 Läuft nur mit ``PDB_INTEGRATION=1`` nach ``migrate``. Meldet Läufe im April 2021 über
 ``wx_process.store.Store`` wie ``wx-process`` und ``wx-import``, legt einen laufenden
@@ -27,6 +27,7 @@ DASHBOARD = Path(__file__).parents[2] / "config/grafana/dashboards/status.json"
 APRIL = datetime(2021, 4, 1, tzinfo=UTC)
 MAY = datetime(2021, 5, 1, tzinfo=UTC)
 HOST = "it-silver"
+CLUSTERING = "it_gold"
 
 
 def _runs(hour: int) -> list[datetime]:
@@ -43,11 +44,21 @@ def engine() -> Iterator[Engine]:
             {"a": APRIL, "b": MAY},
         )
         c.execute(text("DELETE FROM meta.backfill_job WHERE host = :h"), {"h": HOST})
+        c.execute(
+            text("DELETE FROM meta.nwp_feature_run WHERE run_time >= :a AND run_time < :b"),
+            {"a": APRIL, "b": MAY},
+        )
+        c.execute(
+            text("DELETE FROM assets.grid_weight WHERE clustering_version = :v"), {"v": CLUSTERING}
+        )
+        c.execute(
+            text("DELETE FROM assets.clustering WHERE clustering_version = :v"), {"v": CLUSTERING}
+        )
 
 
-def _panel_sql(hours: str) -> str:
+def _panel_sql(hours: str, panel_id: int = 46) -> str:
     dash = json.loads(DASHBOARD.read_text(encoding="utf-8"))
-    panel = next(p for p in dash["panels"] if p["id"] == 46)
+    panel = next(p for p in dash["panels"] if p["id"] == panel_id)
     sql: str = panel["targets"][0]["rawSql"]
     return sql.replace("$gfs_lauf", hours)
 
@@ -92,3 +103,48 @@ def test_store_and_month_bars(engine: Engine) -> None:
     assert april("'12'")[1] == round(400 / 30, 1)
     store.clear_silver_loading(sid)
     assert april("'12'") == (round(500 / 30, 1), round(100 / 30, 1))
+
+
+def test_gold_month_bars(engine: Engine) -> None:
+    """Gold: grün mit aktueller Clusterung und Feature-Version, gelb mit Silber ohne Gold."""
+    store = Store(engine)
+    sid = store.source_id("gfs_0p25")
+    runs = _runs(0)
+    store.mark_silver(sid, runs[:20], "present", "ghcr")
+    future = datetime(2099, 1, 1, tzinfo=UTC)
+    with engine.begin() as c:
+        # jüngste Clusterung mit Gitter-Gewichten
+        c.execute(
+            text("""INSERT INTO assets.clustering (clustering_version, grid, grid_res, created_at)
+                    VALUES (:v, '0p25', 0.25, :t)"""),
+            {"v": CLUSTERING, "t": future},
+        )
+        c.execute(
+            text("INSERT INTO assets.cluster VALUES (:v, 'wind_on', 0, 53.5, 9.5, NULL)"),
+            {"v": CLUSTERING},
+        )
+        c.execute(
+            text("""INSERT INTO assets.grid_weight VALUES
+                    (:v, 'wind_on', 0, 'gfs_0p25', 53.5, 9.5, 10, 1, 0)"""),
+            {"v": CLUSTERING},
+        )
+        for i, r in enumerate(runs[:12]):
+            # 10 mit aktueller Clusterung, 1 mit alter, 1 mit alter Feature-Version
+            version = CLUSTERING if i < 11 else "it_alt"
+            fv = "it_fv" if i != 10 else "it_fv_alt"
+            c.execute(
+                text("""INSERT INTO meta.nwp_feature_run (source_id, run_time, clustering_version,
+                          features_version, silver_key, n_values, processed_at)
+                        VALUES (:s, :r, :v, :fv, 'test', 0, :t)"""),
+                {"s": sid, "r": r, "v": version, "fv": fv, "t": future + timedelta(minutes=i)},
+            )
+        # zuletzt verwendete Feature-Version ist it_fv
+        c.execute(
+            text("""UPDATE meta.nwp_feature_run SET processed_at = :t
+                    WHERE run_time = :r AND clustering_version = :v"""),
+            {"t": future + timedelta(days=1), "r": runs[0], "v": CLUSTERING},
+        )
+
+    with engine.connect() as c:
+        rows = {r[0]: r[1:] for r in c.execute(text(_panel_sql("'0'", 47))).all()}
+    assert tuple(float(v) for v in rows["2021-04"]) == (round(1000 / 30, 1), round(1000 / 30, 1))

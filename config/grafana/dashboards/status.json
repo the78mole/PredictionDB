@@ -2896,6 +2896,113 @@
       }
     },
     {
+      "type": "barchart",
+      "title": "Gold lokal je Monat (Anteil der GFS-Läufe mit Wetter-Features)",
+      "id": 47,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 98
+      },
+      "description": "Je Monat der Anteil der erwarteten GFS-Läufe (wie beim Silber-Panel, Laufzeiten oben unter „GFS-Läufe“), für die die Wetter-Features je Cluster (Gold, feat.nwp_value) mit der aktuellen Clusterung und Feature-Version gerechnet sind. Grün = fertig, gelb = in Arbeit: Silber liegt lokal vor, Gold steht noch aus (wx-process-backfill rechnet stündlich nach, nur für die Laufzeiten in GFS_BACKFILL_RUNS). Eine neue Clusterung macht alle Läufe wieder gelb, bis sie neu gerechnet sind.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "-- Erwartete Läufe wie im Silber-Panel. Grün: meta.nwp_feature_run hat den Lauf für die aktuelle\n-- Clusterung (jüngste mit Gitter-Gewichten) und die zuletzt verwendete Feature-Version.\n-- Gelb: Silber liegt vor (meta.silver_run present), Gold fehlt noch.\nWITH soll AS (\n  SELECT t FROM generate_series(timestamptz '2021-03-22 12:00+00',\n                                date_bin('6 hours', now() - interval '5 hours', timestamptz '2000-01-01'),\n                                interval '6 hours') t\n   WHERE extract(hour FROM t AT TIME ZONE 'UTC')::int::text IN ($gfs_lauf)),\nq AS (SELECT source_id FROM meta.source WHERE code = 'gfs_0p25'),\ncl AS (SELECT c.clustering_version FROM assets.clustering c\n        WHERE EXISTS (SELECT 1 FROM assets.grid_weight w\n                       WHERE w.clustering_version = c.clustering_version AND w.grid = 'gfs_0p25')\n        ORDER BY c.created_at DESC LIMIT 1),\nfv AS (SELECT features_version FROM meta.nwp_feature_run\n        WHERE source_id = (SELECT source_id FROM q) ORDER BY processed_at DESC LIMIT 1),\ngold AS (SELECT f.run_time FROM meta.nwp_feature_run f\n          WHERE f.source_id = (SELECT source_id FROM q)\n            AND f.clustering_version = (SELECT clustering_version FROM cl)\n            AND f.features_version = (SELECT features_version FROM fv)),\nsilber AS (SELECT run_time FROM meta.silver_run\n            WHERE source_id = (SELECT source_id FROM q) AND status = 'present'),\nz AS (\n  SELECT soll.t,\n         CASE WHEN gold.run_time IS NOT NULL THEN 'fertig'\n              WHEN silber.run_time IS NOT NULL THEN 'arbeit' END AS zustand\n    FROM soll LEFT JOIN gold ON gold.run_time = soll.t LEFT JOIN silber ON silber.run_time = soll.t)\nSELECT to_char(t AT TIME ZONE 'UTC', 'YYYY-MM') AS \"Monat\",\n       round(100.0 * count(*) FILTER (WHERE zustand = 'fertig') / count(*), 1) AS \"Fertig\",\n       round(100.0 * count(*) FILTER (WHERE zustand = 'arbeit') / count(*), 1) AS \"In Arbeit\"\n  FROM z\n GROUP BY 1\n ORDER BY 1"
+        }
+      ],
+      "options": {
+        "orientation": "vertical",
+        "stacking": "normal",
+        "showValue": "never",
+        "groupWidth": 0.8,
+        "barWidth": 0.9,
+        "barRadius": 0,
+        "xField": "Monat",
+        "xTickLabelRotation": -45,
+        "xTickLabelSpacing": 0,
+        "fullHighlight": false,
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "decimals": 1,
+          "color": {
+            "mode": "fixed"
+          },
+          "custom": {
+            "fillOpacity": 85,
+            "lineWidth": 0,
+            "gradientMode": "none",
+            "axisSoftMin": 0,
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Fertig"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "In Arbeit"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "type": "row",
       "title": "Anlagenbestand (MaStR)",
       "id": 10,
@@ -2904,7 +3011,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 98
+        "y": 107
       },
       "panels": []
     },
@@ -2920,7 +3027,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 99
+        "y": 108
       },
       "targets": [
         {
@@ -3041,7 +3148,7 @@
         "h": 8,
         "w": 16,
         "x": 8,
-        "y": 99
+        "y": 108
       },
       "targets": [
         {
@@ -3146,7 +3253,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 107
+        "y": 116
       },
       "panels": []
     },
@@ -3162,7 +3269,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 108
+        "y": 117
       },
       "targets": [
         {
@@ -3224,7 +3331,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 108
+        "y": 117
       },
       "targets": [
         {
@@ -3286,7 +3393,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 112
+        "y": 121
       },
       "targets": [
         {
@@ -3329,7 +3436,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 112
+        "y": 121
       },
       "targets": [
         {
@@ -3372,7 +3479,7 @@
         "h": 8,
         "w": 16,
         "x": 8,
-        "y": 108
+        "y": 117
       },
       "targets": [
         {
@@ -3423,7 +3530,7 @@
         "h": 14,
         "w": 8,
         "x": 0,
-        "y": 116
+        "y": 125
       },
       "targets": [
         {
@@ -3509,7 +3616,7 @@
         "h": 14,
         "w": 8,
         "x": 8,
-        "y": 116
+        "y": 125
       },
       "targets": [
         {
@@ -3595,7 +3702,7 @@
         "h": 14,
         "w": 8,
         "x": 16,
-        "y": 116
+        "y": 125
       },
       "targets": [
         {
@@ -3706,7 +3813,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 130
+        "y": 139
       },
       "targets": [
         {
@@ -3782,7 +3889,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 130
+        "y": 139
       },
       "targets": [
         {
@@ -3854,7 +3961,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 138
+        "y": 147
       },
       "panels": []
     },
@@ -3871,7 +3978,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 139
+        "y": 148
       },
       "targets": [
         {
@@ -3963,7 +4070,7 @@
         "h": 8,
         "w": 16,
         "x": 8,
-        "y": 139
+        "y": 148
       },
       "targets": [
         {
@@ -4238,7 +4345,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 147
+        "y": 156
       },
       "targets": [
         {
@@ -4371,7 +4478,7 @@
         "h": 8,
         "w": 6,
         "x": 0,
-        "y": 155
+        "y": 164
       },
       "targets": [
         {
@@ -4414,7 +4521,7 @@
         "h": 8,
         "w": 18,
         "x": 6,
-        "y": 155
+        "y": 164
       },
       "targets": [
         {
@@ -4489,7 +4596,7 @@
       {
         "type": "custom",
         "name": "gfs_lauf",
-        "label": "GFS-Läufe (Silber je Monat)",
+        "label": "GFS-Läufe (Silber/Gold je Monat)",
         "query": "00Z : 0, 06Z : 6, 12Z : 12, 18Z : 18",
         "multi": true,
         "includeAll": true,
