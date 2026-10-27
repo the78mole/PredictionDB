@@ -9,10 +9,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from ml_train.backtest import make_folds, run_backtest
+from ml_train.backtest import backtest_steps, make_folds, run_backtest
 from ml_train.calendar import calendar_features
 from ml_train.config import ModelConfig, load_config
 from ml_train.dataset import FeatureBuilder, WeatherTable, local_day_hours, same_local_time
+from ml_train.jobs import JobLog
 from ml_train.models import TwoStageModel
 from ml_train.predict import due_issues, next_wake
 from ml_train.registry import Registry, compare
@@ -240,9 +241,24 @@ def test_weather_alignment_interval_and_instant() -> None:
     assert t.loc[run + pd.Timedelta(hours=121), "wx_interp"] == 1
 
 
+class RecordingJob(JobLog):
+    """Schritte ohne Datenbank mitschreiben."""
+
+    def __init__(self) -> None:
+        super().__init__(None)
+        self.labels: list[str] = []
+
+    def step(self, label: str) -> None:
+        self.labels.append(label)
+
+
 def test_backtest_beats_naive_baselines(snap, cfg) -> None:  # type: ignore[no-untyped-def]
     fb = FeatureBuilder(snap, cfg)
-    res = run_backtest(fb, cfg)
+    job = RecordingJob()
+    res = run_backtest(fb, cfg, job=job)
+    # Fortschritt im Dashboard: angekündigte Schritte = gemeldete Schritte
+    assert len(job.labels) == backtest_steps(fb, cfg)
+    assert job.labels[1].startswith("Faltung 1/")
     m = res.metrics(("method", "target")).set_index(["method", "target"])
     assert m.loc[("kalender", "load_actual"), "mae"] < m.loc[("naive_week", "load_actual"), "mae"]
     assert (
@@ -286,7 +302,9 @@ def test_registry_champion_challenger(snap, cfg, tmp_path: Path) -> None:  # typ
     v1 = reg.register(
         base, man, preds[preds.method == "kalender"].drop(columns="method"), "champion"
     )
-    wx = TwoStageModel(cfg, cfg.variant("wetter")).fit(frame)
+    wx, labels = TwoStageModel(cfg, cfg.variant("wetter")), list[str]()
+    wx.fit(frame, progress=labels.append)
+    assert len(labels) == wx.fit_steps() and labels[0].startswith("Stufe 1")
     v2 = reg.register(wx, man, preds[preds.method == "wetter"].drop(columns="method"))
     assert reg.state()["champion"] == v1 and reg.state()["challengers"] == [v2]
     assert set(reg.active()) == {v1, v2}
