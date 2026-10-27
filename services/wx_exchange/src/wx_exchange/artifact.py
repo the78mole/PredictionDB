@@ -36,6 +36,14 @@ ARTIFACT_TYPE = "application/vnd.predictiondb.wx-silver.v1"
 LAYER_TYPE = "application/vnd.predictiondb.zarr.v3.tar"
 LICENSE = "CC-BY-4.0"
 ATTRIBUTION = "NOAA/NCEP Global Forecast System (GFS), verdichtet von PredictionDB"
+#: Läufe vor GFS v16 stammen aus NCAR GDEX d084001 (CC BY 4.0, Zitat mit DOI)
+ATTRIBUTION_GDEX = (
+    "NOAA/NCEP Global Forecast System (GFS); Läufe vor 2021-03-22 12Z aus NCEP GFS 0.25 Degree"
+    " Global Forecast Grids Historical Archive, Research Data Archive at NCAR,"
+    " https://doi.org/10.5065/D65D8PWK; verdichtet von PredictionDB"
+)
+#: Letzter Monat mit Läufen aus GDEX
+GDEX_UNTIL = "2021-03"
 PREFIX = "org.predictiondb."
 #: Silber-Attribute, die sich bei jedem Bau ändern und nicht zum Inhalt zählen
 VOLATILE = ("bronze_completed_at",)
@@ -246,7 +254,9 @@ class MonthArtifact:
                 "org.opencontainers.image.source": source,
                 "org.opencontainers.image.created": datetime.now(UTC).isoformat(timespec="seconds"),
                 "org.opencontainers.image.licenses": LICENSE,
-                PREFIX + "attribution": ATTRIBUTION,
+                PREFIX + "attribution": (
+                    ATTRIBUTION_GDEX if self.month <= GDEX_UNTIL else ATTRIBUTION
+                ),
                 PREFIX + "model": self.model,
                 PREFIX + "grid": self.resolution,
                 PREFIX + "month": self.month,

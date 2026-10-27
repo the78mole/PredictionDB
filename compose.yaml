@@ -142,7 +142,7 @@ services:
       - wx-process
       - gfs
       - backfill
-      - ${GFS_BACKFILL_START:-2021-03-22T12}
+      - ${GFS_HISTORY_START:-${GFS_BACKFILL_START:-2021-03-22T12}}
       - --runs=${GFS_BACKFILL_RUNS:-0,12}
       - --newest-first
       - --watch=3600
@@ -153,6 +153,8 @@ services:
   # GFS-Historie als Silber aus GHCR (gebaut vom Workflow gfs-history.yml), statt sie über die
   # gedrosselte Leitung aus dem AWS-Archiv zu laden: docker compose --profile history up -d.
   # Holt stündlich neue Läufe nach wx-silver; wx-process-backfill rechnet daraus die Features.
+  # GFS_HISTORY_START früher als 2021-03-22T12 holt auch die Läufe vor GFS v16 (NCAR GDEX, nur
+  # über GHCR; gfs-backfill bleibt bei GFS_BACKFILL_START, das AWS-Archiv hat sie nicht).
   wx-import:
     <<: *app
     profiles: [history]
@@ -160,7 +162,7 @@ services:
       - wx-exchange
       - gfs
       - import
-      - ${GFS_BACKFILL_START:-2021-03-22T12}
+      - ${GFS_HISTORY_START:-${GFS_BACKFILL_START:-2021-03-22T12}}
       - --runs=${GFS_HISTORY_RUNS:-0,12,6,18}
       - --watch=3600
     depends_on:

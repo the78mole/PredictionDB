@@ -10,6 +10,11 @@ name: GFS-Historie
 # Stand aus den Manifesten in GHCR und nimmt nur Monate mit Lücken auf; ein erneuter Start
 # setzt also fort, wo der letzte aufgehört hat.
 #
+# Mit source: gdex kommen die Läufe vor GFS v16 (bis 2021-03-22 06Z) aus dem NCAR-Archiv GDEX
+# d084001 (config/sources/gfs_0p25_gdex.yaml, CC BY 4.0, dreistündlich bis 240 h). Standard ist
+# dann der Pilot mit GFS v15 ab 2019-06-12 12Z. Beide Quellen schreiben in dasselbe Paket; im
+# März 2021 teilen sie sich die Tags, getrennt durch start/end.
+#
 # Täglich per Zeitplan holt der Workflow die neuen Läufe aus dem AWS-Archiv (nicht von der VM,
 # deren Live-Läufe über NOMADS kommen und um wenige Int16-Stufen abweichen). Ohne Eingaben
 # gelten die Standardwerte unten. GitHub pausiert Zeitpläne nach 60 Tagen ohne Commit.
@@ -18,11 +23,16 @@ on:
     - cron: "17 7 * * *"
   workflow_dispatch:
     inputs:
+      source:
+        description: Archiv (aws ab GFS v16, gdex davor)
+        type: choice
+        options: [aws, gdex]
+        default: aws
       start:
-        description: Frühester Lauf (GFS v16 ab 2021-03-22T12)
-        default: 2021-03-22T12
+        description: Frühester Lauf (leer = 2021-03-22T12 bei aws, 2019-06-12T12 bei gdex)
+        default: ""
       end:
-        description: Spätester Lauf (leer = vor dem 30-h-Live-Fenster)
+        description: Spätester Lauf (leer = vor dem 30-h-Live-Fenster bzw. 2021-03-22T06)
         default: ""
       runs:
         description: Laufzeiten in Reihenfolge der Priorität
@@ -54,6 +64,10 @@ jobs:
       block1: ${{ steps.plan.outputs.block1 }}
       block2: ${{ steps.plan.outputs.block2 }}
       block3: ${{ steps.plan.outputs.block3 }}
+      config: ${{ steps.source.outputs.config }}
+      start: ${{ steps.source.outputs.start }}
+      end: ${{ steps.source.outputs.end }}
+      concurrency: ${{ steps.source.outputs.concurrency }}
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.2
@@ -61,15 +75,31 @@ jobs:
           enable-cache: true
           save-cache: false
       - run: uv sync --locked --no-dev --package wx-exchange
+      - id: source
+        env:
+          SOURCE: ${{ inputs.source || 'aws' }}
+          START: ${{ inputs.start }}
+          END: ${{ inputs.end }}
+        run: |
+          if [ "$SOURCE" = "gdex" ]; then
+            config=config/sources/gfs_0p25_gdex.yaml
+            start=${START:-2019-06-12T12}; end=${END:-2021-03-22T06}; concurrency=24
+          else
+            config=config/sources/gfs_0p25.yaml
+            start=${START:-2021-03-22T12}; end=$END; concurrency=16
+          fi
+          { echo "config=$config"; echo "start=$start"; echo "end=$end"
+            echo "concurrency=$concurrency"; } >> "$GITHUB_OUTPUT"
       - id: plan
         env:
-          START: ${{ inputs.start || '2021-03-22T12' }}
-          END: ${{ inputs.end || '' }}
+          CONFIG: ${{ steps.source.outputs.config }}
+          START: ${{ steps.source.outputs.start }}
+          END: ${{ steps.source.outputs.end }}
           RUNS: ${{ inputs.runs || '0,12,6,18' }}
           BLOCK_YEARS: ${{ inputs.block_years || '3' }}
           REBUILD: ${{ inputs.rebuild == true }}
         run: |
-          args=(gfs plan "$START")
+          args=(gfs --config "$CONFIG" plan "$START")
           [ -n "$END" ] && args+=("$END")
           args+=(--runs "$RUNS" --block-years "$BLOCK_YEARS" --blocks 3)
           [ "$REBUILD" = "true" ] && args+=(--all)
@@ -81,8 +111,10 @@ jobs:
     uses: ./.github/workflows/gfs-history-block.yml
     with:
       matrix: ${{ needs.plan.outputs.block1 }}
-      start: ${{ inputs.start || '2021-03-22T12' }}
-      end: ${{ inputs.end || '' }}
+      config: ${{ needs.plan.outputs.config }}
+      start: ${{ needs.plan.outputs.start }}
+      end: ${{ needs.plan.outputs.end }}
+      archive_concurrency: ${{ needs.plan.outputs.concurrency }}
       rebuild: ${{ inputs.rebuild == true }}
     permissions:
       contents: read
@@ -94,8 +126,10 @@ jobs:
     uses: ./.github/workflows/gfs-history-block.yml
     with:
       matrix: ${{ needs.plan.outputs.block2 }}
-      start: ${{ inputs.start || '2021-03-22T12' }}
-      end: ${{ inputs.end || '' }}
+      config: ${{ needs.plan.outputs.config }}
+      start: ${{ needs.plan.outputs.start }}
+      end: ${{ needs.plan.outputs.end }}
+      archive_concurrency: ${{ needs.plan.outputs.concurrency }}
       rebuild: ${{ inputs.rebuild == true }}
     permissions:
       contents: read
@@ -107,8 +141,10 @@ jobs:
     uses: ./.github/workflows/gfs-history-block.yml
     with:
       matrix: ${{ needs.plan.outputs.block3 }}
-      start: ${{ inputs.start || '2021-03-22T12' }}
-      end: ${{ inputs.end || '' }}
+      config: ${{ needs.plan.outputs.config }}
+      start: ${{ needs.plan.outputs.start }}
+      end: ${{ needs.plan.outputs.end }}
+      archive_concurrency: ${{ needs.plan.outputs.concurrency }}
       rebuild: ${{ inputs.rebuild == true }}
     permissions:
       contents: read

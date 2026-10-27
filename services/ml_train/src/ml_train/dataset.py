@@ -44,6 +44,14 @@ INTERVAL_SUFFIXES = ("_ghi", "_pv_cf", "_pv_power", "_precip", "_snow_fraction")
 #: Day-Ahead-Preise (DE-LU und Nachbarzonen): bekannt ab dem Auktionsergebnis am Vortag
 PRICE_PREFIX = "da_price_"
 LAG_KINDS = ("day", "week", "mean_day", "mean_7d", "last")
+#: Erster Lauf je GFS-Hauptversion (Merkmalsgruppe ``nwp_version``, Wind-Bias je Version,
+#: docs/analysen/gfs-v15-v16); ältere Läufe stammen aus NCAR GDEX d084001
+GFS_VERSIONS = (
+    (pd.Timestamp("2021-03-22 12:00", tz="UTC"), 16),
+    (pd.Timestamp("2019-06-12 12:00", tz="UTC"), 15),
+    (pd.Timestamp("2017-07-19 12:00", tz="UTC"), 14),
+    (pd.Timestamp("2015-01-14 12:00", tz="UTC"), 13),
+)
 META_COLUMNS = ["issue_time", "ts", "lead_day", "lead_h"]
 
 
@@ -241,9 +249,13 @@ class FeatureBuilder:
         groups["lags"] = list(lags.columns)
         parts.append(lags)
 
-        wx = self._weather(meta)
+        runs = self._weather_runs(meta)
+        wx = self._weather(meta, runs)
         groups["weather"] = list(wx.columns)
         parts.append(wx)
+        ver = pd.DataFrame({"wx_gfs_v": gfs_version(runs)}, index=meta.index)
+        groups["nwp_version"] = list(ver.columns)
+        parts.append(ver)
 
         for name, sg in self.cfg.series_groups.items():
             extra = self._series_group(sg, meta)
@@ -437,16 +449,19 @@ class FeatureBuilder:
                 out[f"ol_{stem}_h{k}"] = pd.Series(v, index=cur.index).reindex(issues).to_numpy()
         return pd.DataFrame(out, index=meta.index).astype(np.float32)
 
-    def _weather(self, meta: pd.DataFrame) -> pd.DataFrame:
-        cols = [*self.weather.columns, "wx_interp", "wx_lead_h"]
-        if not self.weather.columns:
-            return pd.DataFrame(index=meta.index)
+    def _weather_runs(self, meta: pd.DataFrame) -> pd.Series:
+        """Wetterlauf je Zeile: der jüngste, der zum Ausgabezeitpunkt verarbeitet vorlag."""
         issues = meta["issue_time"]
         run_of = {
             i: self.weather.run_for(pd.Timestamp(i), self.cfg.issue.nwp_delay_h)
             for i in issues.unique()
         }
-        runs = issues.map(run_of)
+        return issues.map(run_of)
+
+    def _weather(self, meta: pd.DataFrame, runs: pd.Series) -> pd.DataFrame:
+        cols = [*self.weather.columns, "wx_interp", "wx_lead_h"]
+        if not self.weather.columns:
+            return pd.DataFrame(index=meta.index)
         valid = runs.notna().to_numpy()
         out = pd.DataFrame(np.nan, index=meta.index, columns=cols, dtype=np.float32)
         if valid.any():
@@ -457,6 +472,17 @@ class FeatureBuilder:
             vals = self.weather.table.reindex(key)[cols].to_numpy()
             out.loc[valid, cols] = vals
         return out
+
+
+def gfs_version(runs: pd.Series) -> np.ndarray:
+    """GFS-Hauptversion je Lauf (NaN ohne Lauf), siehe ``GFS_VERSIONS``."""
+    out = np.full(len(runs), np.nan, dtype=np.float32)
+    t = pd.DatetimeIndex(runs)
+    if t.tz is None:
+        t = t.tz_localize("UTC")
+    for start, version in reversed(GFS_VERSIONS):
+        out[np.asarray(t >= start)] = version
+    return out
 
 
 def issue_days_between(start: date, end: date, stride: int = 1) -> list[date]:

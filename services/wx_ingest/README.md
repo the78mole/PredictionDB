@@ -11,6 +11,12 @@ Ausschnitt zugeschnittenen Schritte in Garage (Bucket `wx-bronze`) ab. Grundlage
    `idx_range`: `.idx` laden, Nachrichten wählen, je Byte-Bereich eine Range-Anfrage
    (Multi-Range liefert bei S3 die ganze Datei), Antwortlänge und GRIB-Struktur prüfen,
    lokal zuschneiden.
+   `header_scan` (Archiv ohne `.idx`, NCAR GDEX d084001 in `config/sources/gfs_0p25_gdex.yaml`):
+   je Nachricht die ersten 512 Byte lesen (Länge aus Sektion 0, Parameter, Fläche und
+   Prognosezeit aus Sektion 4, wgrib2-Namen wie in der `.idx`), danach weiter wie `idx_range`.
+   Damit die Köpfe nicht nacheinander gelesen werden, wird die Datei in bis zu 16 Abschnitte
+   geteilt; an jedem Schnitt wird der nächste Nachrichtenanfang (`7777GRIB`) gesucht. Landet der
+   Lauf über die Köpfe nicht genau am nächsten Anfang, wird die ganze Datei geladen.
    NOMADS liefert Süd→Nord und einfache Packung; die Antwort wird auf Nord→Süd gedreht
    und verlustfrei mit CCSDS gepackt, damit Bronze unabhängig vom Endpunkt einheitlich ist.
    Der Filter kombiniert jede Variable mit jedem Level und liefert daher einzelne

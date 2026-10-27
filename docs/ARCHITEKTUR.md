@@ -202,7 +202,7 @@ Für das **Training** wird Historie benötigt. Archiv-Optionen:
 
 | Zweck | Quelle | Bemerkung |
 |---|---|---|
-| Historische GFS-Prognosen | AWS `noaa-gfs-bdp-pds` (ab ~2021), NCEI-Archiv (älter) | per `.idx`-Range wie im Live-Betrieb |
+| Historische GFS-Prognosen | AWS `noaa-gfs-bdp-pds` (ab GFS v16, 2021-03-22 12Z), NCAR GDEX d084001 (2015-01-15 bis 2021-03-22 06Z, CC BY 4.0) | AWS per `.idx`-Range wie im Live-Betrieb; GDEX ohne `.idx`, Inventar aus den Nachrichtenköpfen per Range (`header_scan`), dreistündlich bis 240 h, danach zwölfstündlich |
 | Historische ECMWF-Open-Data-Prognosen | AWS `ecmwf-forecasts` (ab ~2023) | Umfang vorher prüfen |
 | Wetter-„Wahrheit“ | ERA5 über Copernicus CDS (kostenloses Konto), DWD-Stationsdaten (CDC), NOAA ISD/Global Hourly auf AWS als Ausweichquelle (7.9) | für Bias-Korrektur und als Ziel bei Hilfsmodellen |
 | Schnell-Backfill Punktdaten | Open-Meteo Historical Forecast API | gut für erste Modelle |

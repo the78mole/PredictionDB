@@ -12,7 +12,13 @@ import pytest
 from ml_train.backtest import make_folds, run_backtest
 from ml_train.calendar import calendar_features
 from ml_train.config import ModelConfig, load_config
-from ml_train.dataset import FeatureBuilder, WeatherTable, local_day_hours, same_local_time
+from ml_train.dataset import (
+    FeatureBuilder,
+    WeatherTable,
+    gfs_version,
+    local_day_hours,
+    same_local_time,
+)
 from ml_train.models import TwoStageModel
 from ml_train.predict import due_issues, next_wake
 from ml_train.registry import Registry, compare
@@ -220,6 +226,19 @@ def test_weather_uses_run_available_at_issue(snap, cfg) -> None:  # type: ignore
     # ab 120 h dreistündlich: interpoliert markiert
     assert frame.X.loc[frame.X["wx_lead_h"] > 121, "wx_interp"].eq(1).any()
     assert frame.X.loc[frame.X["wx_lead_h"] < 100, "wx_interp"].eq(0).all()
+
+
+def test_gfs_version_by_run(snap, cfg) -> None:  # type: ignore[no-untyped-def]
+    runs = pd.Series(
+        pd.to_datetime(
+            ["2019-06-12 06:00", "2019-06-12 12:00", "2021-03-22 06:00", "2021-03-22 12:00", None],
+            utc=True,
+        )
+    )
+    np.testing.assert_array_equal(gfs_version(runs), [14, 15, 15, 16, np.nan])
+    frame = FeatureBuilder(snap, cfg).build([date(2023, 5, 10)])
+    assert frame.groups["nwp_version"] == ["wx_gfs_v"]
+    assert frame.X["wx_gfs_v"].eq(16).all()
 
 
 def test_weather_alignment_interval_and_instant() -> None:
