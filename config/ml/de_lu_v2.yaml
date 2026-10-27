@@ -39,6 +39,10 @@ stage2:
     center: lag_da_price_de_lu_mean_day
 
 lag_series: [residual_load]
+# Lags der Last über dieselbe Uhrzeit in Ortszeit statt k·24 h: sonst liegt der Morgenanstieg
+# nach einer Zeitumstellung eine Woche lang eine Stunde daneben (docs/analysen/zeitumstellung).
+# PV folgt der Sonne (UTC), Preis und Residuallast sind neutral; die bleiben bei k·24 h.
+lag_local_time: [load_actual]
 
 series_groups:
   # Day-Ahead-Preise der Nachbarzonen (Energy-Charts, CC BY 4.0), bekannt wie der Preis DE-LU

@@ -148,6 +148,10 @@ class ModelConfig(BaseModel):
     promotion: PromotionRule = Field(default_factory=PromotionRule)
     #: Reihen, die als Lags in die Merkmale gehen (zusätzlich zu den Zielgrößen)
     lag_series: list[str] = Field(default_factory=list)
+    #: Reihen, deren Lags ``day`` und ``week`` dieselbe Uhrzeit in Ortszeit nehmen (Verhalten
+    #: nach der Uhr, z. B. Last); alle anderen greifen k·24 h zurück (Sonnenstand, z. B. PV).
+    #: Über eine Zeitumstellung hinweg unterscheiden sich beide um eine Stunde.
+    lag_local_time: list[str] = Field(default_factory=list)
     #: Wetter-Merkmale aus dem Snapshot (``<technologie>_<feature>``); leer = alle
     weather_features: list[str] = Field(default_factory=list)
     #: weitere Merkmalsgruppen aus Energie- und Preisreihen, Name -> Gruppe
