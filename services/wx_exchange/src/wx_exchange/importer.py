@@ -112,7 +112,11 @@ class Importer:
     def layers(
         self, start: datetime, end: datetime, hours: list[int] | None = None
     ) -> Iterator[tuple[str, Layer]]:
-        """Alle Layer im Zeitraum, jüngste Monate und Läufe zuerst, mit ihrem Tag."""
+        """Alle Layer im Zeitraum mit ihrem Tag.
+
+        Laufzeiten in der Reihenfolge von ``hours`` (erst alle 00Z, dann 12Z …), darin die
+        jüngsten Monate und Läufe zuerst.
+        """
         tags = []
         for t in self.registry.tags():
             parsed = parse_tag(t)
@@ -121,7 +125,10 @@ class Importer:
             a, b = month_bounds(parsed[0])
             if b >= start and a <= end:
                 tags.append((t, *parsed))
-        for t, month, hour in sorted(tags, reverse=True):
+        priority = {h: i for i, h in enumerate(hours or [])}
+        tags.sort(key=lambda e: e[1], reverse=True)
+        tags.sort(key=lambda e: priority.get(e[2], 0))
+        for t, month, hour in tags:
             art = MonthArtifact.from_manifest(month, hour, self.registry.manifest(t))
             for run in sorted(art.layers, reverse=True):
                 if start <= run <= end:
