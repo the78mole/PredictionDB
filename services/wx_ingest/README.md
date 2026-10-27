@@ -21,6 +21,9 @@ Ausschnitt zugeschnittenen Schritte in Garage (Bucket `wx-bronze`) ab. Grundlage
    Läufe (Reihenfolge innerhalb einer Modellversion fest): Die Lage der gewählten Nachrichten
    wird aus der Vorlage geschätzt, dort angesprungen und nur über wenige Köpfe gelaufen, statt
    alle Köpfe zu lesen. Passt die Vorlage nicht, entsteht ein neues vollständiges Inventar.
+   In GitHub Actions baut `wx-exchange gfs templates` die Vorlagen einmal je Workflow-Lauf
+   (Job „Kopf-Inventare“, Artefakt `gfs-templates`); die Monatsjobs übernehmen sie mit
+   `publish --templates`.
    NOMADS liefert Süd→Nord und einfache Packung; die Antwort wird auf Nord→Süd gedreht
    und verlustfrei mit CCSDS gepackt, damit Bronze unabhängig vom Endpunkt einheitlich ist.
    Der Filter kombiniert jede Variable mit jedem Level und liefert daher einzelne

@@ -1,5 +1,6 @@
 import asyncio
 import dataclasses
+import json
 from typing import Any
 
 import httpx
@@ -195,3 +196,27 @@ async def test_parallel_runs_share_one_full_scan(monkeypatch: pytest.MonkeyPatch
         a, b = await asyncio.gather(_fetch(ep, 3), _fetch(ep, 3))
     assert a.messages == b.messages and a.grib == b.grib
     assert len(scans) == 1  # der zweite Abruf wartet und springt dann über die Vorlage
+
+
+async def test_templates_travel_between_jobs(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Ein Job baut die Vorlagen, ein anderer übernimmt sie als JSON und springt sofort
+    scans: list[str] = []
+    scan = gfs.Endpoint.scan
+
+    async def counted(self: gfs.Endpoint, url: str) -> tuple[str, list[IdxEntry]]:
+        scans.append(url)
+        return await scan(self, url)
+
+    monkeypatch.setattr(gfs.Endpoint, "scan", counted)
+    host = FakeGfsHost("gdex.test", {3, 6}, index=False)
+    async with make_client(host) as client:
+        builder = ingestor(Bronze(MemoryStore()), client).endpoints[0]
+        assert await builder.build_templates(RUN, [3, 6, 9]) == [3, 6]
+        data = json.loads(json.dumps(builder.export_templates()))
+        full = await _fetch(builder, 6)
+        n = len(scans)
+        worker = ingestor(Bronze(MemoryStore()), client).endpoints[0]
+        assert worker.import_templates(data) == 2
+        again = await _fetch(worker, 6)
+    assert len(scans) == n  # kein vollständiges Inventar im zweiten Job
+    assert again.messages == full.messages and again.grib == full.grib
