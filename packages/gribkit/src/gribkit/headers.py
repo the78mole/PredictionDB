@@ -117,6 +117,12 @@ def _level(sec4: bytes) -> str:
         return f"{a:g}-{b:g} m below ground" if b is not None else f"{a:g} m below ground"
     if t1 == 100 and a is not None:
         return f"{a / 100:g} mb"
+    if t1 == 102 and a is not None:
+        return f"{a:g} m above mean sea level"
+    if t1 == 108 and a is not None:
+        b = _scaled(f2, v2) if t2 == 108 else None
+        if b is not None:
+            return f"{a / 100:g}-{b / 100:g} mb above ground"
     return f"surface{t1}"
 
 

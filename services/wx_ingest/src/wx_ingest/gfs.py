@@ -173,6 +173,7 @@ class Endpoint:
         self._retry_wait_max = retry_wait_max
         #: header_scan: vollständiges Inventar je Schritt als Vorlage für spätere Läufe
         self._templates: dict[int, _Template] = {}
+        self._scan_locks: dict[int, asyncio.Lock] = {}
 
     @property
     def name(self) -> str:
@@ -429,7 +430,9 @@ class Endpoint:
             return out
 
         parts = await asyncio.gather(*(group(a, b) for a, b in _groups(wanted)))
-        return url, [e for part in parts for e in part]
+        # Vorlauf einer Gruppe kann die vorige überlappen: jede Nachricht nur einmal
+        unique = {e.offset: e for part in parts for e in part}
+        return url, [unique[o] for o in sorted(unique)]
 
     async def _fetch_header_scan(
         self, run: datetime, step: int, specs: list[MessageSpec], bbox: BBox
@@ -461,11 +464,19 @@ class Endpoint:
     ) -> tuple[str, list[IdxEntry]]:
         """Einträge für die Auswahl: gezielt über die Vorlage, sonst vollständig (neue Vorlage)."""
         template = self._templates.get(step)
-        if template is not None:
-            try:
-                return await self.scan_targeted(url, template, specs)
-            except _TemplateMiss as exc:
-                log.info("scan_template_miss", url=url, error=str(exc))
+        if template is None:
+            # Gleichzeitige Läufe warten auf die Vorlage, statt jeder alle Köpfe zu lesen
+            async with self._scan_locks.setdefault(step, asyncio.Lock()):
+                template = self._templates.get(step)
+                if template is None:
+                    return await self._full_inventory(url, step)
+        try:
+            return await self.scan_targeted(url, template, specs)
+        except _TemplateMiss as exc:
+            log.info("scan_template_miss", url=url, error=str(exc))
+            return await self._full_inventory(url, step)
+
+    async def _full_inventory(self, url: str, step: int) -> tuple[str, list[IdxEntry]]:
         final, entries = await self.scan(url)
         if entries:
             end = entries[-1].offset + (entries[-1].length or 0)
