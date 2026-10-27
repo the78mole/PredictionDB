@@ -6,6 +6,7 @@ from typing import Any
 import httpx
 import numpy as np
 import obstore
+from obstore.store import MemoryStore
 
 from gribkit import BBox, iter_messages
 from wx_ingest.bronze import Bronze
@@ -104,6 +105,21 @@ async def test_fallback_when_range_not_honoured(bronze: Bronze) -> None:
     async with make_client(aws, gcs) as client:
         result = await ingestor(bronze, client).ingest_run(RUN, [0])
     assert result.steps[0].status == "stored" and result.steps[0].endpoint == "gcs"
+
+
+async def test_stale_idx_realigned_from_whole_file(bronze: Bronze) -> None:
+    aws = FakeGfsHost("aws.test", ALL_STEPS, stale_idx=True)
+    gcs = FakeGfsHost("gcs.test", set())
+    async with make_client(aws, gcs) as client:
+        result = await ingestor(bronze, client).ingest_run(RUN, [0])
+    assert result.steps[0].status == "stored" and result.steps[0].endpoint == "aws"
+    assert any(r.url.path.endswith("f000") and "range" not in r.headers for r in aws.requests)
+    # gleiches Ergebnis wie mit passender .idx
+    clean = Bronze(MemoryStore())
+    async with make_client(FakeGfsHost("aws.test", ALL_STEPS), gcs) as client:
+        await ingestor(clean, client).ingest_run(RUN, [0])
+    got, want = await bronze.step_manifest(RUN, 0), await clean.step_manifest(RUN, 0)
+    assert got is not None and want is not None and got.sha256 == want.sha256
 
 
 async def test_fallback_when_primary_lacks_step(bronze: Bronze) -> None:

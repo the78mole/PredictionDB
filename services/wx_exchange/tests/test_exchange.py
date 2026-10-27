@@ -19,7 +19,7 @@ from wx_exchange.artifact import (
     unpack,
 )
 from wx_exchange.importer import Importer
-from wx_exchange.oci import Registry
+from wx_exchange.oci import Registry, ServerError
 from wx_exchange.publish import Publisher, months_between, plan
 from wx_exchange.testing import FakeRegistry
 from wx_ingest.testing import RUN, FakeGfsHost, make_client, make_config
@@ -43,7 +43,9 @@ def host(*runs: datetime) -> FakeGfsHost:
 
 def registry(fake: FakeRegistry, *, write: bool = True) -> Registry:
     client = httpx.Client(transport=httpx.MockTransport(fake))
-    return Registry(fake.host, fake.repository, client, "bot", "secret" if write else None)
+    return Registry(
+        fake.host, fake.repository, client, "bot", "secret" if write else None, (0.0, 0.0)
+    )
 
 
 def test_tag_roundtrip() -> None:
@@ -73,6 +75,15 @@ def test_registry_blob_manifest_and_tags() -> None:
     ro = registry(fake, write=False)
     assert ro.manifest("2026-01-00z") is not None
     assert ro.manifest("2099-01-00z") is None
+
+
+def test_push_blob_retries_server_errors() -> None:
+    fake = FakeRegistry(fail_uploads=2)
+    d = registry(fake).push_blob(b"hello")
+    assert fake.blobs[d] == b"hello" and fake.blob_puts() == 3
+    fake = FakeRegistry(fail_uploads=3)
+    with pytest.raises(ServerError):
+        registry(fake).push_blob(b"hello")
 
 
 def _silver(run: datetime = RUN, completed: str = "2099-01-02T10:00:00+00:00") -> MemoryStore:

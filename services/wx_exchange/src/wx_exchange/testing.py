@@ -24,6 +24,8 @@ class FakeRegistry:
     uploads: dict[str, bool] = field(default_factory=dict)
     requests: list[httpx.Request] = field(default_factory=list)
     page_size: int = 1000
+    #: so viele Blob-Uploads scheitern mit 500 (wie gelegentlich bei GHCR)
+    fail_uploads: int = 0
 
     def manifest(self, tag: str) -> dict[str, Any]:
         data: dict[str, Any] = json.loads(self.manifests[tag])
@@ -95,6 +97,9 @@ class FakeRegistry:
             return httpx.Response(202, headers={"location": f"{base}/blobs/uploads/{uid}"})
         m = re.fullmatch(r"/blobs/uploads/([0-9a-f]+)", rest)
         if m and request.method == "PUT" and writable and self.uploads.pop(m[1], False):
+            if self.fail_uploads:
+                self.fail_uploads -= 1
+                return httpx.Response(500, json={"errors": [{"code": "UNKNOWN"}]})
             d = request.url.params["digest"]
             if digest(request.content) != d:
                 return httpx.Response(400, text="digest invalid")
