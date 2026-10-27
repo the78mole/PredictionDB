@@ -9,7 +9,13 @@ name: GFS-Historie
 # Monate der ersten Laufzeit in `runs` (jüngste zuerst), dann der nächsten. Der Plan liest den
 # Stand aus den Manifesten in GHCR und nimmt nur Monate mit Lücken auf; ein erneuter Start
 # setzt also fort, wo der letzte aufgehört hat.
+#
+# Täglich per Zeitplan holt der Workflow die neuen Läufe aus dem AWS-Archiv (nicht von der VM,
+# deren Live-Läufe über NOMADS kommen und um wenige Int16-Stufen abweichen). Ohne Eingaben
+# gelten die Standardwerte unten. GitHub pausiert Zeitpläne nach 60 Tagen ohne Commit.
 on:
+  schedule:
+    - cron: "17 7 * * *"
   workflow_dispatch:
     inputs:
       start:
@@ -57,11 +63,11 @@ jobs:
       - run: uv sync --locked --no-dev --package wx-exchange
       - id: plan
         env:
-          START: ${{ inputs.start }}
-          END: ${{ inputs.end }}
-          RUNS: ${{ inputs.runs }}
-          BLOCK_YEARS: ${{ inputs.block_years }}
-          REBUILD: ${{ inputs.rebuild }}
+          START: ${{ inputs.start || '2021-03-22T12' }}
+          END: ${{ inputs.end || '' }}
+          RUNS: ${{ inputs.runs || '0,12,6,18' }}
+          BLOCK_YEARS: ${{ inputs.block_years || '3' }}
+          REBUILD: ${{ inputs.rebuild == true }}
         run: |
           args=(gfs plan "$START")
           [ -n "$END" ] && args+=("$END")
@@ -75,9 +81,9 @@ jobs:
     uses: ./.github/workflows/gfs-history-block.yml
     with:
       matrix: ${{ needs.plan.outputs.block1 }}
-      start: ${{ inputs.start }}
-      end: ${{ inputs.end }}
-      rebuild: ${{ inputs.rebuild }}
+      start: ${{ inputs.start || '2021-03-22T12' }}
+      end: ${{ inputs.end || '' }}
+      rebuild: ${{ inputs.rebuild == true }}
     permissions:
       contents: read
       packages: write
@@ -88,9 +94,9 @@ jobs:
     uses: ./.github/workflows/gfs-history-block.yml
     with:
       matrix: ${{ needs.plan.outputs.block2 }}
-      start: ${{ inputs.start }}
-      end: ${{ inputs.end }}
-      rebuild: ${{ inputs.rebuild }}
+      start: ${{ inputs.start || '2021-03-22T12' }}
+      end: ${{ inputs.end || '' }}
+      rebuild: ${{ inputs.rebuild == true }}
     permissions:
       contents: read
       packages: write
@@ -101,9 +107,9 @@ jobs:
     uses: ./.github/workflows/gfs-history-block.yml
     with:
       matrix: ${{ needs.plan.outputs.block3 }}
-      start: ${{ inputs.start }}
-      end: ${{ inputs.end }}
-      rebuild: ${{ inputs.rebuild }}
+      start: ${{ inputs.start || '2021-03-22T12' }}
+      end: ${{ inputs.end || '' }}
+      rebuild: ${{ inputs.rebuild == true }}
     permissions:
       contents: read
       packages: write
