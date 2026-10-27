@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -438,17 +439,41 @@ class Endpoint:
         assert self.config.path is not None
         return f"{self.config.url.rstrip('/')}/{self.config.path.format(run=run, step=step)}"
 
-    async def build_templates(self, run: datetime, steps: list[int]) -> list[int]:
-        """Vollständige Inventare aller Schritte eines Laufs als Vorlagen; liefert die Schritte."""
+    async def build_templates(
+        self, run: datetime, steps: list[int], concurrency: int = 8
+    ) -> list[int]:
+        """Vollständige Inventare aller Schritte eines Laufs als Vorlagen; liefert die Schritte.
+
+        Höchstens ``concurrency`` Schritte gleichzeitig, damit sie nacheinander fertig werden
+        und der Fortschritt im Log sichtbar ist (die Anfragen begrenzt ohnehin der Endpunkt).
+        """
+        sem = asyncio.Semaphore(concurrency)
+        started = time.monotonic()
+        finished = 0
 
         async def one(step: int) -> int | None:
-            try:
-                await self._full_inventory(self._scan_url(run, step), step)
-            except (StepUnavailable, FetchError) as exc:
-                log.warning("template_failed", run=f"{run:%Y%m%d%H}", step=step, error=str(exc))
+            nonlocal finished
+            async with sem:
+                try:
+                    _, entries = await self._full_inventory(self._scan_url(run, step), step)
+                except (StepUnavailable, FetchError) as exc:
+                    entries, error = [], str(exc)
+                else:
+                    error = ""
+            finished += 1
+            progress = {
+                "run": f"{run:%Y%m%d%H}",
+                "step": step,
+                "done": f"{finished}/{len(steps)}",
+                "seconds": round(time.monotonic() - started),
+            }
+            if error:
+                log.warning("template_failed", error=error, **progress)
                 return None
+            log.info("template_built", messages=len(entries), **progress)
             return step
 
+        log.info("templates_start", run=f"{run:%Y%m%d%H}", steps=len(steps))
         done = await asyncio.gather(*(one(s) for s in steps))
         return [s for s in done if s is not None]
 

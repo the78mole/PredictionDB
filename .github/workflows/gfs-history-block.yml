@@ -48,6 +48,8 @@ jobs:
       WX_EXCHANGE_USERNAME: ${{ github.actor }}
       WX_EXCHANGE_TOKEN: ${{ github.token }}
       PDB_LOG_JSON: "false"
+      # Log sofort zeigen, nicht erst gepuffert am Ende
+      PYTHONUNBUFFERED: "1"
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.2
