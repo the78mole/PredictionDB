@@ -1,3 +1,4 @@
+import asyncio
 import dataclasses
 from typing import Any
 
@@ -5,6 +6,7 @@ import httpx
 import pytest
 from obstore.store import MemoryStore
 
+from gribkit import IdxEntry
 from wx_ingest import gfs
 from wx_ingest.bronze import Bronze
 from wx_ingest.ingest import GfsIngestor
@@ -141,3 +143,55 @@ async def test_template_with_other_lengths(monkeypatch: pytest.MonkeyPatch, fact
         again = await _fetch(ep, 12)
     assert again.messages == full.messages and again.grib == full.grib
     assert ep._templates[12].entries == skewed  # gezielt gefunden, nicht neu inventarisiert
+
+
+async def test_template_skips_ambiguous_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Gewählte und benachbarte Nachrichten ohne eindeutigen Schlüssel: Sprung überspringt sie
+    # oder läuft vom letzten bekannten Anfang
+    monkeypatch.setattr(gfs, "SCAN_WINDOW", 1024)
+    monkeypatch.setattr(gfs, "_MAX_LEAD", 0)
+    index = gfs._Template.index
+
+    def ambiguous(self: gfs._Template) -> dict[str, int]:
+        return {k: i for k, i in index(self).items() if not k.startswith(("CLMR", "TMP", "DPT"))}
+
+    monkeypatch.setattr(gfs._Template, "index", ambiguous)
+    host = FakeGfsHost("gdex.test", STEPS, index=False)
+    async with make_client(host) as client:
+        ep = ingestor(Bronze(MemoryStore()), client).endpoints[0]
+        full = await _fetch(ep, 6)
+        template = ep._templates[6]
+        again = await _fetch(ep, 6)
+    assert again.messages == full.messages and again.grib == full.grib
+    assert ep._templates[6] is template
+
+
+async def test_template_overlapping_groups_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Jede gewählte Nachricht als eigene Gruppe mit Vorlauf: Gruppen überlappen sich
+    monkeypatch.setattr(gfs, "_MAX_LEAD", 10)
+    monkeypatch.setattr(gfs, "_groups", lambda indices: [(i, i) for i in indices])
+    host = FakeGfsHost("gdex.test", STEPS, index=False)
+    async with make_client(host) as client:
+        ep = ingestor(Bronze(MemoryStore()), client).endpoints[0]
+        full = await _fetch(ep, 9)
+        template = ep._templates[9]
+        again = await _fetch(ep, 9)
+    assert again.messages == full.messages and again.grib == full.grib
+    assert ep._templates[9] is template
+
+
+async def test_parallel_runs_share_one_full_scan(monkeypatch: pytest.MonkeyPatch) -> None:
+    scans: list[str] = []
+    scan = gfs.Endpoint.scan
+
+    async def counted(self: gfs.Endpoint, url: str) -> tuple[str, list[IdxEntry]]:
+        scans.append(url)
+        return await scan(self, url)
+
+    monkeypatch.setattr(gfs.Endpoint, "scan", counted)
+    host = FakeGfsHost("gdex.test", STEPS, index=False)
+    async with make_client(host) as client:
+        ep = ingestor(Bronze(MemoryStore()), client).endpoints[0]
+        a, b = await asyncio.gather(_fetch(ep, 3), _fetch(ep, 3))
+    assert a.messages == b.messages and a.grib == b.grib
+    assert len(scans) == 1  # der zweite Abruf wartet und springt dann über die Vorlage
