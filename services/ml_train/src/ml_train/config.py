@@ -16,7 +16,7 @@ import yaml
 from pydantic import BaseModel, Field, model_validator
 
 #: Feste Gruppen; dazu kommen die Reihengruppen aus ``series_groups`` unter ihrem Namen
-BUILTIN_GROUPS = ("calendar", "lags", "capacity", "weather", "stage1")
+BUILTIN_GROUPS = ("calendar", "lags", "capacity", "weather", "nwp_version", "stage1")
 FeatureGroup = str
 
 

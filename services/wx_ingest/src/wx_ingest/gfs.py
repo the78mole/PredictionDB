@@ -12,6 +12,12 @@ Zwei Mechaniken (``docs/ARCHITEKTUR.md`` 4.1):
 - ``nomads_filter``: NOMADS Grib-Filter schneidet serverseitig zu. Der Filter
   kombiniert jede angeforderte Variable mit jedem angeforderten Level und kennt
   keinen Filter auf das Prognosefeld; er liefert daher eine Obermenge.
+- ``header_scan`` (NCAR GDEX d084001, GFS vor v16): Archive ohne ``.idx``. Das Inventar entsteht
+  aus den Nachrichtenköpfen (:mod:`gribkit.headers`), je Nachricht eine kleine Range-Anfrage.
+  Damit das nicht Nachricht für Nachricht nacheinander läuft, wird die Datei in Abschnitte
+  geteilt; an jedem Schnitt wird der nächste Nachrichtenanfang gesucht und die Abschnitte
+  werden gleichzeitig abgelaufen. Danach weiter wie bei ``idx_range``. Passen die Abschnitte
+  nicht aneinander (Fehltreffer beim Suchen), wird die ganze Datei geladen.
 """
 
 from __future__ import annotations
@@ -30,16 +36,20 @@ from gribkit import (
     BBox,
     ByteRange,
     GribError,
+    HeaderError,
     IdxEntry,
     MessageSpec,
     crop,
     describe,
+    find_boundary,
     iter_messages,
     merge_ranges,
     missing_specs,
+    parse_head,
     parse_idx,
     select,
 )
+from gribkit.headers import HEAD_BYTES, Head, entry
 from predictiondb_core.log import get_logger
 from wx_ingest.config import EndpointConfig
 
@@ -51,6 +61,9 @@ NOMADS_PACKING = "grid_ccsds"
 
 #: HTTP-Status, bei denen eine Wiederholung sinnvoll ist.
 RETRY_STATUS = frozenset({408, 425, 429, 500, 502, 503, 504})
+
+#: Fenster beim Suchen eines Nachrichtenanfangs (GFS-Nachrichten sind meist 0,2 bis 1 MB)
+SCAN_WINDOW = 256 * 1024
 
 #: Ganze GRIB-Dateien (je rund 540 MB) nur einzeln im Speicher, über alle Endpunkte und Läufe;
 #: mehrere gleichzeitig ließen den Actions-Runner abstürzen
@@ -142,6 +155,8 @@ class Endpoint:
     ) -> StepData:
         if self.config.kind == "idx_range":
             return await self._fetch_idx_range(product, run, step, specs, bbox)
+        if self.config.kind == "header_scan":
+            return await self._fetch_header_scan(run, step, specs, bbox)
         return await self._fetch_nomads(product, run, step, specs, bbox)
 
     async def _fetch_idx_range(
@@ -159,7 +174,24 @@ class Endpoint:
         if not chosen:
             raise FetchError(f"keine der angeforderten Nachrichten in {url}.idx")
         ranges = merge_ranges(chosen, max_gap=self.config.max_gap)
+        expected = sum(len(r.entries) for r in ranges)
+        try:
+            raw = await self._load_ranges(url, ranges)
+            grib = await asyncio.to_thread(_crop_checked, raw, bbox, expected)
+        except StaleIndex as exc:
+            log.warning("idx_stale", url=url, error=str(exc))
+            grib = await self._fetch_realigned(
+                url, entries, [e for r in ranges for e in r.entries], bbox
+            )
+        return StepData(
+            grib=grib,
+            url=url,
+            n_messages=expected,
+            messages=[e.key for r in ranges for e in r.entries],
+            absent=[s.label for s in missing_specs(entries, specs)],
+        )
 
+    async def _load_ranges(self, url: str, ranges: list[ByteRange]) -> bytes:
         async def load(r: ByteRange) -> bytes:
             resp = await self.get(url, headers={"Range": r.header})
             if resp.status_code == 404:
@@ -174,22 +206,138 @@ class Endpoint:
             except ValueError as exc:
                 raise FetchError(str(exc)) from exc
 
-        expected = sum(len(r.entries) for r in ranges)
+        return b"".join(await asyncio.gather(*(load(r) for r in ranges)))
+
+    # --- header_scan ---------------------------------------------------------------------------
+
+    async def _range(self, url: str, start: int, end: int) -> httpx.Response:
+        resp = await self.get(url, headers={"Range": f"bytes={start}-{end}"})
+        if resp.status_code in (403, 404):
+            raise StepUnavailable(url)
+        if resp.status_code != 206:
+            raise FetchError(f"Range {start}-{end} auf {url}: HTTP {resp.status_code} statt 206")
+        return resp
+
+    async def _boundary(self, url: str, at: int, size: int) -> int | None:
+        """Erster Nachrichtenanfang ab ``at`` (``None``, wenn bis Dateiende keiner folgt)."""
+        off = at
+        while off < size:
+            end = min(size, off + SCAN_WINDOW) - 1
+            chunk = (await self._range(url, off, end)).content
+            found = find_boundary(chunk, size - off)
+            if found is not None:
+                return off + found
+            off = end + 1 - 16  # Überlappung, damit ``7777GRIB`` am Rand nicht verloren geht
+            if end + 1 >= size:
+                break
+        return None
+
+    async def _walk(
+        self, url: str, start: int, stop: int, first: bytes | None = None
+    ) -> list[tuple[int, Head]]:
+        """Köpfe der Nachrichten von ``start`` bis genau ``stop``."""
+        out: list[tuple[int, Head]] = []
+        off = start
+        while off < stop:
+            if off == 0 and first is not None:
+                data = first
+            else:
+                data = (await self._range(url, off, off + HEAD_BYTES - 1)).content
+            try:
+                head = parse_head(data)
+            except HeaderError as exc:
+                raise StaleIndex(f"Kopf an Byte {off} von {url}: {exc}") from exc
+            out.append((off, head))
+            off += head.length
+        if off != stop:
+            raise StaleIndex(f"Köpfe ab Byte {start} enden bei {off} statt {stop} in {url}")
+        return out
+
+    async def _size(self, url: str, first: httpx.Response) -> int:
+        """Dateigröße aus ``Content-Range``, sonst (NCAR-Ursprung) aus einer HEAD-Anfrage."""
         try:
-            raw = b"".join(await asyncio.gather(*(load(r) for r in ranges)))
-            grib = await asyncio.to_thread(_crop_checked, raw, bbox, expected)
-        except StaleIndex as exc:
-            log.warning("idx_stale", url=url, error=str(exc))
-            grib = await self._fetch_realigned(
-                url, entries, [e for r in ranges for e in r.entries], bbox
+            return int(first.headers["content-range"].rsplit("/", 1)[1])
+        except (KeyError, ValueError, IndexError):
+            pass
+        async with self._sem:
+            head = await self.client.head(url)
+        try:
+            return int(head.headers["content-length"])
+        except (KeyError, ValueError) as exc:
+            raise FetchError(f"{url}: Dateigröße weder in Content-Range noch per HEAD") from exc
+
+    async def scan(self, url: str) -> tuple[str, list[IdxEntry]]:
+        """Inventar einer Datei aus ihren Köpfen; liefert die URL nach Weiterleitungen mit."""
+        first = await self._range(url, 0, HEAD_BYTES - 1)
+        # OSDF leitet auf einen Cache weiter; der bleibt für die Datei derselbe
+        url = str(first.url)
+        size = await self._size(url, first)
+        n = max(1, min(self.config.segments, size // (4 * SCAN_WINDOW)))
+        cuts = [size * i // n for i in range(1, n)]
+        found = await asyncio.gather(*(self._boundary(url, c, size) for c in cuts))
+        bounds = sorted({0, *(b for b in found if b is not None)})
+        parts = await asyncio.gather(
+            *(
+                self._walk(url, a, b, first.content)
+                for a, b in zip(bounds, [*bounds[1:], size], strict=True)
             )
+        )
+        heads = [h for part in parts for h in part]
+        return url, [entry(i, off, h) for i, (off, h) in enumerate(heads, start=1)]
+
+    async def _fetch_header_scan(
+        self, run: datetime, step: int, specs: list[MessageSpec], bbox: BBox
+    ) -> StepData:
+        assert self.config.path is not None
+        url = f"{self.config.url.rstrip('/')}/{self.config.path.format(run=run, step=step)}"
+        try:
+            final, entries = await self.scan(url)
+            chosen = select(entries, specs)
+            if not chosen:
+                raise FetchError(f"keine der angeforderten Nachrichten in {url}")
+            ranges = merge_ranges(chosen, max_gap=self.config.max_gap)
+            raw = await self._load_ranges(final, ranges)
+            grib = await asyncio.to_thread(_crop_checked, raw, bbox, len(chosen))
+        except StaleIndex as exc:
+            log.warning("scan_failed", url=url, error=str(exc))
+            entries, chosen, grib = await self._fetch_whole_scanned(url, specs, bbox)
         return StepData(
             grib=grib,
             url=url,
-            n_messages=expected,
-            messages=[e.key for r in ranges for e in r.entries],
+            n_messages=len(chosen),
+            messages=[e.key for e in chosen],
             absent=[s.label for s in missing_specs(entries, specs)],
         )
+
+    async def _fetch_whole_scanned(
+        self, url: str, specs: list[MessageSpec], bbox: BBox
+    ) -> tuple[list[IdxEntry], list[IdxEntry], bytes]:
+        """Ganze Datei laden und die Köpfe im Speicher lesen (ohne Fehltreffer)."""
+        async with _FULL_DOWNLOAD:
+            resp = await self.get(url)
+            if resp.status_code in (403, 404):
+                raise StepUnavailable(url)
+            if resp.status_code != 200:
+                raise FetchError(f"ganze Datei {url}: HTTP {resp.status_code}")
+            data = resp.content
+            del resp
+            entries = []
+            try:
+                for i, (start, _end) in enumerate(_message_bounds(data), start=1):
+                    entries.append(entry(i, start, parse_head(data[start : start + HEAD_BYTES])))
+            except HeaderError as exc:
+                raise FetchError(f"{url}: {exc}") from exc
+            chosen = select(entries, specs)
+            if not chosen:
+                raise FetchError(f"keine der angeforderten Nachrichten in {url}")
+            raw = b"".join(data[e.offset : e.offset + (e.length or 0)] for e in chosen)
+            del data
+        try:
+            grib = await asyncio.to_thread(crop, raw, bbox)
+        except GribError as exc:
+            raise FetchError(str(exc)) from exc
+        log.info("scan_whole_file", url=url, messages=len(chosen))
+        return entries, chosen, grib
 
     async def _fetch_realigned(
         self, url: str, entries: list[IdxEntry], chosen: list[IdxEntry], bbox: BBox

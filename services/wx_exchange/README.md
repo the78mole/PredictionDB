@@ -48,11 +48,19 @@ hochgeladen wird er aber nur, wenn sich der Inhalts-Hash geändert hat. Ändern 
 
 | Eingabe | Standard | |
 |---|---|---|
-| `start` | `2021-03-22T12` | GFS v16, ältere Läufe unterstützt `wx-ingest` nicht |
-| `end` | leer | vor dem 30-h-Fenster von `ingest-gfs` |
+| `source` | `aws` | `aws`: GFS v16 aus `noaa-gfs-bdp-pds`; `gdex`: ältere Läufe aus NCAR GDEX d084001 (`config/sources/gfs_0p25_gdex.yaml`) |
+| `start` | `2021-03-22T12` bzw. `2019-06-12T12` | bei `gdex` ab GFS v15 (Pilot); das Archiv reicht bis 2015-01-15 zurück |
+| `end` | leer bzw. `2021-03-22T06` | bei `aws` vor dem 30-h-Fenster von `ingest-gfs` |
 | `runs` | `0,12,6,18` | Laufzeiten in Reihenfolge der Priorität |
 | `block_years` | `3` | Blöcke vom jüngsten Monat rückwärts |
 | `rebuild` | aus | siehe oben |
+
+**GDEX (vor GFS v16):** dreistündlich bis 240 h, danach zwölfstündlich (93 statt 209 Schritte), ohne
+`.idx`; das Inventar entsteht aus den Nachrichtenköpfen (`header_scan`, siehe `services/wx_ingest`).
+Je Lauf werden so rund 1,5 GB statt 20–30 GB übertragen (gemessen: 4–8 s je Schritt einzeln, 8 Schritte parallel in 25 s). Silber trägt dieselben Variablen; in `ml_train`
+markiert die Merkmalsgruppe `nwp_version` (`wx_gfs_v`) die GFS-Version, weil der 10-m-Wind von v15 zu
+v16 einen Bias-Sprung hat (`docs/analysen/gfs-v15-v16`). Im März 2021 teilen sich beide Quellen die
+Tags; `start`/`end` trennen sie, der Workflow läuft nie zweimal gleichzeitig.
 
 Reihenfolge: erst Block 1 (die jüngsten drei Jahre), darin alle Monate 00Z, dann 12Z, 06Z, 18Z,
 jeweils jüngste zuerst; danach Block 2 mit den älteren Monaten. Höchstens 8 Jobs laufen gleichzeitig,

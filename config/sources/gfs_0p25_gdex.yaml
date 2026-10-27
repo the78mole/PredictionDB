@@ -1,0 +1,63 @@
+# NOAA GFS 0,25° vor v16 (bis 2021-03-22 06Z) aus dem NCAR-Archiv GDEX d084001.
+# Nur für die Historie in GitHub Actions (gfs-history.yml mit source: gdex), nicht im Live-Betrieb.
+# Lizenz CC BY 4.0: NCEP/NWS/NOAA, "NCEP GFS 0.25 Degree Global Forecast Grids Historical
+# Archive", Research Data Archive at NCAR, https://doi.org/10.5065/D65D8PWK
+# Gleiche Quelle (code), gleiches Gitter und gleiche Nachrichten wie gfs_0p25.yaml, damit Silber
+# und Gold dieselben Variablen tragen; das Schrittraster ist das des Archivs.
+code: gfs_0p25
+model: gfs
+resolution: 0p25
+product: pgrb2.0p25
+runs: [0, 6, 12, 18]
+# 0–240 h dreistündlich (81 Schritte), 252–384 h zwölfstündlich (12 Schritte)
+steps:
+  - [0, 240, 3]
+  - [252, 384, 12]
+bbox: {north: 58, south: 44, west: 0, east: 20}
+lookback_hours: 30
+# Keine .idx: je Schritt einige hundert kleine Range-Anfragen für die Köpfe
+step_concurrency: 8
+
+# OSDF leitet auf einen nahen Cache weiter; data.gdex.ucar.edu ist der Ursprung.
+endpoints:
+  - name: gdex
+    kind: header_scan
+    url: https://osdf-director.osg-htc.org/ncar/gdex/d084001
+    path: "{run:%Y}/{run:%Y%m%d}/gfs.0p25.{run:%Y%m%d%H}.f{step:03d}.grib2"
+    archive: true
+    concurrency: 32
+  - name: gdex-origin
+    kind: header_scan
+    url: https://data.gdex.ucar.edu/d084001
+    path: "{run:%Y}/{run:%Y%m%d}/gfs.0p25.{run:%Y%m%d%H}.f{step:03d}.grib2"
+    archive: true
+    concurrency: 16
+
+# Auswahl nach ARCHITEKTUR.md 4.3. Ohne fcst werden alle passenden Nachrichten
+# übernommen, bei TCDC/CSNOW also Momentanwert und Intervallmittel.
+# DSWRF und APCP fehlen im Analyse-Schritt f000; das Manifest führt sie unter "absent".
+messages:
+  - {var: TMP,   level: 2 m above ground}
+  - {var: DPT,   level: 2 m above ground}
+  - {var: RH,    level: 2 m above ground}
+  - {var: UGRD,  level: 10 m above ground}
+  - {var: VGRD,  level: 10 m above ground}
+  - {var: UGRD,  level: 100 m above ground}
+  - {var: VGRD,  level: 100 m above ground}
+  - {var: GUST,  level: surface}
+  - {var: DSWRF, level: surface}
+  - {var: TCDC,  level: entire atmosphere}
+  - {var: APCP,  level: surface}
+  - {var: CSNOW, level: surface}
+  - {var: PRMSL, level: mean sea level}
+  # Ergänzt 2026-10-21 für Anlagenprognosen (ARCHITEKTUR.md 7.6) und Wärme/Kälte (7.8),
+  # damit die Historie ab jetzt mitläuft.
+  - {var: PRES,  level: surface}                  # Luftdichte (Wind), Enthalpie (Kühlung)
+  - {var: DLWRF, level: surface}                  # langwellige Gegenstrahlung: Gebäude-Wärmeverlust, Nachtauskühlung
+  - {var: SUNSD, level: surface}                  # Sonnenscheindauer
+  - {var: WEASD, level: surface}                  # Schnee-Wasseräquivalent (Wasserkraft, PV)
+  - {var: SNOD,  level: surface}                  # Schneehöhe
+  - {var: TSOIL, level: 0-0.1 m below ground}     # Bodentemperatur: Sole-WP, Netzverluste
+  - {var: TSOIL, level: 0.1-0.4 m below ground}
+  - {var: SOILW, level: 0-0.1 m below ground}     # Bodenfeuchte (Wasserkraft)
+  - {var: SOILW, level: 0.1-0.4 m below ground}

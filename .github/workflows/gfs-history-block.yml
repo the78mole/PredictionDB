@@ -8,6 +8,12 @@ on:
       matrix:
         type: string
         required: true
+      config:
+        type: string
+        default: config/sources/gfs_0p25.yaml
+      archive_concurrency:
+        type: string
+        default: "16"
       start:
         type: string
         required: true
@@ -46,13 +52,16 @@ jobs:
       - run: uv sync --locked --no-dev --package wx-exchange
       - name: Monat laden, verdichten und nach GHCR
         env:
+          CONFIG: ${{ inputs.config }}
+          CONCURRENCY: ${{ inputs.archive_concurrency }}
           MONTH: ${{ matrix.month }}
           HOUR: ${{ matrix.hour }}
           START: ${{ inputs.start }}
           END: ${{ inputs.end }}
           REBUILD: ${{ inputs.rebuild }}
         run: |
-          args=(gfs publish "$MONTH" "$HOUR" --start "$START" --parallel-runs 2)
+          args=(gfs --config "$CONFIG" publish "$MONTH" "$HOUR" --start "$START" --parallel-runs 2
+                --archive-concurrency "$CONCURRENCY")
           [ -n "$END" ] && args+=(--end "$END")
           [ "$REBUILD" = "true" ] && args+=(--rebuild)
           uv run --no-sync wx-exchange "${args[@]}"

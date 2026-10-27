@@ -1,4 +1,9 @@
-"""Hilfen für Tests: simulierte GFS-Spiegel (S3 mit .idx + GRIB2) für httpx.MockTransport."""
+"""Hilfen für Tests: simulierte GFS-Spiegel (S3 mit .idx + GRIB2) für httpx.MockTransport.
+
+Ohne ``.idx`` (``index=False``) liegt die Datei wie im NCAR-Archiv GDEX d084001; die
+Nachrichten tragen die zu ``LAYOUT`` passenden GRIB2-Schlüssel, damit das Kopf-Inventar
+dieselben Zeilen liefert.
+"""
 
 from __future__ import annotations
 
@@ -24,6 +29,48 @@ LAYOUT = [
     ("TCDC", "entire atmosphere", "0-{h} hour ave fcst"),
     ("UGRD", "100 m above ground", "{h} hour fcst"),
 ]
+
+
+#: (Disziplin, Kategorie, Parameter, Flächentyp) je ``LAYOUT``-Zeile
+_KEYS = [
+    (0, 3, 1, 101),
+    (0, 1, 22, 105),
+    (0, 0, 0, 103),
+    (0, 0, 6, 103),
+    (0, 6, 1, 10),
+    (0, 6, 1, 10),
+    (0, 2, 2, 103),
+]
+_HEIGHTS = {2: 2, 3: 2, 6: 100}
+
+GDEX_PATH = "{run:%Y}/{run:%Y%m%d}/gfs.0p25.{run:%Y%m%d%H}.f{step:03d}.grib2"
+
+
+def keyed_message(n: int, step: int) -> bytes:
+    """Nachricht ``n`` (ab 1) der synthetischen Datei mit Werten ``n * 100 + lat``."""
+    import eccodes as ec
+
+    msg, _, _ = make_global_message(values_fn=lambda lat, lon: n * 100 + lat + 0 * lon)
+    h = ec.codes_new_from_message(msg)
+    try:
+        if "ave" in LAYOUT[n - 1][2]:
+            ec.codes_set(h, "productDefinitionTemplateNumber", 8)
+        names = ("discipline", "parameterCategory", "parameterNumber", "typeOfFirstFixedSurface")
+        for k, v in zip(names, _KEYS[n - 1], strict=True):
+            ec.codes_set(h, k, v)
+        if (n - 1) in _HEIGHTS:
+            ec.codes_set(h, "scaleFactorOfFirstFixedSurface", 0)
+            ec.codes_set(h, "scaledValueOfFirstFixedSurface", _HEIGHTS[n - 1])
+        if "ave" in LAYOUT[n - 1][2]:
+            ec.codes_set(h, "typeOfStatisticalProcessing", 0)
+            ec.codes_set(h, "stepUnits", 1)
+            ec.codes_set(h, "startStep", 0)
+            ec.codes_set(h, "endStep", step)
+        else:
+            ec.codes_set(h, "forecastTime", step)
+        return bytes(ec.codes_get_message(h))
+    finally:
+        ec.codes_release(h)
 
 
 def config_dict(**over: Any) -> dict[str, Any]:
@@ -57,23 +104,29 @@ class FakeGfsHost:
     fail_status: int | None = None
     #: .idx mit verschobenen Offsets, wie nach einem Neuschreiben der GRIB-Datei im Archiv
     stale_idx: bool = False
+    #: ohne ``.idx`` und mit Pfaden wie in GDEX d084001 (``GDEX_PATH``)
+    index: bool = True
+    #: ``Content-Range`` ohne Gesamtgröße (``bytes 0-511/*``) wie am NCAR-Ursprung
+    unknown_size: bool = False
     files: dict[str, bytes] = field(default_factory=dict)
     idx: dict[str, str] = field(default_factory=dict)
     requests: list[httpx.Request] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         for step in self.available:
-            base = f"/gfs.{RUN:%Y%m%d}/{RUN:%H}/atmos/gfs.t{RUN:%H}z.pgrb2.0p25.f{step:03d}"
+            if self.index:
+                base = f"/gfs.{RUN:%Y%m%d}/{RUN:%H}/atmos/gfs.t{RUN:%H}z.pgrb2.0p25.f{step:03d}"
+            else:
+                base = "/" + GDEX_PATH.format(run=RUN, step=step)
             data, lines = b"", []
             for n, (var, level, fcst) in enumerate(LAYOUT, start=1):
-                msg, _, _ = make_global_message(
-                    values_fn=lambda lat, lon, n=n: n * 100 + lat + 0 * lon  # type: ignore[misc]
-                )
+                msg = keyed_message(n, step)
                 offset = len(data) + (1000 * n if self.stale_idx else 0)
                 lines.append(f"{n}:{offset}:d={RUN:%Y%m%d%H}:{var}:{level}:{fcst.format(h=step)}:")
                 data += msg
             self.files[base] = data
-            self.idx[base + ".idx"] = "\n".join(lines) + "\n"
+            if self.index:
+                self.idx[base + ".idx"] = "\n".join(lines) + "\n"
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
@@ -85,6 +138,8 @@ class FakeGfsHost:
         if path not in self.files:
             return httpx.Response(404)
         data = self.files[path]
+        if request.method == "HEAD":
+            return httpx.Response(200, headers={"content-length": str(len(data))})
         rng = request.headers.get("range")
         if not rng or not self.honour_range:
             return httpx.Response(200, content=data)
@@ -92,7 +147,16 @@ class FakeGfsHost:
         if m is None:
             return httpx.Response(416)
         start, end = int(m[1]), int(m[2]) if m[2] else len(data) - 1
-        return httpx.Response(206, content=data[start : end + 1])
+        if start >= len(data):
+            return httpx.Response(416)
+        end = min(end, len(data) - 1)
+        return httpx.Response(
+            206,
+            content=data[start : end + 1],
+            headers={
+                "content-range": f"bytes {start}-{end}/{'*' if self.unknown_size else len(data)}"
+            },
+        )
 
 
 class Router:

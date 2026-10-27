@@ -20,8 +20,13 @@ class EndpointConfig(BaseModel):
     """Ein Download-Endpunkt; die Reihenfolge in der YAML-Datei ist die Priorität."""
 
     name: str
-    kind: Literal["idx_range", "nomads_filter"]
+    kind: Literal["idx_range", "nomads_filter", "header_scan"]
     url: str
+    #: ``header_scan``: Pfad der GRIB-Datei unter ``url``, Platzhalter ``{run}`` und ``{step}``
+    #: (z. B. ``{run:%Y}/{run:%Y%m%d}/gfs.0p25.{run:%Y%m%d%H}.f{step:03d}.grib2``)
+    path: str | None = None
+    #: ``header_scan``: Abschnitte je Datei, deren Köpfe gleichzeitig gelesen werden
+    segments: int = Field(default=16, ge=1)
     #: Endpunkt hält das Archiv vor und darf für Backfill genutzt werden.
     archive: bool = False
     #: Gleichzeitige Anfragen an diesen Endpunkt.
@@ -30,6 +35,12 @@ class EndpointConfig(BaseModel):
     rate_per_min: int | None = Field(default=None, ge=1)
     #: Lücken bis zu dieser Größe zwischen gewählten Nachrichten mitladen.
     max_gap: int = Field(default=0, ge=0)
+
+    @model_validator(mode="after")
+    def _path(self) -> EndpointConfig:
+        if self.kind == "header_scan" and not self.path:
+            raise ValueError(f"Endpunkt {self.name}: header_scan braucht path")
+        return self
 
 
 class MessageConfig(BaseModel):
