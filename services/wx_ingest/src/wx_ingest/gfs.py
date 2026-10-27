@@ -456,8 +456,10 @@ class Endpoint:
             async with sem:
                 try:
                     _, entries = await self._full_inventory(self._scan_url(run, step), step)
-                except (StepUnavailable, FetchError) as exc:
-                    entries, error = [], str(exc)
+                except (StepUnavailable, FetchError, httpx.HTTPError) as exc:
+                    # auch Zeitüberschreitungen nach allen Wiederholungen: dieser Schritt
+                    # fehlt dann in den Vorlagen, die Monatsjobs bauen ihn selbst
+                    entries, error = [], f"{type(exc).__name__}: {exc}"
                 else:
                     error = ""
             finished += 1

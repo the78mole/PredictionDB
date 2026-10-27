@@ -220,3 +220,18 @@ async def test_templates_travel_between_jobs(monkeypatch: pytest.MonkeyPatch) ->
         again = await _fetch(worker, 6)
     assert len(scans) == n  # kein vollständiges Inventar im zweiten Job
     assert again.messages == full.messages and again.grib == full.grib
+
+
+async def test_template_timeout_skips_step(monkeypatch: pytest.MonkeyPatch) -> None:
+    scan = gfs.Endpoint.scan
+
+    async def flaky(self: gfs.Endpoint, url: str) -> tuple[str, list[IdxEntry]]:
+        if url.endswith("f006.grib2"):
+            raise httpx.ReadTimeout("zu langsam")
+        return await scan(self, url)
+
+    monkeypatch.setattr(gfs.Endpoint, "scan", flaky)
+    host = FakeGfsHost("gdex.test", {3, 6}, index=False)
+    async with make_client(host) as client:
+        ep = ingestor(Bronze(MemoryStore()), client).endpoints[0]
+        assert await ep.build_templates(RUN, [3, 6]) == [3]
