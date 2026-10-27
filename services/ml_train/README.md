@@ -54,6 +54,7 @@ uv run ml-train registry list
 uv run ml-train registry evaluate <version>                        # Champion/Challenger
 uv run ml-train registry promote <version>
 uv run ml-train registry sync                                      # Spiegel für Grafana
+uv run ml-train registry attach-backtest <version> --backtest .ml-data/bt # Backtest nachreichen
 uv run ml-train predict --dry-run                                  # aktive Versionen, jetzt
 ```
 
@@ -94,7 +95,9 @@ keine Datenbank erreichbar (Training auf dem Laptop), wird der Abgleich nur prot
 übersprungen. Die Sicht `fcst.prediction_error` stellt jede gespeicherte Medianprognose dem
 Ist-Wert (Stundenmittel aus `energy.value_best`) gegenüber; daraus rechnen die Panels den
 Prognosefehler im Betrieb. `fit --backtest` übernimmt die Laufzeit des Backtests aus `lauf.json`
-ins Manifest (`backtest_seconds`).
+ins Manifest (`backtest_seconds`). Ohne `--backtest` trainierte Versionen haben keine Backtest-Kennzahlen;
+`registry attach-backtest` legt die Prognosen eines Backtests derselben Konfiguration und
+Variante nachträglich dazu, der nächste Abgleich füllt `meta.model_metric`.
 
 ## Tests
 

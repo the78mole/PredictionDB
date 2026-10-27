@@ -172,6 +172,10 @@ services:
   #   docker compose --profile ml run --rm ml-train backtest --snapshot /data/snap --out /data/bt
   #   docker compose --profile ml run --rm ml-train fit --snapshot /data/snap --variant kalender \
   #     --backtest /data/bt --role champion
+  # Backtest für eine schon registrierte Version nachreichen, mit niedriger CPU-Priorität:
+  #   docker compose --profile ml run --rm --entrypoint nice ml-train -n 19 ml-train backtest \
+  #     --snapshot /data/snap --out /data/bt --variant kalender
+  #   docker compose --profile ml run --rm ml-train registry attach-backtest <version> --backtest /data/bt
   # Feste CPU-Grenze, damit Ingest und Verarbeitung nebenher weiterlaufen.
   ml-train:
     <<: *app

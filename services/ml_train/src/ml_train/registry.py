@@ -172,6 +172,30 @@ class Registry:
             raise KeyError(f"Version {version} fehlt in der Registry")
         return dict(json.loads(raw))
 
+    def attach_backtest(
+        self, version: str, backtest: pd.DataFrame, extra: dict[str, Any] | None = None
+    ) -> None:
+        """Backtest-Prognosen nachträglich zu einer registrierten Version legen.
+
+        Für Versionen, die ohne ``--backtest`` trainiert wurden. Der Backtest muss mit derselben
+        Konfiguration und Variante gerechnet sein; der Registry-Spiegel liest daraus beim
+        nächsten Abgleich die Kennzahlen.
+        """
+        man = self.manifest(version)
+        buf = io.BytesIO()
+        backtest.to_parquet(buf, index=False)
+        self.store.write(f"{self.base}/{version}/backtest.parquet", buf.getvalue())
+        files = list(man.get("files", []))
+        if "backtest.parquet" not in files:
+            files.insert(
+                len(files) - 1 if "manifest.json" in files else len(files), "backtest.parquet"
+            )
+        man = {**man, **(extra or {}), "files": files}
+        self.store.write(
+            f"{self.base}/{version}/manifest.json",
+            json.dumps(man, indent=2, default=str).encode(),
+        )
+
     # Ablegen und Laden ------------------------------------------------------------------------
 
     def register(
