@@ -6,6 +6,9 @@ Zwei Mechaniken (``docs/ARCHITEKTUR.md`` 4.1):
   ``.idx`` laden, Nachrichten wählen, je Byte-Bereich eine Range-Anfrage,
   danach lokal auf den Ausschnitt zuschneiden. Diese Speicher beantworten
   Multi-Range-Anfragen mit der ganzen Datei, deshalb eine Anfrage je Bereich.
+  Passt die ``.idx`` nicht zur GRIB-Datei (im Archiv wurden einzelne Dateien nachträglich neu
+  geschrieben, die ``.idx`` blieb alt, z. B. 2022-11-30 00Z), wird die ganze Datei geladen
+  und die Nachrichten werden über ihre Position den Zeilen der ``.idx`` zugeordnet.
 - ``nomads_filter``: NOMADS Grib-Filter schneidet serverseitig zu. Der Filter
   kombiniert jede angeforderte Variable mit jedem angeforderten Level und kennt
   keinen Filter auf das Prognosefeld; er liefert daher eine Obermenge.
@@ -14,6 +17,7 @@ Zwei Mechaniken (``docs/ARCHITEKTUR.md`` 4.1):
 from __future__ import annotations
 
 import asyncio
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -26,15 +30,20 @@ from gribkit import (
     BBox,
     ByteRange,
     GribError,
+    IdxEntry,
     MessageSpec,
     crop,
+    describe,
     iter_messages,
     merge_ranges,
     missing_specs,
     parse_idx,
     select,
 )
+from predictiondb_core.log import get_logger
 from wx_ingest.config import EndpointConfig
+
+log = get_logger(__name__)
 
 #: NOMADS liefert einfache Packung. CCSDS komprimiert dieselben quantisierten Werte
 #: verlustfrei (etwa 40 % kleiner); komplexe Packung würde hier Bits verlieren.
@@ -43,6 +52,9 @@ NOMADS_PACKING = "grid_ccsds"
 #: HTTP-Status, bei denen eine Wiederholung sinnvoll ist.
 RETRY_STATUS = frozenset({408, 425, 429, 500, 502, 503, 504})
 
+#: Höchstens so viele ganze GRIB-Dateien (je rund 500 MB) gleichzeitig im Speicher
+FULL_DOWNLOADS = 2
+
 
 class StepUnavailable(Exception):
     """Der Schritt ist auf diesem Endpunkt (noch) nicht veröffentlicht."""
@@ -50,6 +62,10 @@ class StepUnavailable(Exception):
 
 class FetchError(Exception):
     """Der Schritt ist vorhanden, der Download ist aber fehlgeschlagen."""
+
+
+class StaleIndex(FetchError):
+    """Die Byte-Bereiche aus der ``.idx`` treffen keine GRIB-Nachrichten."""
 
 
 class _RetryableStatus(Exception):
@@ -92,6 +108,7 @@ class Endpoint:
         self._limiter = AsyncLimiter(config.rate_per_min, 60) if config.rate_per_min else None
         self._retry_attempts = retry_attempts
         self._retry_wait_max = retry_wait_max
+        self._full = asyncio.Semaphore(FULL_DOWNLOADS)
 
     @property
     def name(self) -> str:
@@ -148,6 +165,8 @@ class Endpoint:
             if resp.status_code == 404:
                 # .idx schon da, GRIB-Datei noch nicht vollständig hochgeladen
                 raise StepUnavailable(url)
+            if resp.status_code == 416:
+                raise StaleIndex(f"Range {r.header} liegt hinter dem Ende von {url}")
             if resp.status_code != 206:
                 raise FetchError(f"Range {r.header} auf {url}: HTTP {resp.status_code} statt 206")
             try:
@@ -155,9 +174,15 @@ class Endpoint:
             except ValueError as exc:
                 raise FetchError(str(exc)) from exc
 
-        raw = b"".join(await asyncio.gather(*(load(r) for r in ranges)))
         expected = sum(len(r.entries) for r in ranges)
-        grib = await asyncio.to_thread(_crop_checked, raw, bbox, expected)
+        try:
+            raw = b"".join(await asyncio.gather(*(load(r) for r in ranges)))
+            grib = await asyncio.to_thread(_crop_checked, raw, bbox, expected)
+        except StaleIndex as exc:
+            log.warning("idx_stale", url=url, error=str(exc))
+            grib = await self._fetch_realigned(
+                url, entries, [e for r in ranges for e in r.entries], bbox
+            )
         return StepData(
             grib=grib,
             url=url,
@@ -165,6 +190,17 @@ class Endpoint:
             messages=[e.key for r in ranges for e in r.entries],
             absent=[s.label for s in missing_specs(entries, specs)],
         )
+
+    async def _fetch_realigned(
+        self, url: str, entries: list[IdxEntry], chosen: list[IdxEntry], bbox: BBox
+    ) -> bytes:
+        async with self._full:
+            resp = await self.get(url)
+            if resp.status_code != 200:
+                raise FetchError(f"ganze Datei {url}: HTTP {resp.status_code}")
+            grib = await asyncio.to_thread(_realign, resp.content, entries, chosen, bbox)
+        log.info("idx_realigned", url=url, messages=len(chosen))
+        return grib
 
     async def _fetch_nomads(
         self, product: str, run: datetime, step: int, specs: list[MessageSpec], bbox: BBox
@@ -206,8 +242,40 @@ def nomads_params(
 def _crop_checked(raw: bytes, bbox: BBox, expected: int) -> bytes:
     try:
         n = sum(1 for _ in iter_messages(raw))
-        if n != expected:
-            raise FetchError(f"{n} GRIB-Nachrichten erhalten, {expected} erwartet")
+    except GribError as exc:
+        raise StaleIndex(str(exc)) from exc
+    if n != expected:
+        raise StaleIndex(f"{n} GRIB-Nachrichten erhalten, {expected} erwartet")
+    try:
         return crop(raw, bbox)
+    except GribError as exc:
+        raise FetchError(str(exc)) from exc
+
+
+def _realign(data: bytes, entries: list[IdxEntry], chosen: list[IdxEntry], bbox: BBox) -> bytes:
+    """Wählt die Nachrichten aus der ganzen Datei über ihre Position in der ``.idx``.
+
+    Das gilt nur, wenn die Datei genau so viele Nachrichten hat wie die ``.idx`` Offsets;
+    zusätzlich muss der Prognosezeitraum jeder gewählten Nachricht zur Zeile passen.
+    """
+    try:
+        messages = list(iter_messages(data))
+    except GribError as exc:
+        raise FetchError(f"GRIB-Datei unbrauchbar: {exc}") from exc
+    offsets = sorted({e.offset for e in entries})
+    if len(messages) != len(offsets):
+        raise FetchError(
+            f".idx veraltet: {len(messages)} Nachrichten in der Datei, {len(offsets)} im Index"
+        )
+    position = {o: i for i, o in enumerate(offsets)}
+    picked = []
+    for e in chosen:
+        msg = messages[position[e.offset]]
+        m = re.match(r"(\d+(?:-\d+)?) hour", e.fcst)
+        if m and describe(msg).step_range.split("-")[-1] != m[1].split("-")[-1]:
+            raise FetchError(f".idx veraltet: {e.key} passt nicht zur Nachricht an Position")
+        picked.append(msg)
+    try:
+        return crop(b"".join(picked), bbox)
     except GribError as exc:
         raise FetchError(str(exc)) from exc

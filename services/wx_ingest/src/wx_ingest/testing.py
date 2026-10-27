@@ -55,6 +55,8 @@ class FakeGfsHost:
     available: set[int]
     honour_range: bool = True
     fail_status: int | None = None
+    #: .idx mit verschobenen Offsets, wie nach einem Neuschreiben der GRIB-Datei im Archiv
+    stale_idx: bool = False
     files: dict[str, bytes] = field(default_factory=dict)
     idx: dict[str, str] = field(default_factory=dict)
     requests: list[httpx.Request] = field(default_factory=list)
@@ -67,9 +69,8 @@ class FakeGfsHost:
                 msg, _, _ = make_global_message(
                     values_fn=lambda lat, lon, n=n: n * 100 + lat + 0 * lon  # type: ignore[misc]
                 )
-                lines.append(
-                    f"{n}:{len(data)}:d={RUN:%Y%m%d%H}:{var}:{level}:{fcst.format(h=step)}:"
-                )
+                offset = len(data) + (1000 * n if self.stale_idx else 0)
+                lines.append(f"{n}:{offset}:d={RUN:%Y%m%d%H}:{var}:{level}:{fcst.format(h=step)}:")
                 data += msg
             self.files[base] = data
             self.idx[base + ".idx"] = "\n".join(lines) + "\n"

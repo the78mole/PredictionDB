@@ -11,6 +11,8 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -33,6 +35,10 @@ class RegistryError(RuntimeError):
     pass
 
 
+class ServerError(RegistryError):
+    """5xx der Registry (GHCR meldet gelegentlich ``500 unknown error``); wird wiederholt."""
+
+
 class AccessDenied(RegistryError):
     """Kein Token für das Repository; anonym heißt das bei GHCR meist: gibt es (noch) nicht."""
 
@@ -46,6 +52,8 @@ class Registry:
     client: httpx.Client
     username: str | None = None
     password: str | None = None
+    #: Wartezeiten zwischen Wiederholungen bei 5xx oder Verbindungsfehlern (Sekunden)
+    retry_waits: tuple[float, ...] = (2.0, 8.0, 30.0)
     _token: str | None = field(default=None, repr=False)
 
     @property
@@ -86,8 +94,18 @@ class Registry:
     def _check(r: httpx.Response, *ok: int) -> httpx.Response:
         if r.status_code not in ok:
             req = r.request
-            raise RegistryError(f"{req.method} {req.url} → {r.status_code}: {r.text[:300]}")
+            error = ServerError if r.status_code >= 500 else RegistryError
+            raise error(f"{req.method} {req.url} → {r.status_code}: {r.text[:300]}")
         return r
+
+    def _retry[T](self, fn: Callable[[], T]) -> T:
+        """Wiederholt einen ganzen Vorgang (beim Upload samt neuer Upload-Sitzung)."""
+        for wait in self.retry_waits:
+            try:
+                return fn()
+            except (ServerError, httpx.TransportError):
+                time.sleep(wait)
+        return fn()
 
     # --- Lesen -------------------------------------------------------------------------------
 
@@ -125,8 +143,11 @@ class Registry:
         return data
 
     def blob(self, digest_: str) -> bytes:
-        r = self._request("GET", f"{self.base}/blobs/{digest_}", follow_redirects=True)
-        data = self._check(r, 200).content
+        def get() -> bytes:
+            r = self._request("GET", f"{self.base}/blobs/{digest_}", follow_redirects=True)
+            return self._check(r, 200).content
+
+        data = self._retry(get)
         if digest(data) != digest_:
             raise RegistryError(f"Blob {digest_}: Prüfsumme stimmt nicht")
         return data
@@ -138,6 +159,9 @@ class Registry:
     # --- Schreiben ---------------------------------------------------------------------------
 
     def push_blob(self, data: bytes) -> str:
+        return self._retry(lambda: self._push_blob(data))
+
+    def _push_blob(self, data: bytes) -> str:
         d = digest(data)
         if self.has_blob(d):
             return d
@@ -161,13 +185,15 @@ class Registry:
         body = json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()
         if manifest.get("config") == EMPTY:
             self.push_blob(b"{}")
-        self._check(
-            self._request(
-                "PUT",
-                f"{self.base}/manifests/{tag}",
-                content=body,
-                headers={"Content-Type": MANIFEST},
-            ),
-            201,
+        self._retry(
+            lambda: self._check(
+                self._request(
+                    "PUT",
+                    f"{self.base}/manifests/{tag}",
+                    content=body,
+                    headers={"Content-Type": MANIFEST},
+                ),
+                201,
+            )
         )
         return digest(body)
