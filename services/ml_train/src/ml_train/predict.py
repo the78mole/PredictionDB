@@ -8,6 +8,11 @@ Im Dauerbetrieb (``--watch``) läuft jede volle Stunde ein Ausgabezeitpunkt. Ver
 (Neustart, langer Lauf) werden nachgeholt, damit z. B. der Lauf um 10 Uhr Ortszeit, zeitgleich
 mit der Day-Ahead-Lastprognose der ÜNB, für den Vergleich im Dashboard nie fehlt. Nachholen
 ist leakage-sicher: Merkmale nutzen nur Werte, die zum Ausgabezeitpunkt veröffentlicht waren.
+
+Kommt eine Version neu hinzu (``--fill-new``), rechnet sie rückwirkend dieselben
+Ausgabezeitpunkte, die die übrigen aktiven Versionen im Fenster schon haben. Sie erscheint so
+sofort in den Vergleichsgrafiken neben Champion und Challengern, mit demselben
+Veröffentlichungsstand der Eingänge wie diese.
 """
 
 from __future__ import annotations
@@ -69,6 +74,45 @@ def last_issue(engine: Engine, versions: list[str]) -> pd.Timestamp | None:
             {"v": versions},
         ).scalar()
     return None if t is None else pd.Timestamp(t).tz_convert("UTC")
+
+
+MISSING_ISSUES = text("""
+    SELECT DISTINCT issue_time FROM fcst.prediction
+     WHERE model_version = ANY(:peers) AND issue_time >= :since AND issue_time <= :until
+    EXCEPT
+    SELECT DISTINCT issue_time FROM fcst.prediction
+     WHERE model_version = :version AND issue_time >= :since AND issue_time <= :until
+    ORDER BY 1""")
+
+
+def missing_issues(
+    engine: Engine, version: str, peers: list[str], since: pd.Timestamp, until: pd.Timestamp
+) -> list[pd.Timestamp]:
+    """Ausgabezeitpunkte im Fenster, die andere Versionen haben, ``version`` aber nicht."""
+    peers = [p for p in peers if p != version]
+    if not peers:
+        return []
+    with engine.connect() as c:
+        rows = c.execute(
+            MISSING_ISSUES,
+            {
+                "peers": peers,
+                "version": version,
+                "since": since.to_pydatetime(),
+                "until": until.to_pydatetime(),
+            },
+        ).scalars()
+        return [pd.Timestamp(t).tz_convert("UTC") for t in rows]
+
+
+def by_issue(missing: dict[str, list[pd.Timestamp]]) -> dict[pd.Timestamp, list[str]]:
+    """Fehlende Ausgabezeitpunkte je Version zu Versionen je Ausgabezeitpunkt (aufsteigend),
+    damit jeder Zeitpunkt nur einen Snapshot braucht."""
+    out: dict[pd.Timestamp, list[str]] = {}
+    for version, issues in missing.items():
+        for issue in issues:
+            out.setdefault(issue, []).append(version)
+    return dict(sorted(out.items()))
 
 
 def live_snapshot(engine: Engine, cfg: ModelConfig, issue: pd.Timestamp) -> Snapshot:
