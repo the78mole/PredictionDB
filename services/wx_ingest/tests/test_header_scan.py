@@ -1,3 +1,4 @@
+import dataclasses
 from typing import Any
 
 import httpx
@@ -83,3 +84,60 @@ async def test_false_boundary_falls_back_to_whole_file(
 def test_header_scan_needs_path() -> None:
     with pytest.raises(ValueError, match="path"):
         make_config(endpoints=[GDEX])
+
+
+async def _fetch(ep: gfs.Endpoint, step: int) -> gfs.StepData:
+    cfg = make_config()
+    return await ep.fetch_step("pgrb2.0p25", RUN, step, cfg.specs(), cfg.bbox.bbox())
+
+
+async def test_template_finds_chosen_messages(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Zweiter Lauf desselben Schritts: nur Sprünge zu den gewählten Nachrichten statt aller Köpfe
+    monkeypatch.setattr(gfs, "SCAN_WINDOW", 4096)
+    host = FakeGfsHost("gdex.test", STEPS, index=False)
+    async with make_client(host) as client:
+        ing = ingestor(Bronze(MemoryStore()), client, segments=1)
+        ep = ing.endpoints[0]
+        full = await _fetch(ep, 6)
+        n_full = len(host.requests)
+        again = await _fetch(ep, 6)
+    assert 6 in ep._templates
+    assert again.messages == full.messages and again.grib == full.grib
+    assert again.absent == full.absent
+    # Köpfe 1 bis 7 vollständig, gezielt nur ab TMP (Nachricht 3)
+    heads = [r for r in host.requests[n_full:] if r.headers["range"].endswith("-511")]
+    assert len(heads) < 7
+
+
+async def test_template_mismatch_rebuilds_inventory() -> None:
+    host = FakeGfsHost("gdex.test", STEPS, index=False)
+    async with make_client(host) as client:
+        ep = ingestor(Bronze(MemoryStore()), client).endpoints[0]
+        full = await _fetch(ep, 9)
+        # Vorlage eines anderen Schritts: Schlüssel passen nicht (andere Prognosezeit)
+        await _fetch(ep, 3)
+        ep._templates[9] = ep._templates[3]
+        again = await _fetch(ep, 9)
+    assert again.messages == full.messages and again.grib == full.grib
+    assert ep._templates[9].entries[2].key == "TMP:2 m above ground:9 hour fcst"
+
+
+@pytest.mark.parametrize("factor", [0.5, 1.6])
+async def test_template_with_other_lengths(monkeypatch: pytest.MonkeyPatch, factor: float) -> None:
+    # Längen weichen ab: die Schätzung liegt daneben, weitere Sprünge finden die Nachricht
+    monkeypatch.setattr(gfs, "SCAN_WINDOW", 1024)
+    monkeypatch.setattr(gfs, "_MAX_LEAD", 0)
+    host = FakeGfsHost("gdex.test", STEPS, index=False)
+    async with make_client(host) as client:
+        ep = ingestor(Bronze(MemoryStore()), client).endpoints[0]
+        full = await _fetch(ep, 12)
+        t = ep._templates[12]
+        offsets = [int(e.offset * factor**i) for i, e in enumerate(t.entries)]
+        skewed = [
+            dataclasses.replace(e, offset=o, length=n - o)
+            for e, o, n in zip(t.entries, offsets, [*offsets[1:], t.size], strict=True)
+        ]
+        ep._templates[12] = gfs._Template(t.size, skewed)
+        again = await _fetch(ep, 12)
+    assert again.messages == full.messages and again.grib == full.grib
+    assert ep._templates[12].entries == skewed  # gezielt gefunden, nicht neu inventarisiert

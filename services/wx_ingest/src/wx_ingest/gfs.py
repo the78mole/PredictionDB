@@ -18,6 +18,12 @@ Zwei Mechaniken (``docs/ARCHITEKTUR.md`` 4.1):
   geteilt; an jedem Schnitt wird der nächste Nachrichtenanfang gesucht und die Abschnitte
   werden gleichzeitig abgelaufen. Danach weiter wie bei ``idx_range``. Passen die Abschnitte
   nicht aneinander (Fehltreffer beim Suchen), wird die ganze Datei geladen.
+  Ein vollständiges Inventar kostet je Datei einige hundert Anfragen. Es dient deshalb als
+  Vorlage für denselben Schritt späterer Läufe: Die Reihenfolge der Nachrichten ist innerhalb
+  einer Modellversion fest, nur die Längen schwanken. Aus der Vorlage wird geschätzt, wo die
+  gewählten Nachrichten liegen; dort wird der nächste Anfang gesucht und nur über die wenigen
+  Köpfe bis zu den gewählten Nachrichten gelaufen (:meth:`Endpoint.scan_targeted`). Passt die
+  Vorlage nicht (andere Modellversion), entsteht ein neues vollständiges Inventar.
 """
 
 from __future__ import annotations
@@ -82,6 +88,47 @@ class StaleIndex(FetchError):
     """Die Byte-Bereiche aus der ``.idx`` treffen keine GRIB-Nachrichten."""
 
 
+class _TemplateMiss(Exception):
+    """Die Vorlage passt nicht zur Datei; ein vollständiges Inventar ist nötig."""
+
+
+#: Sprünge je Gruppe gewählter Nachrichten, bevor die Vorlage als unpassend gilt
+_MAX_JUMPS = 8
+#: So viele Köpfe vor einer Gruppe dürfen noch abgelaufen statt angesprungen werden
+_MAX_LEAD = 3
+#: Höchstens so viele Köpfe ablaufen, wenn die Sprünge das Ziel nur einschließen
+_MAX_WALK = 32
+
+
+@dataclass(frozen=True)
+class _Template:
+    """Vollständiges Inventar eines Schritts als Vorlage für spätere Läufe."""
+
+    size: int
+    entries: list[IdxEntry]
+
+    def index(self) -> dict[str, int]:
+        """Position je Schlüssel; mehrdeutige Schlüssel taugen nicht zum Wiederfinden."""
+        seen: dict[str, int] = {}
+        doubles: set[str] = set()
+        for i, e in enumerate(self.entries):
+            if e.key in seen:
+                doubles.add(e.key)
+            seen[e.key] = i
+        return {k: i for k, i in seen.items() if k not in doubles}
+
+
+def _groups(indices: list[int], gap: int = 2) -> list[tuple[int, int]]:
+    """Fasst Positionen mit höchstens ``gap`` Nachrichten Abstand zu Gruppen zusammen."""
+    out: list[tuple[int, int]] = []
+    for i in indices:
+        if out and i - out[-1][1] <= gap:
+            out[-1] = (out[-1][0], i)
+        else:
+            out.append((i, i))
+    return out
+
+
 class _RetryableStatus(Exception):
     def __init__(self, response: httpx.Response) -> None:
         super().__init__(f"HTTP {response.status_code} für {response.request.url}")
@@ -122,6 +169,8 @@ class Endpoint:
         self._limiter = AsyncLimiter(config.rate_per_min, 60) if config.rate_per_min else None
         self._retry_attempts = retry_attempts
         self._retry_wait_max = retry_wait_max
+        #: header_scan: vollständiges Inventar je Schritt als Vorlage für spätere Läufe
+        self._templates: dict[int, _Template] = {}
 
     @property
     def name(self) -> str:
@@ -285,13 +334,96 @@ class Endpoint:
         heads = [h for part in parts for h in part]
         return url, [entry(i, off, h) for i, (off, h) in enumerate(heads, start=1)]
 
+    async def scan_targeted(
+        self, url: str, template: _Template, specs: list[MessageSpec]
+    ) -> tuple[str, list[IdxEntry]]:
+        """Nur die gewählten Nachrichten finden, Lage geschätzt aus ``template``.
+
+        Liefert die Einträge der gewählten Nachrichten (mit Nachbarn aus den abgelaufenen
+        Köpfen). Passt die Vorlage nicht, folgt :class:`_TemplateMiss`.
+        """
+        first = await self._range(url, 0, HEAD_BYTES - 1)
+        url = str(first.url)
+        size = await self._size(url, first)
+        tmpl = template.entries
+        wanted = [i for i, e in enumerate(tmpl) if any(s.matches(e) for s in specs)]
+        if not wanted:
+            raise _TemplateMiss("Vorlage enthält keine gewählte Nachricht")
+        index = template.index()
+        scale = size / template.size
+
+        def aim(anchor_off: int, anchor_i: int, target: int) -> int:
+            # Mitte der Nachricht vor dem Ziel: die Suche findet dann den Anfang des Ziels
+            before = tmpl[target - 1]
+            mid = before.offset + (before.length or 0) // 2
+            return anchor_off + int((mid - tmpl[anchor_i].offset) * scale)
+
+        async def locate(est: int) -> tuple[int, int]:
+            """Nächster Nachrichtenanfang ab ``est`` und seine Position in der Vorlage."""
+            found = await self._boundary(url, max(0, min(est, size - 1)), size)
+            if found is None:
+                raise _TemplateMiss(f"kein Nachrichtenanfang ab Byte {est}")
+            data = (await self._range(url, found, found + HEAD_BYTES - 1)).content
+            try:
+                key = entry(0, found, parse_head(data)).key
+            except HeaderError as exc:
+                raise _TemplateMiss(f"Kopf an Byte {found}: {exc}") from exc
+            if key not in index:
+                raise _TemplateMiss(f"{key} an Byte {found} fehlt in der Vorlage")
+            return found, index[key]
+
+        async def start(a: int) -> tuple[int, int]:
+            """Ein Nachrichtenanfang höchstens ``_MAX_LEAD`` Nachrichten vor ``a``."""
+            if a == 0:
+                return 0, 0
+            lo: tuple[int, int] | None = None  # bester Anfang vor dem Ziel
+            back = 1
+            est = aim(0, 0, a)
+            for _ in range(_MAX_JUMPS):
+                pos, i = await locate(est)
+                if i <= a:
+                    if a - i <= _MAX_LEAD:
+                        return pos, i
+                    lo = (pos, i) if lo is None or i > lo[1] else lo
+                    est = aim(pos, i, a)
+                elif lo is not None:
+                    break  # Ziel liegt zwischen zwei gefundenen Anfängen: ablaufen
+                else:
+                    # zu weit: immer weiter vor dem Ziel ansetzen, bis ein Anfang davor liegt
+                    est = aim(pos, i, max(1, a - back))
+                    back *= 2
+            if lo is None or a - lo[1] > _MAX_WALK:
+                raise _TemplateMiss(f"Nachricht {tmpl[a].key} nach {_MAX_JUMPS} Sprüngen")
+            return lo
+
+        async def group(a: int, b: int) -> list[IdxEntry]:
+            pos, i = await start(a)
+            out: list[IdxEntry] = []
+            off = pos
+            for n in range(i, b + 1):
+                data = (await self._range(url, off, off + HEAD_BYTES - 1)).content
+                try:
+                    e = entry(n + 1, off, parse_head(data))
+                except HeaderError as exc:
+                    raise _TemplateMiss(f"Kopf an Byte {off}: {exc}") from exc
+                if e.key != tmpl[n].key:
+                    raise _TemplateMiss(f"an Position {n + 1} {e.key} statt {tmpl[n].key}")
+                out.append(e)
+                off += e.length or 0
+            if off > size:
+                raise _TemplateMiss(f"Nachricht {tmpl[b].key} reicht über das Dateiende")
+            return out
+
+        parts = await asyncio.gather(*(group(a, b) for a, b in _groups(wanted)))
+        return url, [e for part in parts for e in part]
+
     async def _fetch_header_scan(
         self, run: datetime, step: int, specs: list[MessageSpec], bbox: BBox
     ) -> StepData:
         assert self.config.path is not None
         url = f"{self.config.url.rstrip('/')}/{self.config.path.format(run=run, step=step)}"
         try:
-            final, entries = await self.scan(url)
+            final, entries = await self._inventory(url, step, specs)
             chosen = select(entries, specs)
             if not chosen:
                 raise FetchError(f"keine der angeforderten Nachrichten in {url}")
@@ -300,6 +432,7 @@ class Endpoint:
             grib = await asyncio.to_thread(_crop_checked, raw, bbox, len(chosen))
         except StaleIndex as exc:
             log.warning("scan_failed", url=url, error=str(exc))
+            self._templates.pop(step, None)
             entries, chosen, grib = await self._fetch_whole_scanned(url, specs, bbox)
         return StepData(
             grib=grib,
@@ -308,6 +441,22 @@ class Endpoint:
             messages=[e.key for e in chosen],
             absent=[s.label for s in missing_specs(entries, specs)],
         )
+
+    async def _inventory(
+        self, url: str, step: int, specs: list[MessageSpec]
+    ) -> tuple[str, list[IdxEntry]]:
+        """Einträge für die Auswahl: gezielt über die Vorlage, sonst vollständig (neue Vorlage)."""
+        template = self._templates.get(step)
+        if template is not None:
+            try:
+                return await self.scan_targeted(url, template, specs)
+            except _TemplateMiss as exc:
+                log.info("scan_template_miss", url=url, error=str(exc))
+        final, entries = await self.scan(url)
+        if entries:
+            end = entries[-1].offset + (entries[-1].length or 0)
+            self._templates[step] = _Template(end, entries)
+        return final, entries
 
     async def _fetch_whole_scanned(
         self, url: str, specs: list[MessageSpec], bbox: BBox
