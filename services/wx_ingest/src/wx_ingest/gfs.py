@@ -434,11 +434,48 @@ class Endpoint:
         unique = {e.offset: e for part in parts for e in part}
         return url, [unique[o] for o in sorted(unique)]
 
+    def _scan_url(self, run: datetime, step: int) -> str:
+        assert self.config.path is not None
+        return f"{self.config.url.rstrip('/')}/{self.config.path.format(run=run, step=step)}"
+
+    async def build_templates(self, run: datetime, steps: list[int]) -> list[int]:
+        """Vollständige Inventare aller Schritte eines Laufs als Vorlagen; liefert die Schritte."""
+
+        async def one(step: int) -> int | None:
+            try:
+                await self._full_inventory(self._scan_url(run, step), step)
+            except (StepUnavailable, FetchError) as exc:
+                log.warning("template_failed", run=f"{run:%Y%m%d%H}", step=step, error=str(exc))
+                return None
+            return step
+
+        done = await asyncio.gather(*(one(s) for s in steps))
+        return [s for s in done if s is not None]
+
+    def export_templates(self) -> dict[str, Any]:
+        """Vorlagen als JSON-taugliches Objekt, damit andere Jobs sie nicht neu bauen müssen."""
+        return {
+            str(step): {
+                "size": t.size,
+                "entries": [[e.offset, e.length, e.var, e.level, e.fcst] for e in t.entries],
+            }
+            for step, t in sorted(self._templates.items())
+        }
+
+    def import_templates(self, data: dict[str, Any]) -> int:
+        """Übernimmt Vorlagen aus :meth:`export_templates`; liefert ihre Zahl."""
+        for step, t in data.items():
+            entries = [
+                IdxEntry(str(i), off, length, "", var, level, fcst)
+                for i, (off, length, var, level, fcst) in enumerate(t["entries"], start=1)
+            ]
+            self._templates[int(step)] = _Template(int(t["size"]), entries)
+        return len(data)
+
     async def _fetch_header_scan(
         self, run: datetime, step: int, specs: list[MessageSpec], bbox: BBox
     ) -> StepData:
-        assert self.config.path is not None
-        url = f"{self.config.url.rstrip('/')}/{self.config.path.format(run=run, step=step)}"
+        url = self._scan_url(run, step)
         try:
             final, entries = await self._inventory(url, step, specs)
             chosen = select(entries, specs)

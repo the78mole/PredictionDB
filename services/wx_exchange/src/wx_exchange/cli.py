@@ -6,6 +6,12 @@ Beispiele::
     wx-exchange gfs plan 2021-03-22T12 --runs 0,12,6,18 --block-years 3
     wx-exchange gfs publish 2026-09 0 --parallel-runs 2
 
+    # Archiv ohne .idx (GDEX): Kopf-Inventare einmal bauen, alle Monatsjobs nutzen sie
+    wx-exchange gfs --config config/sources/gfs_0p25_gdex.yaml templates 2019-06-12T12 \
+        --out templates.json
+    wx-exchange gfs --config config/sources/gfs_0p25_gdex.yaml publish 2019-09 0 \
+        --templates templates.json
+
     # VM: Silber aus GHCR nach wx-silver holen, stündlich wiederholen
     wx-exchange gfs import 2021-03-22T12 --runs 0,12,6,18 --watch 3600
 
@@ -30,6 +36,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
+from obstore.store import MemoryStore
 
 from predictiondb_core.db import create_db_engine
 from predictiondb_core.log import configure_logging
@@ -38,8 +45,10 @@ from predictiondb_core.settings import get_settings
 from wx_exchange.importer import Importer
 from wx_exchange.oci import Registry
 from wx_exchange.publish import Publisher, plan
+from wx_ingest.bronze import Bronze
 from wx_ingest.cli import DEFAULT_CONFIG, parse_run
 from wx_ingest.config import GfsConfig
+from wx_ingest.ingest import GfsIngestor
 from wx_process.config import ProcessConfig, WxProcessSettings
 from wx_process.store import Store
 
@@ -86,6 +95,16 @@ def build_parser() -> argparse.ArgumentParser:
     pub.add_argument("--parallel-runs", type=int, default=2, metavar="N")
     pub.add_argument("--archive-concurrency", type=int, default=16, metavar="N")
     pub.add_argument("--workdir", type=Path, help="Standard: temporäres Verzeichnis")
+    pub.add_argument(
+        "--templates", type=Path, help="Kopf-Inventare aus 'templates' (header_scan-Endpunkte)"
+    )
+
+    tpl = cmd.add_parser(
+        "templates", help="Kopf-Inventare aller Schritte eines Laufs (header_scan) als JSON"
+    )
+    tpl.add_argument("run", type=parse_run, help="ein Lauf derselben Modellversion")
+    tpl.add_argument("--out", type=Path, required=True)
+    tpl.add_argument("--archive-concurrency", type=int, default=96, metavar="N")
 
     imp = cmd.add_parser("import", help="Silber aus GHCR nach wx-silver")
     _range_args(imp)
@@ -162,6 +181,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.cmd == "publish":
             return asyncio.run(_publish(args, config, registry))
+        if args.cmd == "templates":
+            return asyncio.run(_templates(args, config))
 
         importer_ = _importer(registry, config, ledger=args.cmd == "import")
         if args.cmd == "verify":
@@ -192,20 +213,43 @@ def _importer(registry: Registry, config: GfsConfig, *, ledger: bool = False) ->
     )
 
 
-async def _publish(args: argparse.Namespace, config: GfsConfig, registry: Registry) -> int:
+def _archive_client(args: argparse.Namespace, config: GfsConfig) -> httpx.AsyncClient:
     for ep in config.endpoints:
         if ep.archive:
             ep.concurrency = args.archive_concurrency
+    timeout = httpx.Timeout(60.0, connect=15.0)
+    # Ohne .idx (GDEX) laufen viele kleine Range-Anfragen; der Pool darf nicht bremsen
+    pool = max(100, sum(ep.concurrency for ep in config.endpoints))
+    limits = httpx.Limits(max_connections=pool, max_keepalive_connections=pool)
+    return httpx.AsyncClient(timeout=timeout, follow_redirects=True, limits=limits)
+
+
+async def _templates(args: argparse.Namespace, config: GfsConfig) -> int:
+    async with _archive_client(args, config) as client:
+        endpoints = GfsIngestor(config, Bronze(MemoryStore()), client, archive_only=True).endpoints
+        scan = [ep for ep in endpoints if ep.config.kind == "header_scan"]
+        if not scan:
+            print("keine header_scan-Endpunkte in der Konfiguration", file=sys.stderr)
+            return 1
+        steps = config.step_list()
+        built = await scan[0].build_templates(args.run, steps)
+    data = {"run": f"{args.run:%Y-%m-%dT%H}", "steps": scan[0].export_templates()}
+    args.out.write_text(json.dumps(data, separators=(",", ":")), encoding="utf-8")
+    print(json.dumps({"run": data["run"], "steps": len(built), "of": len(steps)}))
+    # Fehlende Vorlagen bauen die Monatsjobs selbst; das ist kein Fehler
+    return 0
+
+
+async def _publish(args: argparse.Namespace, config: GfsConfig, registry: Registry) -> int:
     process = ProcessConfig.from_yaml(args.process_config or WxProcessSettings().config)
+    templates = (
+        json.loads(args.templates.read_text(encoding="utf-8"))["steps"]
+        if args.templates and args.templates.exists()
+        else None
+    )
     with tempfile.TemporaryDirectory(prefix="wx-exchange-") as tmp:
         workdir = args.workdir or Path(tmp)
-        timeout = httpx.Timeout(60.0, connect=15.0)
-        # Ohne .idx (GDEX) laufen viele kleine Range-Anfragen; der Pool darf nicht bremsen
-        pool = max(100, sum(ep.concurrency for ep in config.endpoints))
-        limits = httpx.Limits(max_connections=pool, max_keepalive_connections=pool)
-        async with httpx.AsyncClient(
-            timeout=timeout, follow_redirects=True, limits=limits
-        ) as client:
+        async with _archive_client(args, config) as client:
             publisher = Publisher(
                 registry,
                 config,
@@ -215,6 +259,10 @@ async def _publish(args: argparse.Namespace, config: GfsConfig, registry: Regist
                 source_url=SOURCE_URL,
                 parallel_runs=args.parallel_runs,
             )
+            if templates:
+                for ep in publisher.ingestor.endpoints:
+                    if ep.config.kind == "header_scan":
+                        ep.import_templates(templates)
             # Nie ins Live-Fenster: noch nicht veröffentlichte Läufe gälten sonst als fehlend
             result = await publisher.publish_month(
                 args.month, args.hour, args.start, _end(args, config), rebuild=args.rebuild
