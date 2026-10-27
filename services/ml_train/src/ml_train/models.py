@@ -24,6 +24,7 @@ import pandas as pd
 
 from ml_train.config import LgbmParams, ModelConfig, StageTarget, Variant
 from ml_train.dataset import FeatureFrame
+from ml_train.jobs import Progress, no_progress
 
 #: Eingänge der Stufe 2 aus Stufe 1
 RESIDUAL = "s1_residual_load"
@@ -174,16 +175,24 @@ class TwoStageModel:
 
     # Training und Prognose --------------------------------------------------------------------
 
-    def fit(self, frame: FeatureFrame) -> TwoStageModel:
+    def fit_steps(self) -> int:
+        """Zahl der Rückmeldungen von :meth:`fit` an ``progress``."""
+        oof = self.uses_stage1 and bool(self.cfg.stage2)
+        return len(self.cfg.stage1) * (2 if oof else 1) + len(self.cfg.stage2)
+
+    def fit(self, frame: FeatureFrame, progress: Progress = no_progress) -> TwoStageModel:
         base = self._base_features(frame)
         oof: dict[str, np.ndarray] = {}
         for t in self.cfg.stage1:
+            progress(f"Stufe 1 · {t.code}")
             self.stage1[t.code] = self._model(t, base, frame).fit(frame.X, frame.y[t.code])
             if self.uses_stage1 and self.cfg.stage2:
+                progress(f"Stufe 1 · {t.code} · Out-of-Fold")
                 oof[t.code] = self._oof(t, base, frame)
         X2 = self._with_stage1(frame.X, oof) if self.uses_stage1 else frame.X
         feats2 = base + (self.stage1_columns() if self.uses_stage1 else [])
         for t in self.cfg.stage2:
+            progress(f"Stufe 2 · {t.code}")
             self.stage2[t.code] = self._model(t, feats2, frame).fit(X2, frame.y[t.code])
         return self
 
