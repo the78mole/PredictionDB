@@ -77,6 +77,9 @@ class GfsConfig(BaseModel):
     lookback_hours: int = 30
     #: Schritte gleichzeitig je Lauf.
     step_concurrency: int = Field(default=4, ge=1)
+    #: ``header_scan``: Kopf-Inventare je Schritt (JSON, gern ``.json.gz``) als Vorlagen,
+    #: relativ zur Konfigurationsdatei; fehlende Schritte baut der Endpunkt im ersten Lauf
+    templates: Path | None = None
 
     @field_validator("runs")
     @classmethod
@@ -128,4 +131,7 @@ class GfsConfig(BaseModel):
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> GfsConfig:
-        return cls.model_validate(yaml.safe_load(Path(path).read_text()))
+        config = cls.model_validate(yaml.safe_load(Path(path).read_text()))
+        if config.templates and not config.templates.is_absolute():
+            config.templates = Path(path).parent / config.templates
+        return config

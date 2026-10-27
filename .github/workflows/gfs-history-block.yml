@@ -23,13 +23,8 @@ on:
       rebuild:
         type: boolean
         default: false
-      #: Kopf-Inventare aus dem Job "Kopf-Inventare" desselben Laufs (Artefakt gfs-templates)
-      templates:
-        type: boolean
-        default: false
 
 permissions:
-  actions: read
   contents: read
   packages: write
 
@@ -57,12 +52,6 @@ jobs:
           enable-cache: true
           save-cache: false
       - run: uv sync --locked --no-dev --package wx-exchange
-      - name: Kopf-Inventare holen
-        if: inputs.templates
-        env:
-          GH_TOKEN: ${{ github.token }}
-        # Ohne Vorlagen baut der Job sie selbst; daher kein Abbruch
-        run: gh run download "$GITHUB_RUN_ID" -n gfs-templates -R "$GITHUB_REPOSITORY" || true
       - name: Monat laden, verdichten und nach GHCR
         env:
           CONFIG: ${{ inputs.config }}
@@ -77,5 +66,4 @@ jobs:
                 --archive-concurrency "$CONCURRENCY")
           [ -n "$END" ] && args+=(--end "$END")
           [ "$REBUILD" = "true" ] && args+=(--rebuild)
-          [ -f templates.json ] && args+=(--templates templates.json)
           uv run --no-sync wx-exchange "${args[@]}"

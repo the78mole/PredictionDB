@@ -29,10 +29,13 @@ Zwei Mechaniken (``docs/ARCHITEKTUR.md`` 4.1):
 from __future__ import annotations
 
 import asyncio
+import gzip
+import json
 import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -145,6 +148,20 @@ class StepData:
     n_messages: int
     messages: list[str] = field(default_factory=list)
     absent: list[str] = field(default_factory=list)
+
+
+def read_templates(path: Path) -> dict[str, Any]:
+    """Vorlagen aus :meth:`Endpoint.export_templates` (``{"steps": ...}``, ``.gz`` entpackt)."""
+    raw = path.read_bytes()
+    data = json.loads(gzip.decompress(raw) if path.suffix == ".gz" else raw)
+    steps: dict[str, Any] = data["steps"]
+    return steps
+
+
+def write_templates(path: Path, run: str, steps: dict[str, Any]) -> None:
+    """Schreibt Vorlagen kompakt; ``.gz`` ohne Zeitstempel, damit gleicher Inhalt gleich bleibt."""
+    raw = json.dumps({"run": run, "steps": steps}, separators=(",", ":")).encode()
+    path.write_bytes(gzip.compress(raw, mtime=0) if path.suffix == ".gz" else raw)
 
 
 def gfs_file(product: str, run: datetime, step: int) -> str:
