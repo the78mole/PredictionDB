@@ -6,10 +6,10 @@ Beispiele::
     wx-exchange gfs plan 2021-03-22T12 --runs 0,12,6,18 --block-years 3
     wx-exchange gfs publish 2026-09 0 --parallel-runs 2
 
-    # Archiv ohne .idx (GDEX): fehlende Kopf-Inventare ergänzen; das Ergebnis ersetzt die
-    # Datei unter "templates" der Konfiguration (Workflow gfs-templates.yml)
+    # Archiv ohne .idx (GDEX): Kopf-Inventare an je einem Lauf pro Monat prüfen und
+    # ergänzen; das Ergebnis ersetzt die Datei unter "templates" (Workflow gfs-templates.yml)
     wx-exchange gfs --config config/sources/gfs_0p25_gdex.yaml templates 2019-06-12T12 \
-        --out gfs_0p25_gdex.templates.json.gz
+        2021-03-22T06 --out gfs_0p25_gdex.templates.json.gz
 
     # VM: Silber aus GHCR nach wx-silver holen, stündlich wiederholen
     wx-exchange gfs import 2021-03-22T12 --runs 0,12,6,18 --watch 3600
@@ -97,9 +97,12 @@ def build_parser() -> argparse.ArgumentParser:
     pub.add_argument("--workdir", type=Path, help="Standard: temporäres Verzeichnis")
 
     tpl = cmd.add_parser(
-        "templates", help="fehlende Kopf-Inventare (header_scan) ergänzen und alle schreiben"
+        "templates", help="Kopf-Inventare (header_scan) prüfen, fehlende ergänzen, alle schreiben"
     )
-    tpl.add_argument("run", type=parse_run, help="ein Lauf derselben Modellversion")
+    tpl.add_argument("run", type=parse_run, help="erster Lauf")
+    tpl.add_argument(
+        "end", type=parse_run, nargs="?", help="dazu je Monat bis hier der erste 00Z-Lauf"
+    )
     tpl.add_argument("--out", type=Path, required=True)
     tpl.add_argument(
         "--seed", type=Path, help="weitere Vorlagen übernehmen (z. B. Artefakt eines Laufs)"
@@ -224,23 +227,46 @@ def _archive_client(args: argparse.Namespace, config: GfsConfig) -> httpx.AsyncC
     return httpx.AsyncClient(timeout=timeout, follow_redirects=True, limits=limits)
 
 
+def _sample_runs(first: datetime, end: datetime | None) -> list[datetime]:
+    """``first`` und je Monat bis ``end`` der erste 00Z-Lauf (Stichproben für Modell-Updates)."""
+    runs = [first]
+    month = first.replace(day=1, hour=0)
+    while end is not None:
+        month = (month + timedelta(days=32)).replace(day=1)
+        if month > end:
+            break
+        runs.append(month)
+    return runs
+
+
 async def _templates(args: argparse.Namespace, config: GfsConfig) -> int:
-    """Baut die in ``config.templates`` fehlenden Vorlagen und schreibt alle."""
+    """Prüft die Vorlagen aus ``config.templates`` an Stichprobenläufen und ergänzt sie.
+
+    Je Lauf und Schritt: Passt eine vorhandene Vorlage, kostet das wenige Anfragen; sonst
+    (fehlender Schritt oder geänderte Nachrichtenfolge nach einem Modell-Update) kommt eine
+    weitere Variante hinzu.
+    """
+    runs = _sample_runs(args.run, args.end)
     async with _archive_client(args, config) as client:
-        endpoints = GfsIngestor(config, Bronze(MemoryStore()), client, archive_only=True).endpoints
-        scan = [ep for ep in endpoints if ep.config.kind == "header_scan"]
+        ingestor = GfsIngestor(config, Bronze(MemoryStore()), client, archive_only=True)
+        scan = [ep for ep in ingestor.endpoints if ep.config.kind == "header_scan"]
         if not scan:
             print("keine header_scan-Endpunkte in der Konfiguration", file=sys.stderr)
             return 1
         if args.seed:
             scan[0].import_templates(read_templates(args.seed))
         steps = config.step_list()
-        have = {int(s) for s in scan[0].export_templates()}
-        missing = [s for s in steps if s not in have]
-        built = await scan[0].build_templates(args.run, missing, config.step_concurrency)
+        ready = {}
+        for run in runs:
+            built = await scan[0].build_templates(
+                run, steps, ingestor.specs, config.step_concurrency
+            )
+            ready[f"{run:%Y-%m-%dT%H}"] = len(built)
     templates = scan[0].export_templates()
-    write_templates(args.out, f"{args.run:%Y-%m-%dT%H}", templates)
-    print(json.dumps({"steps": len(templates), "of": len(steps), "built": built}))
+    label = f"{runs[0]:%Y-%m-%dT%H}" + (f"..{runs[-1]:%Y-%m-%dT%H}" if len(runs) > 1 else "")
+    write_templates(args.out, label, templates)
+    variants = sum(len(v) for v in templates.values())
+    print(json.dumps({"steps": len(templates), "variants": variants, "runs": ready}))
     # Fehlende Vorlagen bauen die Monatsjobs selbst; das ist kein Fehler
     return 0
 

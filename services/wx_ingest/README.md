@@ -22,8 +22,10 @@ Ausschnitt zugeschnittenen Schritte in Garage (Bucket `wx-bronze`) ab. Grundlage
    wird aus der Vorlage geschätzt, dort angesprungen und nur über wenige Köpfe gelaufen, statt
    alle Köpfe zu lesen. Passt die Vorlage nicht, entsteht ein neues vollständiges Inventar.
    Die Vorlagen liegen fest im Repo (`templates` in der Konfiguration,
-   `config/sources/gfs_0p25_gdex.templates.json.gz`). Fehlende Schritte ergänzt der Workflow
-   `gfs-templates.yml` (`wx-exchange gfs templates`, Ergebnis als Artefakt oder Commit).
+   `config/sources/gfs_0p25_gdex.templates.json.gz`), je Schritt eine oder mehrere Varianten,
+   weil Modell-Updates die Nachrichtenfolge ändern; versucht wird die zuletzt passende zuerst.
+   Der Workflow `gfs-templates.yml` (`wx-exchange gfs templates`) prüft sie an je einem Lauf
+   pro Monat und ergänzt fehlende Schritte und neue Varianten (Artefakt oder Commit).
    NOMADS liefert Süd→Nord und einfache Packung; die Antwort wird auf Nord→Süd gedreht
    und verlustfrei mit CCSDS gepackt, damit Bronze unabhängig vom Endpunkt einheitlich ist.
    Der Filter kombiniert jede Variable mit jedem Level und liefert daher einzelne

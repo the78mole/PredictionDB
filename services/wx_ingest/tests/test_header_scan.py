@@ -15,6 +15,7 @@ from wx_ingest.testing import GDEX_PATH, RUN, FakeGfsHost, make_client, make_con
 
 STEPS = {0, 1, 2, 3, 6, 9, 12}
 GDEX = {"name": "gdex", "kind": "header_scan", "url": "https://gdex.test", "archive": True}
+SPECS = make_config().specs()
 
 
 def ingestor(bronze: Bronze, client: httpx.AsyncClient, **endpoint: Any) -> GfsIngestor:
@@ -119,10 +120,11 @@ async def test_template_mismatch_rebuilds_inventory() -> None:
         full = await _fetch(ep, 9)
         # Vorlage eines anderen Schritts: Schlüssel passen nicht (andere Prognosezeit)
         await _fetch(ep, 3)
-        ep._templates[9] = ep._templates[3]
+        ep._templates[9] = list(ep._templates[3])
         again = await _fetch(ep, 9)
     assert again.messages == full.messages and again.grib == full.grib
-    assert ep._templates[9].entries[2].key == "TMP:2 m above ground:9 hour fcst"
+    assert ep._templates[9][0].entries[2].key == "TMP:2 m above ground:9 hour fcst"
+    assert len(ep._templates[9]) == 2  # die unpassende bleibt als weitere Variante
 
 
 @pytest.mark.parametrize("factor", [0.5, 1.6])
@@ -134,16 +136,16 @@ async def test_template_with_other_lengths(monkeypatch: pytest.MonkeyPatch, fact
     async with make_client(host) as client:
         ep = ingestor(Bronze(MemoryStore()), client).endpoints[0]
         full = await _fetch(ep, 12)
-        t = ep._templates[12]
+        t = ep._templates[12][0]
         offsets = [int(e.offset * factor**i) for i, e in enumerate(t.entries)]
         skewed = [
             dataclasses.replace(e, offset=o, length=n - o)
             for e, o, n in zip(t.entries, offsets, [*offsets[1:], t.size], strict=True)
         ]
-        ep._templates[12] = gfs._Template(t.size, skewed)
+        ep._templates[12] = [gfs._Template(t.size, skewed)]
         again = await _fetch(ep, 12)
     assert again.messages == full.messages and again.grib == full.grib
-    assert ep._templates[12].entries == skewed  # gezielt gefunden, nicht neu inventarisiert
+    assert ep._templates[12][0].entries == skewed  # gezielt gefunden, nicht neu inventarisiert
 
 
 async def test_template_skips_ambiguous_keys(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -161,10 +163,10 @@ async def test_template_skips_ambiguous_keys(monkeypatch: pytest.MonkeyPatch) ->
     async with make_client(host) as client:
         ep = ingestor(Bronze(MemoryStore()), client).endpoints[0]
         full = await _fetch(ep, 6)
-        template = ep._templates[6]
+        template = ep._templates[6][0]
         again = await _fetch(ep, 6)
     assert again.messages == full.messages and again.grib == full.grib
-    assert ep._templates[6] is template
+    assert ep._templates[6] == [template]
 
 
 async def test_template_overlapping_groups_once(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -175,10 +177,36 @@ async def test_template_overlapping_groups_once(monkeypatch: pytest.MonkeyPatch)
     async with make_client(host) as client:
         ep = ingestor(Bronze(MemoryStore()), client).endpoints[0]
         full = await _fetch(ep, 9)
-        template = ep._templates[9]
+        template = ep._templates[9][0]
         again = await _fetch(ep, 9)
     assert again.messages == full.messages and again.grib == full.grib
-    assert ep._templates[9] is template
+    assert ep._templates[9] == [template]
+
+
+async def test_second_template_variant_found_without_full_scan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Nach einem Modell-Update passt die neueste Vorlage nicht, eine ältere Variante schon
+    scans: list[str] = []
+    scan = gfs.Endpoint.scan
+
+    async def counted(self: gfs.Endpoint, url: str) -> tuple[str, list[IdxEntry]]:
+        scans.append(url)
+        return await scan(self, url)
+
+    monkeypatch.setattr(gfs.Endpoint, "scan", counted)
+    host = FakeGfsHost("gdex.test", STEPS, index=False)
+    async with make_client(host) as client:
+        ep = ingestor(Bronze(MemoryStore()), client).endpoints[0]
+        await _fetch(ep, 3)
+        full = await _fetch(ep, 9)
+        right = ep._templates[9][0]
+        ep._templates[9] = [ep._templates[3][0], right]
+        n = len(scans)
+        again = await _fetch(ep, 9)
+    assert len(scans) == n
+    assert again.messages == full.messages and again.grib == full.grib
+    assert ep._templates[9][0] is right  # die passende rückt nach vorn
 
 
 async def test_parallel_runs_share_one_full_scan(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -214,7 +242,7 @@ async def test_templates_travel_between_jobs(
     path = tmp_path / "gdex.templates.json.gz"
     async with make_client(host) as client:
         builder = ingestor(Bronze(MemoryStore()), client).endpoints[0]
-        assert await builder.build_templates(RUN, [3, 6, 9]) == [3, 6]
+        assert await builder.build_templates(RUN, [3, 6, 9], SPECS) == [3, 6]
         gfs.write_templates(path, "2026-10-20T00", builder.export_templates())
         full = await _fetch(builder, 6)
         n = len(scans)
@@ -239,7 +267,7 @@ async def test_template_timeout_skips_step(monkeypatch: pytest.MonkeyPatch) -> N
     host = FakeGfsHost("gdex.test", {3, 6}, index=False)
     async with make_client(host) as client:
         ep = ingestor(Bronze(MemoryStore()), client).endpoints[0]
-        assert await ep.build_templates(RUN, [3, 6]) == [3]
+        assert await ep.build_templates(RUN, [3, 6], SPECS) == [3]
 
 
 async def test_template_retries_failed_step_once(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -256,4 +284,4 @@ async def test_template_retries_failed_step_once(monkeypatch: pytest.MonkeyPatch
     host = FakeGfsHost("gdex.test", {3, 6}, index=False)
     async with make_client(host) as client:
         ep = ingestor(Bronze(MemoryStore()), client).endpoints[0]
-        assert await ep.build_templates(RUN, [3, 6]) == [3, 6]
+        assert await ep.build_templates(RUN, [3, 6], SPECS) == [3, 6]

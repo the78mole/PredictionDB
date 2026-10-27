@@ -113,6 +113,10 @@ class _Template:
     size: int
     entries: list[IdxEntry]
 
+    def keys(self) -> tuple[str, ...]:
+        """Nachrichtenfolge; Vorlagen mit gleicher Folge sind gleichwertig."""
+        return tuple(e.key for e in self.entries)
+
     def index(self) -> dict[str, int]:
         """Position je Schlüssel; mehrdeutige Schlüssel taugen nicht zum Wiederfinden."""
         seen: dict[str, int] = {}
@@ -189,8 +193,9 @@ class Endpoint:
         self._limiter = AsyncLimiter(config.rate_per_min, 60) if config.rate_per_min else None
         self._retry_attempts = retry_attempts
         self._retry_wait_max = retry_wait_max
-        #: header_scan: vollständiges Inventar je Schritt als Vorlage für spätere Läufe
-        self._templates: dict[int, _Template] = {}
+        #: header_scan: vollständige Inventare je Schritt als Vorlagen für spätere Läufe,
+        #: zuletzt passende zuerst (die Nachrichtenfolge wechselt mit Modell-Updates)
+        self._templates: dict[int, list[_Template]] = {}
         self._scan_locks: dict[int, asyncio.Lock] = {}
 
     @property
@@ -457,12 +462,17 @@ class Endpoint:
         return f"{self.config.url.rstrip('/')}/{self.config.path.format(run=run, step=step)}"
 
     async def build_templates(
-        self, run: datetime, steps: list[int], concurrency: int = 8
+        self,
+        run: datetime,
+        steps: list[int],
+        specs: list[MessageSpec],
+        concurrency: int = 8,
     ) -> list[int]:
-        """Vollständige Inventare aller Schritte eines Laufs als Vorlagen; liefert die Schritte.
+        """Vorlagen für alle Schritte eines Laufs; liefert die Schritte mit passender Vorlage.
 
-        Höchstens ``concurrency`` Schritte gleichzeitig, damit sie nacheinander fertig werden
-        und der Fortschritt im Log sichtbar ist (die Anfragen begrenzt ohnehin der Endpunkt).
+        Passt eine vorhandene Vorlage, kostet das nur wenige Anfragen; sonst entsteht aus
+        dem vollständigen Inventar eine weitere. Höchstens ``concurrency`` Schritte
+        gleichzeitig, damit der Fortschritt im Log sichtbar ist.
         """
         sem = asyncio.Semaphore(concurrency)
         started = time.monotonic()
@@ -472,7 +482,7 @@ class Endpoint:
             nonlocal finished
             async with sem:
                 try:
-                    _, entries = await self._full_inventory(self._scan_url(run, step), step)
+                    _, entries = await self._inventory(self._scan_url(run, step), step, specs)
                 except (StepUnavailable, FetchError, httpx.HTTPError) as exc:
                     # auch Zeitüberschreitungen nach allen Wiederholungen: dieser Schritt
                     # fehlt dann in den Vorlagen, die Monatsjobs bauen ihn selbst
@@ -489,7 +499,7 @@ class Endpoint:
             if error:
                 log.warning("template_failed", error=error, **progress)
                 return None
-            log.info("template_built", messages=len(entries), **progress)
+            log.info("template_ready", messages=len(entries), **progress)
             return step
 
         log.info("templates_start", run=f"{run:%Y%m%d%H}", steps=len(steps))
@@ -504,24 +514,41 @@ class Endpoint:
         return sorted(built)
 
     def export_templates(self) -> dict[str, Any]:
-        """Vorlagen als JSON-taugliches Objekt, damit andere Jobs sie nicht neu bauen müssen."""
+        """Vorlagen als JSON-taugliches Objekt, damit andere Jobs sie nicht neu bauen müssen.
+
+        Je Schritt eine Liste von Varianten, in der Reihenfolge der Nachrichtenfolge, damit
+        gleicher Bestand gleich exportiert wird.
+        """
         return {
-            str(step): {
-                "size": t.size,
-                "entries": [[e.offset, e.length, e.var, e.level, e.fcst] for e in t.entries],
-            }
-            for step, t in sorted(self._templates.items())
+            str(step): [
+                {
+                    "size": t.size,
+                    "entries": [[e.offset, e.length, e.var, e.level, e.fcst] for e in t.entries],
+                }
+                for t in sorted(variants, key=_Template.keys)
+            ]
+            for step, variants in sorted(self._templates.items())
         }
 
     def import_templates(self, data: dict[str, Any]) -> int:
-        """Übernimmt Vorlagen aus :meth:`export_templates`; liefert ihre Zahl."""
-        for step, t in data.items():
-            entries = [
-                IdxEntry(str(i), off, length, "", var, level, fcst)
-                for i, (off, length, var, level, fcst) in enumerate(t["entries"], start=1)
-            ]
-            self._templates[int(step)] = _Template(int(t["size"]), entries)
+        """Übernimmt Vorlagen aus :meth:`export_templates` (auch eine je Schritt ohne Liste).
+
+        Liefert die Zahl der Schritte.
+        """
+        for step, variants in data.items():
+            for t in reversed(variants if isinstance(variants, list) else [variants]):
+                entries = [
+                    IdxEntry(str(i), off, length, "", var, level, fcst)
+                    for i, (off, length, var, level, fcst) in enumerate(t["entries"], start=1)
+                ]
+                self._add_template(int(step), _Template(int(t["size"]), entries))
         return len(data)
+
+    def _add_template(self, step: int, template: _Template) -> None:
+        """Vorlage nach vorn; eine mit gleicher Nachrichtenfolge ersetzt sie."""
+        keys = template.keys()
+        rest = [t for t in self._templates.get(step, []) if t.keys() != keys]
+        self._templates[step] = [template, *rest]
 
     async def _fetch_header_scan(
         self, run: datetime, step: int, specs: list[MessageSpec], bbox: BBox
@@ -550,25 +577,32 @@ class Endpoint:
     async def _inventory(
         self, url: str, step: int, specs: list[MessageSpec]
     ) -> tuple[str, list[IdxEntry]]:
-        """Einträge für die Auswahl: gezielt über die Vorlage, sonst vollständig (neue Vorlage)."""
-        template = self._templates.get(step)
-        if template is None:
+        """Einträge für die Auswahl: gezielt über eine Vorlage, sonst vollständig (neue Vorlage)."""
+        variants = self._templates.get(step)
+        if not variants:
             # Gleichzeitige Läufe warten auf die Vorlage, statt jeder alle Köpfe zu lesen
             async with self._scan_locks.setdefault(step, asyncio.Lock()):
-                template = self._templates.get(step)
-                if template is None:
+                variants = self._templates.get(step)
+                if not variants:
                     return await self._full_inventory(url, step)
-        try:
-            return await self.scan_targeted(url, template, specs)
-        except _TemplateMiss as exc:
-            log.info("scan_template_miss", url=url, error=str(exc))
-            return await self._full_inventory(url, step)
+        errors = []
+        for template in list(variants):
+            try:
+                found = await self.scan_targeted(url, template, specs)
+            except _TemplateMiss as exc:
+                errors.append(str(exc))
+                continue
+            if template is not variants[0]:
+                self._add_template(step, template)
+            return found
+        log.info("scan_template_miss", url=url, variants=len(errors), error=errors[0])
+        return await self._full_inventory(url, step)
 
     async def _full_inventory(self, url: str, step: int) -> tuple[str, list[IdxEntry]]:
         final, entries = await self.scan(url)
         if entries:
             end = entries[-1].offset + (entries[-1].length or 0)
-            self._templates[step] = _Template(end, entries)
+            self._add_template(step, _Template(end, entries))
         return final, entries
 
     async def _fetch_whole_scanned(
