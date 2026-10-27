@@ -394,14 +394,20 @@ Eingerichtet wird das erst, wenn mindestens drei Jahre GFS-Trainingsdaten vorlie
   jeder Ausgabezeitpunkt vorliegt. Nachholen ist leakage-sicher, weil die Merkmale nur Werte
   nutzen, die zum Ausgabezeitpunkt veröffentlicht waren.
 - **Neue Versionen sofort im Vergleich:** Kommt eine aktive Version hinzu (neu registrierter
-  Challenger, neue Linie), rechnet sie rückwirkend alle Ausgabezeitpunkte der letzten 72 h nach,
-  die die übrigen aktiven Versionen (aller Linien) schon haben (`--fill-new 72`). Sie erscheint
-  damit sofort in den Panels unter „Prognosemodelle“ und „Modellversionen“ neben Champion und
-  Challengern, statt erst ab dem nächsten Liefertag. Die Eingänge sind dieselben wie bei den
-  übrigen Versionen: dieselbe Merkmalsbildung zum Ausgabezeitpunkt, nur mit Werten, die damals
-  veröffentlicht waren. Abweichen kann nur, was nachträglich in der Datenbank korrigiert wurde
-  (z. B. eine überschriebene Energiereihe). Geprüft wird beim Start des Dienstes für alle aktiven
-  Versionen (füllt so auch Lücken) und danach für jede neu hinzukommende Version einmal.
+  Challenger, neue Linie), rechnet sie rückwirkend die Ausgabezeitpunkte der letzten 72 h nach,
+  die die übrigen aktiven Versionen (aller Linien) schon haben (`--fill-new 72`), und zwar nur
+  die, die die Vergleichsgrafiken zeigen: 08 UTC (Prognosefehler D+1, Tabelle) und 10 Uhr
+  Ortszeit (eigene Modelle gegen ÜNB und Day-Ahead-Preis), also etwa sechs je Version. Sie
+  erscheint damit sofort in den Panels unter „Prognosemodelle“ und „Modellversionen“ neben
+  Champion und Challengern, statt erst ab dem nächsten Liefertag. Die Eingänge sind dieselben wie
+  bei den übrigen Versionen: dieselbe Merkmalsbildung zum Ausgabezeitpunkt, nur mit Werten, die
+  damals veröffentlicht waren. Abweichen kann nur, was nachträglich in der Datenbank korrigiert
+  wurde (z. B. eine überschriebene Energiereihe). Geprüft wird beim Start des Dienstes für alle
+  aktiven Versionen (füllt so auch Lücken) und danach für jede neu hinzukommende Version einmal,
+  jeweils nach dem regulären Lauf der Stunde.
+- **Wetter im Live-Snapshot:** Der Snapshot liest Wetterläufe nur bis zum Ausgabezeitpunkt
+  (spätere nutzt die Merkmalsbildung nicht) und nur, wenn eine der gerechneten Versionen eine
+  Wetter-Variante ist. Die Wetterabfrage über `feat.nwp_value` ist der teuerste Teil.
 - **Vergleich mit der ÜNB-Prognose:** Die Übertragungsnetzbetreiber veröffentlichen ihre
   Day-Ahead-Lastprognose bis 10:00 Ortszeit am Vortag (VO 543/2013 Art. 6.1 b). Die Panels
   „Lastprognose: eigene Modelle gegen ÜNB“ und „Preisprognose: eigene Modelle gegen
