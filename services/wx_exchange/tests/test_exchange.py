@@ -297,3 +297,16 @@ async def test_verify_local_build_against_ghcr(tmp_path: Path) -> None:
     result = imp.verify(start, end)
     assert result.runs == {"2026102006": "different"}
     assert result.details["2026102006"]["different"] == [chunk[len(key) + 1 :]]
+
+
+async def test_import_order_follows_run_priority(tmp_path: Path) -> None:
+    fake = FakeRegistry()
+    r00 = datetime(2026, 10, 20, 0, tzinfo=UTC)
+    pub = _publisher(fake, host(RUN, r00), tmp_path)
+    await pub.publish_month("2026-10", 6, RUN, RUN)
+    await pub.publish_month("2026-10", 0, r00, r00)
+
+    imp = Importer(registry(fake, write=False), MemoryStore())
+    start, end = datetime(2026, 10, 1, tzinfo=UTC), datetime(2026, 10, 31, tzinfo=UTC)
+    assert [layer.run for _, layer in imp.layers(start, end, [0, 6])] == [r00, RUN]
+    assert [layer.run for _, layer in imp.layers(start, end, [6, 0])] == [RUN, r00]
