@@ -1,0 +1,84 @@
+name: GFS-Kopf-Inventare
+
+# GDEX (GFS vor v16) hat keine .idx. Die Kopf-Inventare je Schritt (Vorlagen) liegen fest im
+# Repo, Datei unter "templates" in config/sources/gfs_0p25_gdex.yaml; die Nachrichtenfolge ist
+# innerhalb einer GFS-Version gleich. Dieser Workflow baut nur die Schritte, die in der Datei
+# fehlen, und lädt die ergänzte Datei als Artefakt hoch. Mit branch committet er sie dorthin
+# (nie auf main); mit seed_run übernimmt er das Artefakt gfs-templates eines früheren Laufs.
+on:
+  workflow_dispatch:
+    inputs:
+      run:
+        description: Ein Lauf derselben GFS-Version
+        default: 2019-06-12T12
+      concurrency:
+        description: Gleichzeitige Anfragen ans Archiv
+        default: "96"
+      seed_run:
+        description: Run-ID mit Artefakt gfs-templates als Ausgangspunkt (leer = keiner)
+        default: ""
+      branch:
+        description: Ergänzte Datei auf diesen Zweig committen (leer = nur Artefakt)
+        default: ""
+
+permissions:
+  actions: read
+  contents: write
+
+env:
+  CONFIG: config/sources/gfs_0p25_gdex.yaml
+  OUT: config/sources/gfs_0p25_gdex.templates.json.gz
+  PDB_LOG_JSON: "false"
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  templates:
+    name: Kopf-Inventare ergänzen
+    runs-on: ubuntu-26.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          enable-cache: true
+          save-cache: false
+      - run: uv sync --locked --no-dev --package wx-exchange
+      - name: Ausgangspunkt holen
+        if: inputs.seed_run != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SEED_RUN: ${{ inputs.seed_run }}
+        run: gh run download "$SEED_RUN" -n gfs-templates -R "$GITHUB_REPOSITORY" -D seed
+      - name: Fehlende Schritte bauen
+        env:
+          RUN: ${{ inputs.run }}
+          CONCURRENCY: ${{ inputs.concurrency }}
+        run: |
+          args=(gfs --config "$CONFIG" templates "$RUN" --out "$OUT"
+                --archive-concurrency "$CONCURRENCY")
+          seed=$(find seed -type f 2>/dev/null | head -n 1)
+          [ -n "$seed" ] && args+=(--seed "$seed")
+          uv run --no-sync wx-exchange "${args[@]}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: gfs-templates
+          path: ${{ env.OUT }}
+          retention-days: 7
+      - name: Auf Zweig committen
+        if: inputs.branch != '' && inputs.branch != 'main'
+        env:
+          BRANCH: ${{ inputs.branch }}
+          RUN: ${{ inputs.run }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Datei sichern, dann auf den Zweig (oder neu ab diesem Stand) wechseln
+          cp "$OUT" "$RUNNER_TEMP/templates.json.gz" && rm -f "$OUT" && git reset -q --hard
+          if git fetch -q origin "$BRANCH"; then git checkout -q -B "$BRANCH" FETCH_HEAD
+          else git checkout -q -B "$BRANCH"; fi
+          cp "$RUNNER_TEMP/templates.json.gz" "$OUT"
+          git add "$OUT"
+          git diff --cached --quiet && exit 0
+          git commit -m "chore(config): GDEX-Kopf-Inventare ergänzt (Lauf $RUN)" \
+            -m "Signed-off-by: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+          git push origin "HEAD:$BRANCH"

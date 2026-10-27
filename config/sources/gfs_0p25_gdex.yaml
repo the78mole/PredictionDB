@@ -17,6 +17,9 @@ bbox: {north: 58, south: 44, west: 0, east: 20}
 lookback_hours: 30
 # Keine .idx: je Schritt einige hundert kleine Range-Anfragen für die Köpfe
 step_concurrency: 8
+# Kopf-Inventare je Schritt eines v15-Laufs; spätere Läufe springen damit gezielt zu den
+# gewählten Nachrichten. Fehlende Schritte ergänzt der Workflow gfs-templates.yml.
+templates: gfs_0p25_gdex.templates.json.gz
 
 # OSDF leitet auf einen nahen Cache weiter; data.gdex.ucar.edu ist der Ursprung.
 endpoints:

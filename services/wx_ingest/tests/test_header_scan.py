@@ -1,6 +1,6 @@
 import asyncio
 import dataclasses
-import json
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -198,8 +198,10 @@ async def test_parallel_runs_share_one_full_scan(monkeypatch: pytest.MonkeyPatch
     assert len(scans) == 1  # der zweite Abruf wartet und springt dann über die Vorlage
 
 
-async def test_templates_travel_between_jobs(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Ein Job baut die Vorlagen, ein anderer übernimmt sie als JSON und springt sofort
+async def test_templates_travel_between_jobs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Ein Lauf baut die Vorlagen, die Datei aus der Konfiguration lässt andere sofort springen
     scans: list[str] = []
     scan = gfs.Endpoint.scan
 
@@ -209,17 +211,20 @@ async def test_templates_travel_between_jobs(monkeypatch: pytest.MonkeyPatch) ->
 
     monkeypatch.setattr(gfs.Endpoint, "scan", counted)
     host = FakeGfsHost("gdex.test", {3, 6}, index=False)
+    path = tmp_path / "gdex.templates.json.gz"
     async with make_client(host) as client:
         builder = ingestor(Bronze(MemoryStore()), client).endpoints[0]
         assert await builder.build_templates(RUN, [3, 6, 9]) == [3, 6]
-        data = json.loads(json.dumps(builder.export_templates()))
+        gfs.write_templates(path, "2026-10-20T00", builder.export_templates())
         full = await _fetch(builder, 6)
         n = len(scans)
-        worker = ingestor(Bronze(MemoryStore()), client).endpoints[0]
-        assert worker.import_templates(data) == 2
+        ep = {**GDEX, "path": GDEX_PATH}
+        config = make_config(endpoints=[ep], templates=path)
+        worker = GfsIngestor(config, Bronze(MemoryStore()), client).endpoints[0]
         again = await _fetch(worker, 6)
     assert len(scans) == n  # kein vollständiges Inventar im zweiten Job
     assert again.messages == full.messages and again.grib == full.grib
+    assert gfs.read_templates(path) == builder.export_templates()
 
 
 async def test_template_timeout_skips_step(monkeypatch: pytest.MonkeyPatch) -> None:

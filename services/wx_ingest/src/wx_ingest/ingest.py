@@ -19,7 +19,7 @@ from gribkit import IdxParseError
 from predictiondb_core.log import get_logger
 from wx_ingest.bronze import Bronze, StepManifest
 from wx_ingest.config import GfsConfig
-from wx_ingest.gfs import Endpoint, FetchError, StepUnavailable
+from wx_ingest.gfs import Endpoint, FetchError, StepUnavailable, read_templates
 
 log = get_logger(__name__)
 
@@ -67,6 +67,12 @@ class GfsIngestor:
         ]
         if not self.endpoints:
             raise ValueError("keine Endpunkte für diesen Modus konfiguriert")
+        scan = [ep for ep in self.endpoints if ep.config.kind == "header_scan"]
+        if scan and config.templates and config.templates.exists():
+            templates = read_templates(config.templates)
+            for ep in scan:
+                ep.import_templates(templates)
+            log.info("templates_loaded", file=config.templates.name, steps=len(templates))
 
     def _bbox_dict(self) -> dict[str, float]:
         return self.config.bbox.model_dump()
