@@ -299,6 +299,23 @@ def test_registry_champion_challenger(snap, cfg, tmp_path: Path) -> None:  # typ
     pd.testing.assert_frame_equal(a["da_price_de_lu"], b["da_price_de_lu"])
 
 
+def test_attach_backtest_to_registered_version(snap, cfg, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    fb = FeatureBuilder(snap, cfg)
+    res = run_backtest(fb, cfg, variants=["kalender"])
+    frame = fb.build([date(2023, 3, 1) + pd.Timedelta(days=i) for i in range(0, 60, 3)])
+    reg = Registry(str(tmp_path), cfg)
+    model = TwoStageModel(cfg, cfg.variant("kalender")).fit(frame)
+    v = reg.register(model, {"snapshot_id": "synthetic"}, None, "champion")
+    assert reg.backtest(v) is None
+    bt = res.predictions.query("method == 'kalender'").drop(columns="method")
+    reg.attach_backtest(v, bt, {"backtest_seconds": 1.0})
+    got = reg.backtest(v)
+    assert got is not None and len(got) == len(bt)
+    man = reg.manifest(v)
+    assert man["files"][-2:] == ["backtest.parquet", "manifest.json"]
+    assert man["backtest_seconds"] == 1.0 and man["variant"]["name"] == "kalender"
+
+
 def test_compare_blocks_group_regression() -> None:
     rng = np.random.default_rng(1)
     ts = pd.date_range("2024-01-01", periods=2000, freq="h", tz="UTC")

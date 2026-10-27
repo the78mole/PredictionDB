@@ -99,6 +99,11 @@ def build_parser() -> argparse.ArgumentParser:
     rc = r.add_subparsers(dest="action", required=True)
     rc.add_parser("list")
     rc.add_parser("sync", help="Versionen, Rollen und Kennzahlen nach meta.model_* spiegeln")
+    at = rc.add_parser(
+        "attach-backtest", help="Backtest-Prognosen nachträglich zu einer Version legen"
+    )
+    at.add_argument("version")
+    at.add_argument("--backtest", required=True, type=Path, help="Ordner von ml-train backtest")
     for name in ("evaluate", "promote"):
         x = rc.add_parser(name)
         x.add_argument("version")
@@ -220,10 +225,7 @@ def cmd_fit(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace) -> int:
     frame = fb.build(days, need_weather=v.requires_weather)
     t0 = time.monotonic()
     model = TwoStageModel(cfg, v).fit(frame)
-    bt = None
-    if a.backtest:
-        p = pd.read_parquet(a.backtest / "predictions.parquet")
-        bt = p[p["method"] == v.name].drop(columns=["method"])
+    bt, extra = backtest_for(a.backtest, v.name) if a.backtest else (None, {})
     manifest = {
         "config": cfg.name,
         "config_sha256": cfg_sha,
@@ -235,17 +237,26 @@ def cmd_fit(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace) -> int:
         "git_commit": git_commit(),
         "created": datetime.now(UTC).isoformat(timespec="seconds"),
     }
-    if a.backtest and (a.backtest / "lauf.json").exists():
-        timings = json.loads((a.backtest / "lauf.json").read_text()).get("timings_s", {})
-        manifest["backtest_seconds"] = round(sum(timings.values()), 1)
-    if a.backtest and (a.backtest / "metrics.csv").exists():
-        m = pd.read_csv(a.backtest / "metrics.csv")
-        manifest["backtest_metrics"] = m[m["method"] == v.name].to_dict("records")
+    manifest.update(extra)
     reg = Registry(a.registry, cfg)
     version = reg.register(model, manifest, bt, a.role)
     try_sync(reg)
     print(json.dumps({"version": version, "role": a.role, "train_rows": len(frame)}))
     return 0
+
+
+def backtest_for(folder: Path, variant: str) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """Backtest-Prognosen einer Variante und Angaben fürs Manifest aus ``ml-train backtest``."""
+    p = pd.read_parquet(folder / "predictions.parquet")
+    bt = p[p["method"] == variant].drop(columns=["method"])
+    extra: dict[str, Any] = {}
+    if (folder / "lauf.json").exists():
+        timings = json.loads((folder / "lauf.json").read_text()).get("timings_s", {})
+        extra["backtest_seconds"] = round(sum(timings.values()), 1)
+    if (folder / "metrics.csv").exists():
+        m = pd.read_csv(folder / "metrics.csv")
+        extra["backtest_metrics"] = m[m["method"] == variant].to_dict("records")
+    return bt, extra
 
 
 def try_sync(reg: Registry, engine: Engine | None = None) -> None:
@@ -266,6 +277,15 @@ def cmd_registry(cfg: ModelConfig, a: argparse.Namespace) -> int:
         from predictiondb_core.db import create_db_engine
 
         print(json.dumps({"versions": sync_registry(create_db_engine(), reg)}))
+        return 0
+    if a.action == "attach-backtest":
+        variant = reg.manifest(a.version)["variant"]["name"]
+        bt, extra = backtest_for(a.backtest, variant)
+        if bt.empty:
+            raise SystemExit(f"Backtest {a.backtest} enthält die Variante {variant} nicht")
+        reg.attach_backtest(a.version, bt, extra)
+        try_sync(reg)
+        print(json.dumps({"version": a.version, "backtest_rows": len(bt)}))
         return 0
     if a.action == "list":
         st = reg.state()
