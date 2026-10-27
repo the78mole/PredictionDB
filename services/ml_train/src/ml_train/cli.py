@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -30,12 +31,13 @@ from typing import Any
 import pandas as pd
 from sqlalchemy import Engine
 
-from ml_train.backtest import BacktestResult, data_days, run_backtest
+from ml_train.backtest import BacktestResult, backtest_steps, data_days, run_backtest
 from ml_train.config import ModelConfig, load_config
 from ml_train.dataset import FeatureBuilder, issue_days_between
+from ml_train.jobs import JobLog, open_job_log
 from ml_train.models import TwoStageModel
 from ml_train.registry import Registry
-from ml_train.snapshot import export_snapshot, load_snapshot
+from ml_train.snapshot import export_snapshot, export_steps, load_snapshot
 from predictiondb_core.log import configure_logging, get_logger
 
 log = get_logger(__name__)
@@ -144,23 +146,28 @@ def build_parser() -> argparse.ArgumentParser:
 # --- Befehle ---------------------------------------------------------------------------------
 
 
-def cmd_snapshot(cfg: ModelConfig, a: argparse.Namespace) -> int:
+def cmd_snapshot(cfg: ModelConfig, a: argparse.Namespace, job: JobLog) -> int:
     from predictiondb_core.db import create_db_engine
 
     end = a.end or (datetime.now(UTC).date() + timedelta(days=2))
     codes = list(dict.fromkeys(cfg.targets + cfg.lag_series + cfg.series_codes))
     codes += sorted({b for t in cfg.stage1 + cfg.stage2 for b in t.benchmarks})
     codes += [c for c in a.extra_codes.split(",") if c]
+    codes = list(dict.fromkeys(codes))
+    job.total(export_steps(codes, to_dt(a.start), to_dt(end), to_dt(a.weather_from)) + 1)
     snap = export_snapshot(
         create_db_engine(),
-        list(dict.fromkeys(codes)),
+        codes,
         to_dt(a.start),
         to_dt(end),
         weather_from=to_dt(a.weather_from),
         run_hours=[int(h) for h in a.run_hours.split(",")],
         max_lead_h=24 * (max(cfg.issue.lead_days) + 2),
+        progress=job.step,
     )
+    job.step("Speichern")
     sid = snap.save(a.out)
+    job.result = sid
     print(json.dumps({"snapshot_id": sid, "out": str(a.out), **snap.manifest["rows"]}))
     return 0
 
@@ -194,7 +201,7 @@ def write_backtest(res: BacktestResult, cfg: ModelConfig, out: Path, extra: dict
     (out / "lauf.json").write_text(json.dumps(run, indent=2, default=str))
 
 
-def cmd_backtest(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace) -> int:
+def cmd_backtest(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: JobLog) -> int:
     if a.test_from:
         cfg.backtest.test_from = a.test_from
     if a.test_to:
@@ -205,26 +212,36 @@ def cmd_backtest(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace) -> int:
         cfg.backtest.train_issue_stride = a.stride
     if a.issue_hour is not None:
         cfg.issue.hour_utc = a.issue_hour
+    job.step("Snapshot laden")
     snap = load_snapshot(a.snapshot)
     fb = FeatureBuilder(snap, cfg)
-    res = run_backtest(fb, cfg, a.variant)
+    # Schritte: Snapshot laden, Backtest, Ergebnisse schreiben
+    job.total(2 + backtest_steps(fb, cfg, a.variant))
+    res = run_backtest(fb, cfg, a.variant, job)
+    job.step("Ergebnisse schreiben")
     write_backtest(res, cfg, a.out, {"snapshot_id": snap.snapshot_id, "config_sha256": cfg_sha})
+    job.result = str(a.out)
     m = res.metrics(("method", "target"))
     print(m.to_string(index=False))
     return 0
 
 
-def cmd_fit(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace) -> int:
+def cmd_fit(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: JobLog) -> int:
+    v = cfg.variant(a.variant)
+    model = TwoStageModel(cfg, v)
+    # Schritte: Snapshot laden, Merkmale, Training je Stufe und Ziel, Registrieren
+    job.total(3 + model.fit_steps())
+    job.step("Snapshot laden")
     snap = load_snapshot(a.snapshot)
     fb = FeatureBuilder(snap, cfg)
     first, last = data_days(fb, cfg)
-    v = cfg.variant(a.variant)
     start = max(v.train_from or first, first)
     train_to = last - timedelta(days=cfg.backtest.gap_days)
     days = issue_days_between(start, train_to, cfg.backtest.train_issue_stride)
+    job.step("Merkmale bilden")
     frame = fb.build(days, need_weather=v.requires_weather)
     t0 = time.monotonic()
-    model = TwoStageModel(cfg, v).fit(frame)
+    model.fit(frame, progress=job.step)
     bt, extra = backtest_for(a.backtest, v.name) if a.backtest else (None, {})
     manifest = {
         "config": cfg.name,
@@ -238,8 +255,10 @@ def cmd_fit(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace) -> int:
         "created": datetime.now(UTC).isoformat(timespec="seconds"),
     }
     manifest.update(extra)
+    job.step("Registrieren")
     reg = Registry(a.registry, cfg)
     version = reg.register(model, manifest, bt, a.role)
+    job.result = version
     try_sync(reg)
     print(json.dumps({"version": version, "role": a.role, "train_rows": len(frame)}))
     return 0
@@ -376,16 +395,46 @@ def cmd_bundle(cfg: ModelConfig, a: argparse.Namespace) -> int:
     return 0
 
 
+def _terminate(signum: int, _: object) -> None:
+    raise SystemExit(128 + signum)
+
+
+def run_job(cfg: ModelConfig, sha: str, a: argparse.Namespace) -> int:
+    """Snapshot, Backtest oder Training mit Fortschritt in ``meta.ml_job``."""
+    variants = {
+        "snapshot": [],
+        "backtest": a.variant or [v.name for v in cfg.variants],
+        "fit": [a.variant],
+    }[a.cmd]
+    args = {k: v for k, v in vars(a).items() if k not in ("cmd", "verbose") and v is not None}
+    job = open_job_log()
+    job.start(a.cmd, cfg.name, variants, args)
+    # docker stop: als Abbruch eintragen statt erst nach der Frist für hängende Jobs
+    signal.signal(signal.SIGTERM, _terminate)
+    try:
+        if a.cmd == "snapshot":
+            rc = cmd_snapshot(cfg, a, job)
+        elif a.cmd == "backtest":
+            rc = cmd_backtest(cfg, sha, a, job)
+        else:
+            rc = cmd_fit(cfg, sha, a, job)
+    except BaseException as e:
+        if isinstance(e, SystemExit) and e.code == 128 + signal.SIGTERM:
+            msg = "beendet (SIGTERM)"
+        else:
+            msg = f"{type(e).__name__}: {e}".strip().rstrip(":")
+        job.finish(error=msg[:1000])
+        raise
+    job.finish(error=None if rc == 0 else f"Rückgabewert {rc}")
+    return rc
+
+
 def main(argv: list[str] | None = None) -> int:
     a = build_parser().parse_args(argv)
     configure_logging()
     cfg, sha = load_config(a.config)
-    if a.cmd == "snapshot":
-        return cmd_snapshot(cfg, a)
-    if a.cmd == "backtest":
-        return cmd_backtest(cfg, sha, a)
-    if a.cmd == "fit":
-        return cmd_fit(cfg, sha, a)
+    if a.cmd in ("snapshot", "backtest", "fit"):
+        return run_job(cfg, sha, a)
     if a.cmd == "registry":
         return cmd_registry(cfg, a)
     if a.cmd == "predict":

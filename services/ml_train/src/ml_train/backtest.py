@@ -18,6 +18,7 @@ import pandas as pd
 
 from ml_train.config import ModelConfig
 from ml_train.dataset import FeatureBuilder, FeatureFrame, issue_days_between
+from ml_train.jobs import JobLog
 from ml_train.metrics import add_context, common_rows, daily_rank_corr, score
 from ml_train.models import TwoStageModel, baselines
 from predictiondb_core.log import get_logger
@@ -111,14 +112,27 @@ def train_frame(
     return full.subset(mask)
 
 
-def run_backtest(
+def backtest_steps(
     fb: FeatureBuilder, cfg: ModelConfig, variants: Sequence[str] | None = None
+) -> int:
+    """Rückmeldungen von :func:`run_backtest`: Merkmale, dann je Faltung und Variante eine."""
+    names = variants or [v.name for v in cfg.variants]
+    return 1 + len(make_folds(cfg, data_days(fb, cfg)[1])) * len(names)
+
+
+def run_backtest(
+    fb: FeatureBuilder,
+    cfg: ModelConfig,
+    variants: Sequence[str] | None = None,
+    job: JobLog | None = None,
 ) -> BacktestResult:
+    job = job or JobLog(None)
     first, last = data_days(fb, cfg)
     folds = make_folds(cfg, last)
     if not folds:
         raise ValueError(f"Kein Testzeitraum: test_from {cfg.backtest.test_from}, Daten bis {last}")
     names = list(variants or [v.name for v in cfg.variants])
+    job.step("Merkmale bilden")
     t0 = time.monotonic()
     full = fb.build(issue_days_between(first, last))
     timings = {"features_s": time.monotonic() - t0}
@@ -133,6 +147,7 @@ def run_backtest(
         for method, preds in baselines(test, cfg).items():
             parts += _long(method, dict(preds), test, fold.no)
         for name in names:
+            job.step(f"Faltung {fold.no + 1}/{len(folds)} · {name} · {fold.test_from:%m/%Y}")
             v = cfg.variant(name)
             tr = train_frame(full, cfg, name, fold.train_to, first)
             if len(tr) < 1000:

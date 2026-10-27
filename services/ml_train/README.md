@@ -99,6 +99,16 @@ ins Manifest (`backtest_seconds`). Ohne `--backtest` trainierte Versionen haben 
 `registry attach-backtest` legt die Prognosen eines Backtests derselben Konfiguration und
 Variante nachträglich dazu, der nächste Abgleich füllt `meta.model_metric`.
 
+### Fortschritt laufender Jobs
+
+`snapshot`, `backtest` und `fit` tragen sich beim Start in `meta.ml_job` ein und melden jeden
+Schritt (Backtest: je Faltung und Variante, Training: Merkmale, je Stufe und Ziel ein Modell,
+Registrieren) mit Zählerstand. Ein Lebenszeichen je Minute hält `updated_at` auch in langen
+Schritten frisch; das Panel „Laufende Trainings und Backtests" unter „Modellversionen" zeigt so
+laufende und in den letzten 24 Stunden beendete Jobs mit Fortschritt, Laufzeit und geschätztem
+Ende. `docker stop` (SIGTERM) wird als Fehler eingetragen; hart beendete Jobs ohne Lebenszeichen
+seit 15 Minuten markiert der nächste Start als abgebrochen. Ohne Datenbank läuft alles wie bisher.
+
 ## Tests
 
 ```bash

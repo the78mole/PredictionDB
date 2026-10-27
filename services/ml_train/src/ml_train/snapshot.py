@@ -29,6 +29,7 @@ from typing import Any
 import pandas as pd
 from sqlalchemy import Engine, text
 
+from ml_train.jobs import Progress, no_progress
 from predictiondb_core.log import get_logger
 
 log = get_logger(__name__)
@@ -163,6 +164,13 @@ def latest_clustering(engine: Engine) -> str | None:
     return None if v is None else str(v)
 
 
+def export_steps(
+    codes: list[str], start: datetime, end: datetime, weather_from: datetime | None = None
+) -> int:
+    """Zahl der Rückmeldungen von :func:`export_snapshot` (Reihen, Wettermonate, Bestand)."""
+    return len(codes) + len(list(_months(max(start, weather_from or start), end))) + 1
+
+
 def export_snapshot(
     engine: Engine,
     codes: list[str],
@@ -175,6 +183,7 @@ def export_snapshot(
     clustering_version: str | None = None,
     source: str = "gfs_0p25",
     grid: str = "gfs_0p25",
+    progress: Progress = no_progress,
 ) -> Snapshot:
     """Liest Energie, Wetter-Features und Bestand für ``[start, end)`` aus der Datenbank."""
     cv = clustering_version or latest_clustering(engine)
@@ -182,13 +191,16 @@ def export_snapshot(
     energy_parts: list[pd.DataFrame] = []
     weather_parts: list[pd.DataFrame] = []
     with engine.connect() as c:
-        for code in codes:
+        for i, code in enumerate(codes):
+            progress(f"Energie {i + 1}/{len(codes)} · {code}")
             df = pd.read_sql(ENERGY_SQL, c, params={"code": code, "a": start, "b": end})
             df["code"] = code
             energy_parts.append(df)
             log.info("snapshot.energy", code=code, rows=len(df))
         if cv is not None:
-            for a, b in _months(max(start, weather_from or start), end):
+            months = list(_months(max(start, weather_from or start), end))
+            for j, (a, b) in enumerate(months):
+                progress(f"Wetter {j + 1}/{len(months)} · {a:%Y-%m}")
                 df = pd.read_sql(
                     WEATHER_SQL,
                     c,
@@ -204,6 +216,7 @@ def export_snapshot(
                 )
                 weather_parts.append(df)
                 log.info("snapshot.weather", month=a.strftime("%Y-%m"), rows=len(df))
+            progress("Bestand")
             capacity = pd.read_sql(CAPACITY_SQL, c, params={"cv": cv})
         else:
             capacity = pd.DataFrame(columns=["day", "technology", "capacity_mw"])

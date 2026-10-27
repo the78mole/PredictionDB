@@ -463,6 +463,286 @@
       }
     },
     {
+      "type": "table",
+      "title": "Laufende Trainings und Backtests",
+      "id": 48,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "description": "Laufende Aufrufe von ml-train fit, backtest und snapshot (meta.ml_job) sowie die in den letzten 24 Stunden beendeten. Backtest: ein Schritt je Faltung und Variante; Training: Merkmale, je Stufe und Ziel ein Modell, Registrieren. Erledigt und Fortschritt zählen abgeschlossene Schritte, Schritt / Ergebnis zeigt den laufenden (bei beendeten Jobs Version, Snapshot-ID bzw. Ausgabeordner oder den Fehler); Fertig ca. rechnet mit gleich langen Schritten (Faltungen werden im Expanding Window länger, die Schätzung ist daher eher zu früh). hängt? = seit 5 Minuten kein Lebenszeichen.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT job_id AS \"Job\",\n       CASE command WHEN 'fit' THEN 'Training' WHEN 'backtest' THEN 'Backtest' ELSE 'Snapshot' END AS \"Art\",\n       config AS \"Konfiguration\", array_to_string(variants, ', ') AS \"Varianten\",\n       to_char(started_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Start\",\n       CASE WHEN status = 'running' THEN step ELSE coalesce(error, result) END AS \"Schritt / Ergebnis\",\n       steps_done || '/' || coalesce(steps_total::text, '?') AS \"Erledigt\",\n       round(100.0 * steps_done / nullif(steps_total, 0), 1) AS \"Fortschritt\",\n       extract(epoch FROM coalesce(finished_at, now()) - started_at) AS \"Laufzeit\",\n       CASE WHEN status = 'running' THEN extract(epoch FROM now() - step_started_at) END AS \"Im Schritt\",\n       CASE WHEN status = 'running' AND steps_done > 0 AND steps_total > steps_done\n            THEN to_char((now() + (now() - started_at) * (steps_total - steps_done) / steps_done)\n                         AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') END AS \"Fertig ca.\",\n       CASE status WHEN 'running' THEN CASE WHEN updated_at < now() - interval '5 minutes'\n                                            THEN 'hängt?' ELSE 'läuft' END\n                   WHEN 'done' THEN 'fertig' WHEN 'failed' THEN 'Fehler' ELSE 'abgebrochen' END AS \"Status\",\n       host AS \"Host\"\n  FROM meta.ml_job\n WHERE status = 'running' OR finished_at > now() - interval '24 hours'\n ORDER BY status <> 'running', started_at DESC\n LIMIT 10"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "minWidth": 30
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Job"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 44
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Art"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 78
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Konfiguration"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 104
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Varianten"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Start"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 88
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Erledigt"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 72
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Fortschritt"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 220
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Laufzeit"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              },
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Im Schritt"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              },
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Fertig ca."
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 88
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 88
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "läuft": {
+                        "color": "blue",
+                        "index": 0
+                      },
+                      "fertig": {
+                        "color": "green",
+                        "index": 1
+                      },
+                      "hängt?": {
+                        "color": "orange",
+                        "index": 2
+                      },
+                      "Fehler": {
+                        "color": "red",
+                        "index": 3
+                      },
+                      "abgebrochen": {
+                        "color": "red",
+                        "index": 4
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Host"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Schritt / Ergebnis"
+            },
+            "properties": [
+              {
+                "id": "custom.minWidth",
+                "value": 320
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
+    {
       "type": "timeseries",
       "title": "Prognosefehler Last D+1 (Tagesmittel)",
       "id": 39,
@@ -474,7 +754,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 9
+        "y": 15
       },
       "timeFrom": "30d",
       "description": "**Was die Linien zeigen**\n\nFehler der Medianprognose (P50) für den Folgetag (D+1) aus der Ausgabe um 08 UTC (wie im Backtest) gegen den Ist-Wert, als Tagesmittel je Modellversion aus fcst.prediction_error. Ohne Gesamtsumme, da sich Fehler verschiedener Modelle nicht addieren. ENTSO-E Day-Ahead dient als Vergleich und wird genauso berechnet.\n\n**Kennzahlen**\n\n- **MAE** (mittlerer absoluter Fehler, durchgezogen, linke Achse in MW): Um wie viel die Prognose im Tagesmittel danebenliegt, egal ob zu hoch oder zu niedrig. Beispiel: MAE 1.500 MW heißt, jede Stunde liegt im Schnitt 1.500 MW neben dem Ist-Wert.\n- **RMSE** (Wurzel aus dem mittleren quadrierten Fehler, gestrichelt, linke Achse): Wie MAE, aber große Ausreißer zählen überproportional. RMSE ist immer mindestens so groß wie MAE. Liegt RMSE deutlich über MAE, stecken einzelne grobe Fehlstunden im Tag; liegen beide nah beieinander, ist der Fehler gleichmäßig verteilt.\n- **Fehler %** (WAPE, gepunktet, rechte Achse): Tages-MAE geteilt durch den mittleren Betrag des Ist-Werts der Last am selben Tag (WAPE = Σ|Prognose − Ist| / Σ|Ist|), gekappt bei 100 %. Macht Tage mit unterschiedlichem Niveau vergleichbar: 10 % heißt, die Prognose liegt im Schnitt um ein Zehntel des Ist-Werts daneben.",
@@ -639,7 +919,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 9
+        "y": 15
       },
       "timeFrom": "30d",
       "description": "**Was die Linien zeigen**\n\nFehler der Medianprognose (P50) für den Folgetag (D+1) aus der Ausgabe um 08 UTC (wie im Backtest) gegen den Ist-Wert, als Tagesmittel je Modellversion aus fcst.prediction_error. Ohne Gesamtsumme, da sich Fehler verschiedener Modelle nicht addieren.\n\n**Kennzahlen**\n\n- **MAE** (mittlerer absoluter Fehler, durchgezogen, linke Achse in €/MWh): Um wie viel die Prognose im Tagesmittel danebenliegt, egal ob zu hoch oder zu niedrig. Beispiel: MAE 20 €/MWh heißt, jede Stunde liegt im Schnitt 20 €/MWh neben dem Ist-Wert.\n- **RMSE** (Wurzel aus dem mittleren quadrierten Fehler, gestrichelt, linke Achse): Wie MAE, aber große Ausreißer zählen überproportional. RMSE ist immer mindestens so groß wie MAE. Liegt RMSE deutlich über MAE, stecken einzelne grobe Fehlstunden im Tag; liegen beide nah beieinander, ist der Fehler gleichmäßig verteilt.\n- **Fehler %** (WAPE, gepunktet, rechte Achse): Tages-MAE geteilt durch den mittleren Betrag des Ist-Preises am selben Tag (WAPE = Σ|Prognose − Ist| / Σ|Ist|), gekappt bei 100 %. Macht Tage mit unterschiedlichem Niveau vergleichbar: 10 % heißt, die Prognose liegt im Schnitt um ein Zehntel des Ist-Werts daneben.\n\nBewusst kein stundenweiser MAPE: Preise liegen oft nahe 0 € oder sind negativ, einzelne Stunden würden den Mittelwert sonst sprengen. An Tagen mit durchweg niedrigen Preisen fällt die Prozentzahl trotzdem hoch aus, daher die Kappung bei 100 %.",
@@ -783,7 +1063,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 17
+        "y": 23
       },
       "targets": [
         {
@@ -924,7 +1204,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 17
+        "y": 23
       },
       "targets": [
         {
@@ -1036,7 +1316,7 @@
         "h": 8,
         "w": 10,
         "x": 0,
-        "y": 25
+        "y": 31
       },
       "description": "MAE der Medianprognose je Vorlauftag aus dem Backtest der aktiven Versionen (meta.model_metric). Gesamt und RMSE über alle Vorlauftage. P10–P90 = Anteil der Ist-Werte im 80-%-Band (Soll 80 %). Last in MW, Preis in €/MWh.",
       "targets": [
@@ -1119,7 +1399,7 @@
         "h": 8,
         "w": 9,
         "x": 10,
-        "y": 25
+        "y": 31
       },
       "description": "Wie der Backtest, aber aus den gespeicherten Live-Prognosen (fcst.prediction) der letzten 14 Liefertage gegen die Ist-Werte, Ausgabe um 08 UTC.\n\n- **D+1, D+2, D+7**: MAE (mittlerer absoluter Fehler) für den 1., 2. bzw. 7. Tag nach der Ausgabe, also um wie viel die Prognose im Mittel danebenliegt, egal in welche Richtung (Last in MW, Preis in €/MWh).\n- **Bias**: mittlere Abweichung mit Vorzeichen (positiv: Prognose im Schnitt zu hoch, negativ: zu niedrig). Ein Bias nahe 0 bei hohem MAE heißt: die Fehler streuen, sind aber nicht systematisch.\n- **Werte**: Anzahl der verglichenen Stundenwerte.",
       "targets": [
@@ -1198,7 +1478,7 @@
         "h": 8,
         "w": 5,
         "x": 19,
-        "y": 25
+        "y": 31
       },
       "description": "Registrierungen und Rollenwechsel (meta.model_event).",
       "targets": [
@@ -1269,7 +1549,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 33
+        "y": 39
       },
       "panels": []
     },
@@ -1285,7 +1565,7 @@
         "h": 10,
         "w": 14,
         "x": 0,
-        "y": 34
+        "y": 40
       },
       "targets": [
         {
@@ -1427,7 +1707,7 @@
         "h": 10,
         "w": 10,
         "x": 14,
-        "y": 34
+        "y": 40
       },
       "targets": [
         {
@@ -1496,7 +1776,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 44
+        "y": 50
       },
       "targets": [
         {
@@ -1585,7 +1865,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 44
+        "y": 50
       },
       "targets": [
         {
@@ -1716,7 +1996,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 52
+        "y": 58
       },
       "panels": []
     },
@@ -1732,7 +2012,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 53
+        "y": 59
       },
       "targets": [
         {
@@ -1775,7 +2055,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 57
+        "y": 63
       },
       "targets": [
         {
@@ -1836,7 +2116,7 @@
         "h": 8,
         "w": 18,
         "x": 6,
-        "y": 53
+        "y": 59
       },
       "targets": [
         {
@@ -1864,7 +2144,7 @@
         "h": 5,
         "w": 24,
         "x": 0,
-        "y": 61
+        "y": 67
       },
       "description": "Neu = neu geladene Läufe, Da = schon vorhanden, Unv. = unvollständig, Fehler = fehlgeschlagene Schritte. Zeitraum und Zuletzt in UTC, Start und Fertig ca. lokal.",
       "targets": [
@@ -2148,7 +2428,7 @@
         "h": 12,
         "w": 14,
         "x": 0,
-        "y": 66
+        "y": 72
       },
       "description": "Oben die Live-Läufe (ingest-gfs, eigener Dienst mit eigener Quelle NOMADS, unabhängig vom Backfill): „NOAA ab hh:mm“ = Lauf noch nicht veröffentlicht, frühestens ab dieser lokalen Zeit; „wartet (NOAA)“ = teilweise veröffentlicht. Darunter laufende Backfill-Läufe und die nächsten der Warteschlange. Lauf in UTC, Start lokal.",
       "targets": [
@@ -2331,7 +2611,7 @@
         "h": 12,
         "w": 10,
         "x": 14,
-        "y": 66
+        "y": 72
       },
       "description": "Die letzten 50 abgeschlossenen Läufe aller Jobs, neueste oben. Neu = neu geladene Schritte; Lauf in UTC, Fertig in lokaler Zeit. übergeben = vom nächsten Live-Job geladen.",
       "targets": [
@@ -2484,7 +2764,7 @@
         "h": 11,
         "w": 24,
         "x": 0,
-        "y": 78
+        "y": 84
       },
       "description": "Neu = neu geladene Läufe, Da = schon vorhanden, Unv. = unvollständig, Überg. = offene Läufe eines beendeten Live-Jobs, die der nächste Job lädt (meist der jüngste, bei NOAA noch nicht veröffentlichte; zählen nicht zum Fortschritt), Fehler = fehlgeschlagene Schritte, abgebr. = abgebrochen. Dauer in Stunden:Minuten. Fehlermeldungen stehen in meta.backfill_job.error.",
       "targets": [
@@ -2800,7 +3080,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 89
+        "y": 95
       },
       "description": "Je Monat der Anteil der erwarteten GFS-Läufe (ab v16, 22.03.2021 12Z, bis zum jüngsten veröffentlichten Lauf; Laufzeiten oben unter „GFS-Läufe“ wählbar), deren Silber vollständig in Garage wx-silver liegt. Grün = fertig, gelb = gerade im Download: im laufenden Import-Durchgang aus GHCR (wx-import) vorgesehen oder im Bronze-Backfill (gfs-backfill) in Arbeit. Läufe, die im NOAA-Archiv fehlen, bleiben offen, daher erreichen manche Monate keine 100 %.",
       "targets": [
@@ -2907,7 +3187,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 98
+        "y": 104
       },
       "description": "Je Monat der Anteil der erwarteten GFS-Läufe (wie beim Silber-Panel, Laufzeiten oben unter „GFS-Läufe“), für die die Wetter-Features je Cluster (Gold, feat.nwp_value) mit der aktuellen Clusterung und Feature-Version gerechnet sind. Grün = fertig, gelb = in Arbeit: Silber liegt lokal vor, Gold steht noch aus (wx-process-backfill rechnet stündlich nach, nur für die Laufzeiten in GFS_BACKFILL_RUNS). Eine neue Clusterung macht alle Läufe wieder gelb, bis sie neu gerechnet sind.",
       "targets": [
@@ -3011,7 +3291,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 107
+        "y": 113
       },
       "panels": []
     },
@@ -3027,7 +3307,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 108
+        "y": 114
       },
       "targets": [
         {
@@ -3148,7 +3428,7 @@
         "h": 8,
         "w": 16,
         "x": 8,
-        "y": 108
+        "y": 114
       },
       "targets": [
         {
@@ -3253,7 +3533,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 116
+        "y": 122
       },
       "panels": []
     },
@@ -3269,7 +3549,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 117
+        "y": 123
       },
       "targets": [
         {
@@ -3331,7 +3611,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 117
+        "y": 123
       },
       "targets": [
         {
@@ -3393,7 +3673,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 121
+        "y": 127
       },
       "targets": [
         {
@@ -3436,7 +3716,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 121
+        "y": 127
       },
       "targets": [
         {
@@ -3479,7 +3759,7 @@
         "h": 8,
         "w": 16,
         "x": 8,
-        "y": 117
+        "y": 123
       },
       "targets": [
         {
@@ -3530,7 +3810,7 @@
         "h": 14,
         "w": 8,
         "x": 0,
-        "y": 125
+        "y": 131
       },
       "targets": [
         {
@@ -3616,7 +3896,7 @@
         "h": 14,
         "w": 8,
         "x": 8,
-        "y": 125
+        "y": 131
       },
       "targets": [
         {
@@ -3702,7 +3982,7 @@
         "h": 14,
         "w": 8,
         "x": 16,
-        "y": 125
+        "y": 131
       },
       "targets": [
         {
@@ -3813,7 +4093,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 139
+        "y": 145
       },
       "targets": [
         {
@@ -3889,7 +4169,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 139
+        "y": 145
       },
       "targets": [
         {
@@ -3961,7 +4241,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 147
+        "y": 153
       },
       "panels": []
     },
@@ -3978,7 +4258,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 148
+        "y": 154
       },
       "targets": [
         {
@@ -4070,7 +4350,7 @@
         "h": 8,
         "w": 16,
         "x": 8,
-        "y": 148
+        "y": 154
       },
       "targets": [
         {
@@ -4345,7 +4625,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 156
+        "y": 162
       },
       "targets": [
         {
@@ -4478,7 +4758,7 @@
         "h": 8,
         "w": 6,
         "x": 0,
-        "y": 164
+        "y": 170
       },
       "targets": [
         {
@@ -4521,7 +4801,7 @@
         "h": 8,
         "w": 18,
         "x": 6,
-        "y": 164
+        "y": 170
       },
       "targets": [
         {
