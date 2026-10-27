@@ -21,7 +21,7 @@ from ml_train.dataset import (
 )
 from ml_train.jobs import JobLog
 from ml_train.models import TwoStageModel
-from ml_train.predict import due_issues, next_wake
+from ml_train.predict import by_issue, due_issues, next_wake
 from ml_train.registry import Registry, compare
 from ml_train.snapshot import load_snapshot
 from ml_train.testing import synthetic_snapshot
@@ -436,3 +436,13 @@ def test_next_wake_on_full_hour() -> None:
     assert next_wake(pd.Timestamp("2026-10-26T10:05", tz="UTC"), 3600) == pd.Timestamp(
         "2026-10-26T11:01", tz="UTC"
     )
+
+
+def test_by_issue_groups_versions_per_issue() -> None:
+    a, b, c = (pd.Timestamp(f"2026-10-26T{h:02d}", tz="UTC") for h in (8, 9, 10))
+    assert by_issue({"neu1": [c, a], "neu2": [a, b], "neu3": []}) == {
+        a: ["neu1", "neu2"],
+        b: ["neu2"],
+        c: ["neu1"],
+    }
+    assert list(by_issue({"neu1": [c, a, b]})) == [a, b, c]

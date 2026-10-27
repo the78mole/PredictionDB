@@ -133,6 +133,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         help="weitere Konfiguration (eigene Registry-Linie), deren aktive Versionen mitlaufen",
     )
+    pr.add_argument(
+        "--fill-new",
+        type=int,
+        default=0,
+        metavar="STUNDEN",
+        help="neue aktive Versionen rechnen die Ausgabezeitpunkte der übrigen Versionen der "
+        "letzten STUNDEN nach (Vergleich im Dashboard ab sofort)",
+    )
 
     bu = cmd.add_parser("bundle", help="Prognosepaket einer Version für den Stack predict/")
     bu.add_argument("version")
@@ -339,17 +347,26 @@ def cmd_predict(cfg: ModelConfig, a: argparse.Namespace) -> int:
     lines += [(c, Registry(a.registry, c)) for c, _ in map(load_config, a.also_config)]
     # Zuletzt gerechneter Ausgabezeitpunkt je Linie; beim Start aus der Datenbank
     last: dict[str, pd.Timestamp | None] = {}
+    # Versionen, deren Nachrechnen (--fill-new) erledigt ist; beim Start sind alle neu
+    filled: set[str] = set()
     while True:
         now = pd.Timestamp.now(tz="UTC")
         found = False
+        active: dict[str, list[str]] = {}
         for line_cfg, reg in lines:
             try_sync(reg, engine)
             # --version gilt nur für die Hauptkonfiguration
-            versions = (a.version if line_cfg is cfg else None) or reg.active()
+            active[line_cfg.name] = (a.version if line_cfg is cfg else None) or reg.active()
+        for line_cfg, reg in lines:
+            versions = active[line_cfg.name]
             if not versions:
                 log.warning("predict.no_versions", registry=a.registry, config=line_cfg.name)
                 continue
             found = True
+            if a.fill_new and not a.issue and not a.dry_run:
+                # Vergleich über alle Linien: dieselben Ausgabezeitpunkte wie die übrigen
+                peers = [v for vs in active.values() for v in vs]
+                fill_new(engine, line_cfg, reg, versions, peers, filled, now, a.fill_new)
             if a.issue:
                 issues = [pd.Timestamp(a.issue, tz="UTC")]
             else:
@@ -375,6 +392,42 @@ def cmd_predict(cfg: ModelConfig, a: argparse.Namespace) -> int:
         # Auf dem Raster wecken (volle Stunde plus eine Minute), damit keine Stunde ausfällt
         wake = next_wake(pd.Timestamp.now(tz="UTC"), a.watch)
         time.sleep(max(0.0, (wake - pd.Timestamp.now(tz="UTC")).total_seconds()))
+
+
+def fill_new(
+    engine: Engine,
+    cfg: ModelConfig,
+    reg: Registry,
+    versions: list[str],
+    peers: list[str],
+    filled: set[str],
+    now: pd.Timestamp,
+    hours: int,
+) -> None:
+    """Neue Versionen einer Linie rechnen die Ausgabezeitpunkte der übrigen Versionen nach."""
+    from ml_train.predict import (
+        by_issue,
+        live_snapshot,
+        missing_issues,
+        predict_versions,
+        write_predictions,
+    )
+
+    new = [v for v in versions if v not in filled]
+    if not new:
+        return
+    cur = now.floor("h")
+    # Die laufende Stunde rechnet der reguläre Lauf
+    since, until = cur - pd.Timedelta(hours=hours), cur - pd.Timedelta(hours=1)
+    plan = by_issue({v: missing_issues(engine, v, peers, since, until) for v in new})
+    if plan:
+        log.info("predict.fill_new", config=cfg.name, versions=new, issues=len(plan))
+    for issue, vs in plan.items():
+        snap = live_snapshot(engine, cfg, issue)
+        df = predict_versions(snap, cfg, reg, vs, issue, Path(DEFAULT_CACHE))
+        n = write_predictions(engine, df)
+        log.info("predict.filled", issue=str(issue), versions=vs, rows=n)
+    filled.update(new)
 
 
 def cmd_bundle(cfg: ModelConfig, a: argparse.Namespace) -> int:
