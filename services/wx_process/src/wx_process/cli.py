@@ -50,7 +50,7 @@ def build_parser() -> argparse.ArgumentParser:
         if name == "run":
             c.add_argument("run", type=parse_run)
         else:
-            add_backfill_args(c)
+            add_backfill_args(c, ordered=True)
             c.add_argument(
                 "--watch",
                 type=int,
