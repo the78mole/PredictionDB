@@ -24,6 +24,8 @@ Zwei Mechaniken (``docs/ARCHITEKTUR.md`` 4.1):
   gewählten Nachrichten liegen; dort wird der nächste Anfang gesucht und nur über die wenigen
   Köpfe bis zu den gewählten Nachrichten gelaufen (:meth:`Endpoint.scan_targeted`). Passt die
   Vorlage nicht (andere Modellversion), entsteht ein neues vollständiges Inventar.
+  Liegen vollständige ``.idx`` vor (OCI-Artefakt ``gfs-0p25-gdex-idx``,
+  :meth:`Endpoint.import_idx`), entfällt das Lesen der Köpfe; geladen wird wie bei ``idx_range``.
 """
 
 from __future__ import annotations
@@ -197,6 +199,8 @@ class Endpoint:
         #: zuletzt passende zuerst (die Nachrichtenfolge wechselt mit Modell-Updates)
         self._templates: dict[int, list[_Template]] = {}
         self._scan_locks: dict[int, asyncio.Lock] = {}
+        #: header_scan: vollständige ``.idx`` je Datei, Schlüssel ist der Pfad im Archiv
+        self._idx: dict[str, bytes] = {}
 
     @property
     def name(self) -> str:
@@ -467,9 +471,21 @@ class Endpoint:
         unique = {e.offset: e for part in parts for e in part}
         return url, [unique[o] for o in sorted(unique)]
 
-    def _scan_url(self, run: datetime, step: int) -> str:
+    def _scan_path(self, run: datetime, step: int) -> str:
         assert self.config.path is not None
-        return f"{self.config.url.rstrip('/')}/{self.config.path.format(run=run, step=step)}"
+        return self.config.path.format(run=run, step=step)
+
+    def _scan_url(self, run: datetime, step: int) -> str:
+        return f"{self.config.url.rstrip('/')}/{self._scan_path(run, step)}"
+
+    def import_idx(self, files: dict[str, bytes]) -> int:
+        """Übernimmt vollständige ``.idx`` (Pfad der GRIB-Datei im Archiv plus ``.idx``).
+
+        Für diese Dateien entfällt das Lesen der Köpfe. Liefert die Zahl der Dateien.
+        """
+        found = {n.removesuffix(".idx"): t for n, t in files.items() if n.endswith(".idx")}
+        self._idx.update(found)
+        return len(found)
 
     async def complete_inventory(self, run: datetime, step: int) -> list[IdxEntry]:
         """Alle Nachrichten einer Datei mit Namen wie ``wgrib2 -s`` (für eine ``.idx``).
@@ -590,8 +606,13 @@ class Endpoint:
         self, run: datetime, step: int, specs: list[MessageSpec], bbox: BBox
     ) -> StepData:
         url = self._scan_url(run, step)
+        path = self._scan_path(run, step)
         try:
-            final, entries = await self._inventory(url, step, specs)
+            known = self._idx.get(path)
+            if known is not None:
+                final, entries = url, parse_idx(known.decode())
+            else:
+                final, entries = await self._inventory(url, step, specs)
             chosen = select(entries, specs)
             if not chosen:
                 raise FetchError(f"keine der angeforderten Nachrichten in {url}")
@@ -600,7 +621,8 @@ class Endpoint:
             grib = await asyncio.to_thread(_crop_checked, raw, bbox, len(chosen))
         except StaleIndex as exc:
             log.warning("scan_failed", url=url, error=str(exc))
-            self._templates.pop(step, None)
+            if self._idx.pop(path, None) is None:
+                self._templates.pop(step, None)
             entries, chosen, grib = await self._fetch_whole_scanned(url, specs, bbox)
         return StepData(
             grib=grib,

@@ -74,6 +74,14 @@ class GfsIngestor:
                 ep.import_templates(templates)
             log.info("templates_loaded", file=config.templates.name, steps=len(templates))
 
+    def import_idx(self, files: dict[str, bytes]) -> int:
+        """Vollständige ``.idx`` für alle ``header_scan``-Endpunkte (Pfade wie im Archiv)."""
+        n = 0
+        for ep in self.endpoints:
+            if ep.config.kind == "header_scan":
+                n = ep.import_idx(files)
+        return n
+
     def _bbox_dict(self) -> dict[str, float]:
         return self.config.bbox.model_dump()
 

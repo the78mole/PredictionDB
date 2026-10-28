@@ -131,6 +131,11 @@ oras manifest fetch ghcr.io/the78mole/predictiondb-data/gfs-0p25-gdex-idx:v1 \
 oras blob fetch -o 2019-07-00z.tar.gz ghcr.io/the78mole/predictiondb-data/gfs-0p25-gdex-idx@sha256:…
 ```
 
+`publish` nutzt den Layer selbst: Vor einem Monat lädt es den passenden Layer (Monat und
+Laufzeit) und liest die gewählten Nachrichten wie bei `idx_range` direkt über die `.idx`, ohne
+Köpfe abzulaufen (Log `idx_loaded`). Dateien ohne `.idx` (noch `failed`) und `.idx`, die nicht
+zur Datei passen, laufen weiter über Vorlagen und Köpfe. `--idx-repository ''` schaltet das ab.
+
 ## Aufruf
 
 ```bash
