@@ -83,6 +83,42 @@ def test_stale_job_is_marked_aborted(engine: Engine) -> None:
     assert _runs(engine, old.job_id)[RUN]["status"] == "aborted"
 
 
+def test_job_of_same_service_from_other_container_is_taken_over(engine: Engine) -> None:
+    """Deploy-Neustart: Der alte Container schrieb keinen Abschluss, der neue übernimmt."""
+    old = JobLog(engine)
+    old.start("gfs_0p25", RUN, RUN, [0], False, [RUN])
+    old.run_started(RUN, 2)
+    assert old.job_id is not None
+    with engine.begin() as c:
+        c.execute(
+            text("UPDATE meta.backfill_job SET host = 'weg' WHERE job_id = :id"),
+            {"id": old.job_id},
+        )
+    live = JobLog(engine)
+    live.start("gfs_0p25", RUN, RUN, [0], False, [RUN], mode="live")
+    assert live.job_id is not None
+    assert _job(engine, old.job_id)["status"] == "running"  # anderer Dienst
+
+    JobLog(engine).start("gfs_0p25", RUN, RUN, [0], False, [RUN])
+    assert _job(engine, old.job_id)["status"] == "aborted"
+    assert _runs(engine, old.job_id)[RUN]["status"] == "aborted"
+    assert _job(engine, live.job_id)["status"] == "running"
+
+
+def test_running_runs_of_finished_job_are_closed(engine: Engine) -> None:
+    old = JobLog(engine)
+    old.start("gfs_0p25", RUN, RUN, [0], False, [RUN])
+    old.run_started(RUN, 2)
+    assert old.job_id is not None
+    with engine.begin() as c:
+        c.execute(
+            text("UPDATE meta.backfill_job SET status = 'failed' WHERE job_id = :id"),
+            {"id": old.job_id},
+        )
+    JobLog(engine).start("gfs_0p25", RUN, RUN, [0], False, [RUN])
+    assert _runs(engine, old.job_id)[RUN]["status"] == "aborted"
+
+
 def _runs(eng: Engine, job_id: int) -> dict[datetime, dict[str, object]]:
     with eng.connect() as c:
         rows = c.execute(
