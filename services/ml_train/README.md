@@ -84,7 +84,7 @@ Ziel im Mittel (Pinball-Loss über P10/P50/P90) besser sein und darf in keiner G
 Vorlauftag und Jahreszeit mit mindestens 200 Werten mehr als 5 % schlechter sein
 (`promotion` in der YAML).
 
-### Spiegel in der Datenbank (Status-Dashboard)
+### Spiegel in der Datenbank (Dashboard „Prognose und Energiedaten“)
 
 Grafana liest keine Dateien aus Garage. `registry sync` schreibt deshalb Versionen mit Rolle,
 Trainingsdauer und -zeitraum nach `meta.model_version`, den Verlauf nach `meta.model_event` und

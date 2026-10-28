@@ -21,7 +21,7 @@ pytestmark = [
     pytest.mark.skipif(os.environ.get("PDB_INTEGRATION") != "1", reason="PDB_INTEGRATION != 1"),
 ]
 
-DASHBOARD = Path(__file__).parents[2] / "config/grafana/dashboards/status.json"
+DASHBOARD = Path(__file__).parents[2] / "config/grafana/dashboards/prognose-energiedaten.json"
 CONFIG = "it_ml_job"
 
 

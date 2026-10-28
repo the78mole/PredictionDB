@@ -22,7 +22,7 @@ pytestmark = [
     pytest.mark.skipif(os.environ.get("PDB_INTEGRATION") != "1", reason="PDB_INTEGRATION != 1"),
 ]
 
-DASHBOARD = Path(__file__).parents[2] / "config/grafana/dashboards/status.json"
+DASHBOARD = Path(__file__).parents[2] / "config/grafana/dashboards/wetter.json"
 RUN = datetime(2099, 1, 1, tzinfo=UTC)
 RUNS = [RUN + timedelta(hours=12 * i) for i in range(3)]
 

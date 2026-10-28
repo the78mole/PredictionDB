@@ -1,4 +1,4 @@
-"""Zeitbereich des Preis-Panels: Variablen ``preis_bis``/``preis_ab`` im Status-Dashboard.
+"""Zeitbereich des Preis-Panels: Variablen ``preis_bis``/``preis_ab`` (Prognose und Energiedaten).
 
 Das Panel zeigt immer gestern 00:00 bis Ende heute bzw. ab 12 Uhr bis Ende morgen (Europe/Berlin),
 unabhängig vom Dashboard-Zeitbereich.
@@ -25,7 +25,7 @@ pytestmark = [
     pytest.mark.skipif(os.environ.get("PDB_INTEGRATION") != "1", reason="PDB_INTEGRATION != 1"),
 ]
 
-DASHBOARD = Path(__file__).parents[2] / "config/grafana/dashboards/status.json"
+DASHBOARD = Path(__file__).parents[2] / "config/grafana/dashboards/prognose-energiedaten.json"
 BERLIN = ZoneInfo("Europe/Berlin")
 
 

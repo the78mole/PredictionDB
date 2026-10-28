@@ -43,7 +43,7 @@ Die Gesamtarchitektur steht in [ARCHITEKTUR.md](ARCHITEKTUR.md), die Modelle in
 
 | Werkzeug | Aufgabe | bleibt |
 |---|---|---|
-| Grafana | Monitoring und Auswertung: Status-Dashboard, Prognose-Dashboard (ARCHITEKTUR 7.10), Alarme | ja, unverändert |
+| Grafana | Monitoring und Auswertung: Status-Dashboards (Prognose und Energiedaten, Wetter, System, Karte), Prognose-Dashboard (ARCHITEKTUR 7.10), Alarme | ja, unverändert |
 | MLflow | Experimente, Läufe, Metriken, Artefakte | ja |
 | CLI | vollständige Steuerung, Skripte, Automatisierung | ja, maßgeblich |
 | Steuer-UI | Steuern und Konfigurieren: was läuft, mit welchen Daten, welches Modell ist Champion | optional |
@@ -89,7 +89,7 @@ einschalten. Freie Quellen kann die UI ein- und ausschalten.
 ### 4.1 Quellen
 
 - Liste aller Quellen aus `meta.source` mit `free`, `enabled`, Lizenz, Quellenvermerk, letztem
-  Abruf und Fehlerstand (dieselbe Sicht wie das Status-Dashboard, als Tabelle).
+  Abruf und Fehlerstand (dieselbe Sicht wie das Dashboard „Prognose und Energiedaten“, als Tabelle).
 - Freie Quellen ein- und ausschalten (Rang 2 in 3.); unfreie nur nach der Regel in 3.
 - Zugangsdaten hinterlegen bzw. sehen, ob sie gesetzt sind (6.). Link auf die Anleitung in
   `DATENQUELLEN-ZUGANG.md`.
