@@ -1,0 +1,212 @@
+gruppe,modell,tage,mae,rmse,bias,mape_%,abdeckung_90_%,breite,aufteilung,verzug
+alle,fortschreibung,1252,10.26,13.46,-5.84,26.81,44.33,21.13,jahr,realer Berichtsverzug
+alle,struktur,1216,13.94,28.99,6.08,28.94,,,jahr,realer Berichtsverzug
+alle,struktur_korr,1202,17.27,34.16,4.05,31.93,63.98,75.96,jahr,realer Berichtsverzug
+alle,regel,1252,8.64,11.55,-2.75,21.78,,,jahr,realer Berichtsverzug
+alle,kalibriert,1216,14.2,19.91,-2.89,33.04,38.16,16.57,jahr,realer Berichtsverzug
+alle,verankert,1202,12.85,20.95,-0.2,29.3,44.68,22.34,jahr,realer Berichtsverzug
+alle,gemeinsam,1156,14.95,20.25,-0.71,35.64,,,jahr,realer Berichtsverzug
+alle,acer,213,12.79,14.62,11.95,19.85,,,jahr,realer Berichtsverzug
+2018,fortschreibung,162,10.63,11.47,-10.63,65.19,0.0,2.51,jahr,realer Berichtsverzug
+2018,struktur,162,8.48,10.35,8.3,53.36,,,jahr,realer Berichtsverzug
+2018,struktur_korr,162,6.17,7.29,-3.86,46.66,40.74,15.58,jahr,realer Berichtsverzug
+2018,regel,162,8.43,10.18,5.56,53.49,,,jahr,realer Berichtsverzug
+2018,kalibriert,162,10.02,10.8,-10.02,61.52,0.0,1.95,jahr,realer Berichtsverzug
+2018,verankert,162,10.54,11.26,-10.54,65.33,0.0,2.47,jahr,realer Berichtsverzug
+2018,gemeinsam,162,11.01,12.01,-11.01,67.04,,,jahr,realer Berichtsverzug
+2019,fortschreibung,164,8.63,10.48,-8.63,36.1,57.93,7.94,jahr,realer Berichtsverzug
+2019,struktur,164,5.47,6.66,-2.62,22.33,,,jahr,realer Berichtsverzug
+2019,struktur_korr,150,6.29,8.74,-4.96,25.39,78.67,30.44,jahr,realer Berichtsverzug
+2019,regel,164,5.35,6.72,-3.86,21.83,,,jahr,realer Berichtsverzug
+2019,kalibriert,164,14.41,14.97,-14.41,59.15,0.0,9.68,jahr,realer Berichtsverzug
+2019,verankert,150,8.75,10.46,-8.75,36.33,55.33,9.74,jahr,realer Berichtsverzug
+2019,gemeinsam,158,16.41,16.78,-16.41,66.64,,,jahr,realer Berichtsverzug
+2020,fortschreibung,163,3.92,4.65,0.96,17.77,57.67,10.91,jahr,realer Berichtsverzug
+2020,struktur,127,8.33,10.07,-8.27,34.81,,,jahr,realer Berichtsverzug
+2020,struktur_korr,127,4.0,5.72,-3.09,16.63,86.61,28.35,jahr,realer Berichtsverzug
+2020,regel,163,5.83,7.34,-2.59,24.76,,,jahr,realer Berichtsverzug
+2020,kalibriert,127,3.41,4.33,-2.93,13.87,81.89,10.97,jahr,realer Berichtsverzug
+2020,verankert,127,3.09,4.12,0.13,13.82,53.54,11.0,jahr,realer Berichtsverzug
+2020,gemeinsam,117,3.71,4.94,-1.39,15.52,,,jahr,realer Berichtsverzug
+2021,fortschreibung,178,19.82,21.23,-19.69,37.09,8.43,14.18,jahr,realer Berichtsverzug
+2021,struktur,178,8.57,11.2,1.8,15.95,,,jahr,realer Berichtsverzug
+2021,struktur_korr,178,17.31,22.25,15.59,30.78,30.9,18.39,jahr,realer Berichtsverzug
+2021,regel,178,9.93,12.76,-6.02,18.21,,,jahr,realer Berichtsverzug
+2021,kalibriert,178,16.25,17.76,-15.27,30.44,10.11,9.17,jahr,realer Berichtsverzug
+2021,verankert,178,12.69,13.5,-12.2,24.16,11.8,13.41,jahr,realer Berichtsverzug
+2021,gemeinsam,178,12.18,13.28,-7.35,23.18,,,jahr,realer Berichtsverzug
+2022,fortschreibung,167,10.75,13.33,-6.34,13.23,44.91,24.42,jahr,realer Berichtsverzug
+2022,struktur,167,48.28,71.85,44.15,60.9,,,jahr,realer Berichtsverzug
+2022,struktur_korr,167,47.29,71.68,39.9,59.76,47.31,42.62,jahr,realer Berichtsverzug
+2022,regel,167,10.75,13.33,-6.34,13.23,,,jahr,realer Berichtsverzug
+2022,kalibriert,167,26.89,40.27,17.49,33.94,38.92,19.88,jahr,realer Berichtsverzug
+2022,verankert,167,31.22,45.63,23.31,39.58,32.93,28.06,jahr,realer Berichtsverzug
+2022,gemeinsam,167,28.12,39.31,26.19,36.83,,,jahr,realer Berichtsverzug
+2023,fortschreibung,168,9.07,12.93,-4.39,10.71,87.5,41.87,jahr,realer Berichtsverzug
+2023,struktur,168,10.69,18.74,2.58,12.69,,,jahr,realer Berichtsverzug
+2023,struktur_korr,168,27.64,47.66,-17.59,32.3,75.0,213.11,jahr,realer Berichtsverzug
+2023,regel,168,10.43,13.43,-3.93,12.24,,,jahr,realer Berichtsverzug
+2023,kalibriert,168,13.65,15.8,-12.24,15.91,77.38,32.22,jahr,realer Berichtsverzug
+2023,verankert,168,11.87,17.53,-5.08,14.08,76.19,46.66,jahr,realer Berichtsverzug
+2023,gemeinsam,161,16.31,18.53,-13.3,19.05,,,jahr,realer Berichtsverzug
+2024,fortschreibung,167,10.51,15.91,8.23,17.63,67.66,37.29,jahr,realer Berichtsverzug
+2024,struktur,167,7.21,10.28,-3.08,11.08,,,jahr,realer Berichtsverzug
+2024,struktur_korr,167,9.4,11.83,-2.41,14.41,100.0,182.12,jahr,realer Berichtsverzug
+2024,regel,167,8.85,12.47,-1.35,13.74,,,jahr,realer Berichtsverzug
+2024,kalibriert,167,15.15,16.66,15.15,24.33,51.5,26.85,jahr,realer Berichtsverzug
+2024,verankert,167,11.2,16.72,10.51,18.84,67.66,36.15,jahr,realer Berichtsverzug
+2024,gemeinsam,136,17.74,19.44,17.74,28.06,,,jahr,realer Berichtsverzug
+2024,acer,136,14.89,16.42,14.89,23.66,,,jahr,realer Berichtsverzug
+2025,fortschreibung,83,5.58,6.81,-4.85,7.58,19.28,33.37,jahr,realer Berichtsverzug
+2025,struktur,83,12.39,16.74,-0.99,17.72,,,jahr,realer Berichtsverzug
+2025,struktur_korr,83,13.41,17.94,6.54,19.41,57.83,42.43,jahr,realer Berichtsverzug
+2025,regel,83,10.07,15.16,-3.25,14.3,,,jahr,realer Berichtsverzug
+2025,kalibriert,83,7.7,10.35,1.97,11.14,73.49,23.03,jahr,realer Berichtsverzug
+2025,verankert,83,8.43,10.81,1.75,12.12,83.13,29.95,jahr,realer Berichtsverzug
+2025,gemeinsam,77,7.44,9.54,4.97,10.84,,,jahr,realer Berichtsverzug
+2025,acer,77,9.09,10.71,6.76,13.12,,,jahr,realer Berichtsverzug
+alle,fortschreibung,1252,10.26,13.46,-5.84,26.81,44.33,21.13,regime,realer Berichtsverzug
+alle,struktur,1216,13.94,28.99,6.08,28.94,,,regime,realer Berichtsverzug
+alle,struktur_korr,1202,17.27,34.16,4.05,31.93,63.98,75.96,regime,realer Berichtsverzug
+alle,regel,1252,8.64,11.55,-2.75,21.78,,,regime,realer Berichtsverzug
+alle,kalibriert,1216,14.2,19.91,-2.89,33.04,38.16,16.57,regime,realer Berichtsverzug
+alle,verankert,1202,12.85,20.95,-0.2,29.3,44.68,22.34,regime,realer Berichtsverzug
+alle,gemeinsam,1156,14.95,20.25,-0.71,35.64,,,regime,realer Berichtsverzug
+alle,acer,213,12.79,14.62,11.95,19.85,,,regime,realer Berichtsverzug
+Gaskrise 2021/22,fortschreibung,269,14.96,18.05,-12.39,21.52,44.24,25.08,regime,realer Berichtsverzug
+Gaskrise 2021/22,struktur,269,30.22,53.98,26.79,39.73,,,regime,realer Berichtsverzug
+Gaskrise 2021/22,struktur_korr,269,41.38,61.89,19.48,55.57,37.92,66.37,regime,realer Berichtsverzug
+Gaskrise 2021/22,regel,269,11.57,14.54,-6.33,15.57,,,regime,realer Berichtsverzug
+Gaskrise 2021/22,kalibriert,269,23.51,33.19,0.33,32.05,34.2,19.96,regime,realer Berichtsverzug
+Gaskrise 2021/22,verankert,269,23.64,36.17,4.96,31.6,33.09,28.63,regime,realer Berichtsverzug
+Gaskrise 2021/22,gemeinsam,269,23.49,32.27,7.59,31.66,,,regime,realer Berichtsverzug
+kaum Braunkohle preissetzend,fortschreibung,308,8.84,11.76,-3.11,23.16,44.16,19.31,regime,realer Berichtsverzug
+kaum Braunkohle preissetzend,struktur,272,12.84,23.93,2.14,29.78,,,regime,realer Berichtsverzug
+kaum Braunkohle preissetzend,struktur_korr,265,15.21,32.64,-1.47,29.64,77.36,79.04,regime,realer Berichtsverzug
+kaum Braunkohle preissetzend,regel,308,8.75,11.66,-3.2,23.07,,,regime,realer Berichtsverzug
+kaum Braunkohle preissetzend,kalibriert,272,11.11,15.4,-4.15,27.68,46.32,17.54,regime,realer Berichtsverzug
+kaum Braunkohle preissetzend,verankert,265,11.07,17.24,0.11,24.2,45.66,21.94,regime,realer Berichtsverzug
+kaum Braunkohle preissetzend,gemeinsam,255,12.23,16.31,-1.35,31.3,,,regime,realer Berichtsverzug
+kaum Braunkohle preissetzend,acer,35,14.26,16.78,14.26,22.19,,,regime,realer Berichtsverzug
+normal,fortschreibung,537,9.81,12.68,-4.86,34.69,41.34,17.77,regime,realer Berichtsverzug
+normal,struktur,537,7.23,9.33,-0.02,25.8,,,regime,realer Berichtsverzug
+normal,struktur_korr,530,7.75,10.31,0.37,24.67,66.42,71.32,regime,realer Berichtsverzug
+normal,regel,537,6.93,9.01,-0.42,25.36,,,regime,realer Berichtsverzug
+normal,kalibriert,537,11.77,13.45,-4.91,38.74,30.35,13.19,regime,realer Berichtsverzug
+normal,verankert,530,9.76,12.35,-2.96,34.1,43.77,17.49,regime,realer Berichtsverzug
+normal,gemeinsam,511,12.45,14.11,-5.4,42.46,,,regime,realer Berichtsverzug
+normal,acer,105,14.09,15.66,14.09,22.22,,,regime,realer Berichtsverzug
+viele negative Preise,fortschreibung,138,6.0,8.68,-2.99,14.59,56.52,30.13,regime,realer Berichtsverzug
+viele negative Preise,struktur,138,10.45,16.06,-2.77,18.44,,,regime,realer Berichtsverzug
+viele negative Preise,struktur_korr,138,10.76,15.52,-1.33,18.17,79.71,106.28,regime,realer Berichtsverzug
+viele negative Preise,regel,138,9.37,13.35,-3.84,17.12,,,regime,realer Berichtsverzug
+viele negative Preise,kalibriert,138,11.58,13.24,1.13,23.35,60.14,21.1,regime,realer Berichtsverzug
+viele negative Preise,verankert,138,7.14,10.7,-0.23,16.15,68.84,29.19,regime,realer Berichtsverzug
+viele negative Preise,gemeinsam,121,12.29,14.1,1.99,24.8,,,regime,realer Berichtsverzug
+viele negative Preise,acer,73,10.23,11.67,7.77,15.31,,,regime,realer Berichtsverzug
+alle,fortschreibung,1252,5.07,6.98,-2.31,10.95,69.41,16.56,jahr,Quartal sofort
+alle,struktur,1216,13.94,28.99,6.08,28.94,,,jahr,Quartal sofort
+alle,struktur_korr,1216,16.43,32.53,3.44,30.14,73.52,64.87,jahr,Quartal sofort
+alle,regel,1252,6.92,9.31,-1.63,18.02,,,jahr,Quartal sofort
+alle,kalibriert,1216,10.88,15.43,-1.02,24.55,54.44,20.2,jahr,Quartal sofort
+alle,verankert,1216,8.48,16.03,1.73,15.63,66.94,19.11,jahr,Quartal sofort
+alle,gemeinsam,1156,11.13,16.52,1.77,23.28,,,jahr,Quartal sofort
+alle,acer,298,7.73,9.35,6.65,11.51,,,jahr,Quartal sofort
+2018,fortschreibung,162,2.19,2.93,-1.63,14.74,43.83,3.18,jahr,Quartal sofort
+2018,struktur,162,8.48,10.35,8.3,53.36,,,jahr,Quartal sofort
+2018,struktur_korr,162,6.24,7.48,-0.68,43.78,80.86,22.0,jahr,Quartal sofort
+2018,regel,162,7.37,9.53,6.63,46.11,,,jahr,Quartal sofort
+2018,kalibriert,162,6.73,7.14,-6.73,43.49,19.14,7.63,jahr,Quartal sofort
+2018,verankert,162,2.51,3.0,-2.37,16.51,48.77,4.73,jahr,Quartal sofort
+2018,gemeinsam,162,4.38,4.96,-3.79,30.31,,,jahr,Quartal sofort
+2019,fortschreibung,164,2.0,2.49,-0.14,8.21,65.24,6.45,jahr,Quartal sofort
+2019,struktur,164,5.47,6.66,-2.62,22.33,,,jahr,Quartal sofort
+2019,struktur_korr,164,3.84,5.28,-1.94,16.46,96.34,24.76,jahr,Quartal sofort
+2019,regel,164,4.12,5.23,-2.2,16.88,,,jahr,Quartal sofort
+2019,kalibriert,164,9.53,9.97,-9.53,38.22,31.71,14.86,jahr,Quartal sofort
+2019,verankert,164,2.61,3.23,-1.73,10.87,94.51,11.26,jahr,Quartal sofort
+2019,gemeinsam,158,8.1,9.26,-8.1,32.53,,,jahr,Quartal sofort
+2020,fortschreibung,163,3.11,4.45,-0.92,13.41,68.1,9.08,jahr,Quartal sofort
+2020,struktur,127,8.33,10.07,-8.27,34.81,,,jahr,Quartal sofort
+2020,struktur_korr,127,4.46,6.47,-1.96,18.28,88.98,22.5,jahr,Quartal sofort
+2020,regel,163,5.52,7.51,-4.81,22.64,,,jahr,Quartal sofort
+2020,kalibriert,127,3.62,3.99,-1.72,15.4,88.19,12.78,jahr,Quartal sofort
+2020,verankert,127,3.55,4.67,-0.1,15.41,55.91,8.69,jahr,Quartal sofort
+2020,gemeinsam,117,2.95,4.21,-0.09,12.93,,,jahr,Quartal sofort
+2021,fortschreibung,178,8.47,9.87,-8.3,16.14,49.44,15.07,jahr,Quartal sofort
+2021,struktur,178,8.57,11.2,1.8,15.95,,,jahr,Quartal sofort
+2021,struktur_korr,178,12.44,14.83,10.64,24.47,33.71,21.29,jahr,Quartal sofort
+2021,regel,178,7.35,9.03,-3.45,13.71,,,jahr,Quartal sofort
+2021,kalibriert,178,9.29,11.1,-2.9,18.41,38.76,12.0,jahr,Quartal sofort
+2021,verankert,178,7.22,9.44,0.98,13.28,50.56,14.98,jahr,Quartal sofort
+2021,gemeinsam,178,13.78,20.18,5.75,25.59,,,jahr,Quartal sofort
+2022,fortschreibung,167,8.58,10.78,-4.04,10.8,66.47,21.43,jahr,Quartal sofort
+2022,struktur,167,48.28,71.85,44.15,60.9,,,jahr,Quartal sofort
+2022,struktur_korr,167,64.2,81.34,18.18,81.78,27.54,65.96,jahr,Quartal sofort
+2022,regel,167,8.58,10.78,-4.04,10.8,,,jahr,Quartal sofort
+2022,kalibriert,167,23.64,31.7,10.36,29.71,40.72,27.6,jahr,Quartal sofort
+2022,verankert,167,30.76,39.67,14.27,38.93,29.34,31.9,jahr,Quartal sofort
+2022,gemeinsam,167,21.97,29.69,14.23,28.38,,,jahr,Quartal sofort
+2023,fortschreibung,168,4.67,5.84,1.42,5.74,96.43,28.55,jahr,Quartal sofort
+2023,struktur,168,10.69,18.74,2.58,12.69,,,jahr,Quartal sofort
+2023,struktur_korr,168,12.85,20.13,2.42,15.09,98.21,170.27,jahr,Quartal sofort
+2023,regel,168,6.23,7.18,1.04,7.51,,,jahr,Quartal sofort
+2023,kalibriert,168,11.87,14.3,-9.39,13.89,83.93,34.34,jahr,Quartal sofort
+2023,verankert,168,4.82,6.26,2.27,5.97,94.64,31.13,jahr,Quartal sofort
+2023,gemeinsam,161,13.52,16.24,-9.33,15.84,,,jahr,Quartal sofort
+2023,acer,85,6.8,8.23,6.61,8.91,,,jahr,Quartal sofort
+2024,fortschreibung,167,5.29,6.69,-0.09,8.42,94.01,26.52,jahr,Quartal sofort
+2024,struktur,167,7.21,10.28,-3.08,11.08,,,jahr,Quartal sofort
+2024,struktur_korr,167,8.41,11.03,0.32,13.03,97.01,129.31,jahr,Quartal sofort
+2024,regel,167,7.18,10.25,-3.09,11.02,,,jahr,Quartal sofort
+2024,kalibriert,167,11.45,13.69,11.45,18.75,76.05,29.87,jahr,Quartal sofort
+2024,verankert,167,6.04,7.8,1.18,9.72,89.22,26.08,jahr,Quartal sofort
+2024,gemeinsam,136,12.96,14.56,12.96,20.66,,,jahr,Quartal sofort
+2024,acer,136,8.76,10.2,7.93,13.93,,,jahr,Quartal sofort
+2025,fortschreibung,83,6.61,8.08,-6.39,8.96,74.7,26.38,jahr,Quartal sofort
+2025,struktur,83,12.39,16.74,-0.99,17.72,,,jahr,Quartal sofort
+2025,struktur_korr,83,15.37,20.73,-6.35,21.82,71.08,40.92,jahr,Quartal sofort
+2025,regel,83,10.94,15.53,-4.13,15.53,,,jahr,Quartal sofort
+2025,kalibriert,83,7.41,9.53,0.99,10.66,74.7,21.3,jahr,Quartal sofort
+2025,verankert,83,9.45,11.52,-4.31,13.28,74.7,23.46,jahr,Quartal sofort
+2025,gemeinsam,77,6.18,7.86,3.83,9.01,,,jahr,Quartal sofort
+2025,acer,77,6.93,8.92,4.42,10.13,,,jahr,Quartal sofort
+alle,fortschreibung,1252,5.07,6.98,-2.31,10.95,69.41,16.56,regime,Quartal sofort
+alle,struktur,1216,13.94,28.99,6.08,28.94,,,regime,Quartal sofort
+alle,struktur_korr,1216,16.43,32.53,3.44,30.14,73.52,64.87,regime,Quartal sofort
+alle,regel,1252,6.92,9.31,-1.63,18.02,,,regime,Quartal sofort
+alle,kalibriert,1216,10.88,15.43,-1.02,24.55,54.44,20.2,regime,Quartal sofort
+alle,verankert,1216,8.48,16.03,1.73,15.63,66.94,19.11,regime,Quartal sofort
+alle,gemeinsam,1156,11.13,16.52,1.77,23.28,,,regime,Quartal sofort
+alle,acer,298,7.73,9.35,6.65,11.51,,,regime,Quartal sofort
+Gaskrise 2021/22,fortschreibung,269,6.66,8.69,-3.28,9.06,79.18,21.15,regime,Quartal sofort
+Gaskrise 2021/22,struktur,269,30.22,53.98,26.79,39.73,,,regime,Quartal sofort
+Gaskrise 2021/22,struktur_korr,269,37.04,58.18,17.81,49.49,47.96,68.89,regime,Quartal sofort
+Gaskrise 2021/22,regel,269,7.05,9.03,-1.28,9.61,,,regime,Quartal sofort
+Gaskrise 2021/22,kalibriert,269,17.79,25.59,4.7,22.98,53.16,24.53,regime,Quartal sofort
+Gaskrise 2021/22,verankert,269,18.54,29.66,11.34,24.87,47.96,27.04,regime,Quartal sofort
+Gaskrise 2021/22,gemeinsam,269,21.84,28.77,10.27,30.03,,,regime,Quartal sofort
+kaum Braunkohle preissetzend,fortschreibung,308,5.58,7.71,-2.96,12.66,67.53,15.51,regime,Quartal sofort
+kaum Braunkohle preissetzend,struktur,272,12.84,23.93,2.14,29.78,,,regime,Quartal sofort
+kaum Braunkohle preissetzend,struktur_korr,272,15.91,31.89,-3.5,26.98,78.68,73.59,regime,Quartal sofort
+kaum Braunkohle preissetzend,regel,308,5.59,7.69,-2.96,12.84,,,regime,Quartal sofort
+kaum Braunkohle preissetzend,kalibriert,272,9.6,12.57,-3.67,22.35,59.19,20.37,regime,Quartal sofort
+kaum Braunkohle preissetzend,verankert,272,7.63,12.64,-1.05,13.71,69.12,19.22,regime,Quartal sofort
+kaum Braunkohle preissetzend,gemeinsam,255,8.96,12.33,-0.98,19.36,,,regime,Quartal sofort
+kaum Braunkohle preissetzend,acer,56,10.0,11.94,9.56,14.84,,,regime,Quartal sofort
+normal,fortschreibung,537,4.14,5.78,-1.15,11.54,62.57,13.63,regime,Quartal sofort
+normal,struktur,537,7.23,9.33,-0.02,25.8,,,regime,Quartal sofort
+normal,struktur_korr,537,7.26,9.4,1.0,23.87,82.68,56.05,regime,Quartal sofort
+normal,regel,537,6.99,9.04,-0.48,25.45,,,regime,Quartal sofort
+normal,kalibriert,537,8.75,10.22,-2.88,28.46,46.74,16.84,regime,Quartal sofort
+normal,verankert,537,4.26,5.59,-0.39,12.9,72.63,14.65,regime,Quartal sofort
+normal,gemeinsam,511,7.23,9.07,-1.28,23.05,,,regime,Quartal sofort
+normal,acer,156,8.08,9.36,7.63,12.13,,,regime,Quartal sofort
+viele negative Preise,fortschreibung,138,4.46,5.73,-3.48,8.52,81.16,21.32,regime,Quartal sofort
+viele negative Preise,struktur,138,10.45,16.06,-2.77,18.44,,,regime,Quartal sofort
+viele negative Preise,struktur_korr,138,13.01,19.49,-1.37,23.04,77.54,74.18,regime,Quartal sofort
+viele negative Preise,regel,138,9.35,13.33,-3.82,17.11,,,regime,Quartal sofort
+viele negative Preise,kalibriert,138,8.25,10.19,0.3,16.79,77.54,24.52,regime,Quartal sofort
+viele negative Preise,verankert,138,6.93,10.63,-3.33,12.04,77.54,20.8,regime,Quartal sofort
+viele negative Preise,gemeinsam,121,8.41,9.97,1.59,17.46,,,regime,Quartal sofort
+viele negative Preise,acer,86,5.61,7.15,2.97,8.23,,,regime,Quartal sofort
