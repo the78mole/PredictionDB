@@ -6,7 +6,7 @@ PV-Jahrgängen aus dem MaStR (``mastr_pv_jahrgaenge.py``). Die Preiswirkung zus�
 liest das Skript aus ``tabellen/simulation.csv`` und ``tabellen/zeitachse.csv`` der Hauptanalyse.
 Aufruf::
 
-    uv run --no-project --with pandas --with numpy --with matplotlib \\
+    uv run --no-project --with pandas --with numpy --with scipy --with matplotlib \\
         python esc.py --daten ./speicher-daten
 """
 
@@ -18,6 +18,8 @@ from typing import Any
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from scipy import sparse
+from scipy.optimize import linprog
 
 HIER = Path(__file__).parent
 TAB = HIER / "tabellen"
@@ -59,13 +61,27 @@ UE20_KLASSEN = ["0-10", "10-30", "30-100"]
 NACHRUESTQUOTE = [0.1, 0.25, 0.5]
 KWH_JE_KWP = 1.0
 KW_JE_KWP = 0.5
+# ESC als Portfolio: Prosumer (Ü20-PV mit Haushalt und Speicher), Consumer (Haushalte) und ein
+# Produzent (Wind oder PV auf landwirtschaftlichen Dächern). Was die Gemeinschaft nicht selbst
+# verbraucht, verkauft ein Direktvermarkter an der Börse.
+PROSUMER = 200
+PROSUMER_KWP = 10.0
+CONSUMER_JE_PROSUMER = [2, 4]
+PRODUZENT = {
+    "ohne": (None, 0.0, 0.0),
+    "Wind 1,5 MW (Ü20)": ("wind_on", 1500.0, 1800.0),
+    "PV 500 kWp Landwirtschaft": ("solar", 500.0, 900.0),
+}
+PORTFOLIO_SPEICHER = [0.0, 1.0, 2.0]  # kWh je kWp beim Prosumer, Leistung halb so groß
+PORTFOLIO_PREIS = [8.0, 9.0]
+
 MARKTFAKTOR = {"lastfolgend in der Gemeinschaft": 0.3, "preisgeführt über Direktvermarkter": 1.0}
 WIRKSAM = 0.7
 
 
 def lade_smard(ordner: Path, jahr: int) -> pd.DataFrame:
     reihen = {}
-    for name in ("price", "solar"):
+    for name in ("price", "solar", "wind_on"):
         d = json.loads((ordner / f"{name}.json").read_text())
         reihen[name] = pd.Series({int(k): v for k, v in d.items()}, dtype=float)
     df = pd.DataFrame(reihen)
@@ -409,6 +425,204 @@ def mobilisierung(welle: pd.DataFrame) -> pd.DataFrame:
     return t
 
 
+def portfolio_woche(
+    pool: np.ndarray,
+    ueber: np.ndarray,
+    rest_eigen: np.ndarray,
+    last_c: np.ndarray,
+    wert_netz: np.ndarray,
+    wert_teilen: float,
+    wert_eigen: float,
+    e: float,
+) -> dict[str, np.ndarray]:
+    """Erlösoptimaler Fahrplan einer Woche (perfekte Voraussicht), alle Prosumer zusammengefasst.
+
+    ``pool``: PV-Überschuss der Prosumer nach direktem Eigenverbrauch plus Produzent.
+    ``ueber``: davon der PV-Überschuss der Prosumer; nur daraus lädt ihr Speicher.
+    ``rest_eigen``: Haushaltslast der Prosumer, die ihre PV nicht direkt deckt.
+    Variablen je Stunde: laden, an eigenen Haushalt entladen, in die ESC entladen, Ladestand,
+    geteilt, Netz (Direktvermarktung), abgeregelt. Der Speicher lädt nur aus dem Pool, also aus
+    EE-Strom, nie aus dem Netz. Die ESC deckt Consumer und den Rest der Prosumer.
+    """
+    n = len(pool)
+    w = np.sqrt(ETA)
+    i = sparse.eye(n, format="csr")
+    z = sparse.csr_matrix((n, n))
+    # Bilanz Pool: pool - ab - laden + entl_esc - geteilt - netz = 0
+    bil = sparse.hstack([-i, z, i, z, -i, -i, -i])
+    d = sparse.eye(n) - sparse.eye(n, k=-1)
+    spe = sparse.hstack([-w * i, i / w, i / w, d, z, z, z])
+    a_eq = sparse.vstack([bil, spe]).tocsr()
+    b_eq = np.concatenate([-pool, np.zeros(n)])
+    b_eq[n] = e / 2
+    # entl_eigen + geteilt <= Consumer + Rest der Prosumer; entl_eigen + entl_esc <= Leistung
+    a_ub = sparse.vstack(
+        [sparse.hstack([z, i, z, z, i, z, z]), sparse.hstack([z, i, i, z, z, z, z])]
+    ).tocsr()
+    b_ub = np.concatenate([last_c + rest_eigen, np.full(n, e / 2)])
+    c = np.concatenate(
+        [
+            np.zeros(n),
+            -np.full(n, wert_eigen),
+            np.zeros(2 * n),
+            -np.full(n, wert_teilen),
+            -wert_netz,
+            np.zeros(n),
+        ]
+    )
+    grenzen = (
+        [(0, min(e / 2, x)) for x in ueber]
+        + [(0, x) for x in rest_eigen]
+        + [(0, e / 2)] * n
+        + [(0, e)] * (n - 1)
+        + [(e / 2, e)]
+        + [(0, None)] * 2 * n
+        + [(0, x) for x in pool]
+    )
+    res = linprog(c, A_ub=a_ub, b_ub=b_ub, A_eq=a_eq, b_eq=b_eq, bounds=grenzen, method="highs")
+    if res.status != 0:
+        raise RuntimeError(res.message)
+    x = res.x
+    return dict(eigen=x[n : 2 * n], geteilt=x[4 * n : 5 * n], netz=x[5 * n : 6 * n])
+
+
+def portfolio_jahr(
+    df: pd.DataFrame,
+    pool: np.ndarray,
+    ueber: np.ndarray,
+    rest_eigen: np.ndarray,
+    last_c: np.ndarray,
+    wert_netz: np.ndarray,
+    wert_teilen: float,
+    wert_eigen: float,
+    e: float,
+) -> dict[str, float]:
+    tage = pd.DatetimeIndex(df.index).normalize()
+    woche = np.asarray((tage - tage[0]).days // 7)
+    out = dict.fromkeys(["eigen", "geteilt", "netz", "erloes_netz"], 0.0)
+    for wk in np.unique(woche):
+        idx = np.where(woche == wk)[0]
+        r = portfolio_woche(
+            pool[idx],
+            ueber[idx],
+            rest_eigen[idx],
+            last_c[idx],
+            wert_netz[idx],
+            wert_teilen,
+            wert_eigen,
+            e,
+        )
+        for k in ("eigen", "geteilt", "netz"):
+            out[k] += float(r[k].sum())
+        out["erloes_netz"] += float((r["netz"] * wert_netz[idx]).sum())
+    return out
+
+
+def portfolio(df: pd.DataFrame, h0: np.ndarray) -> pd.DataFrame:
+    """ESC aus Prosumern, Consumern und einem Produzenten gegen den heutigen Stand.
+
+    Heute: Prosumer mit Eigenverbrauch und §23b für den Überschuss (ohne bzw. mit Speicher nur
+    für den Eigenverbrauch), Produzent einzeln in der Direktvermarktung. Erlöse in EUR/a für die
+    Erzeugerseite (Eigenverbrauch zum Haushaltspreis, geteilter Strom zum ESC-Preis abzüglich
+    Kosten, Rest zum Stundenpreis abzüglich Kosten); die Consumer sparen zusätzlich.
+    """
+    form_pv = df["solar"].to_numpy() / df["solar"].sum()
+    pv = form_pv * PROSUMER * PROSUMER_KWP * ERTRAG_UE20
+    eigen_last = h0 * HAUSHALT_KWH * PROSUMER
+    direkt = np.minimum(pv, eigen_last)
+    ueber = pv - direkt
+    rest_eigen = eigen_last - direkt
+    p25 = preise(df, None)
+    h0_25 = float((p25 * h0).sum())
+    zeilen = []
+    for name, niveau in NIVEAU.items():
+        if niveau == NIVEAU["2027 Niveau Aug-Okt 2026"]:
+            continue
+        p = preise(df, niveau)
+        ap = haushaltspreis(niveau, h0_25, float((p * h0).sum()))
+        jmw = float((p * form_pv).sum())
+        wert_23b = np.full_like(p, min(jmw, 10.0) - ABZUG_23B)
+        for prod, (reihe, kw, vls) in PRODUZENT.items():
+            gen = df[reihe].to_numpy() / df[reihe].sum() * kw * vls if reihe else np.zeros_like(pv)
+            for kosten in KOSTEN:
+                netz = p - kosten
+                prod_heute = float((gen * np.maximum(netz, 0)).sum())
+                for spez in PORTFOLIO_SPEICHER:
+                    e = spez * PROSUMER * PROSUMER_KWP
+                    # heute: Speicher nur für den eigenen Haushalt, Überschuss nach §23b
+                    h = portfolio_jahr(
+                        df, ueber, ueber, rest_eigen, np.zeros_like(pv), wert_23b, 0.0, ap, e
+                    )
+                    heute = ((direkt.sum() + h["eigen"]) * ap + h["erloes_netz"] + prod_heute) / 100
+                    # nur Direktvermarktung über den Aggregator, ohne Teilen
+                    dv = portfolio_jahr(
+                        df, ueber + gen, ueber, rest_eigen, np.zeros_like(pv), netz, 0.0, ap, e
+                    )
+                    nur_dv = ((direkt.sum() + dv["eigen"]) * ap + dv["erloes_netz"]) / 100
+                    for je in CONSUMER_JE_PROSUMER:
+                        last_c = h0 * HAUSHALT_KWH * PROSUMER * je
+                        for preis in PORTFOLIO_PREIS:
+                            r = portfolio_jahr(
+                                df,
+                                ueber + gen,
+                                ueber,
+                                rest_eigen,
+                                last_c,
+                                netz,
+                                preis - kosten,
+                                ap,
+                                e,
+                            )
+                            esc = (
+                                (direkt.sum() + r["eigen"]) * ap
+                                + r["geteilt"] * (preis - kosten)
+                                + r["erloes_netz"]
+                            ) / 100
+                            tarif = BESCHAFFUNG_2026 + (
+                                float((p * h0).sum()) - h0_25 if niveau else 0.0
+                            )
+                            zeilen.append(
+                                dict(
+                                    preisniveau=name,
+                                    produzent=prod,
+                                    kosten=kosten,
+                                    speicher_kwh_je_kwp=spez,
+                                    consumer_je_prosumer=je,
+                                    esc_preis=preis,
+                                    erzeugung_mwh=(pv.sum() + gen.sum()) / 1000,
+                                    last_mwh=(eigen_last.sum() + last_c.sum()) / 1000,
+                                    eigen_mwh=(direkt.sum() + r["eigen"]) / 1000,
+                                    geteilt_mwh=r["geteilt"] / 1000,
+                                    netz_mwh=r["netz"] / 1000,
+                                    netz_ct_kwh=r["erloes_netz"] / r["netz"] + kosten
+                                    if r["netz"]
+                                    else np.nan,
+                                    heute_eur=heute,
+                                    nur_dv_eur=nur_dv,
+                                    esc_eur=esc,
+                                    esc_mehr_eur=esc - heute,
+                                    dv_mehr_eur=nur_dv - heute,
+                                    mitglieder_ersparnis_eur=r["geteilt"]
+                                    * (tarif - preis)
+                                    * MWST
+                                    / 100,
+                                )
+                            )
+    t = pd.DataFrame(zeilen)
+    schl = ["preisniveau", "produzent", "kosten", "consumer_je_prosumer", "esc_preis"]
+    basis = t[t["speicher_kwh_je_kwp"] == 0].set_index(schl)
+    idx = pd.MultiIndex.from_frame(t[schl])
+    kwh = t["speicher_kwh_je_kwp"] * PROSUMER * PROSUMER_KWP
+    for spalte, neu in (
+        ("heute_eur", "speicher_heute"),
+        ("nur_dv_eur", "speicher_dv"),
+        ("esc_eur", "speicher_esc"),
+    ):
+        mehr = t[spalte].to_numpy() - basis[spalte].reindex(idx).to_numpy()
+        t[f"{neu}_eur_kwh_15a"] = np.where(kwh > 0, mehr * 15 / kwh.replace(0, 1), np.nan)
+    return t
+
+
 def grafik(t: pd.DataFrame, welle: pd.DataFrame) -> None:
     fig, ax = plt.subplots(1, 2, figsize=(12, 4.5))
     sel = t[
@@ -472,6 +686,8 @@ def main() -> None:
     mob = mobilisierung(welle)
     mob.round(3).to_csv(TAB / "esc_mobilisierung.csv", index=False)
     grafik(t, welle)
+    pf = portfolio(df, h0)
+    pf.round(3).to_csv(TAB / "esc_portfolio.csv", index=False)
     info: dict[str, Any] = {
         "base_2025": float(df["price"].mean()),
         "h0_base_2025": float((preise(df, None) * h0).sum()),

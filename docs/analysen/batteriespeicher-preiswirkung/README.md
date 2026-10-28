@@ -57,12 +57,12 @@ von 82 €/kW/a bei 2 GW auf 53 bei 10 GW und 36 bei 20 GW. Mit mehr PV liegt er
 63 €/kW/a. Das bremst den Ausbau irgendwo zwischen 15 und 30 GW, wenn nicht Regelleistung,
 Intraday und Netzentgeltbefreiung den Rest bezahlen.
 
-**Energy Sharing (§42c EnWG) mobilisiert kaum zusätzliche Speicher.** Für Ü20- und
-Bestandsanlagen bringt die Gemeinschaft bei 8 bis 9 ct/kWh nur 1 bis 3 ct je geteilter kWh mehr
-als die heutige Vergütung, kleine Ü20-Anlagen verlieren das an die Messkosten. Den Vorteil haben
-die Mitglieder (2027 rund 11 bis 16 ct/kWh). Ü20-Speicher rechnen sich über den Eigenverbrauch,
-nicht über die ESC. Selbst wenn bis 2029 die Hälfte der Ü20-Anlagen nachrüstet, sinkt die
-Tagesspanne 2030 nur um 1 bis 3 Prozentpunkte zusätzlich (siehe
+**Energy Sharing (§42c EnWG) lohnt sich als Portfolio mit Speicher.** Eine ESC aus Ü20-Prosumern
+mit Speicher, Consumern und einer Windanlage nimmt 2027 deutlich mehr ein als heute, vor allem
+weil ihr Direktvermarkter die kleinen Speicher nach dem Börsenpreis fährt. Ein Ü20-Speicher ist
+damit über 15 Jahre rund 950 statt 630 €/kWh wert. Die Mitglieder sparen 11 bis 16 ct/kWh. Auf
+den Börsenpreis wirkt das trotzdem wenig: Rüstet bis 2029 die Hälfte der Ü20-Anlagen nach, sinkt
+die Tagesspanne 2030 um 1 bis 3 Prozentpunkte zusätzlich (siehe
 [Ergänzung: Energy Sharing](#ergänzung-energy-sharing-42c-enwg)).
 
 **Für das Prognosemodell:** Die Wirkung ist so groß, dass das Modell sie schon 2027 als
@@ -213,31 +213,41 @@ mit `esc.py`, Tabellen `tabellen/esc_*.csv`.
 
 ### Kurz
 
-- **Für Ü20-Anlagen bringt die ESC wenig, für ihren Speicher fast nichts.** Gegen die
-  Anschlussvergütung nach §23b EEG bringt der geteilte Strom 1 bis 3 ct/kWh mehr. Bei kleinen
-  Anlagen frisst das intelligente Messsystem (50 bis 130 €/a) diesen Vorteil auf. Eine Anlage mit
-  30 kWp braucht 9 ct und mehrere Dutzend Haushalte, dann bleiben 300 bis 570 €/a übrig. Ein nachgerüsteter
-  Speicher rechnet sich bei einer Ü20-Anlage mit eigenem Haushalt trotzdem gut, aber über den
-  Eigenverbrauch: 2027 bringt er rund 300 €/a für 5 kWh, das sind über 15 Jahre gut 800 €/kWh.
-  Die ESC ändert daran fast nichts.
-- **Bestandsanlagen wechseln nur, wenn ihre Vergütung unter dem ESC-Preis abzüglich Kosten
-  liegt.** Die Schwelle liegt bei 7,0 bis 8,5 ct/kWh. Darunter fallen vor allem kleine Anlagen von
-  Mitte 2021 bis Juli 2022 (6,2 bis 7,5 ct) und größere Anlagen mit ohnehin niedrigeren Sätzen.
-  Für eine Anlage mit 10 kWp sind es dann 25 bis 120 €/a mehr, bei 11 ct bis gut 200 €/a.
-- **Den eigentlichen Vorteil haben die Mitglieder.** Steigt der Börsenpreis 2027 wie erwartet,
-  liegt die Beschaffungskomponente im Haushaltstarif bei 18 bis 21 ct/kWh netto. Ein ESC-Preis von
-  8 bis 9 ct spart dann 11 bis 16 ct/kWh brutto, mit der regionalen Stromsteuerbefreiung 13 bis
-  18 ct. Das ist Spielraum für höhere Erzeugerpreise. Erst ab etwa 11 ct lohnt sich die ESC auch
-  für die meisten Erzeuger spürbar.
-- **Ein höherer Börsenpreis macht die ESC für Erzeuger nicht besser, sondern schlechter.** Er hebt
-  auch den Jahresmarktwert Solar, den die Ü20-Anlage nach §23b ohnehin bekommt (2025: 4,6 ct,
-  2027: 6,1 bis 7,7 ct). Ein fester Erzeugerpreis von 8 ct verliert damit seinen Abstand.
-- **Die zusätzlichen Speicher bewegen den Preis kaum.** Bis 2029 fallen 7,2 GW PV bis 100 kW aus
-  der Förderung. Rüstet ein Viertel davon mit 0,5 kW je kWp nach, sind das 0,9 GW und 1,8 GWh.
-  Laufen sie im Eigenverbrauch und für die Gemeinschaft, verringern sie die Tagesspanne 2030 um
-  weitere 0,5 Prozentpunkte. Fährt ein Direktvermarkter sie nach dem Preis, sind es 1,5
-  Prozentpunkte, bei Nachrüstung der Hälfte 3 Prozentpunkte. Der Großspeicherzubau ist um eine
-  Größenordnung wichtiger.
+Gerechnet sind zwei Sichten. Erstens die ESC als Portfolio, wie der Nutzer sie beschreibt:
+Prosumer (Ü20-PV mit Haushalt und Speicher), mindestens zwei Consumer je Prosumer und ein
+Produzent (Windanlage oder PV auf landwirtschaftlichen Dächern). Was die Gemeinschaft nicht selbst
+verbraucht, verkauft ein Direktvermarkter an der Börse, die Speicher fahren nach dem Börsenpreis.
+Zweitens die einzelne Anlage, die zu einem festen ESC-Preis teilt.
+
+- **Als Portfolio lohnt sich die ESC, und zwar vor allem über die Direktvermarktung des
+  Überschusses mit Speicher.** 200 Ü20-Prosumer mit je 10 kWp und 10 kWh, 800 Consumer und eine
+  alte Windanlage mit 1,5 MW nehmen 2027 bei 9 ct ESC-Preis rund 74 000 €/a mehr ein als heute
+  (Eigenverbrauch mit Speicher, Überschuss nach §23b, Wind einzeln vermarktet). Knapp 38 000 €
+  davon kommen allein daher, dass ein Direktvermarkter die Speicher nach dem Börsenpreis fährt.
+  Den Rest bringt das Teilen. Die Mitglieder sparen zusätzlich rund 70 000 €/a.
+- **Für den Speicher macht das den Unterschied.** Nur für den Eigenverbrauch ist ein Ü20-Speicher
+  (1 kWh je kWp) über 15 Jahre rund 630 €/kWh wert. Fährt ihn der Direktvermarkter der ESC
+  zusätzlich nach dem Börsenpreis, sind es 940 bis 960 €/kWh, bei 2 kWh je kWp noch 650 bis
+  690 statt 320 €/kWh. Das Teilen selbst ändert den Speicherwert kaum. Entscheidend ist, dass die
+  ESC kleinen Anlagen eine günstige Direktvermarktung verschafft. Die Annahme des Nutzers, dass
+  Ü20-Anlagen unter solchen Bedingungen nachrüsten, ist damit gut begründet.
+- **Ohne Speicher bringt die ESC wenig.** Ohne Speicher sind es 24 000 bis 38 000 €/a mehr, das sind
+  120 bis 190 € je Prosumer. Die Direktvermarktung allein verliert dann sogar gegen §23b, weil der
+  Solarstrom mittags billig ist und bei Preisen unter den Vermarktungskosten abgeregelt wird.
+- **Eine einzelne Anlage mit festem ESC-Preis gewinnt wenig.** Gegenüber §23b bringt der
+  geteilte Strom 1 bis 3 ct/kWh mehr, bei kleinen Anlagen frisst das Messsystem (50 bis 130 €/a)
+  das auf. Bestandsanlagen wechseln nur, wenn ihre Vergütung unter 7 bis 8,5 ct liegt, vor allem
+  Anlagen von Mitte 2021 bis Juli 2022.
+- **Mitglieder:** Steigt der Börsenpreis 2027 wie erwartet, liegt die Beschaffungskomponente im
+  Haushaltstarif bei 18 bis 21 ct/kWh netto. 8 bis 9 ct sparen dann 11 bis 16 ct/kWh brutto, mit
+  der regionalen Stromsteuerbefreiung 13 bis 18 ct.
+- **Preiswirkung: nur über preisgeführte Speicher.** Bis 2029 fallen 7,2 GW PV bis 100 kW aus der
+  Förderung. Rüstet ein Viertel davon mit 0,5 kW je kWp nach und fahren Direktvermarkter diese
+  Speicher nach dem Preis, sinkt die Tagesspanne 2030 um weitere 1,5 Prozentpunkte, bei der
+  Hälfte um 3 Prozentpunkte. Laufen sie nur im Eigenverbrauch, ist es ein Drittel davon. Der
+  Großspeicherzubau bleibt um eine Größenordnung wichtiger. Hebelt die ESC die Direktvermarktung
+  für den ganzen Heimspeicherbestand (15,6 GW), wird es mehr: Schon 10 % davon preisgeführt
+  entsprechen der Hälfte aller Ü20-Anlagen bis 2029 nachgerüstet.
 
 ![Energy Sharing](grafiken/esc.png)
 
@@ -305,7 +315,64 @@ mit `esc.py`, Tabellen `tabellen/esc_*.csv`.
   EEG 2023 §48 und §49). Der Rest im Marktprämienmodell bringt den anzulegenden Wert, also die
   Vergütung plus 0,4 ct, abzüglich Direktvermarktungskosten.
 
-### Ü20-Anlagen
+### ESC als Portfolio
+
+Aufbau ([tabellen/esc_portfolio.csv](tabellen/esc_portfolio.csv), Funktion `portfolio` in
+`esc.py`):
+
+- **Prosumer:** 200 Ü20-Anlagen mit je 10 kWp (850 kWh/kWp) und Haushalt (3 500 kWh). Der
+  Eigenverbrauch läuft hinter dem Zähler zum Haushaltspreis (2027: 40,3 ct). Speicher 0, 1 oder
+  2 kWh je kWp, Leistung halb so groß. Er lädt nur aus dem eigenen PV-Überschuss.
+- **Consumer:** 2 oder 4 Haushalte je Prosumer (400 bzw. 800).
+- **Produzent:** keiner, eine Ü20-Windanlage mit 1,5 MW und 1 800 Volllaststunden (Form: SMARD
+  Wind an Land 2025) oder 500 kWp PV auf landwirtschaftlichen Dächern.
+- **Fahrweise:** je Woche erlösoptimal mit perfekter Voraussicht (lineares Programm). Der Speicher
+  deckt den eigenen Haushalt, die Gemeinschaft oder verkauft an der Börse, je nachdem, was mehr
+  bringt. Geteilter Strom bringt dem Erzeuger den ESC-Preis abzüglich Kosten, der Rest geht zum
+  Stundenpreis abzüglich Kosten an die Börse. Unter den Kosten wird abgeregelt.
+- **Heute:** Eigenverbrauch mit demselben Speicher, aber nur für den eigenen Haushalt.
+  Überschuss nach §23b, Produzent einzeln in der Direktvermarktung.
+- **Nur Direktvermarktung:** wie ESC, aber ohne Teilen. Das trennt den Beitrag des Teilens von
+  dem der gemeinsamen Vermarktung.
+
+2027 (STEO-Richtung), 9 ct ESC-Preis, 1 ct Kosten, 4 Consumer je Prosumer, Mehrerlös der
+Erzeugerseite gegenüber heute in €/a:
+
+| Produzent | Speicher je kWp | nur Direktvermarktung | ESC | davon Teilen | Ersparnis Mitglieder |
+|---|---|---|---|---|---|
+| keiner | 0 | −6 400 | +23 800 | +30 200 | 52 200 |
+| keiner | 1 kWh | +37 600 | +60 100 | +22 600 | 39 000 |
+| keiner | 2 kWh | +91 800 | +101 400 | +9 600 | 17 300 |
+| Wind 1,5 MW | 0 | −6 400 | +32 400 | +38 700 | 74 100 |
+| Wind 1,5 MW | 1 kWh | +37 600 | +74 200 | +36 700 | 69 600 |
+| Wind 1,5 MW | 2 kWh | +91 800 | +123 600 | +31 800 | 61 600 |
+| PV 500 kWp Landwirtschaft | 1 kWh | +37 600 | +65 600 | +28 000 | 48 200 |
+
+Speicherwert über 15 Jahre in €/kWh (Mehrerlös gegenüber derselben Konstellation ohne Speicher):
+
+| Speicher je kWp | nur Eigenverbrauch (heute) | mit Direktvermarktung | in der ESC mit Wind |
+|---|---|---|---|
+| 1 kWh | 631 | 961 | 945 |
+| 2 kWh | 320 | 688 | 662 |
+
+- Der Überschuss bringt mit preisgeführtem Speicher im Mittel 13 bis 19 ct/kWh an der Börse
+  (`netz_ct_kwh`), ohne Speicher 10 bis 12 ct. Zum Vergleich: §23b zahlt 2027 rund 5,4 ct.
+- Das Teilen bringt am meisten mit Windanlage und vielen Consumern, weil Wind auch abends und im
+  Winter liefert. Mit großem Speicher geht der Beitrag des Teilens zurück, weil der Speicher den
+  Abendstrom lieber an der Börse verkauft, wenn der Preis über dem ESC-Preis liegt.
+- Mit den Preisen von 2025 ist das Bild ähnlich (Speicher 845 statt 600 €/kWh), mit
+  0,5 ct Kosten etwas besser. Die perfekte Voraussicht überschätzt den Speicherwert. In der
+  [PV-Speicher-Arbitrage](../pv-speicher-arbitrage/README.md) kosteten Prognosefehler rund
+  15 %.
+- Nicht gerechnet: die Aufteilung der Mehrerlöse zwischen Prosumern, Produzent und
+  Direktvermarkter, Kosten für Messsysteme bei 200 Prosumern (rund 20 000 €/a bei 100 € je
+  Anlage, soweit nicht ohnehin Pflicht) und für Gründung und Abrechnung der Gemeinschaft.
+
+### Einzelanlage mit festem ESC-Preis
+
+Die erste Rechnung: Jede Ü20-Anlage teilt allein zu einem festen Preis, der Rest geht wie bisher
+nach §23b oder einzeln an die Börse.
+
 
 Mehrerlös 2027 (STEO-Richtung) gegenüber §23b ohne Speicher, €/a, 1 ct Kosten
 ([tabellen/esc_kurz.csv](tabellen/esc_kurz.csv)):
@@ -398,8 +465,9 @@ Day-Ahead-Preis wirksam; [tabellen/esc_mobilisierung.csv](tabellen/esc_mobilisie
 „Lastfolgend“ heißt: Der Speicher deckt Eigenverbrauch und Gemeinschaft, wirkt also nur zu 30 %
 wie ein marktgeführter Speicher. „Preisgeführt“ heißt: Ein Direktvermarkter fährt ihn nach dem
 Börsenpreis, zu 100 %. Zum Vergleich: Der Pfad selbst senkt die Spanne bis 2030 schon um 29 %.
-Die ESC macht aus den Ü20-Speichern also keinen preisrelevanten Faktor. Wichtiger wäre, ob die
-Direktvermarktung über die ESC die vielen kleinen Speicher überhaupt preisgeführt fahren lässt.
+Aus den Ü20-Speichern wird so kein großer Preisfaktor. Die Portfolio-Rechnung zeigt aber, dass
+die ESC als Direktvermarktung den preisgeführten Betrieb der kleinen Speicher wirtschaftlich
+macht.
 Dann zählt nicht nur die Ü20-Nachrüstung, sondern der ganze Heimspeicherbestand von 15,6 GW.
 Schon 10 % davon preisgeführt wären so viel wie die Hälfte aller Ü20-Anlagen bis 2029
 nachgerüstet.
@@ -528,12 +596,12 @@ uv run --no-project --with pandas --with numpy --with scipy --with matplotlib \
 ```
 
 Energy-Sharing-Ergänzung: PV-Jahrgänge aus dem MaStR holen (rund 20 Minuten), dann `esc.py`
-(wenige Sekunden). `esc.py` liest `tabellen/simulation.csv` und `tabellen/zeitachse.csv` aus
+(rund zwei Minuten, vor allem die Portfolio-Rechnung). `esc.py` liest `tabellen/simulation.csv` und `tabellen/zeitachse.csv` aus
 `auswertung.py`:
 
 ```bash
 uv run --no-project --with requests python docs/analysen/batteriespeicher-preiswirkung/mastr_pv_jahrgaenge.py ./speicher-daten/mastr
-uv run --no-project --with pandas --with numpy --with matplotlib \
+uv run --no-project --with pandas --with numpy --with scipy --with matplotlib \
     python docs/analysen/batteriespeicher-preiswirkung/esc.py --daten ./speicher-daten
 ```
 
