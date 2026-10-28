@@ -21,11 +21,26 @@ def registry(fake: FakeRegistry) -> Registry:
     return Registry(fake.host, fake.repository, client, "bot", "secret", (0.0, 0.0))
 
 
-async def build(reg: Registry, host: FakeGfsHost, *, deadline: float | None = None) -> idx.IdxLayer:
-    async with make_client(host) as client:
+class Flaky:
+    """Archiv, das die ersten ``n`` Anfragen mit 503 beantwortet (wie OSDF unter Last)."""
+
+    def __init__(self, host: FakeGfsHost, n: int) -> None:
+        self.host, self.inner, self.n = host.host, host, n
+
+    def handle(self, request: httpx.Request) -> httpx.Response:
+        if self.n > 0:
+            self.n -= 1
+            return httpx.Response(503)
+        return self.inner.handle(request)
+
+
+async def build(
+    reg: Registry, host: FakeGfsHost | Flaky, *, deadline: float | None = None
+) -> idx.IdxLayer:
+    async with make_client(host) as client:  # type: ignore[arg-type]
         endpoints = [Endpoint(ep, client, retry_wait_max=0.01) for ep in CONFIG.endpoints]
         return await idx.build_layer(
-            reg, CONFIG, endpoints, MONTH, RUN.hour, RUN, RUN, deadline=deadline
+            reg, CONFIG, endpoints, MONTH, RUN.hour, RUN, RUN, deadline=deadline, retry_pause=0
         )
 
 
@@ -115,3 +130,10 @@ async def test_manifest_skips_layers_without_blob() -> None:
     ghost = idx.IdxLayer(month=MONTH, hour=0, digest="sha256:" + "0" * 64, size=1, runs=1)
     summary = idx.merge_manifest(reg, [ghost], SOURCE)
     assert summary["skipped"] == [ghost.key] and summary["layers"] == 0
+
+
+async def test_failed_files_are_retried_in_the_same_job() -> None:
+    reg = registry(FakeRegistry())
+    # Je Datei scheitern erst alle Wiederholungen der ersten Anfrage
+    layer = await build(reg, Flaky(FakeGfsHost("gdex.test", AVAILABLE, index=False), 40))
+    assert layer.complete and layer.files == 3 and len(layer.absent) == 4
