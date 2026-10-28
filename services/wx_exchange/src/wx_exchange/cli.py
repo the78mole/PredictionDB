@@ -354,9 +354,10 @@ async def _idx_build(args: argparse.Namespace, config: GfsConfig, registry: Regi
             rebuild=args.rebuild,
             workers=args.workers,
         )
+    # Erst ausgeben, dann schreiben: Scheitert die Datei, steht die Beschreibung vollständig im
+    # Log und das Manifest lässt sich mit ihr nachtragen
+    print(json.dumps(asdict(layer)), flush=True)
     args.out.write_text(json.dumps(asdict(layer), indent=1))
-    counts = {k: len(getattr(layer, k)) for k in ("absent", "broken", "failed")}
-    print(json.dumps(asdict(layer) | counts))
     # Fehlgeschlagene Dateien holt ein Folgelauf nach; der Layer zählt trotzdem
     return 0
 

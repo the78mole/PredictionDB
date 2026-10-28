@@ -560,6 +560,8 @@ async def build_layer(
     log.info(
         "idx_layer_done",
         layer=layer.key,
+        # Mit Digest und Größe lässt sich das Manifest notfalls von Hand nachtragen
+        digest=layer.digest,
         files=layer.files,
         absent=len(layer.absent),
         broken=len(layer.broken),
