@@ -69,6 +69,14 @@ SCHWELLEN = {
 }
 #: EE-Zubau-Szenario: zusätzliche Einspeisung als Anteil der gemessenen (etwa Stand 2029/30)
 EE_PLUS = {"solar": 0.5, "wind": 0.25}
+#: EE-Wachstum je Jahr für die Zeitachse: PV wie die SMARD-Einspeisung Jan-Sep 2024 -> 2026
+#: (57,0 -> 76,2 TWh), Wind grob nach Zubau (~5 GW/a auf ~80 GW), die Wind-Einspeisung
+#: schwankt mit dem Wetter zu stark für eine eigene Schätzung
+EE_WACHSTUM = {"solar": 0.155, "wind": 0.06}
+BASIS_MITTE = pd.Timestamp("2026-04-27")
+#: Sensitivität Abregelung: Leistung (GW), die in Stunden mit Preis <= 0 abgeregelt ist und
+#: zusätzliche Last ohne Preisanstieg deckt, bevor die Kurve greift
+ABREGELUNG_GW = [3.0, 6.0]
 FARBE = {
     "empirisch": "#2f6db3",
     "merit-order": "#c4562b",
@@ -249,6 +257,7 @@ class Preis:
         self.var = variante
         # zusätzliche Last je Stunde vor dem Speicher (EE-Zubau < 0)
         self.shift = np.zeros(len(df))
+        self.abregelung = 0.0  # GW, siehe ABREGELUNG_GW
         if variante == "merit-order":
             # Bedarf an steuerbarer Leistung:
             # Residuallast - Biomasse - Wasser - sonstige EE + Korrektur
@@ -261,6 +270,11 @@ class Preis:
     def _g(self, idx: np.ndarray, x: np.ndarray) -> np.ndarray:
         """g(R + s + x) - g(R) für Stunden idx (n) und Zusatzlasten x (n, k), s = self.shift."""
         x = x + self.shift[idx][:, None]
+        if self.abregelung > 0:
+            # Abgeregelte EE decken zusätzliche Last zum gemessenen Preis (<= 0), erst darüber
+            # steigt der Preis entlang der Kurve
+            null = (self.p[idx] <= 0)[:, None]
+            x = np.where(null & (x > 0), np.maximum(x - self.abregelung, 0), x)
         out = np.empty_like(x)
         for m in np.unique(self.mon[idx]):
             j = np.where(self.mon[idx] == m)[0]
@@ -291,6 +305,12 @@ class Preis:
                     d >= 0, tr(d), tr(np.zeros_like(d)) + (np.interp(r0, GITTER, g) - e_0)
                 )
                 out[jj] = h_y - h_d
+        # Zusätzliche EE (shift < 0) regeln bei negativen Preisen ab (Solarspitzengesetz, § 51 EEG):
+        # sie drücken den Preis nicht unter min(gemessen, 0)
+        neu = self.shift[idx] < 0
+        if neu.any():
+            boden = (np.minimum(self.p[idx], 0) - self.p[idx])[:, None]
+            out = np.where(neu[:, None], np.maximum(out, boden), out)
         return out
 
     def bei(self, idx: np.ndarray, x: np.ndarray) -> np.ndarray:
@@ -407,6 +427,58 @@ def pfade(best: pd.DataFrame, plan: pd.DataFrame, zub: pd.DataFrame) -> pd.DataF
             dict(jahr=j, pfad="MaStR-Planung termingerecht", markt_gw=planpf),
         ]
     return pd.DataFrame(zeilen), dict(jetzt=jetzt, zubau_2026=z26, zubau_2025=z25, faktor=f)
+
+
+def zeitachse_ee(
+    best: pd.DataFrame,
+    plan: pd.DataFrame,
+    zub: pd.DataFrame,
+    basis: pd.DataFrame,
+    preise: dict[str, Preis],
+) -> pd.DataFrame:
+    """Zeitachse mit EE-Zubau je Jahr: jedes Jahr mit und ohne Speicherzubau neu simuliert."""
+    m = markt_gw(best)
+    b0 = m.reindex(basis.index.tz_localize(None).to_period("M").unique()).mean()
+    pf, _ = pfade(best, plan, zub)
+    ref = None
+    out = []
+    for v, preis in preise.items():
+        for j in JAHRE:
+            t = (pd.Timestamp(f"{j}-12-31") - BASIS_MITTE).days / 365.25
+            fs = (1 + EE_WACHSTUM["solar"]) ** t - 1
+            fw = (1 + EE_WACHSTUM["wind"]) ** t - 1
+            preis.shift = -(fs * basis.solar + fw * (basis.wind_on + basis.wind_off)).values
+            p0 = preis.p + preis._g(np.arange(len(basis)), np.zeros((len(basis), 1)))[:, 0]
+            k0 = kennzahlen(basis, p0, np.zeros(len(basis)))
+            if ref is None or j == JAHRE[0]:
+                ref = kennzahlen(basis, preis.p, np.zeros(len(basis)))
+            for _, z in pf[pf.jahr == j].iterrows():
+                d = max(WIRKSAM * (z.markt_gw - b0), 0)
+                x = simulieren(preis, basis, d, d * DAUER)
+                p1 = preis.p + preis._g(np.arange(len(basis)), x[:, None])[:, 0]
+                k1 = kennzahlen(basis, p1, x)
+                out.append(
+                    dict(
+                        jahr=j,
+                        pfad=z.pfad,
+                        variante=v,
+                        pv_plus=fs,
+                        wind_plus=fw,
+                        zusatz_wirksam_gw=d,
+                        spanne_basis=ref["spanne"],
+                        spanne_ohne_speicher=k0["spanne"],
+                        spanne_mit_speicher=k1["spanne"],
+                        mittag_ohne=k0["mittag"],
+                        mittag_mit=k1["mittag"],
+                        abend_ohne=k0["abend"],
+                        abend_mit=k1["abend"],
+                        neg_h_ohne=k0["neg_h"],
+                        neg_h_mit=k1["neg_h"],
+                    )
+                )
+                print(out[-1], flush=True)
+        preis.shift = np.zeros(len(basis))
+    return pd.DataFrame(out)
 
 
 def zeitachse(
@@ -608,12 +680,14 @@ def main() -> None:
     erg, profile = [], {}
     laeufe = [("heute", P, DAUER) for P in ZUBAU_GW] + [("heute", 10, d) for d in DAUER_VARIANTEN]
     laeufe += [("ee_plus", P, DAUER) for P in ZUBAU_GW]
+    laeufe += [(f"abregelung_{k:.0f}gw", P, DAUER) for k in ABREGELUNG_GW for P in [0, 5, 10, 20]]
     ee_plus = -(
         EE_PLUS["solar"] * basis.solar + EE_PLUS["wind"] * (basis.wind_on + basis.wind_off)
     ).values
     for v, preis in preise.items():
         for sz, P, h in laeufe:
             preis.shift = ee_plus if sz == "ee_plus" else np.zeros(len(basis))
+            preis.abregelung = float(sz.split("_")[1][:-2]) if sz.startswith("abregelung") else 0.0
             x = simulieren(preis, basis, P, P * h)
             p_neu = preis.p + preis._g(np.arange(len(basis)), x[:, None])[:, 0]
             kz = kennzahlen(basis, p_neu, x)
@@ -631,6 +705,7 @@ def main() -> None:
                 flush=True,
             )
         preis.shift = np.zeros(len(basis))
+        preis.abregelung = 0.0
     e = pd.DataFrame(erg)
     ref = e[e.zubau_gw == 0].set_index(["szenario", "variante"])
     key = pd.MultiIndex.from_frame(e[["szenario", "variante"]])
@@ -663,6 +738,25 @@ def main() -> None:
     # Teil 3: Zeitachse
     za = zeitachse(best, plan, zub, basis, e)
     za.round(3).to_csv(tab / "zeitachse.csv", index=False)
+    zee = zeitachse_ee(best, plan, zub, basis, preise)
+    zee.round(3).to_csv(tab / "zeitachse_ee.csv", index=False)
+    fig, ax = plt.subplots(1, 2, figsize=(12, 4.5))
+    ze = zee[zee.variante == "empirisch"]
+    ohne = ze.groupby("jahr").first()
+    for i, (spalte, titel) in enumerate([("spanne", "mittlere Tagesspanne"), ("mittag", "Mittag")]):
+        y0 = ohne[f"{spalte}_ohne_speicher" if spalte == "spanne" else f"{spalte}_ohne"]
+        ax[i].plot(ohne.index, y0, "k--", label="EE-Zubau, Speicher wie Basisjahr")
+        for pf, grp in ze.groupby("pfad"):
+            col = f"{spalte}_mit_speicher" if spalte == "spanne" else f"{spalte}_mit"
+            ax[i].plot(grp.jahr, grp[col], "o-", label=f"EE-Zubau + {pf}")
+        ax[i].set_title(f"{titel} €/MWh (empirisch)")
+        ax[i].set_xticks(list(JAHRE))
+        ax[i].grid(alpha=0.3)
+        ax[i].legend(fontsize=8)
+    ax[0].axhline(ohne.spanne_basis.iloc[0], color="grey", lw=0.8, label="Basisjahr")
+    fig.tight_layout()
+    fig.savefig(gra / "zeitachse_ee.png", dpi=130)
+    plt.close(fig)
     print(za)
 
     # Grafiken Simulation

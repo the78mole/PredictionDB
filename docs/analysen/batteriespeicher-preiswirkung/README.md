@@ -34,22 +34,27 @@ Preis, mittags und nachts steigt er. Der mittlere Preis bleibt bis 10 GW Zubau a
 gleich. Darüber steigt er sogar leicht, weil die Verluste (14 % bei Netz zu Netz) als zusätzliche
 Last bezahlt werden müssen und der Mittagspreis stärker steigt, als der Abendpreis fällt.
 
-**Negative Preise werden zuerst selten.** Schon 1,3 GW Zubau reichen für 25 % weniger Stunden mit
-negativem Preis, weil die meisten nur knapp unter null liegen. Das sieht man bereits im Markt:
-Von Januar bis September 2026 gab es dreimal so viele Stunden mit negativer Residuallast wie im
-Vorjahr (565 statt 185), aber weniger Stunden mit negativem Preis (460 statt 525). Neben den
-Speichern wirkt hier das Solarspitzengesetz (neue PV-Anlagen regeln bei negativen Preisen ab),
-die Zahlen trennen beides nicht.
+**Mit dem EE-Zubau gerechnet bleibt die Spanne etwa auf heutigem Stand.** Die Tabelle oben hält
+Wind und PV auf dem Stand des Basisjahres. Wächst PV weiter um 15,5 % und Wind um 6 % im Jahr und
+regeln neue Anlagen bei negativen Preisen ab, wird die Tagesspanne ohne weitere Speicher bis 2030
+um 9 % größer und der Mittagspreis fällt von 58 auf 20 €/MWh. Mit dem Speicherzubau liegt die
+Spanne 2027 je nach Pfad 4 bis 13 % und 2030 9 bis 20 % unter dem Basisjahr. Speicher fangen den
+PV-Zubau also mehr als auf, den Fall des Mittagspreises bremsen sie aber nur um 2 bis 6 €/MWh
+(siehe [Abregelung und EE-Zubau](#abregelung-und-ee-zubau)).
 
-**Mehr PV schiebt die Sättigung hinaus.** Mit 50 % mehr Solar- und 25 % mehr Windstrom (grob der
-Stand 2029/30) wird die Tagesspanne im Basisjahr um 28 % größer. Dann braucht es 3,4 GW Zubau
-für dieselben −10 %, und 20 GW drücken die Spanne nur um ein Drittel. Speicher und PV-Ausbau
-wirken also gegeneinander: Speicher halten die Spanne ungefähr da, wo sie ist, statt sie zu
-halbieren.
+**Negative Preise reagieren empfindlich auf die Abregelung.** Mit dem gemessenen Preis allein
+reichen 1,3 GW Zubau für 25 % weniger Stunden mit negativem Preis, weil die meisten nur knapp
+unter null liegen. Stehen in diesen Stunden aber 3 bis 6 GW abgeregelte Wind- und PV-Leistung
+bereit, laden die Speicher zuerst diesen Strom und der Preis bleibt negativ. Dann braucht es 7 bis
+14 GW. Auf Tagesspanne und Abendpreis hat die Abregelung kaum Einfluss. Im Markt sieht man
+trotzdem schon eine Wende: Von Januar bis September 2026 gab es dreimal so viele Stunden mit
+negativer Residuallast wie im Vorjahr (565 statt 185), aber weniger Stunden mit negativem Preis
+(460 statt 525). Neben den Speichern wirkt hier das Solarspitzengesetz, die Zahlen trennen
+beides nicht.
 
 **Die Erlöse der Speicher fallen schnell.** Der reine Day-Ahead-Arbitrageerlös des Zubaus sinkt
 von 82 €/kW/a bei 2 GW auf 53 bei 10 GW und 36 bei 20 GW. Mit mehr PV liegt er bei 20 GW noch bei
-74 €/kW/a. Das bremst den Ausbau irgendwo zwischen 15 und 30 GW, wenn nicht Regelleistung,
+63 €/kW/a. Das bremst den Ausbau irgendwo zwischen 15 und 30 GW, wenn nicht Regelleistung,
 Intraday und Netzentgeltbefreiung den Rest bezahlen.
 
 **Für das Prognosemodell:** Die Wirkung ist so groß, dass das Modell sie schon 2027 als
@@ -124,16 +129,48 @@ wie 5 GW mit 2 h.
 
 Ab welchem Zubau (2 h) die Schwellen erreicht sind ([tabellen/schwellen.csv](tabellen/schwellen.csv)):
 
-| Schwelle | EE wie heute | mit 50 % mehr PV, 25 % mehr Wind |
+| Schwelle | EE wie heute | mit 50 % mehr PV, 25 % mehr Wind | 3–6 GW abgeregelt |
 |---|---|---|
-| Tagesspanne −10 % | 1,8–1,9 GW | 3,4–3,8 GW |
-| Abendpreis −5 €/MWh | 3,0–3,4 GW | 4,5–5,1 GW |
-| Mittagspreis +5 €/MWh | 3,2–3,3 GW | 3,8–5,2 GW |
-| Stunden mit negativem Preis −25 % | 1,2–1,3 GW | 38 GW |
+| Tagesspanne −10 % | 1,8–1,9 GW | 3,5 GW | 2,4–2,8 GW |
+| Abendpreis −5 €/MWh | 3,0–3,4 GW | 4,4 GW | 3,3–3,6 GW |
+| Mittagspreis +5 €/MWh | 3,2–3,3 GW | 8,1–11,7 GW | 4,3–6,0 GW |
+| Stunden mit negativem Preis −25 % | 1,2–1,3 GW | nicht erreicht | 7,4–14,6 GW |
 
-Spannen: empirische Kurve und Merit-Order-Kurve.
+Spannen: empirische Kurve und Merit-Order-Kurve. Mit mehr Wind und PV regeln die neuen Anlagen
+bei negativen Preisen ab, deshalb bleibt die Zahl der negativen Stunden dort gleich und sinkt
+auch mit Speichern kaum.
 
 ![Zeitachse](grafiken/zeitachse.png)
+
+## Abregelung und EE-Zubau
+
+![Zeitachse mit EE-Zubau](grafiken/zeitachse_ee.png)
+
+Jedes Jahr mit dem EE-Zubau bis dahin, einmal ohne weiteren Speicher und einmal mit dem
+Speicherpfad, empirische Kurve ([tabellen/zeitachse_ee.csv](tabellen/zeitachse_ee.csv)):
+
+| Ende | PV / Wind ggü. Basisjahr | Spanne ohne Speicherzubau | Spanne mit Zubau wie 2026 / wachsend / MaStR-Planung | Mittag ohne / mit | Abend ohne / mit |
+|---|---|---|---|---|---|
+| Basisjahr | – | 143 | – | 58 | 147 |
+| 2027 | +27 % / +10 % | 153 | 138 / 134 / 125 | 39 / 41–43 | 136 / 129–132 |
+| 2028 | +47 % / +17 % | 155 | 135 / 127 / 123 | 31 / 33–35 | 129 / 120–124 |
+| 2030 | +96 % / +31 % | 156 | 131 / 115 / 128 | 20 / 22–25 | 115 / 100–107 |
+
+Die Merit-Order-Kurve ist steiler: Ohne Speicher wächst die Spanne bis 2030 auf 165 €/MWh, mit
+den Pfaden liegt sie bei 120 bis 138 €/MWh. Die Richtung ist dieselbe.
+
+Drei Dinge folgen daraus:
+
+- Der PV-Zubau drückt vor allem den Mittagspreis, weil die zusätzliche Einspeisung genau dort
+  anfällt. Abgeregelte und neue, abregelnde Anlagen machen das Mittagstal breiter, aber nicht
+  tiefer als null. Speicher heben es nur wenig, weil sie zuerst den Strom aufnehmen, der sonst
+  abgeregelt würde.
+- Sturmphasen mit viel Wind dauern oft länger als ein, zwei Tage. 2-h-Speicher verschieben
+  Energie innerhalb des Tages und helfen dort wenig. Die Simulation rechnet je Woche und würde
+  längere Verschiebungen erlauben, die Speicherdauer begrenzt sie aber.
+- Für die Frage „ab wann merklich“ ändert sich wenig: Gegenüber dem Stand ohne weitere Speicher
+  ist die Wirkung 2027 so groß wie in der Tabelle oben. Netto gegenüber heute fällt sie kleiner
+  aus, weil der EE-Zubau die Spanne gleichzeitig vergrößert.
 
 ## Rückblick: Sieht man es schon?
 
@@ -193,9 +230,17 @@ Erdgas teuer war, steigt das Tagesmittel mit, die Kennzahl ist deshalb nur ein H
    mindestens wieder halb voll, Wirkungsgrad 86 % Netz zu Netz). Es rechnet mit perfekter
    Voraussicht und überschätzt die Wirkung damit etwas. Deshalb zählen in den Ausbaupfaden nur
    70 % der Leistung.
-5. **EE-Zubau-Variante:** 50 % mehr Solar- und 25 % mehr Windeinspeisung als gemessen, als
-   negative Zusatzlast vor dem Speicher. Die Kurve wird dabei unter die gemessene Residuallast
-   verlängert. Die Zahl der negativen Stunden ist in dieser Variante unsicher.
+5. **EE-Zubau:** zusätzliche Solar- und Windeinspeisung als Vielfaches der gemessenen, als
+   negative Zusatzlast vor dem Speicher. Einmal als feste Variante (50 % mehr PV, 25 % mehr
+   Wind), einmal je Jahr (PV +15,5 %/a wie die SMARD-Einspeisung Januar–September 2024 bis 2026,
+   Wind +6 %/a nach Zubau, gerechnet ab der Mitte des Basisjahres). Neue Anlagen drücken den
+   Preis nicht unter min(gemessen, 0), weil sie nach Solarspitzengesetz und § 51 EEG bei
+   negativen Preisen abregeln. Die Kurve wird unter die gemessene Residuallast verlängert.
+6. **Abregelung:** SMARD misst die Einspeisung nach der Abregelung. In Stunden mit Preis ≤ 0
+   können 3 oder 6 GW abgeregelte Leistung (Sensitivität, frei veröffentlichte Mengen gibt es
+   nicht) zusätzliche Last zum gemessenen Preis decken, erst darüber greift die Kurve.
+   Netzbedingte Abregelung (Redispatch) wirkt nicht auf den Day-Ahead-Preis und ist nicht
+   modelliert.
 
 Nicht im Modell: Speicher in den Nachbarländern, Intraday- und Regelleistungsmärkte als eigene
 Erlösquellen, Netzengpässe und netzdienliche Fahrweise, Pumpspeicher als eigener Akteur (sie
