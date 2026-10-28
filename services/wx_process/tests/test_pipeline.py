@@ -172,10 +172,23 @@ def test_latest_and_failures(setup) -> None:  # type: ignore[no-untyped-def]
 def test_backfill_run_selection(setup) -> None:  # type: ignore[no-untyped-def]
     pipeline, bronze, _ = setup
     fill_bronze(bronze, STEPS)
-    out = pipeline.backfill(RUN - timedelta(hours=12), RUN, hours=[0, 6], newest_first=True)
+    out = pipeline.backfill(RUN - timedelta(hours=12), RUN, hours=[6, 0], newest_first=True)
     assert [(o.run, o.status) for o in out] == [
         (RUN, "processed"),
         (RUN - timedelta(hours=6), "not_ready"),
+    ]
+
+
+def test_backfill_follows_run_priority(setup) -> None:  # type: ignore[no-untyped-def]
+    """Erst alle Läufe der ersten Laufzeit, dann die nächste, je Laufzeit jüngste zuerst."""
+    pipeline, _, _ = setup
+    start = RUN - timedelta(hours=24)
+    out = pipeline.backfill(start, RUN, hours=[12, 0, 6], newest_first=True)
+    assert [o.run for o in out] == [
+        RUN - timedelta(hours=18),
+        RUN - timedelta(hours=6),
+        RUN,
+        RUN - timedelta(hours=24),
     ]
 
 

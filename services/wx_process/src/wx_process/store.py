@@ -178,6 +178,14 @@ class Store:
         """Ersetzt die Werte eines Laufs für diese Merkmale und Regionen."""
         n = 0
         with self.engine.begin() as c:
+            # Nicht ewig auf Sperren warten (z. B. hinter einer verwaisten Sitzung): Der Lauf
+            # schlägt dann fehl und kommt im nächsten Durchgang wieder dran.
+            c.execute(text("SET LOCAL lock_timeout = '10min'"))
+            # Live- und Backfill-Dienst schreiben denselben Lauf nie gleichzeitig
+            c.execute(
+                text("SELECT pg_advisory_xact_lock(hashtext('feat.nwp_value'), hashtext(:k))"),
+                {"k": run.isoformat()},
+            )
             c.execute(
                 text("""
                 DELETE FROM feat.nwp_value
