@@ -93,7 +93,8 @@ jobs:
       contents: read
       packages: write
     strategy:
-      max-parallel: ${{ inputs.max_parallel }}
+      # Beim Start über die API kommt die Eingabe als Text; fromJSON macht daraus eine Zahl
+      max-parallel: ${{ fromJSON(inputs.max_parallel) }}
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.plan.outputs.matrix) }}
