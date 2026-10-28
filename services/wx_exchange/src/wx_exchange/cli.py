@@ -11,6 +11,13 @@ Beispiele::
     wx-exchange gfs --config config/sources/gfs_0p25_gdex.yaml templates 2019-06-12T12 \
         2021-03-22T06 --out gfs_0p25_gdex.templates.json.gz
 
+    # Vollständige .idx zu GDEX (Workflow gfs-idx.yml): Plan, je Job ein Layer, Manifest
+    wx-exchange gfs --config config/sources/gfs_0p25_gdex.yaml idx-plan 2015-01-15T00 \
+        2021-03-22T06 --runs 0,12
+    wx-exchange gfs --config config/sources/gfs_0p25_gdex.yaml idx-build 2019-07 0 \
+        --out layer.json
+    wx-exchange gfs --config config/sources/gfs_0p25_gdex.yaml idx-manifest layers/
+
     # VM: Silber aus GHCR nach wx-silver holen, stündlich wiederholen
     wx-exchange gfs import 2021-03-22T12 --runs 0,12,6,18 --watch 3600
 
@@ -18,8 +25,9 @@ Beispiele::
     wx-exchange gfs verify 2026-01-01T00 --runs 0,12
 
 Registry und Repository kommen aus ``WX_EXCHANGE_REGISTRY`` (``ghcr.io``) und
-``WX_EXCHANGE_REPOSITORY``, die Anmeldung zum Schreiben aus ``WX_EXCHANGE_USERNAME`` und
-``WX_EXCHANGE_TOKEN`` (in Actions ``github.actor`` und ``GITHUB_TOKEN``). Lesen geht anonym.
+``WX_EXCHANGE_REPOSITORY`` (Standard Silber, bei ``idx-*`` das ``.idx``-Artefakt), die
+Anmeldung zum Schreiben aus ``WX_EXCHANGE_USERNAME`` und ``WX_EXCHANGE_TOKEN`` (in Actions
+``github.actor`` und ``GITHUB_TOKEN``). Lesen geht anonym.
 """
 
 from __future__ import annotations
@@ -31,6 +39,7 @@ import os
 import sys
 import tempfile
 import time
+from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -41,13 +50,14 @@ from predictiondb_core.db import create_db_engine
 from predictiondb_core.log import configure_logging
 from predictiondb_core.s3 import s3_store
 from predictiondb_core.settings import get_settings
+from wx_exchange import idx
 from wx_exchange.importer import Importer
 from wx_exchange.oci import Registry
 from wx_exchange.publish import Publisher, plan
 from wx_ingest.bronze import Bronze
 from wx_ingest.cli import DEFAULT_CONFIG, parse_run
 from wx_ingest.config import GfsConfig
-from wx_ingest.gfs import read_templates, write_templates
+from wx_ingest.gfs import Endpoint, read_templates, write_templates
 from wx_ingest.ingest import GfsIngestor
 from wx_process.config import ProcessConfig, WxProcessSettings
 from wx_process.store import Store
@@ -71,9 +81,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="wx-exchange", description="Silber-Austausch über GHCR")
     p.add_argument("-v", "--verbose", action="store_true")
     p.add_argument("--registry", default=os.environ.get("WX_EXCHANGE_REGISTRY", "ghcr.io"))
-    p.add_argument(
-        "--repository", default=os.environ.get("WX_EXCHANGE_REPOSITORY", DEFAULT_REPOSITORY)
-    )
+    p.add_argument("--repository", default=os.environ.get("WX_EXCHANGE_REPOSITORY"))
     sub = p.add_subparsers(dest="model", required=True)
     gfs = sub.add_parser("gfs", help="NOAA GFS 0,25°")
     gfs.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
@@ -109,6 +117,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     tpl.add_argument("--archive-concurrency", type=int, default=96, metavar="N")
 
+    ip = cmd.add_parser("idx-plan", help="Matrix der Monat-Laufzeit-Paare ohne vollständige .idx")
+    _range_args(ip)
+    ip.add_argument("--limit", type=int, default=256, help="höchstens so viele Jobs")
+    ip.add_argument("--all", action="store_true", help="alle Paare, auch vollständige (Neubau)")
+
+    ib = cmd.add_parser("idx-build", help="vollständige .idx eines Monats einer Laufzeit")
+    ib.add_argument("month", help="JJJJ-MM")
+    ib.add_argument("hour", type=int, choices=(0, 6, 12, 18))
+    ib.add_argument("--start", type=parse_run, required=True, help="frühester Lauf")
+    ib.add_argument("--end", type=parse_run, required=True, help="spätester Lauf")
+    ib.add_argument("--out", type=Path, required=True, help="Layer-Beschreibung (JSON)")
+    ib.add_argument("--parallel-files", type=int, default=12, metavar="N")
+    ib.add_argument("--archive-concurrency", type=int, default=96, metavar="N")
+    ib.add_argument(
+        "--minutes", type=float, help="danach keine neue Datei mehr beginnen (Job-Zeitgrenze)"
+    )
+    ib.add_argument("--rebuild", action="store_true", help="vorhandenen Layer nicht übernehmen")
+
+    im = cmd.add_parser("idx-manifest", help="Layer-Beschreibungen ins Manifest übernehmen")
+    im.add_argument("layers", type=Path, help="Verzeichnis mit Layer-Beschreibungen (*.json)")
+
     imp = cmd.add_parser("import", help="Silber aus GHCR nach wx-silver")
     _range_args(imp)
     imp.add_argument("--force", action="store_true", help="auch vorhandenes Silber ersetzen")
@@ -135,9 +164,10 @@ def _range_args(p: argparse.ArgumentParser) -> None:
 
 
 def _registry(args: argparse.Namespace, client: httpx.Client) -> Registry:
+    default = idx.DEFAULT_REPOSITORY if args.cmd.startswith("idx-") else DEFAULT_REPOSITORY
     return Registry(
         args.registry,
-        args.repository,
+        args.repository or default,
         client,
         username=os.environ.get("WX_EXCHANGE_USERNAME"),
         password=os.environ.get("WX_EXCHANGE_TOKEN") or None,
@@ -186,6 +216,29 @@ def main(argv: list[str] | None = None) -> int:
             return asyncio.run(_publish(args, config, registry))
         if args.cmd == "templates":
             return asyncio.run(_templates(args, config))
+        if args.cmd == "idx-plan":
+            matrix = idx.plan(
+                registry,
+                config,
+                args.start,
+                _end(args, config),
+                args.runs,
+                limit=args.limit,
+                rebuild=args.all,
+            )
+            _github_output("matrix", json.dumps(matrix, separators=(",", ":")))
+            print(json.dumps({"jobs": len(matrix), "matrix": matrix}, indent=1))
+            return 0
+        if args.cmd == "idx-build":
+            return asyncio.run(_idx_build(args, config, registry))
+        if args.cmd == "idx-manifest":
+            layers = [
+                idx.IdxLayer(**json.loads(f.read_text()))
+                for f in sorted(args.layers.glob("*.json"))
+            ]
+            summary = idx.merge_manifest(registry, layers, SOURCE_URL)
+            print(json.dumps(summary, indent=1))
+            return 0
 
         importer_ = _importer(registry, config, ledger=args.cmd == "import")
         if args.cmd == "verify":
@@ -268,6 +321,35 @@ async def _templates(args: argparse.Namespace, config: GfsConfig) -> int:
     variants = sum(len(v) for v in templates.values())
     print(json.dumps({"steps": len(templates), "variants": variants, "runs": ready}))
     # Fehlende Vorlagen bauen die Monatsjobs selbst; das ist kein Fehler
+    return 0
+
+
+async def _idx_build(args: argparse.Namespace, config: GfsConfig, registry: Registry) -> int:
+    deadline = time.monotonic() + args.minutes * 60 if args.minutes else None
+    async with _archive_client(args, config) as client:
+        endpoints = [
+            Endpoint(ep, client)
+            for ep in config.endpoints
+            if ep.archive and ep.kind == "header_scan"
+        ]
+        if not endpoints:
+            print("keine header_scan-Endpunkte in der Konfiguration", file=sys.stderr)
+            return 1
+        layer = await idx.build_layer(
+            registry,
+            config,
+            endpoints,
+            args.month,
+            args.hour,
+            args.start,
+            args.end,
+            parallel_files=args.parallel_files,
+            deadline=deadline,
+            rebuild=args.rebuild,
+        )
+    args.out.write_text(json.dumps(asdict(layer), indent=1))
+    print(json.dumps(asdict(layer) | {"absent": len(layer.absent), "failed": len(layer.failed)}))
+    # Fehlgeschlagene Dateien holt ein Folgelauf nach; der Layer zählt trotzdem
     return 0
 
 
