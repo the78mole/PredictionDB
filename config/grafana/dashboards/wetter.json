@@ -1479,6 +1479,106 @@
           }
         ]
       }
+    },
+    {
+      "type": "row",
+      "title": "Rechenlast der Wetter-Dienste",
+      "id": 53,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 66
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "CPU der Wetter-Dienste (100 % = ein Kern)",
+      "id": 54,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "pdb-prometheus"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 67
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "pdb-prometheus"
+          },
+          "expr": "sum by (container_label_com_docker_compose_service) (rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_service=~\"ingest-gfs|gfs-.+|wx-.+\"}[2m])) * 100",
+          "legendFormat": "{{container_label_com_docker_compose_service}}",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "pdb-prometheus"
+          },
+          "expr": "sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_service=~\"ingest-gfs|gfs-.+|wx-.+\"}[2m])) * 100",
+          "legendFormat": "Gesamt",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 30
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Gesamt"
+            },
+            "properties": [
+              {
+                "id": "custom.stacking",
+                "value": {
+                  "mode": "none",
+                  "group": "gesamt"
+                }
+              },
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "viz": true,
+                  "legend": true,
+                  "tooltip": false
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "CPU je Container der Wetterkette (cAdvisor): ingest-gfs, gfs-backfill, wx-process, wx-process-backfill, wx-import und einmalige Läufe dieser Dienste per docker compose run (Muster ingest-gfs, gfs-*, wx-*). Der Tooltip zeigt zusätzlich die Summe. Alle Dienste stehen im Dashboard „System“."
     }
   ],
   "templating": {
