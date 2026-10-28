@@ -2,11 +2,14 @@ import asyncio
 import time
 
 import httpx
+from obstore.store import MemoryStore
 
 from wx_exchange import idx
 from wx_exchange.oci import Registry
 from wx_exchange.testing import FakeRegistry
+from wx_ingest.bronze import Bronze
 from wx_ingest.gfs import Endpoint
+from wx_ingest.ingest import GfsIngestor
 from wx_ingest.testing import GDEX_PATH, RUN, FakeGfsHost, make_client, make_config
 
 SOURCE = "https://github.com/the78mole/predictiondb"
@@ -183,3 +186,42 @@ async def test_workers_split_files_and_load(monkeypatch) -> None:  # type: ignor
     assert sorted(n for n, _, _ in seen) == [2, 2, 3]
     assert {(c, p) for _, c, p in seen} == {(8, 4)}
     assert config.endpoints[0].concurrency == 24  # Aufteilen ändert die Vorlage nicht
+
+
+async def test_backfill_reads_idx_instead_of_headers() -> None:
+    reg = registry(FakeRegistry())
+    host = FakeGfsHost("gdex.test", AVAILABLE, index=False)
+    idx.merge_manifest(reg, [await build(reg, host)], SOURCE)
+    layer, files = idx.load_layer(reg, MONTH, RUN.hour)
+    assert layer is not None and layer.complete and len(files) == 3
+    assert idx.load_layer(reg, "1999-01", RUN.hour) == (None, {})
+
+    async with make_client(host) as client:
+        a, b = Bronze(MemoryStore()), Bronze(MemoryStore())
+        want = await GfsIngestor(CONFIG, a, client, archive_only=True).ingest_step(RUN, 3)
+        withidx = GfsIngestor(CONFIG, b, client, archive_only=True)
+        assert withidx.import_idx(files) == 3
+        before = len(host.requests)
+        got = await withidx.ingest_step(RUN, 3)
+    # keine Köpfe mehr, nur die Bereiche der gewählten Nachrichten
+    ranges = [r.headers["range"] for r in host.requests[before:]]
+    assert ranges and not any(r.endswith("-511") for r in ranges)
+    assert got.status == want.status == "stored"
+    ma, mb = await a.step_manifest(RUN, 3), await b.step_manifest(RUN, 3)
+    assert ma is not None and mb is not None
+    assert mb.sha256 == ma.sha256 and mb.messages == ma.messages
+
+
+async def test_stale_idx_falls_back_to_headers() -> None:
+    host = FakeGfsHost("gdex.test", AVAILABLE, index=False)
+    # .idx passt nicht zur Datei: Offsets mitten in den Nachrichten
+    (text,) = FakeGfsHost("aws.test", {3}).idx.values()
+    rows = [line.split(":") for line in text.splitlines()]
+    stale = "".join(":".join([r[0], str(int(r[1]) + 10), *r[2:]]) + "\n" for r in rows)
+    name = GDEX_PATH.format(run=RUN, step=3) + ".idx"
+    async with make_client(host) as client:
+        ing = GfsIngestor(CONFIG, Bronze(MemoryStore()), client, archive_only=True)
+        ing.import_idx({name: stale.encode()})
+        result = await ing.ingest_step(RUN, 3)
+    assert result.status == "stored"
+    assert not ing.endpoints[0]._idx

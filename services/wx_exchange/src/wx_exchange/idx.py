@@ -18,6 +18,10 @@ Layer, je Matrix-Job baut :func:`build_layer` einen Layer und lädt den Blob hoc
 Abschlussjob schreibt mit :func:`merge_manifest` das eine Manifest neu. Vorhandene Layer bleiben
 liegen; ein Folgelauf ergänzt nur, was fehlt, und übernimmt dabei die schon gebauten ``.idx``
 eines unvollständigen Layers.
+
+Der Silber-Backfill (``publish``) lädt den passenden Layer mit :func:`load_layer` und liest die
+gewählten Nachrichten direkt über die ``.idx``; nur Dateien ohne ``.idx`` (``failed``) laufen
+weiter über Vorlagen und Köpfe.
 """
 
 from __future__ import annotations
@@ -151,6 +155,16 @@ def read_layers(registry: Registry) -> dict[str, IdxLayer]:
             layer = IdxLayer.from_descriptor(d)
             out[layer.key] = layer
     return out
+
+
+def load_layer(
+    registry: Registry, month: str, hour: int
+) -> tuple[IdxLayer | None, dict[str, bytes]]:
+    """Layer eines Monats und einer Laufzeit mit seinen ``.idx`` (``None``, wenn es keinen gibt)."""
+    layer = read_layers(registry).get(layer_key(month, hour))
+    if layer is None:
+        return None, {}
+    return layer, unpack(registry.blob(layer.digest))
 
 
 def _runs(
