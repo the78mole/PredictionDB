@@ -86,3 +86,33 @@ def test_forecast_and_missing(make_http: Callable[..., Http]) -> None:
     (solar,) = ec.fetch("forecast_solar", T0, T0 + timedelta(hours=1))
     assert solar.code == "gen_da_forecast_solar"
     assert ec.fetch("forecast_load", T0, T0 + timedelta(hours=1)) == []
+
+
+def cross_border(req: httpx.Request) -> httpx.Response:
+    assert req.url.path in ("/cbet", "/cbpf")
+    assert req.url.params["country"] == "de"
+    return httpx.Response(
+        200,
+        json={
+            "unix_seconds": STAMPS,
+            "countries": [
+                {"name": "France", "data": [-1.078, -0.752, None, 0.5]},
+                {"name": "Czech Republic", "data": [1.0, 1.0, 1.0, 1.0]},
+                {"name": "Atlantis", "data": [9, 9, 9, 9]},
+                {"name": "sum", "data": [-1.225, -0.608, -0.247, 0.0]},
+            ],
+            "deprecated": False,
+        },
+    )
+
+
+@pytest.mark.parametrize(("dataset", "prefix"), [("cbet", "xb_trade_"), ("cbpf", "xb_flow_")])
+def test_cross_border(make_http: Callable[..., Http], dataset: str, prefix: str) -> None:
+    ec = EnergyCharts(make_http(cross_border))
+    assert dataset in ec.datasets()
+    out = {d.code: d for d in ec.fetch(dataset, T0, T0 + timedelta(hours=1))}
+    # unbekannte Partner werden übergangen, GW werden zu MW
+    assert set(out) == {prefix + "fr", prefix + "cz", prefix + "net"}
+    assert [v for _, v in out[prefix + "fr"].points] == pytest.approx([-1078, -752, 500])
+    assert [v for _, v in out[prefix + "net"].points] == pytest.approx([-1225, -608, -247, 0])
+    assert out[prefix + "net"].resolution == timedelta(minutes=15)

@@ -5,8 +5,9 @@ transparency@entsoe.eu mit dem Betreff „Restful API access“. Ohne ``PDB_ENTS
 bleibt die Quelle abgeschaltet.
 
 Frei weiterverwendbar (CC BY 4.0) ist nur die „List of Data available for free re-use“. Von den
-genutzten Reihen steht nur die Day-Ahead-Lastprognose (6.1.b) darauf; sie läuft als eigene, freie
-Quelle ``entsoe_last`` ohne Schalter, sobald ein Token gesetzt ist. Ist-Last, Preise, Erzeugung
+genutzten Reihen steht nur die Day-Ahead-Lastprognose (6.1.b) darauf; sie läuft für Deutschland
+und die Nachbarzonen als eigene, freie Quelle ``entsoe_last`` ohne Schalter, sobald ein Token
+gesetzt ist. Ist-Last, Preise, Erzeugung
 und Wind-/PV-Prognosen (Quelle ``entsoe``) laufen nur mit ``PDB_ALLOW_ENTSO_E=true``.
 
 Antworten sind XML-Dokumente (``Publication_MarketDocument`` bzw. ``GL_MarketDocument``)
@@ -23,13 +24,29 @@ from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 
 from energy_ingest.http import Http
-from energy_ingest.model import SERIES, SeriesData, series
+from energy_ingest.model import LOAD_FORECAST_ZONES, SERIES, SeriesData, series
 from energy_ingest.sources import SourceError, clip
 
 BASE_URL = "https://web-api.tp.entsoe.eu/api"
 
 EIC_DE_LU = "10Y1001A1001A82H"  # Gebotszone DE-LU (seit 2018-10-01)
 EIC_DE = "10Y1001A1001A83F"  # Deutschland (Land), vergleichbar mit SMARD und Energy-Charts
+
+#: Gebotszonen der Nachbarn (Kürzel aus ``LOAD_FORECAST_ZONES``) -> EIC
+EIC_ZONES: dict[str, str] = {
+    "at": "10YAT-APG------L",
+    "be": "10YBE----------2",
+    "ch": "10YCH-SWISSGRIDZ",
+    "cz": "10YCZ-CEPS-----N",
+    "dk1": "10YDK-1--------W",
+    "dk2": "10YDK-2--------M",
+    "fr": "10YFR-RTE------C",
+    "nl": "10YNL----------L",
+    "no2": "10YNO-2--------T",
+    "pl": "10YPL-AREA-----S",
+    "se4": "10Y1001A1001A47J",
+}
+assert set(EIC_ZONES) == set(LOAD_FORECAST_ZONES)
 
 PSR_TYPES: dict[str, str] = {
     "B01": "biomass",
@@ -65,6 +82,15 @@ QUERIES: dict[str, dict[str, str]] = {
         "documentType": "A65",
         "processType": "A01",
         "outBiddingZone_Domain": EIC_DE,
+    },
+    # Day-Ahead-Lastprognosen der Nachbarzonen, Datensätze ``load_forecast_<kürzel>``
+    **{
+        f"load_forecast_{z}": {
+            "documentType": "A65",
+            "processType": "A01",
+            "outBiddingZone_Domain": EIC_ZONES[z],
+        }
+        for z in LOAD_FORECAST_ZONES
     },
     "generation": {"documentType": "A75", "processType": "A16", "in_Domain": EIC_DE},
     "wind_solar_forecast": {"documentType": "A69", "processType": "A01", "in_Domain": EIC_DE},
@@ -169,7 +195,7 @@ def merge(
 
 
 #: Datensätze auf der Freigabeliste von ENTSO-E (Stand 18.10.2023)
-FREE_DATASETS = ["load_forecast"]
+FREE_DATASETS = ["load_forecast", *(f"load_forecast_{z}" for z in LOAD_FORECAST_ZONES)]
 
 
 class Entsoe:
@@ -212,6 +238,8 @@ class Entsoe:
             groups["load_actual"] = docs
         elif dataset == "load_forecast":
             groups["load_da_forecast"] = docs
+        elif dataset.startswith("load_forecast_"):
+            groups["load_da_forecast_" + dataset.removeprefix("load_forecast_")] = docs
         else:
             prefix = "gen_" if dataset == "generation" else "gen_da_forecast_"
             for ts in docs:
@@ -230,7 +258,8 @@ class Entsoe:
 
 
 class EntsoeLast(Entsoe):
-    """Freier Teil von ENTSO-E: Day-Ahead-Lastprognose (6.1.b), CC BY 4.0."""
+    """Freier Teil von ENTSO-E: Day-Ahead-Lastprognosen (6.1.b) für DE und die Nachbarzonen,
+    CC BY 4.0."""
 
     code = "entsoe_last"
     license = "CC BY 4.0, ENTSO-E Transparency Platform (List of Data available for free re-use)"
