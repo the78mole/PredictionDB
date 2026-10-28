@@ -1185,7 +1185,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "-- Je Liefertag die eigene Prognose vom Vortag 10:00 Ortszeit, zeitgleich mit der\n-- Day-Ahead-Lastprognose der ÜNB (bis 10:00 am Vortag, VO 543/2013 Art. 6.1 b)\nSELECT p.valid_time AS time,\n       v.config || ' ' || v.variant || ' · ' || CASE v.role WHEN 'champion' THEN 'Champion' ELSE 'Challenger' END AS metric, p.value\n  FROM fcst.prediction p JOIN meta.model_version v ON v.version = p.model_version\n WHERE p.target = 'load_actual' AND p.quantile = 0.5 AND v.role IN ('champion', 'challenger')\n   AND extract(hour FROM p.issue_time AT TIME ZONE 'Europe/Berlin') = 10\n   AND (p.valid_time AT TIME ZONE 'Europe/Berlin')::date\n         - (p.issue_time AT TIME ZONE 'Europe/Berlin')::date = 1\n   AND $__timeFilter(p.valid_time)\n ORDER BY 1"
+          "rawSql": "-- Je Liefertag die eigene Prognose vom Vortag 10:00 Ortszeit, zeitgleich mit der\n-- Day-Ahead-Lastprognose der ÜNB (bis 10:00 am Vortag, VO 543/2013 Art. 6.1 b)\nSELECT p.valid_time AS time,\n       v.config || ' ' || v.variant || ' ' || to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') || ' · ' || CASE v.role WHEN 'champion' THEN 'Champion' ELSE 'Challenger' END AS metric, p.value\n  FROM fcst.prediction p JOIN meta.model_version v ON v.version = p.model_version\n WHERE p.target = 'load_actual' AND p.quantile = 0.5 AND v.role IN ('champion', 'challenger')\n   AND extract(hour FROM p.issue_time AT TIME ZONE 'Europe/Berlin') = 10\n   AND (p.valid_time AT TIME ZONE 'Europe/Berlin')::date\n         - (p.issue_time AT TIME ZONE 'Europe/Berlin')::date = 1\n   AND $__timeFilter(p.valid_time)\n ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -1326,7 +1326,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "-- Je Liefertag die eigene Prognose vom Vortag 10:00 Ortszeit, zeitgleich mit der\n-- Day-Ahead-Lastprognose der ÜNB (bis 10:00 am Vortag, VO 543/2013 Art. 6.1 b)\nSELECT p.valid_time AS time,\n       v.config || ' ' || v.variant || ' · ' || CASE v.role WHEN 'champion' THEN 'Champion' ELSE 'Challenger' END AS metric, p.value\n  FROM fcst.prediction p JOIN meta.model_version v ON v.version = p.model_version\n WHERE p.target = 'da_price_de_lu' AND p.quantile = 0.5 AND v.role IN ('champion', 'challenger')\n   AND extract(hour FROM p.issue_time AT TIME ZONE 'Europe/Berlin') = 10\n   AND (p.valid_time AT TIME ZONE 'Europe/Berlin')::date\n         - (p.issue_time AT TIME ZONE 'Europe/Berlin')::date = 1\n   AND $__timeFilter(p.valid_time)\n ORDER BY 1"
+          "rawSql": "-- Je Liefertag die eigene Prognose vom Vortag 10:00 Ortszeit, zeitgleich mit der\n-- Day-Ahead-Lastprognose der ÜNB (bis 10:00 am Vortag, VO 543/2013 Art. 6.1 b)\nSELECT p.valid_time AS time,\n       v.config || ' ' || v.variant || ' ' || to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') || ' · ' || CASE v.role WHEN 'champion' THEN 'Champion' ELSE 'Challenger' END AS metric, p.value\n  FROM fcst.prediction p JOIN meta.model_version v ON v.version = p.model_version\n WHERE p.target = 'da_price_de_lu' AND p.quantile = 0.5 AND v.role IN ('champion', 'challenger')\n   AND extract(hour FROM p.issue_time AT TIME ZONE 'Europe/Berlin') = 10\n   AND (p.valid_time AT TIME ZONE 'Europe/Berlin')::date\n         - (p.issue_time AT TIME ZONE 'Europe/Berlin')::date = 1\n   AND $__timeFilter(p.valid_time)\n ORDER BY 1"
         }
       ],
       "fieldConfig": {
