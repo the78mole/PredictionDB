@@ -1,3 +1,4 @@
+import asyncio
 import time
 
 import httpx
@@ -137,3 +138,48 @@ async def test_failed_files_are_retried_in_the_same_job() -> None:
     # Je Datei scheitern erst alle Wiederholungen der ersten Anfrage
     layer = await build(reg, Flaky(FakeGfsHost("gdex.test", AVAILABLE, index=False), 40))
     assert layer.complete and layer.files == 3 and len(layer.absent) == 4
+
+
+async def test_workers_split_files_and_load(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """``workers``: Dateien und Anfragen werden aufgeteilt, das Ergebnis bleibt dasselbe.
+
+    Statt Prozessen laufen Threads mit eigener Ereignisschleife (der Testspiegel lebt nur im
+    Testprozess); geprüft wird Aufteilen und Zusammenführen.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    host = FakeGfsHost("gdex.test", AVAILABLE, index=False)
+    seen: list[tuple[int, int, int]] = []
+
+    def worker(config, items, label, parallel_files, deadline, retries, retry_pause):  # type: ignore[no-untyped-def]
+        seen.append((len(items), config.endpoints[0].concurrency, parallel_files))
+
+        async def go() -> idx._Scan:
+            async with make_client(host) as client:
+                endpoints = [Endpoint(ep, client, retry_wait_max=0.01) for ep in config.endpoints]
+                return await idx._scan(
+                    endpoints,
+                    items,
+                    label=label,
+                    parallel_files=parallel_files,
+                    deadline=deadline,
+                    retries=retries,
+                    retry_pause=retry_pause,
+                )
+
+        return asyncio.run(go())
+
+    monkeypatch.setattr(idx, "_worker", worker)
+    monkeypatch.setattr(
+        idx, "ProcessPoolExecutor", lambda max_workers, mp_context: ThreadPoolExecutor(max_workers)
+    )
+    config = CONFIG.model_copy(deep=True)
+    config.endpoints[0].concurrency = 24
+    reg = registry(FakeRegistry())
+    layer = await idx.build_layer(
+        reg, config, [], MONTH, RUN.hour, RUN, RUN, retry_pause=0, workers=3
+    )
+    assert layer.complete and layer.files == 3 and len(layer.absent) == 4
+    assert sorted(n for n, _, _ in seen) == [2, 2, 3]
+    assert {(c, p) for _, c, p in seen} == {(8, 4)}
+    assert config.endpoints[0].concurrency == 24  # Aufteilen ändert die Vorlage nicht
