@@ -1148,7 +1148,7 @@
     },
     {
       "type": "row",
-      "title": "Lokaler Bestand (Silber und Gold)",
+      "title": "Lokaler Bestand (Bronze, Silber und Gold)",
       "id": 51,
       "collapsed": false,
       "gridPos": {
@@ -1158,6 +1158,113 @@
         "y": 38
       },
       "panels": []
+    },
+    {
+      "type": "barchart",
+      "title": "Bronze lokal je Monat (Anteil der GFS-Läufe)",
+      "id": 52,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 39
+      },
+      "description": "Je Monat der Anteil der erwarteten GFS-Läufe (wie beim Silber-Panel, Laufzeiten oben unter „GFS-Läufe“), deren zugeschnittene GRIB-Schritte (Bronze) vollständig in Garage wx-bronze liegen. Grün = fertig: ein Download-Lauf (gfs-ingest oder gfs-backfill) hat den Lauf vollständig abgelegt oder vollständig vorgefunden (meta.backfill_run complete/skipped), oder das lokale Silber wurde aus Bronze gerechnet (meta.silver_run origin bronze). Gelb = gerade im Bronze-Download. Läufe, deren Silber nur aus GHCR importiert wurde, haben lokal kein Bronze.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "-- Erwartete Läufe wie im Silber-Panel. Grün: Bronze liegt vollständig in wx-bronze, d. h. ein\n-- Download hat den Lauf abgeschlossen oder vollständig vorgefunden (meta.backfill_run complete\n-- bzw. skipped) oder das Silber wurde lokal aus Bronze gerechnet (meta.silver_run origin bronze).\n-- Gelb: gerade im Bronze-Download (meta.backfill_run running).\nWITH soll AS (\n  SELECT t FROM generate_series(timestamptz '2021-03-22 12:00+00',\n                                date_bin('6 hours', now() - interval '5 hours', timestamptz '2000-01-01'),\n                                interval '6 hours') t\n   WHERE extract(hour FROM t AT TIME ZONE 'UTC')::int::text IN ($gfs_lauf)),\nq AS (SELECT source_id FROM meta.source WHERE code = 'gfs_0p25'),\ndl AS (SELECT r.run_time, bool_or(r.status IN ('complete', 'skipped')) AS fertig,\n              bool_or(r.status = 'running') AS laden\n         FROM meta.backfill_run r JOIN meta.backfill_job j USING (job_id)\n        WHERE j.source_id = (SELECT source_id FROM q)\n        GROUP BY r.run_time),\nsilber AS (SELECT run_time FROM meta.silver_run\n            WHERE source_id = (SELECT source_id FROM q) AND origin = 'bronze' AND status = 'present'),\nz AS (\n  SELECT soll.t,\n         CASE WHEN dl.fertig OR silber.run_time IS NOT NULL THEN 'fertig'\n              WHEN dl.laden THEN 'laden' END AS zustand\n    FROM soll LEFT JOIN dl ON dl.run_time = soll.t LEFT JOIN silber ON silber.run_time = soll.t)\nSELECT to_char(t AT TIME ZONE 'UTC', 'YYYY-MM') AS \"Monat\",\n       round(100.0 * count(*) FILTER (WHERE zustand = 'fertig') / count(*), 1) AS \"Fertig\",\n       round(100.0 * count(*) FILTER (WHERE zustand = 'laden') / count(*), 1) AS \"Im Download\"\n  FROM z\n GROUP BY 1\n ORDER BY 1"
+        }
+      ],
+      "options": {
+        "orientation": "vertical",
+        "stacking": "normal",
+        "showValue": "never",
+        "groupWidth": 0.8,
+        "barWidth": 0.9,
+        "barRadius": 0,
+        "xField": "Monat",
+        "xTickLabelRotation": -45,
+        "xTickLabelSpacing": 0,
+        "fullHighlight": false,
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "decimals": 1,
+          "color": {
+            "mode": "fixed"
+          },
+          "custom": {
+            "fillOpacity": 85,
+            "lineWidth": 0,
+            "gradientMode": "none",
+            "axisSoftMin": 0,
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Fertig"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Im Download"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "type": "barchart",
@@ -1171,7 +1278,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 39
+        "y": 48
       },
       "description": "Je Monat der Anteil der erwarteten GFS-Läufe (ab v16, 22.03.2021 12Z, bis zum jüngsten veröffentlichten Lauf; Laufzeiten oben unter „GFS-Läufe“ wählbar), deren Silber vollständig in Garage wx-silver liegt. Grün = fertig, gelb = gerade im Download: im laufenden Import-Durchgang aus GHCR (wx-import) vorgesehen oder im Bronze-Backfill (gfs-backfill) in Arbeit. Läufe, die im NOAA-Archiv fehlen, bleiben offen, daher erreichen manche Monate keine 100 %.",
       "targets": [
@@ -1278,7 +1385,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 48
+        "y": 57
       },
       "description": "Je Monat der Anteil der erwarteten GFS-Läufe (wie beim Silber-Panel, Laufzeiten oben unter „GFS-Läufe“), für die die Wetter-Features je Cluster (Gold, feat.nwp_value) mit der aktuellen Clusterung und Feature-Version gerechnet sind. Grün = fertig, gelb = in Arbeit: Silber liegt lokal vor, Gold steht noch aus (wx-process-backfill rechnet stündlich nach, nur für die Laufzeiten in GFS_BACKFILL_RUNS). Eine neue Clusterung macht alle Läufe wieder gelb, bis sie neu gerechnet sind.",
       "targets": [
@@ -1379,7 +1486,7 @@
       {
         "type": "custom",
         "name": "gfs_lauf",
-        "label": "GFS-Läufe (Silber/Gold je Monat)",
+        "label": "GFS-Läufe (Bronze/Silber/Gold je Monat)",
         "query": "00Z : 0, 06Z : 6, 12Z : 12, 18Z : 18",
         "multi": true,
         "includeAll": true,
