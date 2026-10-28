@@ -3,10 +3,11 @@
 Läuft im energy-ingest-Container (Zugangsdaten aus .env), schreibt CSV nach stdout:
 endpoint;Datum;Zeitzone;von;bis;...Originalspalten...
 """
+
 import os
 import sys
 import time
-from datetime import date
+from datetime import UTC, datetime
 
 import httpx
 
@@ -21,14 +22,14 @@ H = {"Authorization": f"Bearer {tok}"}
 BASE = "https://ds.netztransparenz.de/api/v1/data"
 EP = {"idaep": "IdAep", "rebap": "NrvSaldo/reBAP/Qualitaetsgesichert"}
 start_year = int(sys.argv[1]) if len(sys.argv) > 1 else 2020
-today = date.today()
+today = datetime.now(UTC).date()
 for name, path in EP.items():
     header_done = False
     y, m = start_year, 1
     while (y, m) <= (today.year, today.month):
         ny, nm = (y + 1, 1) if m == 12 else (y, m + 1)
         url = f"{BASE}/{path}/{y:04d}-{m:02d}-01T00:00:00/{ny:04d}-{nm:02d}-01T00:00:00"
-        for attempt in range(3):
+        for _ in range(3):
             r = c.get(url, headers=H)
             if r.status_code < 500:
                 break
