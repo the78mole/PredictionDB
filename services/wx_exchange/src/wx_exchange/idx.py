@@ -484,10 +484,11 @@ async def build_layer(
 
     Ein vorhandener Layer wird übernommen; neu gelesen werden nur Dateien, die darin weder
     als ``.idx`` noch als im Archiv fehlend oder defekt stehen. Ab ``deadline``
-    (``time.monotonic()``) beginnt keine neue Datei mehr; der Rest gilt als fehlgeschlagen und kommt beim nächsten
-    Start dran. Fehlgeschlagene Dateien werden bis zu ``retries`` Mal nach einer wachsenden
-    Pause (``retry_pause``, ``2 * retry_pause``, …) erneut versucht. Mit ``workers > 1``
-    lesen so viele Prozesse (je mit eigenem Client aus ``config``) statt ``endpoints``.
+    (``time.monotonic()``) beginnt keine neue Datei mehr; der Rest gilt als fehlgeschlagen
+    und kommt beim nächsten Start dran. Fehlgeschlagene Dateien werden bis zu ``retries``
+    Mal nach einer wachsenden Pause (``retry_pause``, ``2 * retry_pause``, …) erneut
+    versucht. Mit ``workers > 1`` lesen so viele Prozesse (je mit eigenem Client aus
+    ``config``) statt ``endpoints``.
     Das Manifest schreibt erst :func:`merge_manifest`.
     """
     runs = _runs(config, month, hour, start, end)
