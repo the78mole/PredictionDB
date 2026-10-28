@@ -155,6 +155,8 @@ services:
   # (wx-process latest schaut nur 48 h zurück).
   # GFS_PROCESS_RUNS gibt die Laufzeiten in Reihenfolge der Priorität an; Läufe ohne Silber
   # werden übersprungen, die Liste darf also mehr enthalten als gfs-backfill lädt.
+  # --decompress entpackt die schon komprimierten Chunks von feat.nwp_value, solange Läufe
+  # hineinschreiben (ein COPY in komprimierte Chunks ist etwa dreimal langsamer).
   wx-process-backfill:
     <<: *app
     profiles: [backfill, history]
@@ -167,6 +169,7 @@ services:
       - ${GFS_HISTORY_START:-${GFS_BACKFILL_START:-2021-03-22T12}}
       - --runs=${GFS_PROCESS_RUNS:-0,12,6,18}
       - --newest-first
+      - --decompress
       - --watch=3600
     depends_on:
       garage-init: {condition: service_completed_successfully}

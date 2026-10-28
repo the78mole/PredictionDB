@@ -12,7 +12,7 @@ Neuberechnung aus Silber dasselbe ergibt.
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -29,7 +29,7 @@ from wx_process.config import ProcessConfig
 from wx_process.decode import Grid, StepFields, decode_step
 from wx_process.features import FEATURES_VERSION, UNITS, FeatureBuilder, FeatureSeries
 from wx_process.silver import Dataset, Silver, assemble
-from wx_process.store import Store
+from wx_process.store import Chunk, Store
 from wx_process.variables import SILVER_VERSION
 
 log = get_logger(__name__)
@@ -152,7 +152,9 @@ class WxPipeline:
 
     # --- Gold --------------------------------------------------------------------------------
 
-    def write_features(self, ds: Dataset, version: str) -> tuple[int, dict[str, Any]]:
+    def write_features(
+        self, ds: Dataset, version: str, *, replace: bool = True
+    ) -> tuple[int, dict[str, Any]]:
         assert self.store is not None
         clusters = self.store.cluster_weights(version, self.config.weight_grid)
         valid = ds.valid_times
@@ -173,6 +175,7 @@ class WxPipeline:
             sorted(fids.values()),
             sorted({c.region_id for c in clusters}),
             _rows(series, fids, valid),
+            replace=replace,
         )
         low = {k: round(v, 4) for k, v in coverage.items() if v < 0.999}
         stats = {
@@ -188,8 +191,14 @@ class WxPipeline:
     # --- Ablauf ------------------------------------------------------------------------------
 
     def process(
-        self, run: datetime, *, force: bool = False, clustering: str | None = None
+        self,
+        run: datetime,
+        *,
+        force: bool = False,
+        clustering: str | None = None,
+        prepare: Callable[[datetime, datetime], None] | None = None,
     ) -> RunOutcome:
+        """Rechnet einen Lauf; ``prepare(run, valid_until)`` läuft direkt vor dem Schreiben."""
         run = run.astimezone(UTC)
         manifest = self.run_manifest(run)
         if manifest is None:
@@ -217,7 +226,10 @@ class WxPipeline:
                 log.warning("features.no_clustering", grid=self.config.weight_grid)
             return RunOutcome(run, "silver_only", silver)
 
-        n, stats = self.write_features(ds, version)
+        if prepare is not None:
+            prepare(run, ds.valid_times[-1])
+        replace = self.store.has_features(self.source_id, run)
+        n, stats = self.write_features(ds, version, replace=replace)
         key = self.silver.key(ds.model, ds.resolution, ds.run)
         self.store.mark_processed(
             self.source_id, run, version, FEATURES_VERSION, key, n, stats, manifest
@@ -253,14 +265,65 @@ class WxPipeline:
         clustering: str | None = None,
         hours: Iterable[int] | None = None,
         newest_first: bool = False,
+        decompress: bool = False,
     ) -> list[RunOutcome]:
+        """Rechnet alle Läufe im Zeitraum.
+
+        ``decompress`` entpackt komprimierte Ziel-Chunks vor dem ersten Schreiben und packt sie
+        wieder, sobald kein folgender Lauf mehr hineinschreibt (siehe ``Store.decompress_values``).
+        """
+        hours = list(hours) if hours is not None else None
         runs = self.source.runs_between(start, end, hours)
         if newest_first:
             runs.reverse()
         # Laufzeiten in der Reihenfolge von ``hours`` (z. B. erst alle 00Z, dann 12Z, 06Z, 18Z)
         priority = {h: i for i, h in enumerate(hours or [])}
         runs.sort(key=lambda r: priority.get(r.hour, 0))
-        return [self._safe(r, force=force, clustering=clustering) for r in runs]
+        if not decompress or self.store is None:
+            return [self._safe(r, force=force, clustering=clustering) for r in runs]
+        unpacked = _Unpacked(self.store)
+        out = []
+        try:
+            for i, run in enumerate(runs):
+                out.append(
+                    self._safe(run, force=force, clustering=clustering, prepare=unpacked.prepare)
+                )
+                unpacked.release(runs[i + 1] if i + 1 < len(runs) else None)
+        finally:
+            unpacked.release(None)
+        return out
+
+
+class _Unpacked:
+    """Vom Backfill entpackte Chunks; gepackt wird, sobald der nächste Lauf sie nicht mehr trifft.
+
+    Läuft der Dienst vorher in einen Neustart, packt die Kompressions-Policy sie später.
+    """
+
+    def __init__(self, store: Store) -> None:
+        self.store = store
+        self.chunks: dict[str, Chunk] = {}
+        self.lead = timedelta(0)
+
+    def prepare(self, run: datetime, valid_until: datetime) -> None:
+        self.lead = max(self.lead, valid_until - run)
+        for ch in self.store.decompress_values(run, valid_until):
+            self.chunks[ch.name] = ch
+
+    def release(self, next_run: datetime | None) -> None:
+        done = [
+            ch
+            for ch in self.chunks.values()
+            if next_run is None or ch.end <= next_run or ch.start > next_run + self.lead
+        ]
+        if not done:
+            return
+        try:
+            self.store.compress_values(done)
+        except Exception:
+            log.exception("chunk.compress_failed", chunks=[ch.name for ch in done])
+        for ch in done:
+            self.chunks.pop(ch.name, None)
 
 
 def _rows(
