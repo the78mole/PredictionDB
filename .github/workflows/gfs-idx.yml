@@ -34,9 +34,10 @@ on:
         type: number
         default: 8
       concurrency:
-        # 8 Jobs mit je 96 Anfragen brachten OSDF dazu, Verbindungen abzubrechen
+        # 8 Jobs mit je 96 Anfragen brachten OSDF dazu, Verbindungen abzubrechen; 24 liefen
+        # auf der VM über den festen Cache ohne Abbrüche
         description: Gleichzeitige Anfragen je Job ans Archiv
-        default: "48"
+        default: "24"
       limit:
         description: Höchstens so viele Monatsjobs je Start (Matrix-Grenze 256)
         default: "256"
