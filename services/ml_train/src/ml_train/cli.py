@@ -335,6 +335,7 @@ def cmd_predict(cfg: ModelConfig, a: argparse.Namespace) -> int:
         due_issues,
         last_issue,
         live_snapshot,
+        needs_weather,
         next_wake,
         predict_versions,
         write_predictions,
@@ -363,10 +364,6 @@ def cmd_predict(cfg: ModelConfig, a: argparse.Namespace) -> int:
                 log.warning("predict.no_versions", registry=a.registry, config=line_cfg.name)
                 continue
             found = True
-            if a.fill_new and not a.issue and not a.dry_run:
-                # Vergleich über alle Linien: dieselben Ausgabezeitpunkte wie die übrigen
-                peers = [v for vs in active.values() for v in vs]
-                fill_new(engine, line_cfg, reg, versions, peers, filled, now, a.fill_new)
             if a.issue:
                 issues = [pd.Timestamp(a.issue, tz="UTC")]
             else:
@@ -375,8 +372,9 @@ def cmd_predict(cfg: ModelConfig, a: argparse.Namespace) -> int:
                         last_issue(engine, versions) if a.catch_up and not a.dry_run else None
                     )
                 issues = due_issues(now, last[line_cfg.name], a.catch_up)
+            wx = needs_weather(line_cfg, reg, versions)
             for issue in issues:
-                snap = live_snapshot(engine, line_cfg, issue)
+                snap = live_snapshot(engine, line_cfg, issue, weather=wx)
                 df = predict_versions(snap, line_cfg, reg, versions, issue, Path(DEFAULT_CACHE))
                 if a.dry_run:
                     print(df.to_string(index=False, max_rows=60))
@@ -384,6 +382,14 @@ def cmd_predict(cfg: ModelConfig, a: argparse.Namespace) -> int:
                     n = write_predictions(engine, df)
                     log.info("predict.done", issue=str(issue), versions=versions, rows=n)
                 last[line_cfg.name] = issue
+        if a.fill_new and not a.issue and not a.dry_run:
+            # Nach dem regulären Lauf, damit die aktuelle Prognose nie wartet; Vergleich über
+            # alle Linien: dieselben Ausgabezeitpunkte wie die übrigen Versionen
+            peers = [v for vs in active.values() for v in vs]
+            for line_cfg, reg in lines:
+                fill_new(
+                    engine, line_cfg, reg, active[line_cfg.name], peers, filled, now, a.fill_new
+                )
         if not found:
             log.error("predict.no_versions", registry=a.registry)
             return 1
@@ -404,11 +410,14 @@ def fill_new(
     now: pd.Timestamp,
     hours: int,
 ) -> None:
-    """Neue Versionen einer Linie rechnen die Ausgabezeitpunkte der übrigen Versionen nach."""
+    """Neue Versionen einer Linie rechnen die Ausgabezeitpunkte der Vergleichsgrafiken nach,
+    die die übrigen Versionen schon haben."""
     from ml_train.predict import (
         by_issue,
+        compare_issue,
         live_snapshot,
         missing_issues,
+        needs_weather,
         predict_versions,
         write_predictions,
     )
@@ -419,11 +428,12 @@ def fill_new(
     cur = now.floor("h")
     # Die laufende Stunde rechnet der reguläre Lauf
     since, until = cur - pd.Timedelta(hours=hours), cur - pd.Timedelta(hours=1)
-    plan = by_issue({v: missing_issues(engine, v, peers, since, until) for v in new})
+    missing = {v: missing_issues(engine, v, peers, since, until) for v in new}
+    plan = by_issue({v: [i for i in issues if compare_issue(i)] for v, issues in missing.items()})
     if plan:
         log.info("predict.fill_new", config=cfg.name, versions=new, issues=len(plan))
     for issue, vs in plan.items():
-        snap = live_snapshot(engine, cfg, issue)
+        snap = live_snapshot(engine, cfg, issue, weather=needs_weather(cfg, reg, vs))
         df = predict_versions(snap, cfg, reg, vs, issue, Path(DEFAULT_CACHE))
         n = write_predictions(engine, df)
         log.info("predict.filled", issue=str(issue), versions=vs, rows=n)

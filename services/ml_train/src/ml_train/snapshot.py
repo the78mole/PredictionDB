@@ -178,6 +178,7 @@ def export_snapshot(
     end: datetime,
     *,
     weather_from: datetime | None = None,
+    weather_to: datetime | None = None,
     run_hours: list[int] | None = None,
     max_lead_h: int = 216,
     clustering_version: str | None = None,
@@ -185,7 +186,11 @@ def export_snapshot(
     grid: str = "gfs_0p25",
     progress: Progress = no_progress,
 ) -> Snapshot:
-    """Liest Energie, Wetter-Features und Bestand für ``[start, end)`` aus der Datenbank."""
+    """Liest Energie, Wetter-Features und Bestand für ``[start, end)`` aus der Datenbank.
+
+    Wetterläufe nur mit ``run_time`` in ``[weather_from, weather_to)`` (Vorgabe: ``start``,
+    ``end``); ``weather_to <= weather_from`` lässt das Wetter ganz weg.
+    """
     cv = clustering_version or latest_clustering(engine)
     hours = run_hours or [0, 12]
     energy_parts: list[pd.DataFrame] = []
@@ -198,7 +203,9 @@ def export_snapshot(
             energy_parts.append(df)
             log.info("snapshot.energy", code=code, rows=len(df))
         if cv is not None:
-            months = list(_months(max(start, weather_from or start), end))
+            wx_start = max(start, weather_from or start)
+            wx_end = min(end, weather_to) if weather_to is not None else end
+            months = list(_months(wx_start, wx_end)) if wx_start < wx_end else []
             for j, (a, b) in enumerate(months):
                 progress(f"Wetter {j + 1}/{len(months)} · {a:%Y-%m}")
                 df = pd.read_sql(

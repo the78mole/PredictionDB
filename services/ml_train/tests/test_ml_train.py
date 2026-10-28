@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -21,7 +22,7 @@ from ml_train.dataset import (
 )
 from ml_train.jobs import JobLog
 from ml_train.models import TwoStageModel
-from ml_train.predict import by_issue, due_issues, next_wake
+from ml_train.predict import by_issue, compare_issue, due_issues, needs_weather, next_wake
 from ml_train.registry import Registry, compare
 from ml_train.snapshot import load_snapshot
 from ml_train.testing import synthetic_snapshot
@@ -446,3 +447,23 @@ def test_by_issue_groups_versions_per_issue() -> None:
         c: ["neu1"],
     }
     assert list(by_issue({"neu1": [c, a, b]})) == [a, b, c]
+
+
+def test_compare_issue_matches_dashboard_hours() -> None:
+    assert compare_issue(pd.Timestamp("2026-10-27T08", tz="UTC"))
+    # 10 Uhr Ortszeit: im Winter 09 UTC, im Sommer 08 UTC
+    assert compare_issue(pd.Timestamp("2026-10-27T09", tz="UTC"))
+    assert compare_issue(pd.Timestamp("2026-07-01T08", tz="UTC"))
+    assert not compare_issue(pd.Timestamp("2026-07-01T09", tz="UTC"))
+    assert not compare_issue(pd.Timestamp("2026-10-27T18", tz="UTC"))
+
+
+def test_needs_weather_from_manifest_variant(cfg_v2) -> None:  # type: ignore[no-untyped-def]
+    class Reg:
+        def manifest(self, version: str) -> dict[str, dict[str, str]]:
+            return {"variant": {"name": version}}
+
+    reg: Any = Reg()
+    assert not needs_weather(cfg_v2, reg, ["kalender", "frei"])
+    assert needs_weather(cfg_v2, reg, ["frei", "wetter_frei"])
+    assert needs_weather(cfg_v2, reg, ["gibt_es_nicht"])
