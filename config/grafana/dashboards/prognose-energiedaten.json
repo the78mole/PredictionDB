@@ -1159,7 +1159,7 @@
         "uid": "pdb-postgres"
       },
       "gridPos": {
-        "h": 8,
+        "h": 16,
         "w": 12,
         "x": 0,
         "y": 31
@@ -1185,7 +1185,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "-- Je Liefertag die eigene Prognose vom Vortag 10:00 Ortszeit, zeitgleich mit der\n-- Day-Ahead-Lastprognose der ÜNB (bis 10:00 am Vortag, VO 543/2013 Art. 6.1 b)\nSELECT p.valid_time AS time,\n       v.config || ' ' || v.variant || ' · ' || CASE v.role WHEN 'champion' THEN 'Champion' ELSE 'Challenger' END AS metric, p.value\n  FROM fcst.prediction p JOIN meta.model_version v ON v.version = p.model_version\n WHERE p.target = 'load_actual' AND p.quantile = 0.5 AND v.role IN ('champion', 'challenger')\n   AND extract(hour FROM p.issue_time AT TIME ZONE 'Europe/Berlin') = 10\n   AND (p.valid_time AT TIME ZONE 'Europe/Berlin')::date\n         - (p.issue_time AT TIME ZONE 'Europe/Berlin')::date = 1\n   AND $__timeFilter(p.valid_time)\n ORDER BY 1"
+          "rawSql": "-- Je Liefertag die eigene Prognose vom Vortag 10:00 Ortszeit, zeitgleich mit der\n-- Day-Ahead-Lastprognose der ÜNB (bis 10:00 am Vortag, VO 543/2013 Art. 6.1 b)\nSELECT p.valid_time AS time,\n       v.config || ' ' || v.variant || ' ' || to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') || ' · ' || CASE v.role WHEN 'champion' THEN 'Champion' ELSE 'Challenger' END AS metric, p.value\n  FROM fcst.prediction p JOIN meta.model_version v ON v.version = p.model_version\n WHERE p.target = 'load_actual' AND p.quantile = 0.5 AND v.role IN ('champion', 'challenger')\n   AND extract(hour FROM p.issue_time AT TIME ZONE 'Europe/Berlin') = 10\n   AND (p.valid_time AT TIME ZONE 'Europe/Berlin')::date\n         - (p.issue_time AT TIME ZONE 'Europe/Berlin')::date = 1\n   AND $__timeFilter(p.valid_time)\n ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -1300,7 +1300,7 @@
         "uid": "pdb-postgres"
       },
       "gridPos": {
-        "h": 8,
+        "h": 16,
         "w": 12,
         "x": 12,
         "y": 31
@@ -1326,7 +1326,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "-- Je Liefertag die eigene Prognose vom Vortag 10:00 Ortszeit, zeitgleich mit der\n-- Day-Ahead-Lastprognose der ÜNB (bis 10:00 am Vortag, VO 543/2013 Art. 6.1 b)\nSELECT p.valid_time AS time,\n       v.config || ' ' || v.variant || ' · ' || CASE v.role WHEN 'champion' THEN 'Champion' ELSE 'Challenger' END AS metric, p.value\n  FROM fcst.prediction p JOIN meta.model_version v ON v.version = p.model_version\n WHERE p.target = 'da_price_de_lu' AND p.quantile = 0.5 AND v.role IN ('champion', 'challenger')\n   AND extract(hour FROM p.issue_time AT TIME ZONE 'Europe/Berlin') = 10\n   AND (p.valid_time AT TIME ZONE 'Europe/Berlin')::date\n         - (p.issue_time AT TIME ZONE 'Europe/Berlin')::date = 1\n   AND $__timeFilter(p.valid_time)\n ORDER BY 1"
+          "rawSql": "-- Je Liefertag die eigene Prognose vom Vortag 10:00 Ortszeit, zeitgleich mit der\n-- Day-Ahead-Lastprognose der ÜNB (bis 10:00 am Vortag, VO 543/2013 Art. 6.1 b)\nSELECT p.valid_time AS time,\n       v.config || ' ' || v.variant || ' ' || to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') || ' · ' || CASE v.role WHEN 'champion' THEN 'Champion' ELSE 'Challenger' END AS metric, p.value\n  FROM fcst.prediction p JOIN meta.model_version v ON v.version = p.model_version\n WHERE p.target = 'da_price_de_lu' AND p.quantile = 0.5 AND v.role IN ('champion', 'challenger')\n   AND extract(hour FROM p.issue_time AT TIME ZONE 'Europe/Berlin') = 10\n   AND (p.valid_time AT TIME ZONE 'Europe/Berlin')::date\n         - (p.issue_time AT TIME ZONE 'Europe/Berlin')::date = 1\n   AND $__timeFilter(p.valid_time)\n ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -1415,7 +1415,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 39
+        "y": 47
       },
       "description": "MAE der Medianprognose je Vorlauftag aus dem Backtest der aktiven Versionen (meta.model_metric). Gesamt und RMSE über alle Vorlauftage. P10–P90 = Anteil der Ist-Werte im 80-%-Band (Soll 80 %). Last in MW, Preis in €/MWh.",
       "targets": [
@@ -1498,7 +1498,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 39
+        "y": 47
       },
       "description": "Wie der Backtest, aber aus den gespeicherten Live-Prognosen (fcst.prediction) der letzten 14 Liefertage gegen die Ist-Werte, Ausgabe um 08 UTC.\n\n- **D+1, D+2, D+7**: MAE (mittlerer absoluter Fehler) für den 1., 2. bzw. 7. Tag nach der Ausgabe, also um wie viel die Prognose im Mittel danebenliegt, egal in welche Richtung (Last in MW, Preis in €/MWh).\n- **Bias**: mittlere Abweichung mit Vorzeichen (positiv: Prognose im Schnitt zu hoch, negativ: zu niedrig). Ein Bias nahe 0 bei hohem MAE heißt: die Fehler streuen, sind aber nicht systematisch.\n- **Werte**: Anzahl der verglichenen Stundenwerte.",
       "targets": [
@@ -1574,7 +1574,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 47
+        "y": 55
       },
       "panels": []
     },
@@ -1590,7 +1590,7 @@
         "h": 10,
         "w": 14,
         "x": 0,
-        "y": 48
+        "y": 56
       },
       "targets": [
         {
@@ -1732,7 +1732,7 @@
         "h": 10,
         "w": 10,
         "x": 14,
-        "y": 48
+        "y": 56
       },
       "targets": [
         {
@@ -1801,7 +1801,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 58
+        "y": 66
       },
       "targets": [
         {
@@ -1890,7 +1890,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 58
+        "y": 66
       },
       "targets": [
         {
@@ -2021,7 +2021,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 66
+        "y": 74
       },
       "panels": []
     },
@@ -2037,7 +2037,7 @@
         "h": 8,
         "w": 10,
         "x": 0,
-        "y": 67
+        "y": 75
       },
       "targets": [
         {
@@ -2158,7 +2158,7 @@
         "h": 8,
         "w": 14,
         "x": 10,
-        "y": 67
+        "y": 75
       },
       "targets": [
         {
