@@ -1,0 +1,61 @@
+jahr,pfad,szenario,variante,markt_gw,zusatz_wirksam_gw,spanne_rel,abend_diff,mittag_diff,neg_rel,lastgewichtet_diff,erloes_eur_kw_a
+2026,Zubau wie 2026,ee_plus,empirisch,5.075,1.101,-0.036,-1.385,1.094,-0.008,-0.11,67.582
+2026,Zubau wächst x1.50/a,ee_plus,empirisch,5.075,1.101,-0.036,-1.385,1.094,-0.008,-0.11,67.582
+2026,MaStR-Planung termingerecht,ee_plus,empirisch,6.35,1.994,-0.065,-2.507,1.981,-0.015,-0.2,122.367
+2027,Zubau wie 2026,ee_plus,empirisch,7.449,2.763,-0.085,-3.266,2.712,-0.018,-0.231,118.996
+2027,Zubau wächst x1.50/a,ee_plus,empirisch,8.637,3.595,-0.105,-4.084,3.5,-0.022,-0.265,114.902
+2027,MaStR-Planung termingerecht,ee_plus,empirisch,12.502,6.3,-0.162,-6.399,5.937,-0.035,-0.318,104.068
+2028,Zubau wie 2026,ee_plus,empirisch,9.824,4.426,-0.126,-4.902,4.288,-0.026,-0.298,110.808
+2028,Zubau wächst x1.50/a,ee_plus,empirisch,13.98,7.335,-0.179,-7.14,6.815,-0.041,-0.316,100.958
+2028,MaStR-Planung termingerecht,ee_plus,empirisch,17.041,9.477,-0.214,-8.675,8.633,-0.052,-0.31,94.514
+2029,Zubau wie 2026,ee_plus,empirisch,12.199,6.088,-0.158,-6.246,5.756,-0.034,-0.319,104.707
+2029,Zubau wächst x1.50/a,ee_plus,empirisch,21.994,12.945,-0.258,-10.714,11.678,-0.082,-0.195,86.669
+2029,MaStR-Planung termingerecht,ee_plus,empirisch,17.459,9.77,-0.219,-8.885,8.882,-0.054,-0.31,93.633
+2030,Zubau wie 2026,ee_plus,empirisch,14.573,7.75,-0.186,-7.438,7.167,-0.043,-0.315,99.708
+2030,Zubau wächst x1.50/a,ee_plus,empirisch,34.016,21.36,-0.342,-14.582,18.828,-0.137,0.199,72.315
+2030,MaStR-Planung termingerecht,ee_plus,empirisch,17.459,9.77,-0.219,-8.885,8.882,-0.054,-0.31,93.633
+2026,Zubau wie 2026,ee_plus,merit-order,5.075,1.101,-0.033,-1.321,1.495,-0.012,0.137,98.839
+2026,Zubau wächst x1.50/a,ee_plus,merit-order,5.075,1.101,-0.033,-1.321,1.495,-0.012,0.137,98.839
+2026,MaStR-Planung termingerecht,ee_plus,merit-order,6.35,1.994,-0.06,-2.391,2.707,-0.022,0.248,178.962
+2027,Zubau wie 2026,ee_plus,merit-order,7.449,2.763,-0.077,-3.051,3.688,-0.027,0.429,173.033
+2027,Zubau wächst x1.50/a,ee_plus,merit-order,8.637,3.595,-0.096,-3.76,4.747,-0.032,0.626,165.959
+2027,MaStR-Planung termingerecht,ee_plus,merit-order,12.502,6.3,-0.153,-5.709,8.326,-0.05,1.248,147.054
+2028,Zubau wie 2026,ee_plus,merit-order,9.824,4.426,-0.115,-4.47,5.805,-0.038,0.823,158.884
+2028,Zubau wächst x1.50/a,ee_plus,merit-order,13.98,7.335,-0.172,-6.305,9.75,-0.057,1.478,141.533
+2028,MaStR-Planung termingerecht,ee_plus,merit-order,17.041,9.477,-0.212,-7.539,12.699,-0.071,1.955,130.094
+2029,Zubau wie 2026,ee_plus,merit-order,12.199,6.088,-0.149,-5.587,8.034,-0.049,1.201,148.188
+2029,Zubau wächst x1.50/a,ee_plus,merit-order,21.994,12.945,-0.268,-9.467,17.504,-0.093,2.778,115.715
+2029,MaStR-Planung termingerecht,ee_plus,merit-order,17.459,9.77,-0.217,-7.708,13.102,-0.073,2.02,128.531
+2030,Zubau wie 2026,ee_plus,merit-order,14.573,7.75,-0.18,-6.544,10.322,-0.06,1.571,139.314
+2030,Zubau wächst x1.50/a,ee_plus,merit-order,34.016,21.36,-0.381,-13.532,29.26,-0.141,4.77,88.796
+2030,MaStR-Planung termingerecht,ee_plus,merit-order,17.459,9.77,-0.217,-7.708,13.102,-0.073,2.02,128.53
+2026,Zubau wie 2026,heute,empirisch,5.075,1.101,-0.06,-1.799,1.701,-0.206,-0.187,44.96
+2026,Zubau wächst x1.50/a,heute,empirisch,5.075,1.101,-0.06,-1.799,1.701,-0.206,-0.187,44.96
+2026,MaStR-Planung termingerecht,heute,empirisch,6.35,1.994,-0.109,-3.258,3.079,-0.373,-0.338,81.406
+2027,Zubau wie 2026,heute,empirisch,7.449,2.763,-0.139,-4.225,4.233,-0.423,-0.355,77.98
+2027,Zubau wächst x1.50/a,heute,empirisch,8.637,3.595,-0.171,-5.266,5.479,-0.476,-0.372,73.968
+2027,MaStR-Planung termingerecht,heute,empirisch,12.502,6.3,-0.257,-8.104,9.265,-0.607,-0.321,63.324
+2028,Zubau wie 2026,heute,empirisch,9.824,4.426,-0.203,-6.308,6.724,-0.528,-0.39,69.956
+2028,Zubau wächst x1.50/a,heute,empirisch,13.98,7.335,-0.282,-8.961,10.602,-0.64,-0.258,60.254
+2028,MaStR-Planung termingerecht,heute,empirisch,17.041,9.477,-0.334,-10.734,13.37,-0.708,-0.126,53.894
+2029,Zubau wie 2026,heute,empirisch,12.199,6.088,-0.252,-7.928,8.991,-0.6,-0.334,63.955
+2029,Zubau wächst x1.50/a,heute,empirisch,21.994,12.945,-0.391,-12.851,17.301,-0.754,0.172,46.622
+2029,MaStR-Planung termingerecht,heute,empirisch,17.459,9.77,-0.341,-10.977,13.749,-0.718,-0.108,53.024
+2030,Zubau wie 2026,heute,empirisch,14.573,7.75,-0.292,-9.305,11.139,-0.653,-0.232,59.02
+2030,Zubau wächst x1.50/a,heute,empirisch,34.016,21.36,-0.492,-16.531,25.296,-0.842,0.984,34.201
+2030,MaStR-Planung termingerecht,heute,empirisch,17.459,9.77,-0.341,-10.977,13.749,-0.718,-0.108,53.024
+2026,Zubau wie 2026,heute,merit-order,5.075,1.101,-0.059,-2.072,1.792,-0.223,-0.287,44.752
+2026,Zubau wächst x1.50/a,heute,merit-order,5.075,1.101,-0.059,-2.072,1.792,-0.223,-0.287,44.752
+2026,MaStR-Planung termingerecht,heute,merit-order,6.35,1.994,-0.107,-3.752,3.244,-0.403,-0.52,81.029
+2027,Zubau wie 2026,heute,merit-order,7.449,2.763,-0.134,-4.745,4.329,-0.456,-0.576,77.826
+2027,Zubau wächst x1.50/a,heute,merit-order,8.637,3.595,-0.162,-5.812,5.498,-0.512,-0.636,74.059
+2027,MaStR-Planung termingerecht,heute,merit-order,12.502,6.3,-0.241,-8.688,9.196,-0.651,-0.659,63.814
+2028,Zubau wie 2026,heute,merit-order,9.824,4.426,-0.191,-6.879,6.668,-0.568,-0.695,70.291
+2028,Zubau wächst x1.50/a,heute,merit-order,13.98,7.335,-0.265,-9.539,10.564,-0.686,-0.598,60.733
+2028,MaStR-Planung termingerecht,heute,merit-order,17.041,9.477,-0.316,-11.303,13.398,-0.759,-0.471,54.35
+2029,Zubau wie 2026,heute,merit-order,12.199,6.088,-0.236,-8.513,8.915,-0.643,-0.672,64.447
+2029,Zubau wächst x1.50/a,heute,merit-order,21.994,12.945,-0.372,-13.332,17.339,-0.814,-0.122,46.957
+2029,MaStR-Planung termingerecht,heute,merit-order,17.459,9.77,-0.322,-11.545,13.786,-0.769,-0.453,53.477
+2030,Zubau wie 2026,heute,merit-order,14.573,7.75,-0.275,-9.881,11.114,-0.7,-0.573,59.495
+2030,Zubau wächst x1.50/a,heute,merit-order,34.016,21.36,-0.469,-16.418,25.997,-0.892,1.109,33.604
+2030,MaStR-Planung termingerecht,heute,merit-order,17.459,9.77,-0.322,-11.545,13.786,-0.769,-0.453,53.477

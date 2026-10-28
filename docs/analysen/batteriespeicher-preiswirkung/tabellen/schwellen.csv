@@ -1,0 +1,17 @@
+szenario,variante,schwelle,zubau_gw
+ee_plus,empirisch,mittlere Tagesspanne -10 %,3.4
+ee_plus,empirisch,Abendpreis 17-21 Uhr -5 €/MWh,4.5
+ee_plus,empirisch,Mittagspreis 11-15 Uhr +5 €/MWh,5.2
+ee_plus,empirisch,Stunden mit negativem Preis -25 %,37.8
+ee_plus,merit-order,mittlere Tagesspanne -10 %,3.8
+ee_plus,merit-order,Abendpreis 17-21 Uhr -5 €/MWh,5.1
+ee_plus,merit-order,Mittagspreis 11-15 Uhr +5 €/MWh,3.8
+ee_plus,merit-order,Stunden mit negativem Preis -25 %,38.4
+heute,empirisch,mittlere Tagesspanne -10 %,1.8
+heute,empirisch,Abendpreis 17-21 Uhr -5 €/MWh,3.4
+heute,empirisch,Mittagspreis 11-15 Uhr +5 €/MWh,3.3
+heute,empirisch,Stunden mit negativem Preis -25 %,1.3
+heute,merit-order,mittlere Tagesspanne -10 %,1.9
+heute,merit-order,Abendpreis 17-21 Uhr -5 €/MWh,3.0
+heute,merit-order,Mittagspreis 11-15 Uhr +5 €/MWh,3.2
+heute,merit-order,Stunden mit negativem Preis -25 %,1.2
