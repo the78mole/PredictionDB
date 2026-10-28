@@ -394,12 +394,13 @@ Eingerichtet wird das erst, wenn mindestens drei Jahre GFS-Trainingsdaten vorlie
   jeder Ausgabezeitpunkt vorliegt. Nachholen ist leakage-sicher, weil die Merkmale nur Werte
   nutzen, die zum Ausgabezeitpunkt veröffentlicht waren.
 - **Neue Versionen sofort im Vergleich:** Kommt eine aktive Version hinzu (neu registrierter
-  Challenger, neue Linie), rechnet sie rückwirkend die Ausgabezeitpunkte der letzten 72 h nach,
-  die die übrigen aktiven Versionen (aller Linien) schon haben (`--fill-new 72`), und zwar nur
-  die, die die Vergleichsgrafiken zeigen: 08 UTC (Prognosefehler D+1, Tabelle) und 10 Uhr
-  Ortszeit (eigene Modelle gegen ÜNB und Day-Ahead-Preis), also etwa sechs je Version. Sie
-  erscheint damit sofort in den Panels unter „Prognosemodelle“ und „Modellversionen“ neben
-  Champion und Challengern, statt erst ab dem nächsten Liefertag. Die Eingänge sind dieselben wie
+  Challenger, neue Linie), rechnet sie rückwirkend die Ausgabezeitpunkte der letzten 216 h nach,
+  die ihr fehlen (`--fill-new 216`), und zwar nur die, die die Vergleichsgrafiken zeigen: 08 UTC
+  (Prognosefehler D+1, Tabelle) und 10 Uhr Ortszeit (eigene Modelle gegen ÜNB und
+  Day-Ahead-Preis, gestriger Tag mit D+1 bis D+7), also etwa 18 je Version. Neun Tage reichen,
+  damit für gestern auch D+7 vorliegt (Lauf acht Tage vorher um 10 Uhr). Sie erscheint damit
+  sofort in den Panels unter „Prognosemodelle“ und „Modellversionen“ neben Champion und
+  Challengern, statt erst ab dem nächsten Liefertag. Die Eingänge sind dieselben wie
   bei den übrigen Versionen: dieselbe Merkmalsbildung zum Ausgabezeitpunkt, nur mit Werten, die
   damals veröffentlicht waren. Abweichen kann nur, was nachträglich in der Datenbank korrigiert
   wurde (z. B. eine überschriebene Energiereihe). Geprüft wird beim Start des Dienstes für alle
@@ -414,6 +415,12 @@ Eingerichtet wird das erst, wenn mindestens drei Jahre GFS-Trainingsdaten vorlie
   Day-Ahead-Preis“ im Dashboard „Prognose und Energiedaten“ zeigen deshalb je Liefertag die P50-Prognose des Laufs
   vom Vortag 10:00 Ortszeit. Hinweis: `de_lu_v2` nutzt die ÜNB-Prognose selbst als Merkmal,
   sofern sie zum Ausgabezeitpunkt schon veröffentlicht war.
+- **Gestriger Tag mit allen Vorlauftagen:** Die Panels „Gestern: Last mit D+1 bis D+7 …“ und „Gestern: Preis mit D+1 bis D+7 …“
+  zeigen den gestrigen Liefertag mit Ist, ÜNB-Prognose (nur Last) und den P50-Prognosen D+1 bis
+  D+7, je vom Lauf um 10:00 Ortszeit n Tage vor dem Liefertag. Eine Zeile für den aktuellen
+  Champion, eine für den Challenger, den die Variable „Challenger“ oben im Dashboard auswählt
+  (Vorgabe: jüngster). So sieht man, wie sich die Vorhersage mit kürzer werdendem Vorlauf dem
+  Ist annähert.
 - **Registry:** Verzeichnisbaum lokal oder in Garage:
 
   ```text
