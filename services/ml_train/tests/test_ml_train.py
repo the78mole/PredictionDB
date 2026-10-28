@@ -515,3 +515,16 @@ def test_scaled_target_trains_and_predicts(snap, cfg_v2, tmp_path: Path) -> None
     # Ablage und Laden behalten die Bezugsspalte
     d = price.save(tmp_path)
     assert type(price).load(d, tmp_path, cfg_v2.lgbm).scale == "gk_niveau"
+
+
+def test_run_job_snapshot_has_no_variant(cfg, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from ml_train import cli
+
+    job = RecordingJob()
+    started: list[Any] = []
+    monkeypatch.setattr(cli, "open_job_log", lambda: job)
+    monkeypatch.setattr(job, "start", lambda *a: started.append(a))
+    monkeypatch.setattr(cli, "cmd_snapshot", lambda cfg, a, job: 0)
+    a = cli.build_parser().parse_args(["snapshot", "--out", "/tmp/x"])
+    assert cli.run_job(cfg, "sha", a) == 0
+    assert started[0][2] == []
