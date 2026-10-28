@@ -357,7 +357,7 @@ def kennzahlen(basis: pd.DataFrame, p: np.ndarray, x: np.ndarray) -> dict[str, A
         neg_h=int((s < 0).sum()),
         ueber_200_h=int((s > 200).sum()),
         zyklen=float(np.clip(x, 0, None).sum() * np.sqrt(ETA)),  # GWh geladen (Speicherseite)
-        erloes=float((-x * s.values).sum()),  # € je MW... (GW x €/MWh x h = 1000 €)
+        erloes=float((-x * s.values).sum()),
     )
 
 
@@ -618,7 +618,8 @@ def main() -> None:
             p_neu = preis.p + preis._g(np.arange(len(basis)), x[:, None])[:, 0]
             kz = kennzahlen(basis, p_neu, x)
             kz.update(szenario=sz, variante=v, zubau_gw=P, dauer_h=h)
-            kz["erloes_eur_kw_a"] = kz.pop("erloes") * 1000 / (P * 1e6) if P else 0.0
+            erloes = kz.pop("erloes")  # GW x €/MWh x h = 1000 €
+            kz["erloes_eur_kw_a"] = erloes * 1000 / (P * 1e6) if P else 0.0
             erg.append(kz)
             profile[(sz, v, P, h)] = (p_neu, x)
             print(
