@@ -831,320 +831,334 @@
       }
     },
     {
-      "type": "table",
+      "type": "row",
       "title": "GFS-Downloads: letzte 10 abgeschlossene Jobs",
-      "id": 26,
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "pdb-postgres"
-      },
+      "id": 55,
+      "collapsed": true,
       "gridPos": {
-        "h": 11,
+        "h": 1,
         "w": 24,
         "x": 0,
         "y": 27
       },
-      "description": "Neu = neu geladene Läufe, Da = schon vorhanden, Unv. = unvollständig, Überg. = offene Läufe eines beendeten Live-Jobs, die der nächste Job lädt (meist der jüngste, bei NOAA noch nicht veröffentlichte; zählen nicht zum Fortschritt), Fehler = fehlgeschlagene Schritte, abgebr. = abgebrochen. Dauer in Stunden:Minuten. Fehlermeldungen stehen in meta.backfill_job.error.",
-      "targets": [
+      "panels": [
         {
-          "refId": "A",
+          "type": "table",
+          "title": "GFS-Downloads: letzte 10 abgeschlossene Jobs",
+          "id": 26,
           "datasource": {
             "type": "grafana-postgresql-datasource",
             "uid": "pdb-postgres"
           },
-          "rawQuery": true,
-          "editorMode": "code",
-          "format": "table",
-          "rawSql": "SELECT job_id AS \"Job\",\n       CASE mode WHEN 'live' THEN 'Live' ELSE 'Backfill' END AS \"Art\",\n       to_char(range_start AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') || ' – ' ||\n         to_char(range_end AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zeitraum\",\n       array_to_string(run_hours, '/') || 'Z' AS \"Läufe\",\n       round(100.0 * (n_complete + n_incomplete) / nullif(n_runs - h.n, 0), 1) AS \"Fortschritt\",\n       (n_complete + n_incomplete) || '/' || (n_runs - h.n) AS \"Bearbeitet\",\n       n_complete - n_skipped AS \"Neu\",\n       n_skipped AS \"Da\",\n       n_incomplete AS \"Unv.\",\n       h.n AS \"Überg.\",\n       n_failed_steps AS \"Fehler\",\n       bytes_stored AS \"Bronze\",\n       to_char(last_run AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zuletzt\",\n       to_char(started_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Start\",\n       to_char(finished_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Ende\",\n       floor(extract(epoch FROM finished_at - started_at) / 3600)::int || ':' || to_char(finished_at - started_at, 'MI') AS \"Dauer\",\n       CASE WHEN status = 'done' THEN 'fertig' WHEN status = 'failed' THEN 'Fehler'\n            WHEN mode = 'live' THEN 'beendet' ELSE 'abgebr.' END AS \"Status\"\n  FROM meta.backfill_job j,\n       LATERAL (SELECT count(*) AS n FROM meta.backfill_run r\n                 WHERE r.job_id = j.job_id AND r.status = 'handed_over') h\n WHERE status <> 'running'\n ORDER BY finished_at DESC NULLS LAST\n LIMIT 10"
+          "gridPos": {
+            "h": 11,
+            "w": 24,
+            "x": 0,
+            "y": 28
+          },
+          "description": "Neu = neu geladene Läufe, Da = schon vorhanden, Unv. = unvollständig, Überg. = offene Läufe eines beendeten Live-Jobs, die der nächste Job lädt (meist der jüngste, bei NOAA noch nicht veröffentlichte; zählen nicht zum Fortschritt), Fehler = fehlgeschlagene Schritte, abgebr. = abgebrochen. Dauer in Stunden:Minuten. Fehlermeldungen stehen in meta.backfill_job.error.",
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "grafana-postgresql-datasource",
+                "uid": "pdb-postgres"
+              },
+              "rawQuery": true,
+              "editorMode": "code",
+              "format": "table",
+              "rawSql": "SELECT job_id AS \"Job\",\n       CASE mode WHEN 'live' THEN 'Live' ELSE 'Backfill' END AS \"Art\",\n       to_char(range_start AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') || ' – ' ||\n         to_char(range_end AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zeitraum\",\n       array_to_string(run_hours, '/') || 'Z' AS \"Läufe\",\n       round(100.0 * (n_complete + n_incomplete) / nullif(n_runs - h.n, 0), 1) AS \"Fortschritt\",\n       (n_complete + n_incomplete) || '/' || (n_runs - h.n) AS \"Bearbeitet\",\n       n_complete - n_skipped AS \"Neu\",\n       n_skipped AS \"Da\",\n       n_incomplete AS \"Unv.\",\n       h.n AS \"Überg.\",\n       n_failed_steps AS \"Fehler\",\n       bytes_stored AS \"Bronze\",\n       to_char(last_run AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zuletzt\",\n       to_char(started_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Start\",\n       to_char(finished_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Ende\",\n       floor(extract(epoch FROM finished_at - started_at) / 3600)::int || ':' || to_char(finished_at - started_at, 'MI') AS \"Dauer\",\n       CASE WHEN status = 'done' THEN 'fertig' WHEN status = 'failed' THEN 'Fehler'\n            WHEN mode = 'live' THEN 'beendet' ELSE 'abgebr.' END AS \"Status\"\n  FROM meta.backfill_job j,\n       LATERAL (SELECT count(*) AS n FROM meta.backfill_run r\n                 WHERE r.job_id = j.job_id AND r.status = 'handed_over') h\n WHERE status <> 'running'\n ORDER BY finished_at DESC NULLS LAST\n LIMIT 10"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "minWidth": 30
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Job"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 40
+                  },
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Art"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 70
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Zeitraum"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 196
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Läufe"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 78
+                  },
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Fortschritt"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 324
+                  },
+                  {
+                    "id": "unit",
+                    "value": "percent"
+                  },
+                  {
+                    "id": "min",
+                    "value": 0
+                  },
+                  {
+                    "id": "max",
+                    "value": 100
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "basic"
+                    }
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 1
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Bearbeitet"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 80
+                  },
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Neu"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 46
+                  },
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Da"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 42
+                  },
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Unv."
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 46
+                  },
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Überg."
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 56
+                  },
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Fehler"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 52
+                  },
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Bronze"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 74
+                  },
+                  {
+                    "id": "unit",
+                    "value": "bytes"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Zuletzt"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 96
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Start"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 88
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Ende"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 88
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Dauer"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 56
+                  },
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Status"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 72
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm"
+          }
         }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "minWidth": 30
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Job"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 40
-              },
-              {
-                "id": "custom.align",
-                "value": "center"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Art"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 70
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Zeitraum"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 196
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Läufe"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 78
-              },
-              {
-                "id": "custom.align",
-                "value": "center"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Fortschritt"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 324
-              },
-              {
-                "id": "unit",
-                "value": "percent"
-              },
-              {
-                "id": "min",
-                "value": 0
-              },
-              {
-                "id": "max",
-                "value": 100
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "gauge",
-                  "mode": "basic"
-                }
-              },
-              {
-                "id": "decimals",
-                "value": 1
-              },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "green"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Bearbeitet"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 80
-              },
-              {
-                "id": "custom.align",
-                "value": "center"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Neu"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 46
-              },
-              {
-                "id": "custom.align",
-                "value": "center"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Da"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 42
-              },
-              {
-                "id": "custom.align",
-                "value": "center"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Unv."
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 46
-              },
-              {
-                "id": "custom.align",
-                "value": "center"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Überg."
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 56
-              },
-              {
-                "id": "custom.align",
-                "value": "center"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Fehler"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 52
-              },
-              {
-                "id": "custom.align",
-                "value": "center"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Bronze"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 74
-              },
-              {
-                "id": "unit",
-                "value": "bytes"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Zuletzt"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 96
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Start"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 88
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Ende"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 88
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Dauer"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 56
-              },
-              {
-                "id": "custom.align",
-                "value": "center"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Status"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 72
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm"
-      }
+      ]
     },
     {
       "type": "row",
@@ -1155,7 +1169,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 38
+        "y": 28
       },
       "panels": []
     },
@@ -1171,7 +1185,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 39
+        "y": 29
       },
       "description": "Je Monat der Anteil der erwarteten GFS-Läufe (wie beim Silber-Panel, Laufzeiten oben unter „GFS-Läufe“), deren zugeschnittene GRIB-Schritte (Bronze) vollständig in Garage wx-bronze liegen. Grün = fertig: ein Download-Lauf (gfs-ingest oder gfs-backfill) hat den Lauf vollständig abgelegt oder vollständig vorgefunden (meta.backfill_run complete/skipped), oder das lokale Silber wurde aus Bronze gerechnet (meta.silver_run origin bronze). Gelb = gerade im Bronze-Download. Läufe, deren Silber nur aus GHCR importiert wurde, haben lokal kein Bronze.",
       "targets": [
@@ -1278,7 +1292,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 48
+        "y": 38
       },
       "description": "Je Monat der Anteil der erwarteten GFS-Läufe (ab v16, 22.03.2021 12Z, bis zum jüngsten veröffentlichten Lauf; Laufzeiten oben unter „GFS-Läufe“ wählbar), deren Silber vollständig in Garage wx-silver liegt. Grün = fertig, gelb = gerade im Download: im laufenden Import-Durchgang aus GHCR (wx-import) vorgesehen oder im Bronze-Backfill (gfs-backfill) in Arbeit. Läufe, die im NOAA-Archiv fehlen, bleiben offen, daher erreichen manche Monate keine 100 %.",
       "targets": [
@@ -1385,7 +1399,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 57
+        "y": 47
       },
       "description": "Je Monat der Anteil der erwarteten GFS-Läufe (wie beim Silber-Panel, Laufzeiten oben unter „GFS-Läufe“), für die die Wetter-Features je Cluster (Gold, feat.nwp_value) mit der aktuellen Clusterung und Feature-Version gerechnet sind. Grün = fertig, gelb = in Arbeit: Silber liegt lokal vor, Gold steht noch aus (wx-process-backfill rechnet stündlich nach, nur für die Laufzeiten in GFS_BACKFILL_RUNS). Eine neue Clusterung macht alle Läufe wieder gelb, bis sie neu gerechnet sind.",
       "targets": [
@@ -1489,7 +1503,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 66
+        "y": 56
       },
       "panels": []
     },
@@ -1505,7 +1519,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 67
+        "y": 57
       },
       "targets": [
         {
