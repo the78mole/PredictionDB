@@ -1346,8 +1346,8 @@ Analyse-Jobs sind bewusst einfach gehalten: eine YAML-Datei, ein Befehl, ein Ord
 > „Prognosemodelle“: Champion und Registry-Verlauf, Modellversionen mit Backtest-Kennzahlen,
 > laufende Trainings, Prognosefehler D+1 im Betrieb (aus der Sicht `fcst.prediction_error`),
 > Last und Preis der eigenen Modelle gegen ÜNB-Prognose bzw. Day-Ahead-Preis (Lauf vom Vortag
-> 10 Uhr) sowie der gestrige, heutige und morgige Liefertag mit den Prognosen D+1 bis D+7 für
-> Champion und einen wählbaren Challenger. Der Ausblick −2 bis +7 Tage, der Fehlerschlauch, die Views
+> 10 Uhr) sowie der gestrige Liefertag (beim Preis auch heute und morgen) mit den Prognosen
+> D+1 bis D+7 für Champion und einen wählbaren Challenger. Der Ausblick −2 bis +7 Tage, der Fehlerschlauch, die Views
 > `fcst.v_outlook`/`fcst.v_yesterday_envelope`, `energy.forecast_vintage`, die
 > Week-Ahead-Lastprognose und `fcst.model_spread` (7.7) sind noch nicht umgesetzt; der Rest
 > dieses Abschnitts beschreibt sie als Plan. Die übrigen Status-Dashboards sind „Wetter“
