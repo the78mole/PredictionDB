@@ -257,6 +257,9 @@ class WxPipeline:
         runs = self.source.runs_between(start, end, hours)
         if newest_first:
             runs.reverse()
+        # Laufzeiten in der Reihenfolge von ``hours`` (z. B. erst alle 00Z, dann 12Z, 06Z, 18Z)
+        priority = {h: i for i, h in enumerate(hours or [])}
+        runs.sort(key=lambda r: priority.get(r.hour, 0))
         return [self._safe(r, force=force, clustering=clustering) for r in runs]
 
 
