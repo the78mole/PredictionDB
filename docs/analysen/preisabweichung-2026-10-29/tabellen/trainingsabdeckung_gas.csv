@@ -1,0 +1,9 @@
+modelle,gas_eur_mwh,tage,anteil,strompreis_mittel
+"v1/v2 kalender, frei",0-30,1187,0.405,46.7
+"v1/v2 kalender, frei",30-50,1035,0.353,90.6
+"v1/v2 kalender, frei",50-70,212,0.072,117.0
+"v1/v2 kalender, frei",70-,466,0.159,221.2
+v2 wetter_frei,0-30,321,0.158,73.8
+v2 wetter_frei,30-50,1035,0.509,90.6
+v2 wetter_frei,50-70,212,0.104,117.0
+v2 wetter_frei,70-,466,0.229,221.2
