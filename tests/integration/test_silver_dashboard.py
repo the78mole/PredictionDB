@@ -1,4 +1,4 @@
-"""Silber-Bestand je Lauf (``meta.silver_run``) und die Monatsbalken für Silber und Gold.
+"""Silber-Bestand je Lauf (``meta.silver_run``) und die Monatsbalken für Bronze, Silber und Gold.
 
 Läuft nur mit ``PDB_INTEGRATION=1`` nach ``migrate``. Meldet Läufe im April 2021 über
 ``wx_process.store.Store`` wie ``wx-process`` und ``wx-import``, legt einen laufenden
@@ -148,3 +148,39 @@ def test_gold_month_bars(engine: Engine) -> None:
     with engine.connect() as c:
         rows = {r[0]: r[1:] for r in c.execute(text(_panel_sql("'0'", 47))).all()}
     assert tuple(float(v) for v in rows["2021-04"]) == (round(1000 / 30, 1), round(1000 / 30, 1))
+
+
+def test_bronze_month_bars(engine: Engine) -> None:
+    """Bronze: grün nach abgeschlossenem Download oder Silber aus Bronze, gelb im Download."""
+    store = Store(engine)
+    sid = store.source_id("gfs_0p25")
+    runs = _runs(6)
+    store.mark_silver(sid, runs[:4], "present", "bronze")  # Silber aus lokalem Bronze
+    store.mark_silver(sid, runs[4:8], "present", "ghcr")  # nur importiert, kein Bronze
+    with engine.begin() as c:
+        job = c.execute(
+            text("""INSERT INTO meta.backfill_job (source_id, range_start, range_end, run_hours,
+                                                   newest_first, n_runs, host)
+                    VALUES (:s, :a, :b, '{6}', true, 1, :h) RETURNING job_id"""),
+            {"s": sid, "a": APRIL, "b": MAY, "h": HOST},
+        ).scalar_one()
+        # 3 geladen (einer davon schon mit Silber), 2 vorgefunden, 1 läuft, 1 unvollständig
+        for i, status in [
+            (0, "complete"),
+            (10, "complete"),
+            (11, "complete"),
+            (12, "skipped"),
+            (13, "skipped"),
+            (14, "running"),
+            (15, "incomplete"),
+        ]:
+            c.execute(
+                text("""INSERT INTO meta.backfill_run (job_id, run_time, queue_pos, status)
+                        VALUES (:j, :r, :p, :st)"""),
+                {"j": job, "r": runs[i], "p": i, "st": status},
+            )
+
+    with engine.connect() as c:
+        rows = {r[0]: r[1:] for r in c.execute(text(_panel_sql("'6'", 52))).all()}
+    # fertig: 4 aus Silber (Bronze) + 4 aus Downloads = 8, im Download 1 von 30
+    assert tuple(float(v) for v in rows["2021-04"]) == (round(800 / 30, 1), round(100 / 30, 1))
