@@ -1,0 +1,10 @@
+brennstoff,eur_mwh_th,t_co2_mwh_th
+gas,97.1,0.201
+gas_small,108.6,0.201
+coal,20.1,0.335
+lignite,4.0,0.4
+oil_light,125.3,0.266
+oil_heavy,52.4,0.28
+waste,-10.0,0.0
+byproduct,8.0,0.0
+heat,0.0,0.0

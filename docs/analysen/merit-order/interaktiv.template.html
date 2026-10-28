@@ -1,0 +1,358 @@
+<title>Merit-Order Deutschland</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: eine Lesespalte für Text, Diagramme dürfen breiter laufen; Werte in Mono */
+:root {
+  --bg: #f6f7f8; --surface: #ffffff; --fg: #15191d; --muted: #59616a; --faint: #8a929b;
+  --rule: #dde1e5; --grid: #e9ecef; --accent: #1c5cab;
+  --ink-demand: #15191d; --ink-price: #b4321f;
+  --s-ee: #1baf7a; --s-bio: #008300; --s-waste: #e87ba4; --s-lig: #eb6834; --s-coal: #6250d6;
+  --s-gas: #2a78d6; --s-oil: #e34948; --s-ps: #eda100;
+  --f-display: "IBM Plex Sans Condensed", "Arial Narrow", sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121417; --surface: #1a1d21; --fg: #eceef0; --muted: #a9b0b8; --faint: #7b838c;
+  --rule: #2c3137; --grid: #23272c; --accent: #6da7ec; --ink-demand: #eceef0; --ink-price: #ff8a70;
+  --s-ee: #199e70; --s-bio: #2f9a2f; --s-waste: #d55181; --s-lig: #d95926; --s-coal: #9085e9;
+  --s-gas: #3987e5; --s-oil: #e66767; --s-ps: #c98500; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #121417; --surface: #1a1d21; --fg: #eceef0; --muted: #a9b0b8; --faint: #7b838c;
+  --rule: #2c3137; --grid: #23272c; --accent: #6da7ec; --ink-demand: #eceef0; --ink-price: #ff8a70;
+  --s-ee: #199e70; --s-bio: #2f9a2f; --s-waste: #d55181; --s-lig: #d95926; --s-coal: #9085e9;
+  --s-gas: #3987e5; --s-oil: #e66767; --s-ps: #c98500; color-scheme: dark; }
+body { background: var(--bg); color: var(--fg); font: 16px/1.6 var(--f-body); }
+main { max-width: 1080px; margin: 0 auto; padding-block: 40px 80px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 48px; }
+section { display: grid; gap: 16px; min-width: 0; }
+.prose { max-width: 68ch; }
+.prose p { margin: 0 0 12px; }
+h1, h2, h3 { font-family: var(--f-display); font-weight: 600; text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(2rem, 5vw, 3rem); letter-spacing: -0.01em; }
+h2 { font-size: 1.6rem; }
+h3 { font-size: 1.15rem; }
+.eyebrow { font: 500 0.75rem/1 var(--f-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.lede { font-size: 1.15rem; color: var(--muted); max-width: 64ch; margin: 0; }
+.num, td.n, .mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 16px; min-width: 0; display: grid; gap: 12px; }
+.controls { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; font-size: 0.9rem; }
+.controls label { display: flex; gap: 8px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+.seg button { font: 500 0.85rem var(--f-body); background: transparent; color: var(--fg); border: 0; padding: 6px 12px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--rule); }
+.seg button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input[type=range] { width: min(420px, 70vw); accent-color: var(--accent); }
+.readout { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.readout div { display: grid; gap: 2px; }
+.readout .k { font-size: 0.78rem; color: var(--muted); }
+.readout .v { font: 500 1.25rem var(--f-mono); font-variant-numeric: tabular-nums; }
+.chart { position: relative; width: 100%; overflow-x: auto; }
+.chart svg { display: block; width: 100%; height: auto; min-width: 560px; }
+.chart text { font: 11px var(--f-mono); fill: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.82rem; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); color: var(--fg); border: 1px solid var(--rule);
+  border-radius: 4px; padding: 8px 10px; font-size: 0.8rem; line-height: 1.4; box-shadow: 0 4px 14px rgb(0 0 0 / 0.12); max-width: 260px; z-index: 2; }
+.tip b { font-weight: 600; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
+th, td { text-align: left; padding: 6px 10px 6px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-weight: 600; color: var(--muted); font-size: 0.78rem; }
+td.n, th.n { text-align: right; }
+.note { font-size: 0.85rem; color: var(--muted); max-width: 72ch; }
+.steps { display: grid; gap: 10px; margin: 0; padding-left: 1.2em; }
+footer { font-size: 0.8rem; color: var(--faint); border-top: 1px solid var(--rule); padding-top: 16px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<main>
+<header style="display:grid;gap:12px">
+  <div class="eyebrow">Strommarkt DE-LU · Day-Ahead · Stand <span id="asof"></span></div>
+  <h1>Merit-Order Deutschland</h1>
+  <p class="lede">Welche Kraftwerke heute zu welchen Grenzkosten bereitstehen, gerechnet aus 79&nbsp;000 Verbrennungseinheiten des Marktstammdatenregisters, den aktuellen Brennstoff- und CO₂-Preisen und einer Wärmegutschrift für KWK-Anlagen.</p>
+</header>
+
+<section class="prose">
+  <h2>Das Prinzip</h2>
+  <p>An der Day-Ahead-Börse geben alle Anbieter für jede Stunde ein Gebot ab. Wer rational bietet, bietet seine <b>Grenzkosten</b>: die Kosten für eine zusätzliche Megawattstunde, also Brennstoff, CO₂-Zertifikate und verschleißabhängige Betriebskosten. Kapital- und Fixkosten fallen ohnehin an und spielen für das Gebot keine Rolle.</p>
+  <p>Die Börse sortiert die Gebote aufsteigend. Diese Treppe ist die Merit-Order. Ganz links stehen Wind und Photovoltaik mit Grenzkosten nahe null, dann Müllverbrennung und Kuppelgase, Braunkohle, Steinkohle, Gas-und-Dampf-Kraftwerke, offene Gasturbinen und ganz rechts Ölkraftwerke. Wo die Nachfrage die Treppe schneidet, liegt der Preis. Alle bezuschlagten Anlagen erhalten diesen Preis, auch die günstigen. Die Differenz zu ihren eigenen Grenzkosten deckt ihre Fixkosten.</p>
+  <p>Mit den Preisen von heute sieht das so aus:</p>
+  <div class="tablewrap"><table id="examples"><thead><tr><th>Beispielanlage</th><th class="n">η el.</th><th class="n">Brennstoff €/MWh<sub>el</sub></th><th class="n">CO₂ €/MWh<sub>el</sub></th><th class="n">Grenzkosten €/MWh</th></tr></thead><tbody></tbody></table></div>
+  <p>Der Wirkungsgrad entscheidet über die Reihenfolge innerhalb eines Brennstoffs. Ein Braunkohleblock von 1975 braucht für dieselbe Megawattstunde etwa ein Viertel mehr Kohle als einer von 2012. Zwischen Kohle und Gas klafft derzeit eine Lücke von rund 70&nbsp;€/MWh, weil Erdgas mit über 90&nbsp;€/MWh fast fünfmal so viel kostet wie Importkohle pro Wärmeeinheit. Der CO₂-Preis verkleinert diese Lücke nur teilweise.</p>
+</section>
+
+<section>
+  <div class="prose" style="display:grid;gap:12px">
+    <h2>Die Treppe mit dem echten Kraftwerkspark</h2>
+    <p style="margin:0">Jede Fläche ist eine Einheit aus dem MaStR (ab 10&nbsp;MW einzeln, kleinere gebündelt in 2-€-Klassen). Links steht die tatsächliche Einspeisung von Wind, PV, Biomasse und Wasser in der gewählten Stunde. Die schwarze Linie ist die gemessene Last, die rote der tatsächliche Börsenpreis. Mit dem Regler lassen sich die letzten 30 Tage durchgehen.</p>
+  </div>
+  <div class="panel">
+    <div class="controls">
+      <label for="hour">Stunde <input id="hour" type="range" min="0" max="719" step="1"></label>
+      <span class="mono" id="hourlabel"></span>
+      <span class="seg" role="group" aria-label="Wärmebedarf">
+        <button id="s-sommer" data-s="sommer" aria-pressed="false">Sommer</button>
+        <button id="s-jetzt" data-s="jetzt" aria-pressed="true">Ende Oktober</button>
+        <button id="s-winter" data-s="winter" aria-pressed="false">Winter</button>
+      </span>
+      <label for="calib"><input id="calib" type="checkbox" checked> Kalibrierung (<span id="offlabel"></span>)</label>
+    </div>
+    <div class="readout">
+      <div><span class="k">Last</span><span class="v" id="r-load"></span></div>
+      <div><span class="k">Wind + PV</span><span class="v" id="r-ee"></span></div>
+      <div><span class="k">Bedarf an steuerbarer Leistung</span><span class="v" id="r-res"></span></div>
+      <div><span class="k">Modellpreis</span><span class="v" id="r-model"></span></div>
+      <div><span class="k">Börsenpreis</span><span class="v" id="r-price"></span></div>
+      <div><span class="k">Grenzanlage im Modell</span><span class="v" id="r-marg" style="font-size:0.95rem"></span></div>
+    </div>
+    <div class="chart" id="mo"></div>
+    <div class="legend" id="legend"></div>
+  </div>
+  <p class="note">Y-Achse bei 450&nbsp;€/MWh abgeschnitten; teure Öl-Kleinanlagen reichen bis über 900&nbsp;€/MWh. Die X-Achse zeigt verfügbare Leistung: thermische Anlagen mit <span id="avail"></span>&nbsp;% ihrer Nettonennleistung (Revisionen und Ausfälle), Pumpspeicher mit 90&nbsp;%.</p>
+</section>
+
+<section>
+  <div class="prose" style="display:grid;gap:12px">
+    <h2>Wirkungsgrad nach Baujahr</h2>
+    <p style="margin:0">Das MaStR enthält keine Wirkungsgrade, wohl aber Technologie, Energieträger, Leistung und Inbetriebnahmedatum. Daraus ist der elektrische Nettowirkungsgrad im Kondensationsbetrieb geschätzt: linear steigend mit dem Baujahr innerhalb einer Technologieklasse, begrenzt durch den heute erreichbaren Bestwert. Jeder Punkt ist eine Einheit ab 10&nbsp;MW.</p>
+  </div>
+  <div class="panel">
+    <div class="chart" id="eff"></div>
+    <div class="legend" id="efflegend"></div>
+  </div>
+  <div class="tablewrap"><table><thead><tr><th>Technologie (MaStR)</th><th>Schätzung η el.</th><th>Bestwert</th></tr></thead><tbody>
+    <tr><td>Braunkohle, Kondensation</td><td class="mono">0,30 + 0,0030 · (Jahr − 1960)</td><td class="mono">0,435 (BoA, 2012)</td></tr>
+    <tr><td>Steinkohle, Kondensation</td><td class="mono">0,33 + 0,0028 · (Jahr − 1965)</td><td class="mono">0,46</td></tr>
+    <tr><td>Gas: GT mit nachgeschalteter Dampfturbine, GT mit Abhitzekessel ≥ 50 MW (GuD)</td><td class="mono">0,45 + 0,0065 · (Jahr − 1990), −0,04 unter 50 MW</td><td class="mono">0,605</td></tr>
+    <tr><td>Gas/Öl: offene Gasturbine</td><td class="mono">0,27 + 0,0035 · (Jahr − 1975)</td><td class="mono">0,41</td></tr>
+    <tr><td>Gas/Öl: Verbrennungsmotor</td><td class="mono">0,40 + 0,035 · log₁₀(P in MW)</td><td class="mono">0,48</td></tr>
+    <tr><td>Gas/Öl: Dampfturbine (Kondensation / Gegendruck)</td><td class="mono">0,33 + 0,0020 · (J − 1965) / 0,25 + 0,0015 · (J − 1965)</td><td class="mono">0,42 / 0,32</td></tr>
+    <tr><td>Müll, Kuppelgase</td><td class="mono">0,24 / 0,36 pauschal</td><td></td></tr>
+  </tbody></table></div>
+</section>
+
+<section>
+  <div class="prose" style="display:grid;gap:12px">
+    <h2>KWK: Wärme drückt die Grenzkosten</h2>
+    <p style="margin:0">Rund <span id="nkwk"></span> der Einheiten sind im MaStR mit einer KWK-Anlage verknüpft. Deren Wärme ersetzt einen Gaskessel. Jede Megawattstunde Wärme, die verkauft werden kann, ist so viel wert wie der eingesparte Kesselbrennstoff samt CO₂: aktuell <span class="mono" id="heatval"></span>&nbsp;€/MWh<sub>th</sub>. Diese Gutschrift zieht das Modell von den Stromkosten ab.</p>
+  </div>
+  <ol class="steps prose">
+    <li><b>Feste Kopplung</b> (Gegendruckturbine, BHKW-Motor, Gasturbine mit Abhitzekessel unter 50&nbsp;MW): Strom und Wärme entstehen im festen Verhältnis r = Q<sub>th</sub>/P<sub>el</sub> aus dem MaStR. Grenzkosten = (1 + r)/η<sub>gesamt</sub> · Brennstoff − r · Wärmewert · Absatzanteil.</li>
+    <li><b>Entnahme-Kondensation</b> (Großkraftwerke, GuD mit Fernwärme): Nur ein wärmegebundener Teil (höchstens die halbe Leistung) wird günstiger, weil die Wärmeentnahme bloß 0,15&nbsp;MWh Strom je MWh Wärme kostet. Der Rest bleibt bei Kondensationskosten.</li>
+    <li><b>Absatzanteil</b>: Sommer 25&nbsp;%, Ende Oktober 60&nbsp;%, Winter 100&nbsp;% der Wärmeleistung. Untergrenze −30&nbsp;€/MWh, weil Wärmespeicher, Elektrokessel und Spitzenkessel noch tiefere Gebote unwirtschaftlich machen.</li>
+  </ol>
+  <p class="note prose">Mit dem Umschalter oben über der Treppe ist der Effekt sichtbar: Im Winter rutschen viele Gas-BHKW und Heizkraftwerke nach links bis an die Braunkohle heran. Kleine Gasanlagen unter 20&nbsp;MW Feuerungsleistung zahlen den nationalen CO₂-Preis (BEHG, <span id="behg"></span>&nbsp;€/t) und einen Gaspreisaufschlag von 14&nbsp;€/MWh statt EUA und Großhandelsgas. Den KWKG-Zuschlag rechnet das Modell nicht ein. Er senkt die Gebote berechtigter Neuanlagen zusätzlich, solange der Preis positiv ist.</p>
+</section>
+
+<section>
+  <div class="prose" style="display:grid;gap:12px">
+    <h2>Wie gut trifft das Modell den Börsenpreis?</h2>
+    <p style="margin:0" id="fittext"></p>
+  </div>
+  <div class="panel">
+    <div class="chart" id="ts"></div>
+    <div class="legend"><span><i style="background:var(--ink-price)"></i>Börsenpreis DE-LU</span><span><i style="background:var(--accent)"></i>Modell (kalibriert, Ende Oktober)</span></div>
+  </div>
+  <p class="note prose">Die Kalibrierung verschiebt die Nachfrage pauschal. Dahinter stecken Stromexporte in teurere Nachbarländer, vorgehaltene Regelleistung, die nicht am Spotmarkt verkauft wird, und Anlagen, die länger in Revision sind als angenommen. Das Modell nutzt für alle 30 Tage die Brennstoffpreise von heute. Anfang Oktober lag TTF noch bei 72 bis 85&nbsp;€/MWh; für die ersten Tage überschätzt das Modell deshalb die Gaskosten, was die pauschale Kalibrierung teilweise wieder ausgleicht. Anfahrkosten, Mindestlasten und Blockgebote fehlen ebenfalls; sie erklären die Spitzen am Abend und die flacheren Täler.</p>
+</section>
+
+<section>
+  <h2>Annahmen und Daten</h2>
+  <div class="cols">
+    <div class="tablewrap"><table id="fuels"><thead><tr><th>Brennstoff</th><th class="n">€/MWh<sub>th</sub></th><th>Grundlage</th></tr></thead><tbody></tbody></table></div>
+    <div class="tablewrap"><table id="fleet"><thead><tr><th>Im Markt (MaStR, in Betrieb)</th><th class="n">MW netto</th></tr></thead><tbody></tbody></table></div>
+  </div>
+  <p class="note">Nicht im Markt gezählt: <span id="excl"></span>. Kernkraft ist seit April 2023 vom Netz. Wind, PV, Biomasse und Laufwasser gehen mit ihrer gemessenen Einspeisung ein (ENTSO-E, SMARD, Energy-Charts, stündlich gemittelt), installiert sind laut MaStR <span id="eeinst"></span>. Pumpspeicher: <span id="psinfo"></span>.</p>
+</section>
+
+<footer>
+  Quellen: Marktstammdatenregister Gesamtdatenexport 20.10.2026 (Release 26.2, DL-DE BY 2.0); PredictionDB (SMARD, ENTSO-E, Energy-Charts, Weltbank, EIA, EZB, EU Oil Bulletin); EUA-Settlement 23.10.2026 laut purelyenergy.co.uk; TTF 27.10.2026 laut oilpriceapi.com; API2 18.09.2026 laut cnyes.com. Modellrechnung, keine Handelsempfehlung.
+</footer>
+</main>
+
+<script>
+const DATA = __DATA__;
+const A = DATA.assumptions;
+const GROUPS = [
+  ["Wind + PV", "--s-ee"], ["Biomasse, Wasser", "--s-bio"], ["Abfall, Kuppelgas", "--s-waste"],
+  ["Braunkohle", "--s-lig"], ["Steinkohle", "--s-coal"], ["Erdgas", "--s-gas"],
+  ["Pumpspeicher", "--s-ps"], ["Öl", "--s-oil"]];
+const COLOR = Object.fromEntries(GROUPS.map(([g, v]) => [g, `var(${v})`]));
+const fmt = (v, d = 0) => v.toLocaleString("de-DE", { minimumFractionDigits: d, maximumFractionDigits: d });
+const $ = id => document.getElementById(id);
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function tipFor(box) { const t = document.createElement("div"); t.className = "tip"; t.hidden = true; box.appendChild(t); return t; }
+function placeTip(tip, box, ev, html) {
+  tip.innerHTML = html; tip.hidden = false;
+  const r = box.getBoundingClientRect(); let x = ev.clientX - r.left + box.scrollLeft + 14, y = ev.clientY - r.top + 14;
+  if (x + 270 > box.scrollLeft + r.width) x -= 290;
+  tip.style.left = x + "px"; tip.style.top = y + "px";
+}
+
+// ---------- Kopfwerte, Tabellen
+const asof = new Date(DATA.asof.replace(" ", "T"));
+$("asof").textContent = asof.toLocaleDateString("de-DE");
+$("avail").textContent = fmt(A.avail * 100);
+$("heatval").textContent = fmt(A.heat_value, 0);
+$("behg").textContent = fmt(A.CO2_BEHG);
+$("nkwk").textContent = fmt(Math.round(DATA.n_kwk / DATA.n_units * 100)) + " %";
+$("offlabel").textContent = (A.import_offset < 0 ? "+" : "−") + fmt(Math.abs(A.import_offset) / 1000, 2) + " GW Nachfrage";
+const F = A.fuel, co2 = A.CO2_ETS, ef = A.ef;
+const ex = [
+  ["Braunkohle, BoA-Block 2012", "lignite", 0.435, 4.5], ["Braunkohle, 500-MW-Block 1975", "lignite", 0.345, 4.5],
+  ["Steinkohle 2015", "coal", 0.46, 4.5], ["Steinkohle 1985", "coal", 0.386, 4.5],
+  ["GuD 2016", "gas", 0.605, 3], ["GuD 2000", "gas", 0.515, 3], ["Offene Gasturbine 2010", "gas", 0.3925, 5],
+  ["Öl-Gasturbine 1975", "oil_light", 0.27, 5]];
+$("examples").tBodies[0].innerHTML = ex.map(([n, f, eta, v]) => {
+  const fu = F[f] / eta, c = ef[f] * co2 / eta;
+  return `<tr><td>${n}</td><td class="n">${fmt(eta, 3)}</td><td class="n">${fmt(fu)}</td><td class="n">${fmt(c)}</td><td class="n"><b>${fmt(fu + c + v)}</b></td></tr>`;
+}).join("");
+const fuelRows = [
+  ["Erdgas (Großkraftwerk)", F.gas, `TTF ${fmt(A.TTF, 1)} + 2,5 Transport`],
+  ["Erdgas (< 20 MW FWL)", F.gas_small, "TTF + 14 Netzentgelte/Umlagen"],
+  ["Importsteinkohle", F.coal, `API2 ${fmt(A.API2_USD)} USD/t, 6000 kcal/kg, + 2,5 Transport`],
+  ["Braunkohle", F.lignite, "variable Tagebaukosten (Annahme)"],
+  ["Leichtes Heizöl", F.oil_light, `NY Harbor ULSD ${fmt(A.ULSD, 3)} USD/gal`],
+  ["Schweres Heizöl", F.oil_heavy, `Brent ${fmt(A.BRENT, 1)} USD/bbl × 0,85`],
+  ["Müll", F.waste, "Entsorgungserlös, läuft ohnehin"],
+  ["Kuppelgase", F.byproduct, "Hochofen-, Koksofen-, Raffineriegas"],
+  ["CO₂ EU-ETS", co2, "€/t, EUA Dez-26"], ["CO₂ BEHG", A.CO2_BEHG, "€/t, Kleinanlagen"],
+  ["Wechselkurs", A.FX, "USD je EUR, EZB"]];
+$("fuels").tBodies[0].innerHTML = fuelRows.map(([a, b, c]) => `<tr><td>${a}</td><td class="n">${fmt(b, b < 5 ? 3 : 1)}</td><td>${c}</td></tr>`).join("");
+const cap = DATA.capacity_inst;
+$("fleet").tBodies[0].innerHTML = ["Braunkohle", "Steinkohle", "Erdgas", "Öl", "Abfall, Kuppelgas"].map(g => `<tr><td>${g}</td><td class="n">${fmt(cap[g] || 0)}</td></tr>`).join("")
+  + `<tr><td>Pumpspeicher</td><td class="n">${fmt(A.ps_mw)}</td></tr>`;
+$("excl").textContent = Object.entries(DATA.excluded).map(([k, v]) => `${k} ${fmt(v)} MW`).join(", ");
+const ei = DATA.ee_inst;
+$("eeinst").textContent = `Wind an Land ${fmt(ei.wind_on / 1000, 1)} GW, Wind auf See ${fmt(ei.wind_off / 1000, 1)} GW, PV ${fmt((ei.pv_roof + ei.pv_ground) / 1000, 1)} GW, Biomasse ${fmt(ei.biomass / 1000, 1)} GW, Wasser ${fmt(ei.hydro / 1000, 1)} GW`;
+$("psinfo").textContent = `${fmt(A.ps_mw)} MW (${A.ps_src}), Gebot zu Opportunitätskosten von ${fmt(A.ps_price)} €/MWh (80-%-Quantil der Preise)`;
+
+// ---------- Merit-Order
+let season = "jetzt", hourIdx = DATA.hours.length - 1;
+const H = DATA.hours; // ts, load, ee, bio_hydro, price, model0, model_imp, lig, coal, gas
+const moBox = $("mo"), moTip = tipFor(moBox);
+$("legend").innerHTML = GROUPS.map(([g]) => `<span><i style="background:${COLOR[g]}"></i>${g}</span>`).join("");
+const W = 1000, HGT = 460, M = { l: 52, r: 16, t: 16, b: 40 }, YMAX = 450, YMIN = -50;
+function draw() {
+  const h = H[hourIdx], st = DATA.stacks[season];
+  const offset = $("calib").checked ? -A.import_offset : 0;
+  const blocks = [["Wind + PV", 0, h[2], "Wind und PV (Einspeisung)"], ["Biomasse, Wasser", 0, h[3], "Biomasse, Laufwasser (Einspeisung)"]]
+    .map(([g, c, P, n]) => ({ g, c, P, n }))
+    .concat(st.map(([g, c, P, n, eta, y]) => ({ g, c, P, n, eta, y })));
+  let cum = 0; for (const b of blocks) { b.x0 = cum; cum += b.P; b.x1 = cum; }
+  const demand = h[1] + offset;
+  const marg = blocks.find(b => b.x1 >= demand);
+  const mp = marg ? marg.c : 500;
+  const xmax = Math.max(cum, demand) * 1.02;
+  const sx = v => M.l + v / xmax * (W - M.l - M.r), sy = v => M.t + (YMAX - Math.max(YMIN, Math.min(YMAX, v))) / (YMAX - YMIN) * (HGT - M.t - M.b);
+  moBox.querySelector("svg")?.remove();
+  const svg = el("svg", { viewBox: `0 0 ${W} ${HGT}`, role: "img", "aria-label": "Merit-Order-Kurve" });
+  moBox.prepend(svg);
+  for (let y = 0; y <= 400; y += 100) {
+    el("line", { x1: M.l, x2: W - M.r, y1: sy(y), y2: sy(y), stroke: "var(--grid)" }, svg);
+    el("text", { x: M.l - 8, y: sy(y) + 4, "text-anchor": "end" }, svg).textContent = y;
+  }
+  for (let x = 0; x <= xmax; x += 20000) {
+    el("text", { x: sx(x), y: HGT - M.b + 18, "text-anchor": "middle" }, svg).textContent = x / 1000;
+  }
+  el("text", { x: W - M.r, y: HGT - 6, "text-anchor": "end" }, svg).textContent = "verfügbare Leistung, GW";
+  el("text", { x: M.l, y: M.t - 4 }, svg).textContent = "€/MWh";
+  const g = el("g", {}, svg);
+  for (const b of blocks) {
+    if (b.P <= 0) continue;
+    const ee = b.g === "Wind + PV" || b.g === "Biomasse, Wasser";
+    const y0 = sy(0), y1 = ee ? y0 - 10 : sy(b.c), w = Math.max(sx(b.x1) - sx(b.x0), 0.6);
+    if (ee && w > 60) el("text", { x: sx(b.x0) + w / 2, y: y0 - 16, "text-anchor": "middle", style: "fill:var(--fg)" }, svg).textContent = `${b.g} ${fmt(b.P / 1000, 1)} GW`;
+    const r = el("rect", { x: sx(b.x0), y: Math.min(y0, y1) , width: w, height: Math.max(Math.abs(y1 - y0), 1.5), fill: COLOR[b.g] }, g);
+    r.addEventListener("mousemove", ev => placeTip(moTip, moBox, ev,
+      `<b>${b.n || "ohne Namen"}</b><br>${b.g}${b.y ? " · " + b.y : ""}<br>Grenzkosten <span class="mono">${fmt(b.c, 1)} €/MWh</span><br>verfügbar <span class="mono">${fmt(b.P)} MW</span>${b.eta ? `<br>η el. <span class="mono">${fmt(b.eta, 3)}</span>` : ""}`));
+    r.addEventListener("mouseleave", () => moTip.hidden = true);
+  }
+  el("line", { x1: M.l, x2: W - M.r, y1: sy(0), y2: sy(0), stroke: "var(--muted)" }, svg);
+  // Börsenpreis
+  el("line", { x1: M.l, x2: W - M.r, y1: sy(h[4]), y2: sy(h[4]), stroke: "var(--ink-price)", "stroke-width": 2, "stroke-dasharray": "6 4" }, svg);
+  el("text", { x: M.l + 6, y: sy(h[4]) - 6, style: "fill:var(--ink-price)" }, svg).textContent = `Börse ${fmt(h[4])} €/MWh`;
+  // Nachfrage
+  el("line", { x1: sx(demand), x2: sx(demand), y1: M.t, y2: HGT - M.b, stroke: "var(--ink-demand)", "stroke-width": 2 }, svg);
+  const lx = sx(demand) > W * 0.75 ? sx(demand) - 8 : sx(demand) + 8;
+  el("text", { x: lx, y: M.t + 12, "text-anchor": sx(demand) > W * 0.75 ? "end" : "start", style: "fill:var(--fg)" }, svg).textContent = `Last ${fmt(h[1] / 1000, 1)} GW${offset ? " + Kalibrierung" : ""}`;
+  el("circle", { cx: sx(demand), cy: sy(mp), r: 6, fill: "var(--surface)", stroke: "var(--ink-demand)", "stroke-width": 2.5 }, svg);
+  const t = new Date(h[0]);
+  $("hourlabel").textContent = t.toLocaleString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  $("r-load").textContent = fmt(h[1] / 1000, 1) + " GW";
+  $("r-ee").textContent = fmt(h[2] / 1000, 1) + " GW";
+  $("r-res").textContent = fmt((demand - h[2] - h[3]) / 1000, 1) + " GW";
+  $("r-model").textContent = fmt(mp) + " €/MWh";
+  $("r-price").textContent = fmt(h[4]) + " €/MWh";
+  $("r-marg").textContent = marg ? `${marg.g}${marg.n && !marg.n.includes("kleine") ? ": " + marg.n : ""}` : "Knappheit";
+}
+$("hour").value = hourIdx;
+$("hour").addEventListener("input", e => { hourIdx = +e.target.value; draw(); });
+$("calib").addEventListener("change", draw);
+document.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => {
+  season = b.dataset.s; document.querySelectorAll(".seg button").forEach(x => x.setAttribute("aria-pressed", x === b)); draw();
+}));
+draw();
+
+// ---------- Zeitreihe
+(function () {
+  const box = $("ts"), tip = tipFor(box), W2 = 1000, H2 = 300, m = { l: 52, r: 16, t: 12, b: 32 };
+  const n = H.length, ymax = 450, ymin = -50;
+  const sx = i => m.l + i / (n - 1) * (W2 - m.l - m.r), sy = v => m.t + (ymax - Math.max(ymin, Math.min(ymax, v))) / (ymax - ymin) * (H2 - m.t - m.b);
+  const svg = el("svg", { viewBox: `0 0 ${W2} ${H2}`, role: "img", "aria-label": "Börsenpreis und Modellpreis, letzte 30 Tage" });
+  box.prepend(svg);
+  for (let y = 0; y <= 400; y += 100) {
+    el("line", { x1: m.l, x2: W2 - m.r, y1: sy(y), y2: sy(y), stroke: "var(--grid)" }, svg);
+    el("text", { x: m.l - 8, y: sy(y) + 4, "text-anchor": "end" }, svg).textContent = y;
+  }
+  H.forEach((h, i) => { if (h[0].endsWith("T00:00Z") && new Date(h[0]).getUTCDay() === 1) el("text", { x: sx(i), y: H2 - 10, "text-anchor": "middle" }, svg).textContent = new Date(h[0]).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }); });
+  const path = k => H.map((h, i) => `${i ? "L" : "M"}${sx(i).toFixed(1)},${sy(h[k]).toFixed(1)}`).join("");
+  el("path", { d: path(6), fill: "none", stroke: "var(--accent)", "stroke-width": 2 }, svg);
+  el("path", { d: path(4), fill: "none", stroke: "var(--ink-price)", "stroke-width": 2 }, svg);
+  const cross = el("line", { y1: m.t, y2: H2 - m.b, stroke: "var(--faint)", visibility: "hidden" }, svg);
+  svg.addEventListener("mousemove", ev => {
+    const r = svg.getBoundingClientRect(), x = (ev.clientX - r.left) / r.width * W2;
+    const i = Math.max(0, Math.min(n - 1, Math.round((x - m.l) / (W2 - m.l - m.r) * (n - 1)))), h = H[i];
+    cross.setAttribute("x1", sx(i)); cross.setAttribute("x2", sx(i)); cross.setAttribute("visibility", "visible");
+    placeTip(tip, box, ev, `<b>${new Date(h[0]).toLocaleString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</b><br>Börse <span class="mono">${fmt(h[4])}</span> · Modell <span class="mono">${fmt(h[6])}</span> €/MWh<br>Last ${fmt(h[1] / 1000, 1)} GW · Wind+PV ${fmt(h[2] / 1000, 1)} GW<br><span style="color:var(--muted)">Klick: Stunde in der Treppe zeigen</span>`);
+    svg.onclick = () => { hourIdx = i; $("hour").value = i; draw(); moBox.scrollIntoView({ behavior: "smooth", block: "center" }); };
+  });
+  svg.addEventListener("mouseleave", () => { tip.hidden = true; cross.setAttribute("visibility", "hidden"); });
+  const pr = H.map(h => h[4]), mo = H.map(h => h[6]);
+  const mean = a => a.reduce((s, v) => s + v, 0) / a.length;
+  const mp = mean(pr), mm = mean(mo);
+  const corr = pr.reduce((s, v, i) => s + (v - mp) * (mo[i] - mm), 0) / Math.sqrt(pr.reduce((s, v) => s + (v - mp) ** 2, 0) * mo.reduce((s, v) => s + (v - mm) ** 2, 0));
+  $("fittext").innerHTML = `Für jede Stunde der letzten 30 Tage schneidet das Modell die Last mit der Treppe und vergleicht das Ergebnis mit dem Börsenpreis. Ohne Korrektur liegt der mittlere absolute Fehler bei <span class="mono">${fmt(A.mae0, 1)}</span> €/MWh, das Modell ist im Schnitt zu billig. Mit einer pauschalen Zusatznachfrage von <span class="mono">${fmt(-A.import_offset / 1000, 2)}</span> GW sinkt der Fehler auf <span class="mono">${fmt(A.mae_best, 1)}</span> €/MWh, die Korrelation beträgt <span class="mono">${fmt(corr, 2)}</span>. Mittlerer Börsenpreis <span class="mono">${fmt(mp)}</span> €/MWh, Modell <span class="mono">${fmt(mm)}</span> €/MWh.`;
+})();
+
+// ---------- Wirkungsgrade
+(function () {
+  const box = $("eff"), tip = tipFor(box), W3 = 1000, H3 = 340, m = { l: 52, r: 16, t: 16, b: 36 };
+  const FG = { lignite: ["Braunkohle", "--s-lig"], coal: ["Steinkohle", "--s-coal"], gas: ["Erdgas", "--s-gas"] };
+  const pts = DATA.eff.filter(p => FG[p[0]]);
+  const x0 = 1955, x1 = 2027, y0 = 0.2, y1 = 0.65;
+  const sx = v => m.l + (v - x0) / (x1 - x0) * (W3 - m.l - m.r), sy = v => m.t + (y1 - v) / (y1 - y0) * (H3 - m.t - m.b);
+  const svg = el("svg", { viewBox: `0 0 ${W3} ${H3}`, role: "img", "aria-label": "Geschätzter Wirkungsgrad nach Baujahr" });
+  box.prepend(svg);
+  for (let y = 0.2; y <= 0.651; y += 0.1) {
+    el("line", { x1: m.l, x2: W3 - m.r, y1: sy(y), y2: sy(y), stroke: "var(--grid)" }, svg);
+    el("text", { x: m.l - 8, y: sy(y) + 4, "text-anchor": "end" }, svg).textContent = fmt(y * 100) + " %";
+  }
+  for (let x = 1960; x <= 2020; x += 10) el("text", { x: sx(x), y: H3 - 12, "text-anchor": "middle" }, svg).textContent = x;
+  for (const p of pts) {
+    const r = Math.max(4, Math.min(11, Math.sqrt(p[3]) / 2.6));
+    const c = el("circle", { cx: sx(p[2]), cy: sy(p[4]), r, fill: `var(${FG[p[0]][1]})`, "fill-opacity": 0.75, stroke: "var(--surface)", "stroke-width": 1.5 }, svg);
+    c.addEventListener("mousemove", ev => placeTip(tip, box, ev, `<b>${p[5] || "ohne Namen"}</b><br>${FG[p[0]][0]} · ${p[1]}<br>Baujahr ${p[2]} · ${fmt(p[3])} MW<br>η el. <span class="mono">${fmt(p[4], 3)}</span>`));
+    c.addEventListener("mouseleave", () => tip.hidden = true);
+  }
+  $("efflegend").innerHTML = Object.values(FG).map(([n, v]) => `<span><i style="background:var(${v})"></i>${n}</span>`).join("") + `<span>Kreisgröße: Nettoleistung</span>`;
+})();
+</script>

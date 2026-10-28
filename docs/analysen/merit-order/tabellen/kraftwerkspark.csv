@@ -1,0 +1,16 @@
+group,typ,mw_netto,bloecke
+"Abfall, Kuppelgas",kond,2298.0,415
+"Abfall, Kuppelgas",kwk_entnahme,1084.0,131
+"Abfall, Kuppelgas",kwk_fest,738.0,3090
+Braunkohle,kond,13302.0,29
+Braunkohle,kwk_entnahme,1176.0,26
+Braunkohle,kwk_fest,294.0,20
+Erdgas,kond,17587.0,4883
+Erdgas,kwk_entnahme,5393.0,801
+Erdgas,kwk_fest,9930.0,61885
+Steinkohle,kond,4656.0,21
+Steinkohle,kwk_entnahme,1582.0,18
+Steinkohle,kwk_fest,1351.0,13
+Öl,kond,2909.0,4115
+Öl,kwk_entnahme,163.0,9
+Öl,kwk_fest,358.0,4533
