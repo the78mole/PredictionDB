@@ -467,3 +467,64 @@ def test_needs_weather_from_manifest_variant(cfg_v2) -> None:  # type: ignore[no
     assert not needs_weather(cfg_v2, reg, ["kalender", "frei"])
     assert needs_weather(cfg_v2, reg, ["frei", "wetter_frei"])
     assert needs_weather(cfg_v2, reg, ["gibt_es_nicht"])
+
+
+def test_grenzkosten_only_uses_known_hours(snap, cfg_v2) -> None:  # type: ignore[no-untyped-def]
+    sg = cfg_v2.series_groups["grenzkosten"]
+    assert {"residual_load", "gen_lignite", "gen_gas"} <= set(sg.stored_codes)
+    fb = FeatureBuilder(snap, cfg_v2)
+    frame = fb.build([date(2023, 5, 10)])
+    X = frame.X
+    assert set(frame.groups["grenzkosten"]) >= {"gk_hoch_14d", "gk_braunkohle_56d", "gk_niveau"}
+    # Fenster endet mit der letzten bekannten Ist-Stunde (08 UTC - 2 h), Preise danach zählen
+    # nicht, obwohl der Preis des Liefertags schon feststeht
+    issue = pd.Timestamp("2023-05-10 08:00", tz="UTC")
+    end = issue - pd.Timedelta(hours=2)
+    e = fb.energy.loc[end - pd.Timedelta(days=14) : end - pd.Timedelta(hours=1)]
+    high = e["residual_load"] >= e["residual_load"].quantile(0.75)
+    expected = e.loc[high, "da_price_de_lu"].median()
+    assert X["gk_hoch_14d"].iloc[0] == pytest.approx(expected, rel=1e-5)
+    assert X["gk_niveau"].iloc[0] == pytest.approx(max(expected, sg.floor), rel=1e-5)
+    # ein Liefertag später ändert den Wert erst ab der nächsten Ausgabe
+    shifted = fb.energy.copy()
+    shifted.loc[end:, "da_price_de_lu"] += 1000.0
+    fb.energy = shifted
+    fb._gk_hours.clear()
+    assert fb.build([date(2023, 5, 10)]).X["gk_hoch_14d"].iloc[0] == pytest.approx(expected)
+
+
+def test_scaled_target_trains_and_predicts(snap, cfg_v2, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    cfg_v2.lgbm.n_estimators = 30
+    fb = FeatureBuilder(snap, cfg_v2)
+    frame = fb.build([date(2022, 10, 1) + pd.Timedelta(days=i) for i in range(0, 200, 4)])
+    m = TwoStageModel(cfg_v2, cfg_v2.variant("frei_gk_skaliert")).fit(frame)
+    price = m.stage2["da_price_de_lu"]
+    assert price.scale == "gk_niveau" and "gk_niveau" in m.features()
+    assert m.stage1["load_actual"].scale is None
+    test = fb.build([date(2023, 6, 1)])
+    out = m.predict(test)["da_price_de_lu"]
+    assert out["q50"].notna().all()
+    # Prognose = Zentrum + Baumausgabe x Niveau (Baum lernt die Abweichung relativ zum Niveau)
+    s1 = {c: q.predict(test.X)["q50"].to_numpy() for c, q in m.stage1.items()}
+    X1 = m._with_stage1(test.X, s1)
+    raw = np.sort(
+        np.column_stack([b.predict(X1[price.features]) for b in price.boosters.values()]), axis=1
+    )[:, 1]
+    expected = X1[price.center].to_numpy() + raw * X1["gk_niveau"].to_numpy()
+    assert price.predict(X1)["q50"].to_numpy() == pytest.approx(expected, rel=1e-6)
+    # Ablage und Laden behalten die Bezugsspalte
+    d = price.save(tmp_path)
+    assert type(price).load(d, tmp_path, cfg_v2.lgbm).scale == "gk_niveau"
+
+
+def test_run_job_snapshot_has_no_variant(cfg, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from ml_train import cli
+
+    job = RecordingJob()
+    started: list[Any] = []
+    monkeypatch.setattr(cli, "open_job_log", lambda: job)
+    monkeypatch.setattr(job, "start", lambda *a: started.append(a))
+    monkeypatch.setattr(cli, "cmd_snapshot", lambda cfg, a, job: 0)
+    a = cli.build_parser().parse_args(["snapshot", "--out", "/tmp/x"])
+    assert cli.run_job(cfg, "sha", a) == 0
+    assert started[0][2] == []

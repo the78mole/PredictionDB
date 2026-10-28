@@ -11,7 +11,7 @@ from wx_process.config import ProcessConfig
 from wx_process.features import FEATURES_VERSION, ClusterWeights
 from wx_process.pipeline import WxPipeline
 from wx_process.silver import Silver
-from wx_process.store import CapacityTable
+from wx_process.store import CapacityTable, Chunk
 from wx_process.testing import RUN, fill_bronze, source_config
 
 STEPS = [0, 1, 2, 3, 6]
@@ -35,6 +35,9 @@ class FakeStore:
         self.done: dict[tuple[datetime, str], dict[str, Any]] = {}
         self.features: dict[str, int] = {}
         self.silver: dict[datetime, tuple[str, str]] = {}
+        self.packed: list[Chunk] = []
+        self.replaced: list[bool] = []
+        self.log: list[tuple[str, str]] = []
 
     def source_id(self, code: str) -> int:
         return 3
@@ -60,7 +63,8 @@ class FakeStore:
             self.features.setdefault(code, len(self.features) + 1)
         return {c: self.features[c] for c in units}
 
-    def write_values(self, run, valid_until, feature_ids, region_ids, rows) -> int:  # type: ignore[no-untyped-def]
+    def write_values(self, run, valid_until, feature_ids, region_ids, rows, *, replace=True) -> int:  # type: ignore[no-untyped-def]
+        self.replaced.append(replace)
         self.values = {k: v for k, v in self.values.items() if k[0] != run}
         n = 0
         for fid, rid, t, v in rows:
@@ -79,6 +83,20 @@ class FakeStore:
     def mark_silver(self, source_id, runs, status, origin) -> None:  # type: ignore[no-untyped-def]
         for r in runs:
             self.silver[r] = (status, origin)
+
+    def has_features(self, source_id: int, run: datetime) -> bool:
+        return any(r == run for r, _ in self.done)
+
+    def decompress_values(self, start: datetime, end: datetime) -> list[Chunk]:
+        hit = [c for c in self.packed if c.start <= end and c.end > start]
+        self.packed = [c for c in self.packed if c not in hit]
+        self.log += [("decompress", c.name) for c in hit]
+        return hit
+
+    def compress_values(self, chunks) -> None:  # type: ignore[no-untyped-def]
+        for c in chunks:
+            self.packed.append(c)
+            self.log.append(("compress", c.name))
 
 
 @pytest.fixture
@@ -108,6 +126,7 @@ def test_process_writes_features_and_skips_afterwards(setup) -> None:  # type: i
     fill_bronze(bronze, STEPS)
     r = pipeline.process(RUN)
     assert (r.status, r.silver, r.clustering_version) == ("processed", "built", "v2099Q1")
+    assert store.replaced == [False]  # erster Lauf ohne DELETE
     assert r.coverage_min == pytest.approx(1.0)
     done = store.done[(RUN, "v2099Q1")]
     assert done["features_version"] == FEATURES_VERSION and done["n"] == r.n_values > 0
@@ -172,11 +191,43 @@ def test_latest_and_failures(setup) -> None:  # type: ignore[no-untyped-def]
 def test_backfill_run_selection(setup) -> None:  # type: ignore[no-untyped-def]
     pipeline, bronze, _ = setup
     fill_bronze(bronze, STEPS)
-    out = pipeline.backfill(RUN - timedelta(hours=12), RUN, hours=[0, 6], newest_first=True)
+    out = pipeline.backfill(RUN - timedelta(hours=12), RUN, hours=[6, 0], newest_first=True)
     assert [(o.run, o.status) for o in out] == [
         (RUN, "processed"),
         (RUN - timedelta(hours=6), "not_ready"),
     ]
+
+
+def test_backfill_follows_run_priority(setup) -> None:  # type: ignore[no-untyped-def]
+    """Erst alle Läufe der ersten Laufzeit, dann die nächste, je Laufzeit jüngste zuerst."""
+    pipeline, _, _ = setup
+    start = RUN - timedelta(hours=24)
+    out = pipeline.backfill(start, RUN, hours=[12, 0, 6], newest_first=True)
+    assert [o.run for o in out] == [
+        RUN - timedelta(hours=18),
+        RUN - timedelta(hours=6),
+        RUN,
+        RUN - timedelta(hours=24),
+    ]
+
+
+def test_backfill_decompresses_until_no_run_writes_into_chunk(setup) -> None:  # type: ignore[no-untyped-def]
+    """Ein Chunk wird vor dem ersten Schreiben entpackt und erst danach wieder gepackt."""
+    pipeline, bronze, store = setup
+    fill_bronze(bronze, STEPS)
+    day = timedelta(days=1)
+    store.packed = [
+        Chunk("c_vorher", RUN - 2 * day, RUN - day),
+        Chunk("c_lauf", RUN - day, RUN + day),
+        Chunk("c_spaeter", RUN + 3 * day, RUN + 4 * day),
+    ]
+    out = pipeline.backfill(RUN - timedelta(hours=6), RUN, newest_first=True, decompress=True)
+    assert [(o.run, o.status) for o in out] == [
+        (RUN, "processed"),
+        (RUN - timedelta(hours=6), "not_ready"),
+    ]
+    assert store.log == [("decompress", "c_lauf"), ("compress", "c_lauf")]
+    assert {c.name for c in store.packed} == {"c_vorher", "c_lauf", "c_spaeter"}
 
 
 def test_imported_silver_without_bronze(setup) -> None:  # type: ignore[no-untyped-def]

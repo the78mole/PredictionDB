@@ -47,34 +47,25 @@ import httpx
 from obstore.store import MemoryStore
 
 from predictiondb_core.db import create_db_engine
-from predictiondb_core.log import configure_logging
+from predictiondb_core.log import configure_logging, get_logger
 from predictiondb_core.s3 import s3_store
 from predictiondb_core.settings import get_settings
 from wx_exchange import idx
 from wx_exchange.importer import Importer
-from wx_exchange.oci import Registry
+from wx_exchange.oci import Registry, RegistryError
 from wx_exchange.publish import Publisher, plan
 from wx_ingest.bronze import Bronze
-from wx_ingest.cli import DEFAULT_CONFIG, parse_run
+from wx_ingest.cli import DEFAULT_CONFIG, parse_hours_ordered, parse_run
 from wx_ingest.config import GfsConfig
 from wx_ingest.gfs import read_templates, write_templates
 from wx_ingest.ingest import GfsIngestor
 from wx_process.config import ProcessConfig, WxProcessSettings
 from wx_process.store import Store
 
+log = get_logger(__name__)
+
 DEFAULT_REPOSITORY = "the78mole/predictiondb-data/gfs-0p25-silver"
 SOURCE_URL = "https://github.com/the78mole/predictiondb"
-
-
-def parse_hours_ordered(text: str) -> list[int]:
-    """Wie ``wx_ingest.cli.parse_hours``, aber in der angegebenen Reihenfolge (Priorität)."""
-    try:
-        hours = list(dict.fromkeys(int(h) for h in text.split(",")))
-    except ValueError:
-        raise argparse.ArgumentTypeError(f"Laufzeiten {text!r} nicht lesbar (z. B. 0,12)") from None
-    if any(h not in (0, 6, 12, 18) for h in hours):
-        raise argparse.ArgumentTypeError("GFS-Läufe nur 0, 6, 12, 18 UTC")
-    return hours
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -103,6 +94,11 @@ def build_parser() -> argparse.ArgumentParser:
     pub.add_argument("--parallel-runs", type=int, default=2, metavar="N")
     pub.add_argument("--archive-concurrency", type=int, default=16, metavar="N")
     pub.add_argument("--workdir", type=Path, help="Standard: temporäres Verzeichnis")
+    pub.add_argument(
+        "--idx-repository",
+        default=idx.DEFAULT_REPOSITORY,
+        help="vollständige .idx für header_scan (leer: Köpfe lesen wie bisher)",
+    )
 
     tpl = cmd.add_parser(
         "templates", help="Kopf-Inventare (header_scan) prüfen, fehlende ergänzen, alle schreiben"
@@ -220,7 +216,18 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps({f"block{i}": e for i, e in enumerate(blocks, start=1)}, indent=1))
             return 0
         if args.cmd == "publish":
-            return asyncio.run(_publish(args, config, registry))
+            idx_registry = (
+                Registry(
+                    args.registry,
+                    args.idx_repository,
+                    client,
+                    username=os.environ.get("WX_EXCHANGE_USERNAME"),
+                    password=os.environ.get("WX_EXCHANGE_TOKEN") or None,
+                )
+                if args.idx_repository
+                else None
+            )
+            return asyncio.run(_publish(args, config, registry, idx_registry))
         if args.cmd == "templates":
             return asyncio.run(_templates(args, config))
         if args.cmd == "idx-plan":
@@ -353,7 +360,32 @@ async def _idx_build(args: argparse.Namespace, config: GfsConfig, registry: Regi
     return 0
 
 
-async def _publish(args: argparse.Namespace, config: GfsConfig, registry: Registry) -> int:
+def _load_idx(registry: Registry, month: str, hour: int) -> dict[str, bytes]:
+    """``.idx`` des Monats; ohne Layer oder bei Fehlern leer (dann Köpfe lesen wie bisher)."""
+    try:
+        layer, files = idx.load_layer(registry, month, hour)
+    except (RegistryError, httpx.HTTPError, OSError, ValueError) as exc:
+        log.warning("idx_unavailable", month=month, hour=hour, error=f"{type(exc).__name__}: {exc}")
+        return {}
+    if layer is None:
+        log.info("idx_missing", month=month, hour=hour)
+        return {}
+    log.info(
+        "idx_loaded",
+        layer=layer.key,
+        files=len(files),
+        complete=layer.complete,
+        failed=len(layer.failed),
+    )
+    return files
+
+
+async def _publish(
+    args: argparse.Namespace,
+    config: GfsConfig,
+    registry: Registry,
+    idx_registry: Registry | None = None,
+) -> int:
     process = ProcessConfig.from_yaml(args.process_config or WxProcessSettings().config)
     with tempfile.TemporaryDirectory(prefix="wx-exchange-") as tmp:
         workdir = args.workdir or Path(tmp)
@@ -367,6 +399,9 @@ async def _publish(args: argparse.Namespace, config: GfsConfig, registry: Regist
                 source_url=SOURCE_URL,
                 parallel_runs=args.parallel_runs,
             )
+            if idx_registry is not None:
+                files = await asyncio.to_thread(_load_idx, idx_registry, args.month, args.hour)
+                publisher.ingestor.import_idx(files)
             # Nie ins Live-Fenster: noch nicht veröffentlichte Läufe gälten sonst als fehlend
             result = await publisher.publish_month(
                 args.month, args.hour, args.start, _end(args, config), rebuild=args.rebuild

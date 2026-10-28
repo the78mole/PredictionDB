@@ -21,6 +21,24 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+    # Verschwindet ein Client ohne Verbindungsabbau (z. B. Container-Neustart beim Deploy),
+    # merken die Keepalives das nach ca. 2 min und Postgres gibt seine Sperren frei; sonst
+    # wartet ein COPY ewig auf Daten und blockiert alle weiteren Schreiber derselben Chunks.
+    # client_connection_check_interval prüft das auch während laufender Anweisungen.
+    # Der Leerlauf-Timeout fängt liegengebliebene Transaktionen ab (großzügig wegen
+    # Server-Cursorn, die zwischen zwei Abrufen rechnen).
+    command:
+      - postgres
+      - -c
+      - tcp_keepalives_idle=60
+      - -c
+      - tcp_keepalives_interval=10
+      - -c
+      - tcp_keepalives_count=6
+      - -c
+      - client_connection_check_interval=10s
+      - -c
+      - idle_in_transaction_session_timeout=30min
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
@@ -135,16 +153,23 @@ services:
 
   # Rechnet die nachgeladenen bzw. importierten Läufe stündlich nach Silber und Features
   # (wx-process latest schaut nur 48 h zurück).
+  # GFS_PROCESS_RUNS gibt die Laufzeiten in Reihenfolge der Priorität an; Läufe ohne Silber
+  # werden übersprungen, die Liste darf also mehr enthalten als gfs-backfill lädt.
+  # --decompress entpackt die schon komprimierten Chunks von feat.nwp_value, solange Läufe
+  # hineinschreiben (ein COPY in komprimierte Chunks ist etwa dreimal langsamer).
   wx-process-backfill:
     <<: *app
     profiles: [backfill, history]
+    # Zeit, um einen laufenden Feature-COPY sauber abzuschließen, bevor Docker hart beendet
+    stop_grace_period: 120s
     command:
       - wx-process
       - gfs
       - backfill
       - ${GFS_HISTORY_START:-${GFS_BACKFILL_START:-2021-03-22T12}}
-      - --runs=${GFS_BACKFILL_RUNS:-0,12}
+      - --runs=${GFS_PROCESS_RUNS:-0,12,6,18}
       - --newest-first
+      - --decompress
       - --watch=3600
     depends_on:
       garage-init: {condition: service_completed_successfully}
@@ -200,7 +225,7 @@ services:
   ml-predict:
     <<: *app
     profiles: [ml]
-    command: ["ml-train", "predict", "--watch", "3600", "--catch-up", "24", "--fill-new", "72", "--also-config", "config/ml/de_lu_v2.yaml"]
+    command: ["ml-train", "predict", "--watch", "3600", "--catch-up", "24", "--fill-new", "216", "--also-config", "config/ml/de_lu_v2.yaml"]
     environment:
       <<: *app-env
       PDB_ML_REGISTRY: s3://ml-artifacts/models

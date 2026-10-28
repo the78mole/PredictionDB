@@ -128,7 +128,9 @@ ENERGY_SQL = text("""
     WHERE code = :code AND ts >= :a AND ts < :b
     GROUP BY 1 ORDER BY 1""")
 
-# *_power als Summe über die Cluster, sonst nach Clusterleistung (Gitter-Gewichte) gemittelt
+# *_power als Summe über die Cluster, sonst nach Clusterleistung (Gitter-Gewichte) gemittelt.
+# feat.nwp_value ist nach valid_time partitioniert: Die Grenzen auf valid_time (konstant,
+# aus run_time und max_lead) lassen TimescaleDB alle übrigen Chunks überspringen
 WEATHER_SQL = text("""
     WITH w AS (
       SELECT c.region_id, c.technology, sum(g.capacity_mw) AS cap
@@ -144,6 +146,7 @@ WEATHER_SQL = text("""
     JOIN meta.feature f USING (feature_id)
     JOIN meta.source s ON s.source_id = f.source_id AND s.code = :source
     WHERE n.run_time >= :a AND n.run_time < :b
+      AND n.valid_time >= :a AND n.valid_time < :valid_to
       AND extract(hour FROM n.run_time AT TIME ZONE 'UTC') = ANY(:hours)
       AND n.valid_time <= n.run_time + make_interval(hours => :max_lead)
     GROUP BY n.run_time, n.valid_time, w.technology, f.code""")
@@ -217,6 +220,7 @@ def export_snapshot(
                         "source": source,
                         "a": a,
                         "b": b,
+                        "valid_to": b + timedelta(hours=max_lead_h),
                         "hours": hours,
                         "max_lead": max_lead_h,
                     },

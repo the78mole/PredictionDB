@@ -9,20 +9,37 @@ idempotent sind.
 from __future__ import annotations
 
 import json
+import time
 from collections import defaultdict
 from collections.abc import Iterable
 from datetime import date, datetime
-from typing import Any, Literal, cast
+from typing import Any, Literal, NamedTuple, cast
 
 import numpy as np
 from numpy.typing import NDArray
 from psycopg import Connection as PgConnection
+from psycopg.errors import LockNotAvailable, UniqueViolation
 from sqlalchemy import Engine, text
+from sqlalchemy.exc import IntegrityError, OperationalError
 
+from predictiondb_core.log import get_logger
 from wx_process.features import ClusterWeights
+
+log = get_logger(__name__)
+
+#: Höchstens so lange auf die exklusive Sperre eines Chunks warten (Entpacken, Packen)
+CHUNK_LOCK_TIMEOUT = "5s"
+#: Ein gesperrter Chunk wird frühestens nach so vielen Sekunden erneut versucht
+BUSY_RETRY_S = 600.0
 
 SilverStatus = Literal["loading", "present"]
 SilverOrigin = Literal["bronze", "ghcr"]
+
+
+class Chunk(NamedTuple):
+    name: str
+    start: datetime
+    end: datetime
 
 
 def _idx(col: str, res_param: str = ":res") -> str:
@@ -54,6 +71,7 @@ class CapacityTable:
 class Store:
     def __init__(self, engine: Engine) -> None:
         self.engine = engine
+        self._busy: dict[str, float] = {}
 
     def source_id(self, code: str) -> int:
         with self.engine.connect() as c:
@@ -174,17 +192,49 @@ class Store:
         feature_ids: list[int],
         region_ids: list[int],
         rows: Iterable[tuple[int, int, datetime, float]],
+        *,
+        replace: bool = True,
     ) -> int:
-        """Ersetzt die Werte eines Laufs für diese Merkmale und Regionen."""
+        """Ersetzt die Werte eines Laufs für diese Merkmale und Regionen.
+
+        ``replace=False`` lässt das DELETE weg (Lauf hatte noch nie Features); das spart in
+        komprimierten Chunks einen Durchgang. Liegen doch Werte vor, wird ersetzt.
+        """
+        rows = list(rows)
+        if not replace:
+            try:
+                return self._write_values(run, valid_until, feature_ids, region_ids, rows, False)
+            except (IntegrityError, UniqueViolation):
+                log.warning("features.values_present", run=f"{run:%Y%m%d%H}")
+        return self._write_values(run, valid_until, feature_ids, region_ids, rows, True)
+
+    def _write_values(
+        self,
+        run: datetime,
+        valid_until: datetime,
+        feature_ids: list[int],
+        region_ids: list[int],
+        rows: list[tuple[int, int, datetime, float]],
+        replace: bool,
+    ) -> int:
         n = 0
         with self.engine.begin() as c:
+            # Nicht ewig auf Sperren warten (z. B. hinter einer verwaisten Sitzung): Der Lauf
+            # schlägt dann fehl und kommt im nächsten Durchgang wieder dran.
+            c.execute(text("SET LOCAL lock_timeout = '10min'"))
+            # Live- und Backfill-Dienst schreiben denselben Lauf nie gleichzeitig
             c.execute(
-                text("""
+                text("SELECT pg_advisory_xact_lock(hashtext('feat.nwp_value'), hashtext(:k))"),
+                {"k": run.isoformat()},
+            )
+            if replace:
+                c.execute(
+                    text("""
                 DELETE FROM feat.nwp_value
                 WHERE run_time = :r AND valid_time BETWEEN :r AND :u
                   AND feature_id = ANY(:f) AND region_id = ANY(:g)"""),
-                {"r": run, "u": valid_until, "f": feature_ids, "g": region_ids},
-            )
+                    {"r": run, "u": valid_until, "f": feature_ids, "g": region_ids},
+                )
             pg = cast(PgConnection[Any], c.connection.driver_connection)
             with pg.cursor().copy(
                 "COPY feat.nwp_value (feature_id, region_id, run_time, valid_time, value) "
@@ -195,7 +245,74 @@ class Store:
                     n += 1
         return n
 
+    # --- Kompression (Backfill in alte, schon komprimierte Chunks) ----------------------------
+
+    def decompress_values(self, start: datetime, end: datetime) -> list[Chunk]:
+        """Entpackt die komprimierten Chunks von ``feat.nwp_value``, die ``[start, end]`` berühren.
+
+        Ein COPY in einen komprimierten Chunk entpackt für die Prüfung des Primärschlüssels
+        jedes betroffene Segment und lässt den Chunk teilweise komprimiert zurück; ein
+        Backfill schreibt deshalb besser in entpackte Chunks und packt sie danach einmal.
+        """
+        with self.engine.connect() as c:
+            rows = c.execute(
+                text("""
+                SELECT format('%I.%I', chunk_schema, chunk_name), range_start, range_end
+                  FROM timescaledb_information.chunks
+                 WHERE hypertable_schema = 'feat' AND hypertable_name = 'nwp_value'
+                   AND is_compressed AND range_start <= :e AND range_end > :s
+                 ORDER BY range_start"""),
+                {"s": start, "e": end},
+            ).all()
+        chunks = [Chunk(str(r[0]), r[1], r[2]) for r in rows]
+        now = time.monotonic()
+        done = []
+        for ch in chunks:
+            if now - self._busy.get(ch.name, -BUSY_RETRY_S) < BUSY_RETRY_S:
+                continue  # eben noch gesperrt: in komprimierte Chunks schreiben (langsamer)
+            if self._chunk_op("decompress_chunk", ch):
+                done.append(ch)
+                log.info("chunk.decompressed", chunk=ch.name, start=f"{ch.start:%Y-%m-%d}")
+        return done
+
+    def compress_values(self, chunks: Iterable[Chunk]) -> None:
+        """Packt die Chunks wieder; gesperrte bleiben für die Kompressions-Policy liegen."""
+        for ch in chunks:
+            if self._chunk_op("compress_chunk", ch):
+                log.info("chunk.compressed", chunk=ch.name, start=f"{ch.start:%Y-%m-%d}")
+
+    def _chunk_op(self, fn: Literal["decompress_chunk", "compress_chunk"], ch: Chunk) -> bool:
+        """Entpacken und Packen brauchen eine exklusive Sperre auf den Chunk.
+
+        Wartet die Anweisung auf einen Leser (z. B. ``ml-train snapshot`` in einer langen
+        Transaktion), stellen sich alle weiteren Leser des Chunks hinter ihr an. Deshalb nur
+        kurz warten und bei Erfolglosigkeit den Chunk vorerst so lassen, wie er ist.
+        """
+        try:
+            with self.engine.begin() as c:
+                c.execute(text(f"SET LOCAL lock_timeout = '{CHUNK_LOCK_TIMEOUT}'"))
+                c.execute(text(f"SELECT {fn}(CAST(:n AS regclass), true)"), {"n": ch.name})
+        except OperationalError as exc:
+            if not isinstance(exc.orig, LockNotAvailable):
+                raise
+            self._busy[ch.name] = time.monotonic()
+            log.warning("chunk.locked", op=fn, chunk=ch.name, start=f"{ch.start:%Y-%m-%d}")
+            return False
+        return True
+
     # --- Zustand -----------------------------------------------------------------------------
+
+    def has_features(self, source_id: int, run: datetime) -> bool:
+        """Hatte der Lauf schon einmal Features (gleich welche Clusterung oder Version)?"""
+        with self.engine.connect() as c:
+            return bool(
+                c.execute(
+                    text("""
+                    SELECT EXISTS (SELECT 1 FROM meta.nwp_feature_run
+                    WHERE source_id = :s AND run_time = :r)"""),
+                    {"s": source_id, "r": run},
+                ).scalar_one()
+            )
 
     def processed(self, source_id: int, run: datetime, version: str, features_version: str) -> bool:
         with self.engine.connect() as c:

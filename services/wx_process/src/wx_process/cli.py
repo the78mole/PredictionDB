@@ -6,7 +6,7 @@ Beispiele::
     wx-process gfs latest --watch 600              # Dienst, alle 10 min
     wx-process gfs run 2026102012 --force          # einen Lauf neu rechnen (Silber und Gold)
     wx-process gfs backfill 2026-10-01T00 2026-10-07T18 --clustering v2026Q4
-    wx-process gfs backfill 2021-03-22T12 --runs 0,12 --newest-first --watch 3600
+    wx-process gfs backfill 2021-03-22T12 --runs 0,12 --newest-first --decompress --watch 3600
     wx-process gfs run 2026102012 --silver-only    # nur Silber, ohne Datenbank
 """
 
@@ -50,12 +50,17 @@ def build_parser() -> argparse.ArgumentParser:
         if name == "run":
             c.add_argument("run", type=parse_run)
         else:
-            add_backfill_args(c)
+            add_backfill_args(c, ordered=True)
             c.add_argument(
                 "--watch",
                 type=int,
                 metavar="SEK",
                 help="wiederholen im Abstand von SEK Sekunden (während wx-ingest nachlädt)",
+            )
+            c.add_argument(
+                "--decompress",
+                action="store_true",
+                help="komprimierte Ziel-Chunks vor dem Schreiben entpacken, danach wieder packen",
             )
         c.add_argument("--force", action="store_true", help="Silber und Features neu rechnen")
         c.add_argument("--clustering", help="Clusterversion (Standard: jüngste)")
@@ -95,6 +100,7 @@ def main(argv: list[str] | None = None) -> int:
                 clustering=args.clustering,
                 hours=args.runs,
                 newest_first=args.newest_first,
+                decompress=args.decompress,
             )
             if not args.watch:
                 break

@@ -138,7 +138,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=0,
         metavar="STUNDEN",
-        help="neue aktive Versionen rechnen die Ausgabezeitpunkte der übrigen Versionen der "
+        help="neue aktive Versionen rechnen die Ausgabezeitpunkte der Vergleichsgrafiken der "
         "letzten STUNDEN nach (Vergleich im Dashboard ab sofort)",
     )
 
@@ -383,13 +383,9 @@ def cmd_predict(cfg: ModelConfig, a: argparse.Namespace) -> int:
                     log.info("predict.done", issue=str(issue), versions=versions, rows=n)
                 last[line_cfg.name] = issue
         if a.fill_new and not a.issue and not a.dry_run:
-            # Nach dem regulären Lauf, damit die aktuelle Prognose nie wartet; Vergleich über
-            # alle Linien: dieselben Ausgabezeitpunkte wie die übrigen Versionen
-            peers = [v for vs in active.values() for v in vs]
+            # Nach dem regulären Lauf, damit die aktuelle Prognose nie wartet
             for line_cfg, reg in lines:
-                fill_new(
-                    engine, line_cfg, reg, active[line_cfg.name], peers, filled, now, a.fill_new
-                )
+                fill_new(engine, line_cfg, reg, active[line_cfg.name], filled, now, a.fill_new)
         if not found:
             log.error("predict.no_versions", registry=a.registry)
             return 1
@@ -405,18 +401,16 @@ def fill_new(
     cfg: ModelConfig,
     reg: Registry,
     versions: list[str],
-    peers: list[str],
     filled: set[str],
     now: pd.Timestamp,
     hours: int,
 ) -> None:
-    """Neue Versionen einer Linie rechnen die Ausgabezeitpunkte der Vergleichsgrafiken nach,
-    die die übrigen Versionen schon haben."""
+    """Neue Versionen einer Linie rechnen die Ausgabezeitpunkte der Vergleichsgrafiken nach
+    (08 UTC und 10 Uhr Ortszeit), die ihnen im Fenster fehlen."""
     from ml_train.predict import (
         by_issue,
-        compare_issue,
         live_snapshot,
-        missing_issues,
+        missing_compare_issues,
         needs_weather,
         predict_versions,
         write_predictions,
@@ -428,8 +422,7 @@ def fill_new(
     cur = now.floor("h")
     # Die laufende Stunde rechnet der reguläre Lauf
     since, until = cur - pd.Timedelta(hours=hours), cur - pd.Timedelta(hours=1)
-    missing = {v: missing_issues(engine, v, peers, since, until) for v in new}
-    plan = by_issue({v: [i for i in issues if compare_issue(i)] for v, issues in missing.items()})
+    plan = by_issue({v: missing_compare_issues(engine, v, since, until) for v in new})
     if plan:
         log.info("predict.fill_new", config=cfg.name, versions=new, issues=len(plan))
     for issue, vs in plan.items():
@@ -464,11 +457,12 @@ def _terminate(signum: int, _: object) -> None:
 
 def run_job(cfg: ModelConfig, sha: str, a: argparse.Namespace) -> int:
     """Snapshot, Backtest oder Training mit Fortschritt in ``meta.ml_job``."""
-    variants = {
-        "snapshot": [],
-        "backtest": a.variant or [v.name for v in cfg.variants],
-        "fit": [a.variant],
-    }[a.cmd]
+    # nur der Eintrag des laufenden Befehls: snapshot hat kein --variant
+    variants: list[str] = []
+    if a.cmd == "backtest":
+        variants = a.variant or [v.name for v in cfg.variants]
+    elif a.cmd == "fit":
+        variants = [a.variant]
     args = {k: v for k, v in vars(a).items() if k not in ("cmd", "verbose") and v is not None}
     job = open_job_log()
     job.start(a.cmd, cfg.name, variants, args)
