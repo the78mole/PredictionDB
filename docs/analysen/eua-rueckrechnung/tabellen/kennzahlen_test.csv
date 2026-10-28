@@ -1,0 +1,57 @@
+gruppe,modell,tage,mae,rmse,bias,mape_%,abdeckung_90_%,breite,aufteilung
+alle,fortschreibung,250,8.87,13.58,3.89,14.3,51.6,35.99,regime
+alle,struktur,250,8.93,12.79,-2.38,13.28,,,regime
+alle,struktur_korr,250,10.73,14.15,0.56,16.07,86.0,135.74,regime
+alle,regel,250,9.25,13.42,-1.98,13.93,,,regime
+alle,kalibriert,250,12.68,14.87,10.77,19.95,58.8,25.58,regime
+alle,verankert,250,10.28,15.02,7.6,16.61,72.8,34.09,regime
+alle,gemeinsam,213,14.01,16.56,13.12,21.84,,,regime
+alle,acer,213,12.79,14.62,11.95,19.85,,,regime
+kaum Braunkohle preissetzend,fortschreibung,35,14.91,17.52,6.49,22.97,14.29,34.99,regime
+kaum Braunkohle preissetzend,struktur,35,6.69,8.69,-2.5,9.73,,,regime
+kaum Braunkohle preissetzend,struktur_korr,35,8.05,8.96,4.34,12.14,100.0,150.54,regime
+kaum Braunkohle preissetzend,regel,35,14.19,17.0,5.97,21.95,,,regime
+kaum Braunkohle preissetzend,kalibriert,35,10.87,13.97,8.75,17.17,57.14,26.28,regime
+kaum Braunkohle preissetzend,verankert,35,13.61,17.67,9.28,21.42,45.71,32.53,regime
+kaum Braunkohle preissetzend,gemeinsam,35,13.91,18.0,13.57,22.02,,,regime
+kaum Braunkohle preissetzend,acer,35,14.26,16.78,14.26,22.19,,,regime
+normal,fortschreibung,125,10.35,15.8,6.45,17.41,52.8,36.06,regime
+normal,struktur,125,8.1,11.54,-0.74,12.36,,,regime
+normal,struktur_korr,125,10.85,14.26,2.59,16.48,84.0,142.49,regime
+normal,regel,125,6.79,10.38,-2.46,10.45,,,regime
+normal,kalibriert,125,14.4,16.46,13.96,23.41,49.6,25.95,regime
+normal,verankert,125,12.38,17.16,11.17,20.7,69.6,34.09,regime
+normal,gemeinsam,105,15.26,17.54,15.23,24.19,,,regime
+normal,acer,105,14.09,15.66,14.09,22.22,,,regime
+viele negative Preise,fortschreibung,90,4.47,6.82,-0.67,6.59,64.44,36.27,regime
+viele negative Preise,struktur,90,10.96,15.5,-4.62,15.94,,,regime
+viele negative Preise,struktur_korr,90,11.62,15.58,-3.72,17.03,83.33,120.62,regime
+viele negative Preise,regel,90,10.75,15.44,-4.4,15.63,,,regime
+viele negative Preise,kalibriert,90,10.98,12.73,7.13,16.24,72.22,24.81,regime
+viele negative Preise,verankert,90,6.08,9.82,1.99,9.06,87.78,34.71,regime
+viele negative Preise,gemeinsam,73,12.28,14.21,9.88,18.36,,,regime
+viele negative Preise,acer,73,10.23,11.67,7.77,15.31,,,regime
+alle,fortschreibung,250,8.87,13.58,3.89,14.3,51.6,35.99,jahr
+alle,struktur,250,8.93,12.79,-2.38,13.28,,,jahr
+alle,struktur_korr,250,10.73,14.15,0.56,16.07,86.0,135.74,jahr
+alle,regel,250,9.25,13.42,-1.98,13.93,,,jahr
+alle,kalibriert,250,12.68,14.87,10.77,19.95,58.8,25.58,jahr
+alle,verankert,250,10.28,15.02,7.6,16.61,72.8,34.09,jahr
+alle,gemeinsam,213,14.01,16.56,13.12,21.84,,,jahr
+alle,acer,213,12.79,14.62,11.95,19.85,,,jahr
+2024,fortschreibung,167,10.51,15.91,8.23,17.63,67.66,37.29,jahr
+2024,struktur,167,7.21,10.28,-3.08,11.08,,,jahr
+2024,struktur_korr,167,9.4,11.83,-2.41,14.41,100.0,182.12,jahr
+2024,regel,167,8.85,12.47,-1.35,13.74,,,jahr
+2024,kalibriert,167,15.15,16.66,15.15,24.33,51.5,26.85,jahr
+2024,verankert,167,11.2,16.72,10.51,18.84,67.66,36.15,jahr
+2024,gemeinsam,136,17.74,19.44,17.74,28.06,,,jahr
+2024,acer,136,14.89,16.42,14.89,23.66,,,jahr
+2025,fortschreibung,83,5.58,6.81,-4.85,7.58,19.28,33.37,jahr
+2025,struktur,83,12.39,16.74,-0.99,17.72,,,jahr
+2025,struktur_korr,83,13.41,17.94,6.54,19.41,57.83,42.43,jahr
+2025,regel,83,10.07,15.16,-3.25,14.3,,,jahr
+2025,kalibriert,83,7.7,10.35,1.97,11.14,73.49,23.03,jahr
+2025,verankert,83,8.43,10.81,1.75,12.12,83.13,29.95,jahr
+2025,gemeinsam,77,7.44,9.54,4.97,10.84,,,jahr
+2025,acer,77,9.09,10.71,6.76,13.12,,,jahr
