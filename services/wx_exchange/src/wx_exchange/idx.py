@@ -9,7 +9,8 @@ Silber gewählten. Abgelegt wird alles in einem OCI-Artefakt::
 Ein Layer je Monat und Laufzeit (``tar.gz`` mit den ``.idx``, Pfade wie im Archiv, z. B.
 ``2019/20190701/gfs.0p25.2019070100.f003.grib2.idx``). Die Annotationen eines Layers nennen
 Monat und Laufzeit und halten den Stand fest: fehlende Dateien im Archiv (``absent``, gelten als
-erledigt), fehlgeschlagene (``failed``, holt ein Folgelauf nach) und Zeilen, deren Name oder
+erledigt), im Archiv leere oder abgeschnittene (``broken``, ebenso erledigt), fehlgeschlagene
+(``failed``, holt ein Folgelauf nach) und Zeilen, deren Name oder
 Fläche nicht in den Tabellen steht (``unknown``). Wer nur einen Monat braucht, sucht den Layer
 im Manifest und lädt genau diesen Blob (``oras blob fetch …@sha256:…``).
 
@@ -50,7 +51,7 @@ from wx_exchange.artifact import ATTRIBUTION_GDEX, LICENSE, PREFIX, month_bounds
 from wx_exchange.oci import EMPTY, MANIFEST, Registry
 from wx_exchange.publish import months_between
 from wx_ingest.config import GfsConfig
-from wx_ingest.gfs import Endpoint, StepUnavailable
+from wx_ingest.gfs import BrokenFile, Endpoint, StepUnavailable
 
 log = get_logger(__name__)
 
@@ -92,6 +93,8 @@ class IdxLayer:
     #: Dateien als :func:`file_code`
     absent: list[str] = field(default_factory=list)
     failed: list[str] = field(default_factory=list)
+    #: im Archiv leer oder abgeschnitten; gilt wie ``absent`` als erledigt
+    broken: list[str] = field(default_factory=list)
     unknown: int = 0
     unknown_names: list[str] = field(default_factory=list)
     built: str = ""
@@ -118,6 +121,7 @@ class IdxLayer:
                 PREFIX + "complete": str(self.complete).lower(),
                 PREFIX + "absent": ",".join(self.absent),
                 PREFIX + "failed": ",".join(self.failed),
+                PREFIX + "broken": ",".join(self.broken),
                 PREFIX + "unknown": str(self.unknown),
                 PREFIX + "unknown_names": json.dumps(self.unknown_names, ensure_ascii=False),
                 PREFIX + "built": self.built,
@@ -140,6 +144,7 @@ class IdxLayer:
             files=int(a.get(PREFIX + "files", 0)),
             absent=items("absent"),
             failed=items("failed"),
+            broken=items("broken"),
             unknown=int(a.get(PREFIX + "unknown", 0)),
             unknown_names=json.loads(a.get(PREFIX + "unknown_names", "[]")),
             built=a.get(PREFIX + "built", ""),
@@ -241,14 +246,21 @@ async def _inventory(endpoints: list[Endpoint], run: datetime, step: int) -> str
     """``.idx``-Text der Datei; ``None``, wenn sie auf keinem Endpunkt liegt.
 
     Fehler auf einem Endpunkt führen zum nächsten; scheitern alle, folgt der letzte Fehler.
+    Meldet ein Endpunkt die Datei als defekt und liefert keiner sie heil, folgt
+    :class:`BrokenFile`, auch wenn andere nur vorübergehend scheiterten: Cache und Ursprung
+    halten dieselbe Datei, ein späterer Versuch ändert daran nichts.
     """
     unavailable = 0
     error: Exception | None = None
+    broken: BrokenFile | None = None
     for ep in endpoints:
         try:
             entries = await ep.complete_inventory(run, step)
         except StepUnavailable:
             unavailable += 1
+            continue
+        except BrokenFile as exc:
+            broken = exc
             continue
         except Exception as exc:
             log.warning(
@@ -263,6 +275,8 @@ async def _inventory(endpoints: list[Endpoint], run: datetime, step: int) -> str
         if not entries:
             raise ValueError("Datei ohne Nachrichten")
         return "".join(idx_line(e) + "\n" for e in entries)
+    if broken is not None:
+        raise broken
     if error is not None:
         raise error
     return None
@@ -298,6 +312,7 @@ class _Scan:
 
     files: dict[str, bytes] = field(default_factory=dict)
     absent: set[str] = field(default_factory=set)
+    broken: set[str] = field(default_factory=set)
     failed: list[_Item] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
 
@@ -326,6 +341,12 @@ async def _scan(
                 return
             try:
                 text = await _inventory(endpoints, run, step)
+            except BrokenFile as exc:
+                # Nicht wiederholen: leer oder abgeschnitten im Archiv selbst
+                log.warning("idx_broken", file=name, error=_describe(exc))
+                out.broken.add(file_code(run, step))
+                done += 1
+                return
             except Exception as exc:
                 log.warning("idx_failed", file=name, error=_describe(exc))
                 failed.append((run, step, name))
@@ -437,6 +458,7 @@ async def _scan_workers(
     for part in parts:
         out.files |= part.files
         out.absent |= part.absent
+        out.broken |= part.broken
         out.failed += part.failed
         out.skipped += part.skipped
     return out
@@ -461,7 +483,7 @@ async def build_layer(
     """Baut den Layer eines Monats und einer Laufzeit und lädt den Blob hoch.
 
     Ein vorhandener Layer wird übernommen; neu gelesen werden nur Dateien, die darin weder
-    als ``.idx`` noch als im Archiv fehlend stehen. Ab ``deadline`` (``time.monotonic()``)
+    als ``.idx`` noch als im Archiv fehlend oder defekt stehen. Ab ``deadline`` (``time.monotonic()``)
     beginnt keine neue Datei mehr; der Rest gilt als fehlgeschlagen und kommt beim nächsten
     Start dran. Fehlgeschlagene Dateien werden bis zu ``retries`` Mal nach einer wachsenden
     Pause (``retry_pause``, ``2 * retry_pause``, …) erneut versucht. Mit ``workers > 1``
@@ -471,15 +493,17 @@ async def build_layer(
     runs = _runs(config, month, hour, start, end)
     files: dict[str, bytes] = {}
     absent: set[str] = set()
+    broken: set[str] = set()
     old = None if rebuild else read_layers(registry).get(layer_key(month, hour))
     if old is not None:
         files = unpack(registry.blob(old.digest))
         absent = set(old.absent)
+        broken = set(old.broken)
     todo = [
         (run, step, file_name(config, run, step))
         for run in runs
         for step in config.step_list()
-        if file_name(config, run, step) not in files and file_code(run, step) not in absent
+        if file_name(config, run, step) not in files and file_code(run, step) not in absent | broken
     ]
     label = layer_key(month, hour)
     log.info(
@@ -503,12 +527,14 @@ async def build_layer(
         scanned = await _scan(endpoints, todo, **opts)
     files |= scanned.files
     absent |= scanned.absent
+    broken |= scanned.broken
     log.info(
         "idx_progress",
         layer=label,
         done=len(todo) - len(scanned.failed) - len(scanned.skipped),
         todo=len(todo),
         absent=len(absent),
+        broken=len(broken),
         failed=len(scanned.failed) + len(scanned.skipped),
     )
     unknown: Counter[str] = Counter()
@@ -525,6 +551,7 @@ async def build_layer(
         files=len(files),
         absent=sorted(absent),
         failed=sorted([file_code(r, st) for r, st, _ in scanned.failed] + scanned.skipped),
+        broken=sorted(broken),
         unknown=sum(unknown.values()),
         unknown_names=[k for k, _ in unknown.most_common(_MAX_LISTED)],
         built=datetime.now(UTC).isoformat(timespec="seconds"),
@@ -534,6 +561,7 @@ async def build_layer(
         layer=layer.key,
         files=layer.files,
         absent=len(layer.absent),
+        broken=len(layer.broken),
         failed=len(layer.failed),
         unknown=layer.unknown,
         size=layer.size,
@@ -588,5 +616,6 @@ def merge_manifest(registry: Registry, new: Iterable[IdxLayer], source: str) -> 
         "skipped": sorted(skipped),
         "failed_files": sum(len(x.failed) for x in layers.values()),
         "absent_files": sum(len(x.absent) for x in layers.values()),
+        "broken_files": sum(len(x.broken) for x in layers.values()),
         "unknown_lines": sum(x.unknown for x in layers.values()),
     }

@@ -118,7 +118,8 @@ ghcr.io/the78mole/predictiondb-data/gfs-0p25-gdex-idx:v1
 ```
 
 Die Annotationen eines Layers tragen den Stand: `complete`, `failed` (Dateien, die der nächste
-Start nachholt), `absent` (fehlen im Archiv) und `unknown` (Zeilen mit Namen, die nicht in der
+Start nachholt), `absent` (fehlen im Archiv), `broken` (im Archiv leer oder abgeschnitten, werden
+nicht wiederholt) und `unknown` (Zeilen mit Namen, die nicht in der
 NCEP-Tabelle stehen). Der Abschlussjob schreibt das Manifest auch, wenn einzelne Monatsjobs
 scheitern; ein erneuter Start nimmt nur Monate ohne vollständigen Layer und übernimmt dabei schon
 gebaute `.idx`. Ein Prozess schafft nur einen Kern; auf einer ausgelasteten Maschine teilt

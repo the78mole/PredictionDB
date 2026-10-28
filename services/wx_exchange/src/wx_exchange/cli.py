@@ -355,7 +355,8 @@ async def _idx_build(args: argparse.Namespace, config: GfsConfig, registry: Regi
             workers=args.workers,
         )
     args.out.write_text(json.dumps(asdict(layer), indent=1))
-    print(json.dumps(asdict(layer) | {"absent": len(layer.absent), "failed": len(layer.failed)}))
+    counts = {k: len(getattr(layer, k)) for k in ("absent", "broken", "failed")}
+    print(json.dumps(asdict(layer) | counts))
     # Fehlgeschlagene Dateien holt ein Folgelauf nach; der Layer zählt trotzdem
     return 0
 
