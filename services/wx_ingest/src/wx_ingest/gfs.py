@@ -90,6 +90,10 @@ class FetchError(Exception):
     """Der Schritt ist vorhanden, der Download ist aber fehlgeschlagen."""
 
 
+class BrokenFile(FetchError):
+    """Die Datei liegt im Archiv, ist dort aber leer oder abgeschnitten; Wiederholen hilft nicht."""
+
+
 class StaleIndex(FetchError):
     """Die Byte-Bereiche aus der ``.idx`` treffen keine GRIB-Nachrichten."""
 
@@ -293,6 +297,9 @@ class Endpoint:
         resp = await self.get(url, headers={"Range": f"bytes={start}-{end}"})
         if resp.status_code in (403, 404):
             raise StepUnavailable(url)
+        if resp.status_code == 416:
+            # Range jenseits des Dateiendes: im GDEX-Archiv liegen einzelne Dateien mit 0 Byte
+            raise BrokenFile(f"Range {start}-{end} auf {url}: HTTP 416, Datei leer oder kürzer")
         if resp.status_code != 206:
             raise FetchError(f"Range {start}-{end} auf {url}: HTTP {resp.status_code} statt 206")
         return resp
@@ -490,7 +497,8 @@ class Endpoint:
     async def complete_inventory(self, run: datetime, step: int) -> list[IdxEntry]:
         """Alle Nachrichten einer Datei mit Namen wie ``wgrib2 -s`` (für eine ``.idx``).
 
-        Passen die Abschnitte nicht aneinander, wird die ganze Datei geladen.
+        Passen die Abschnitte nicht aneinander, wird die ganze Datei geladen. Ist sie leer oder
+        abgeschnitten, folgt :class:`BrokenFile`.
         """
         url = self._scan_url(run, step)
         try:
@@ -763,10 +771,10 @@ def _message_bounds(data: bytes) -> list[tuple[int, int]]:
     pos, n = 0, len(data)
     while pos < n:
         if data[pos : pos + 4] != b"GRIB" or n - pos < 16:
-            raise FetchError(f"GRIB-Datei unbrauchbar: keine Nachricht an Byte {pos}")
+            raise BrokenFile(f"GRIB-Datei unbrauchbar: keine Nachricht an Byte {pos}")
         end = pos + int.from_bytes(data[pos + 8 : pos + 16], "big")
         if end > n or data[end - 4 : end] != b"7777":
-            raise FetchError(f"GRIB-Datei unbrauchbar: Nachricht an Byte {pos} unvollständig")
+            raise BrokenFile(f"GRIB-Datei unbrauchbar: Nachricht an Byte {pos} unvollständig")
         bounds.append((pos, end))
         pos = end
     return bounds

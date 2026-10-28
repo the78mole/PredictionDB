@@ -225,3 +225,23 @@ async def test_stale_idx_falls_back_to_headers() -> None:
         result = await ing.ingest_step(RUN, 3)
     assert result.status == "stored"
     assert not ing.endpoints[0]._idx
+
+
+async def test_broken_archive_files_are_not_retried() -> None:
+    """Leere (HTTP 416) und abgeschnittene Dateien gelten als ``broken``, nicht ``failed``."""
+    reg = registry(FakeRegistry())
+    host = FakeGfsHost("gdex.test", AVAILABLE, index=False)
+    empty, cut = ("/" + GDEX_PATH.format(run=RUN, step=s) for s in (3, 6))
+    host.files[empty] = b""
+    host.files[cut] = host.files[cut][:-100]
+    layer = await build(reg, host)
+    assert layer.complete and layer.files == 1 and not layer.failed
+    assert layer.broken == [idx.file_code(RUN, 3), idx.file_code(RUN, 6)]
+    summary = idx.merge_manifest(reg, [layer], SOURCE)
+    assert summary["broken_files"] == 2
+    assert idx.read_layers(reg)[layer.key].broken == layer.broken
+
+    # Folgelauf mit --rebuild nicht nötig: defekte Dateien werden nicht erneut gelesen
+    before = len(host.requests)
+    again = await build(reg, host)
+    assert len(host.requests) == before and again.broken == layer.broken
