@@ -44,8 +44,8 @@ nach ihrem Ende und mit mindestens 98 % der Stunden geschrieben. Ist Netztranspa
 freigegeben, entfällt die eigene Rechnung, und die amtlichen Werte haben Vorrang.
 
 Zugang zu den unfreien Quellen, falls freigegeben: Netztransparenz-Client im
-[API-Portal](https://api-portal.netztransparenz.de/) anlegen (Quelle der Wahrheit: OpenBao
-`it-infra`, `secret/netztransparenz`, Felder `api-client-id` und `api-client-token`).
+[API-Portal](https://api-portal.netztransparenz.de/) anlegen, Client-ID und -Secret als
+`PDB_NETZTRANSPARENZ_CLIENT_ID` und `PDB_NETZTRANSPARENZ_CLIENT_SECRET` in die `.env`.
 ENTSO-E-Token: Konto auf [transparency.entsoe.eu](https://transparency.entsoe.eu) anlegen, dann
 Mail an `transparency@entsoe.eu` mit Betreff „Restful API access“ und der Konto-Adresse.
 

@@ -88,7 +88,16 @@ uv run wx-process gfs latest --watch 600           # Dienst (Compose: wx-process
 uv run wx-process gfs run 2026102006 --force       # einen Lauf neu rechnen
 uv run wx-process gfs run 2026102006 --silver-only # nur Silber, ohne Datenbank
 uv run wx-process gfs backfill 2026-10-01T00 2026-10-07T18 --clustering v2026Q4
+uv run wx-process gfs backfill 2021-03-22T12 --runs 0,12,6,18 --newest-first --decompress \
+    --watch 3600                                   # Dienst wx-process-backfill
 ```
+
+Im Backfill gibt `--runs` die Laufzeiten in Reihenfolge der Priorität an (erst alle 00Z, dann
+12Z …); Läufe ohne Silber werden übersprungen. `--decompress` entpackt die schon komprimierten
+Chunks von `feat.nwp_value`, solange Läufe hineinschreiben, und packt sie danach wieder (ein
+`COPY` in komprimierte Chunks ist etwa dreimal langsamer). Auf die Sperre eines Chunks wird
+höchstens 5 s gewartet; ein gesperrter Chunk bleibt, wie er ist, und wird nach 10 min erneut
+versucht. Nach einem Abbruch packt die Kompressions-Policy die Chunks später.
 
 | Variable | Standard |
 |---|---|

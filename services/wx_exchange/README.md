@@ -3,8 +3,8 @@
 Silber-Austausch über die GitHub Container Registry (`docs/ARCHITEKTUR.md` 5.5). Die GFS-Historie
 entsteht im GitHub-Actions-Runner statt auf der VM: Ein Lauf überträgt aus dem AWS-Archiv rund
 3,3 GB (globale GRIB-Felder, der Ausschnitt ist davon 0,4 %), als Silber bleiben rund 13 MB. Über
-die gedrosselte Leitung der VM (8,3 MB/s) kostet ein Lauf mindestens 6–7 Minuten,
-im Runner voraussichtlich etwa eine Minute, und auf die VM kommen nur die 13 MB.
+eine Leitung mit 8 MB/s kostet ein Lauf mindestens 6–7 Minuten, im Runner etwa eine Minute, und
+auf die VM kommen nur die 13 MB.
 
 ```
 GitHub Actions (gfs-history.yml)                     VM

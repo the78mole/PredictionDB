@@ -167,12 +167,12 @@ Benutzername) sind geheim; Host, URL, Port, Alarmadresse sind normale Einstellun
 
 | Wert | Ablage | geeignet für |
 |---|---|---|
-| `env` (Vorgabe) | keine; UI zeigt nur den Status, Pflege weiter über `.env` | unsere VM, jede Instanz ohne eigenen Secret-Store |
+| `env` (Vorgabe) | keine; UI zeigt nur den Status, Pflege weiter über `.env` | jede Instanz, deren `.env` von außen gepflegt wird |
 | `openbao` | Backend schreibt per eigenem, auf einen Pfad begrenzten Token in OpenBao/Vault (KV v2); Dienste lesen beim Start von dort | Instanzen mit OpenBao bzw. Cloud-Secret-Store (ARCHITEKTUR 9) |
 | `db-verschlüsselt` | `ctl.secret`, verschlüsselt (AES-GCM) mit einem Schlüssel aus `PDB_CONTROL_SECRET_KEY`, der nie in der Datenbank steht | kleine Instanzen ohne Secret-Store |
 
-- Auf unserer VM bleibt es bei `env`: Die `.env` wird weiter aus OpenBao erzeugt
-  (`betrieb/env-aus-openbao.sh`), die UI ändert daran nichts.
+- Wird die `.env` aus einem Secret-Store erzeugt (ARCHITEKTUR 8.3), bleibt es bei `env`; die
+  UI ändert daran nichts.
 
 ## 7. Aufbau: Backend, SPA, Compose
 

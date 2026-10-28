@@ -33,8 +33,8 @@ Güte verbessert wird. Die Grundsatzentscheidungen stehen in
 | Horizont | ganze Liefertage D+1 bis D+7 in Ortszeit (je 23, 24 oder 25 Stunden) |
 | Ausgabezeitpunkt | täglich 08 UTC, also vor dem Gebotsschluss der Day-Ahead-Auktion (12 Uhr Ortszeit) |
 | Modelltyp | Gradient Boosting (LightGBM) mit Quantil-Verlust, zweistufig |
-| Varianten | `kalender` (ohne Wetter, Maßstab) und `wetter` (mit GFS-Features je Technologie) |
-| Konfiguration | [`config/ml/de_lu_v1.yaml`](../config/ml/de_lu_v1.yaml) |
+| Varianten | `de_lu_v1`: `kalender` (ohne Wetter, Maßstab) und `wetter` (mit GFS-Features je Technologie); `de_lu_v2`: zusätzlich freie Reihen als Merkmalsgruppen ([10.2](#102-de_lu_v2)) |
+| Konfiguration | [`config/ml/de_lu_v1.yaml`](../config/ml/de_lu_v1.yaml), [`config/ml/de_lu_v2.yaml`](../config/ml/de_lu_v2.yaml) |
 | Ergebnis (D+1, 2024 bis 10/2026, ohne Wetter) | Last MAE 1,73 GW (ENTSO-E-Prognose 1,98 GW), Preis MAE 26,3 €/MWh (Vortagespreis 26,1 €/MWh) |
 
 Gradient Boosting ist bewusst das erste Modell: Es trainiert in Minuten auf einer CPU, ist
@@ -84,7 +84,7 @@ Die Bausteine:
 
 | Kennwert | `de_lu_v1` |
 |---|---|
-| Bibliothek | LightGBM 4 (Python-Paket `lightgbm`), Python 3.12, Abhängigkeiten über uv |
+| Bibliothek | LightGBM 4 (Python-Paket `lightgbm`), Python ab 3.12 (Image: 3.14), Abhängigkeiten über uv |
 | Modelle je Version | 15 Booster: 5 Zielgrößen × 3 Quantile (Stufe 1: 4 × 3, Stufe 2: 1 × 3) |
 | Zusätzlich im Training | 12 Hilfs-Booster (4 Stufe-1-Ziele × 3 Blöcke, nur P50) für die Out-of-Fold-Eingänge der Stufe 2; werden nicht gespeichert |
 | Bäume je Booster | 400 (`n_estimators`), ohne Early Stopping |
@@ -122,7 +122,10 @@ bei langem Vorlauf noch geben kann.
 | `capacity` | `cap_<technologie>`, `cap_pv` | installierte Leistung je Technologie in DE aus dem MaStR (Clusterversion des Snapshots), am Liefertag |
 | `lags` | `lag_<reihe>_day`, `_week`, `_mean_day`, `_mean_7d`, `_last` | für alle Zielgrößen und die Residuallast: gleiche Stunde am letzten vollständig bekannten Tag, gleiche Stunde in der jüngsten bekannten Vorwoche, Tagesmittel des letzten vollständigen Tags, 7-Tage-Mittel, letzter bekannter Stundenwert |
 | `weather` | `wx_<technologie>_<feature>`, `wx_interp`, `wx_lead_h` | GFS-Features je Technologie, über die MaStR-Cluster zusammengefasst (siehe unten), Kennzeichen für interpolierte Stunden, Vorlauf des Wetterlaufs |
+| `nwp_version` | `wx_gfs_v` | GFS-Hauptversion des genutzten Wetterlaufs (13 bis 16). Läufe vor dem 22.03.2021 12Z stammen aus NCAR GDEX; der 10-m-Wind hat beim Wechsel auf v16 einen Bias-Sprung ([analysen/gfs-v15-v16](analysen/gfs-v15-v16/README.md)). Nur nötig, wenn das Training Läufe mehrerer Versionen enthält; derzeit in keiner Variante |
 | `stage1` | `s1_load_actual`, `s1_gen_*`, `s1_residual_load` | nur Stufe 2: P50 der Stufe 1 und daraus Residuallast = Last − Wind an Land − Wind auf See − PV |
+
+Dazu kommen ab `de_lu_v2` Reihengruppen aus der Konfiguration (`series_groups`, [10.2](#102-de_lu_v2)).
 
 **Lags über die Zeitumstellung.** `_day` und `_week` greifen standardmäßig k·24 h zurück. Für
 Reihen in `lag_local_time` (in `de_lu_v1`/`v2`: die Last) nehmen sie stattdessen dieselbe
@@ -168,6 +171,12 @@ PV die Last decken, desto teurere Kraftwerke setzen den Preis.
 Der Preis wird **relativ zum Tagesmittel des letzten bekannten Liefertags** gelernt
 (`center: lag_da_price_de_lu_mean_day`). Das Modell lernt also Abweichungen vom aktuellen
 Preisniveau, nicht absolute Preise.
+
+Varianten mit `scale` teilen diese Abweichung zusätzlich durch eine Niveauspalte, in `de_lu_v2`
+durch den Grenzkostenindex `gk_niveau` (`scale: {da_price_de_lu: gk_niveau}`). Gelernt wird dann
+`(Preis − Tagesmittel) / gk_niveau`, die Prognose wird mit dem Niveau zum Ausgabezeitpunkt
+zurückgerechnet. So skalieren die Ausschläge mit dem Brennstoff- und CO₂-Niveau, auch über das
+Niveau der Trainingszeit hinaus, das Bäume sonst nicht erreichen.
 
 **Out-of-Fold-Eingänge.** Würde Stufe 2 im Training mit Stufe-1-Prognosen lernen, die auf
 denselben Zeilen trainiert wurden, wären diese Eingänge zu gut, und Stufe 2 würde ihnen im
@@ -223,7 +232,9 @@ mit dem Wissensstand von `issue_time` gebildet:
 | Day-Ahead-Preis eines Liefertags | 13 Uhr Ortszeit am Vortag | `issue.price_known_local_hour` |
 | GFS-Lauf | `run_time` + 6 h (vollständig verarbeitet) | `issue.nwp_delay_h` |
 | installierte Leistung | Stand des MaStR-Snapshots, auf Tage zurückgerechnet | – |
-| Prognosen Dritter | nur Vergleich, kein Merkmal (v1) | – |
+| Prognosen Dritter | v1 nur Vergleich; v2 Lastprognose der ÜNB ab 10 Uhr am Vortag | `series_groups.*.known_local_hour` |
+| Monats- und Wochenwerte (Brennstoffe, Marktwerte, STEO) | Zeitpunkt `published` der Reihe | Modi `asof`, `outlook` |
+| Grenzkostenindex | nur Stunden, deren Preis und Residuallast zum Ausgabezeitpunkt bekannt sind | Modus `grenzkosten` |
 
 Bei Ausgabe um 08 UTC heißt das: Wetter kommt aus dem 00Z-Lauf desselben Tags, der Preis ist
 bis einschließlich des laufenden Liefertags D bekannt, Last und Erzeugung bis etwa 05 UTC.
@@ -439,6 +450,15 @@ Eingerichtet wird das erst, wenn mindestens drei Jahre GFS-Trainingsdaten vorlie
   `fcst.prediction_error` stellt jede gespeicherte P50-Prognose dem Ist-Wert gegenüber; daraus
   zeigt das Dashboard „Prognose und Energiedaten“ den Prognosefehler im Betrieb.
 
+- **Fortschritt laufender Jobs:** `snapshot`, `backtest` und `fit` tragen sich beim Start in
+  `meta.ml_job` ein und melden jeden Schritt (je Faltung und Variante bzw. je Stufe und Ziel)
+  mit Zählerstand und einem Lebenszeichen je Minute. Das Panel „Laufende Trainings und
+  Backtests“ zeigt laufende und in den letzten 24 Stunden beendete Jobs mit Fortschritt und
+  geschätztem Ende. Ohne Datenbank (Laptop, Miet-GPU) läuft alles ohne Protokoll.
+- **Backtest nachreichen:** `ml-train registry attach-backtest <version> --backtest <ordner>`
+  hängt die Prognosen eines Backtests derselben Konfiguration und Variante an eine schon
+  registrierte Version; der nächste Abgleich füllt `meta.model_metric`.
+
 - **Prognosepaket für den schlanken Stack:** `ml-train bundle <version> --out <ordner>` legt
   eine Version mit Konfiguration, Bestand aus dem MaStR und bei Wetter-Varianten den
   Gitter-Gewichten der Cluster als Ordner ab (ohne Backtest-Prognosen). Der Stack
@@ -489,8 +509,9 @@ Eingerichtet wird das erst, wenn mindestens drei Jahre GFS-Trainingsdaten vorlie
 | Vorhaben | Ziel |
 |---|---|
 | **Kalibrierung der Quantile** (konformale Korrektur je Vorlauf auf dem letzten Trainingsjahr) | Das Band P10–P90 enthält heute 62–65 % statt 80 % der Ist-Werte |
-| **Wetter-Variante bewerten**, sobald die GFS-Historie ab 2021 als Gold-Features in `feat.nwp_value` liegt (Stand 24.10.2026: erst ab 06.01.2026) | Wind und PV sind ohne Wetter nur Klimatologie (Wind an Land MAE 7,4 GW gegen 1,2 GW bei den ÜNB) |
-| **`de_lu_v2/frei` als Challenger** auf der VM registrieren | Preis −5 %, Last −4 % MAE im Backtest, siehe [`de_lu_v2`](#102-de_lu_v2) |
+| **Wetter-Variante bewerten**, sobald die GFS-Historie als Gold-Features in `feat.nwp_value` liegt (Silber ab 2021 aus dem AWS-Archiv, davor aus NCAR GDEX, beides als Import aus GHCR, ARCHITEKTUR.md 5.5) | Wind und PV sind ohne Wetter nur Klimatologie (Wind an Land MAE 7,4 GW gegen 1,2 GW bei den ÜNB) |
+| **`de_lu_v2/frei` als Challenger** registrieren | Preis −5 %, Last −4 % MAE im Backtest, siehe [`de_lu_v2`](#102-de_lu_v2) |
+| **Grenzkostenindex und STEO bewerten** (Varianten `frei_gk`, `frei_gk_skaliert`, `steo`, `frei_steo`) | Preisniveau bei Brennstoff- und CO₂-Sprüngen, die die Lags erst Tage später zeigen |
 | **Lastniveau über Wochen** (28-Tage-Mittel von Last und Residuallast) | In v2 verbessern Preisniveau und Brennstoffe die Last 2026 um bis zu 10 %, ein Hinweis auf ein fehlendes Lastniveau |
 | **Schulferien, bevölkerungsgewichtete Temperatur** | Last in Ferien und bei Hitze/Kälte |
 | **Trend im PV-Kapazitätsfaktor** | PV liegt im Mittel 1 GW zu hoch (Eigenverbrauch, Abregelung wachsen mit dem Bestand) |
@@ -540,6 +561,8 @@ fest, wann ein Wert als bekannt gilt:
 | `lags` | wie die Lags der Ziele (`lag_<reihe>_day`, `_mean_day`, `_mean_7d` …) | Day-Ahead-Preise (`da_price_*`) wie der Preis DE-LU, alle anderen wie Ist-Werte |
 | `forecast` | Prognose Dritter für die Zielstunde selbst (`fc_<reihe>`) | `known_local_hour` am Vortag des Liefertags, sonst leer |
 | `asof` | letzter veröffentlichter Wert (`asof_<reihe>`) und Änderung über `change_days` (`_chg`) | Zeitpunkt `published` der Reihe |
+| `outlook` | erwartete Änderung aus der jüngsten Ausgabe einer Monatsprognose: `ol_<stamm>_h<k>` = log(Prognose Vorlauf k / Prognose laufender Monat) für jedes k in `horizons` | wenn alle Werte der Ausgabe veröffentlicht sind |
+| `grenzkosten` | Median des Preises über die letzten `windows` Tage in Stunden hoher Residuallast (`gk_hoch_<w>d`, oberes Quartil, Gas oder Steinkohle preissetzend) und in Braunkohle-Stunden (`gk_braunkohle_<w>d`, folgt dem CO₂-Preis); dazu `gk_niveau` (kürzestes Fenster mit Wert, mindestens `floor`) und `gk_vortag_rel` (letztes Tagesmittel relativ dazu) | Stunden, deren Preis und Residuallast bekannt sind |
 
 | Gruppe | Modus | Reihen |
 |---|---|---|
@@ -547,13 +570,26 @@ fest, wann ein Wert als bekannt gilt:
 | `lastprognose` | `forecast` | Day-Ahead-Lastprognose der ÜNB, ab 10 Uhr am Vortag |
 | `brennstoffe` | `asof` | Wechselkurs USD/EUR, Diesel und Heizöl, Erdgas EU, LNG Japan, Henry Hub, Kohle, Brent |
 | `marktwerte` | `asof` | Monats- und Jahresmarktwerte nach EEG (Base, Wind an Land, Wind auf See, Solar), selbst aus SMARD berechnet |
+| `steo` | `outlook` | erwartete Änderung von Brent und Henry Hub 1 bis 3 Monate voraus aus dem jüngsten EIA Short-Term Energy Outlook (Quelle `eia_steo`, gemeinfrei) |
+| `grenzkosten` | `grenzkosten` | Grenzkostenindex aus SMARD (Preis, Residuallast, Erzeugung Braunkohle, Steinkohle, Gas) über 14, 28 und 56 Tage: tägliches, freies Ersatzmaß für Gas- und CO₂-Preis ([analysen/eua-rueckrechnung](analysen/eua-rueckrechnung/README.md), [analysen/preisabweichung-2026-10-29](analysen/preisabweichung-2026-10-29/README.md)) |
 
 Damit wird die Lastprognose der ÜNB erstmals Merkmal, allerdings nur für D+1 und nur, wenn sie
 zum Ausgabezeitpunkt veröffentlicht war. Als Gegenprobe gibt es die Gruppe `preisniveau` (Modus
-`lags`, 28-Tage-Mittel des eigenen Preises DE-LU, keine neue Quelle). Varianten: `kalender` (wie
-v1), je eine Gruppe dazu (`nachbarn`, `lastprognose`, `brennstoffe`, `marktwerte`,
-`preisniveau`), alle vier neuen Gruppen (`frei`), alle mit Preisniveau (`frei_niveau`) sowie
-`wetter` und `wetter_frei`.
+`lags`, 28-Tage-Mittel des eigenen Preises DE-LU, keine neue Quelle). Varianten:
+
+| Variante | Gruppen über `kalender` hinaus |
+|---|---|
+| `kalender` | keine (wie v1) |
+| `nachbarn`, `lastprognose`, `brennstoffe`, `marktwerte`, `preisniveau` | je eine Gruppe (Ablation) |
+| `frei` | `nachbarn`, `lastprognose`, `brennstoffe`, `marktwerte` |
+| `frei_niveau` | wie `frei`, dazu `preisniveau` |
+| `steo` | `preisniveau`, `steo` |
+| `frei_steo` | wie `frei_niveau`, dazu `steo` |
+| `frei_gk` | wie `frei`, dazu `grenzkosten` |
+| `frei_gk_skaliert` | wie `frei_gk`, Preis zusätzlich relativ zu `gk_niveau` gelernt ([4.4](#44-stufe-2-preis)) |
+| `wetter` | `weather` (ab 23.03.2021, nur mit Wetterlauf) |
+| `wetter_frei` | `weather` und die Gruppen von `frei` |
+| `wetter_frei_gk_skaliert` | `weather` und die Gruppen von `frei_gk`, skaliert wie `frei_gk_skaliert` |
 
 Ergebnisse der Ablation (Backtest 01/2025 bis 10/2026, alle Varianten auf denselben Stunden,
 Analyse in [`docs/analysen/prognose-de-lu-v2/`](analysen/prognose-de-lu-v2/README.md)):
@@ -576,7 +612,8 @@ Analyse in [`docs/analysen/prognose-de-lu-v2/`](analysen/prognose-de-lu-v2/READM
 - Wetter ist noch nicht bewertbar, weil `feat.nwp_value` erst ab 06.01.2026 Werte hat.
 
 Empfehlung: `frei` als Challenger neben `de_lu_v1/kalender`. Die Champion/Challenger-Regel
-entscheidet dann im Betrieb.
+entscheidet dann im Betrieb. Die Varianten mit `steo` und `grenzkosten` sind neuer als diese
+Ablation; ihre Ergebnisse stehen noch aus.
 
 ## 11. Bekannte Grenzen
 
@@ -610,8 +647,8 @@ entscheidet dann im Betrieb.
 | `lag_series` | weitere Reihen mit Lags (z. B. `residual_load`) |
 | `lag_local_time` | Reihen, deren Lags `_day`/`_week` dieselbe Ortsuhrzeit statt k·24 h nehmen (z. B. `load_actual`) |
 | `weather_features` | Auswahl der Wetter-Features, leer = alle |
-| `series_groups` | ab `de_lu_v2`: Reihengruppen mit `mode`, `codes`, `lags`, `known_local_hour`, `change_days` |
-| `variants[]` | `name`, `groups`, `requires_weather`, `train_from` |
+| `series_groups` | ab `de_lu_v2`: Reihengruppen mit `mode` (`lags`, `forecast`, `asof`, `outlook`, `grenzkosten`), `codes`, `lags` (`day`, `week`, `mean_day`, `mean_7d`, `mean_28d`, `last`), `known_local_hour`, `change_days`, `horizons` (`outlook`), `windows`, `floor`, `residual`, `lignite`, `hard_coal`, `gas` (`grenzkosten`) |
+| `variants[]` | `name`, `groups`, `requires_weather`, `train_from`, `scale` (Ziel-Code → Niveauspalte, durch die die Abweichung geteilt wird) |
 | `lgbm` | `num_leaves`, `learning_rate`, `n_estimators`, `min_child_samples`, `subsample`, `subsample_freq`, `colsample_bytree`, `reg_lambda`, `n_jobs` (0 = alle Kerne) |
 | `backtest` | `test_from`, `test_to`, `fold_months`, `gap_days`, `oof_folds`, `train_issue_stride` |
 | `promotion` | `min_gain`, `max_group_loss`, `min_group_n` |
