@@ -24,7 +24,7 @@ import pandas as pd
 from sqlalchemy import Engine, text
 
 from ml_train.config import ModelConfig, Variant
-from ml_train.dataset import FeatureBuilder, FeatureFrame
+from ml_train.dataset import UTIL_DAYS, FeatureBuilder, FeatureFrame
 from ml_train.models import TwoStageModel
 from ml_train.registry import Registry
 from ml_train.snapshot import Snapshot, export_snapshot
@@ -49,6 +49,8 @@ def lookback_days(cfg: ModelConfig, variant: Variant) -> int:
             back = max(back, ASOF_BACK_DAYS + g.change_days)
         if g is not None and g.mode == "outlook":
             back = max(back, OUTLOOK_BACK_DAYS)
+        if g is not None and g.mode == "grenzkosten":
+            back = max(back, max(g.windows) + UTIL_DAYS + 3)
     return back
 
 

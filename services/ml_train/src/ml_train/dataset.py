@@ -14,6 +14,8 @@ Leakage-Schutz (ARCHITEKTUR.md 7.4):
   Merkmal, und nur für Liefertage, deren Prognose zum Ausgabezeitpunkt veröffentlicht war.
 - Tages-, Wochen- und Monatswerte (Brennstoffpreise, Marktwerte) gelten ab ihrer Spalte
   ``published`` im Snapshot als bekannt.
+- Der Grenzkostenindex (``grenzkosten``) nutzt nur Stunden, in denen Preis und Erzeugung
+  zum Ausgabezeitpunkt beide bekannt sind.
 
 Wetter liegt im Snapshot in nativen Schritten (GFS v16 stündlich bis 120 h, danach
 dreistündlich). Erst hier wird auf Stunden interpoliert (Vorgabe: Interpolation beim Lesen):
@@ -46,6 +48,15 @@ PRICE_PREFIX = "da_price_"
 LAG_KINDS = ("day", "week", "mean_day", "mean_7d", "last")
 #: Erster Lauf je GFS-Hauptversion (Merkmalsgruppe ``nwp_version``, Wind-Bias je Version,
 #: docs/analysen/gfs-v15-v16); ältere Läufe stammen aus NCAR GDEX d084001
+#: Grenzkostenindex: Auslastung je Energieträger relativ zum 5-/95-%-Quantil der letzten 30
+#: Tage; Braunkohle preissetzend = Braunkohle in Teillast, Steinkohle und Gas fast aus
+UTIL_DAYS = 30
+UTIL_Q = (0.05, 0.95)
+LIGNITE_PART = (0.2, 0.8)
+OTHERS_LOW = 0.2
+#: Residuallast "hoch" = oberes Quartil des Fensters; Mindestzahl Stunden je Klasse
+HIGH_Q = 0.75
+MIN_HOURS = 6
 GFS_VERSIONS = (
     (pd.Timestamp("2021-03-22 12:00", tz="UTC"), 16),
     (pd.Timestamp("2019-06-12 12:00", tz="UTC"), 15),
@@ -176,6 +187,7 @@ class FeatureBuilder:
         self.local_day = pd.DatetimeIndex(local.normalize().tz_localize(None))
         self.daily_mean = self.energy.groupby(self.local_day).mean()
         self._hours: dict[date, pd.DatetimeIndex] = {}
+        self._gk_hours: dict[str, pd.DataFrame] = {}
 
     # --- Wissen zum Ausgabezeitpunkt ---------------------------------------------------------
 
@@ -369,6 +381,8 @@ class FeatureBuilder:
             return self._forecast(sg, meta)
         if sg.mode == "outlook":
             return self._outlook(sg, meta)
+        if sg.mode == "grenzkosten":
+            return self._grenzkosten(sg, meta)
         return self._asof(sg, meta)
 
     def _forecast(self, sg: SeriesGroup, meta: pd.DataFrame) -> pd.DataFrame:
@@ -448,6 +462,87 @@ class FeatureBuilder:
                     v = np.log(cur[k].to_numpy(np.float64) / cur[0].to_numpy(np.float64))
                 out[f"ol_{stem}_h{k}"] = pd.Series(v, index=cur.index).reindex(issues).to_numpy()
         return pd.DataFrame(out, index=meta.index).astype(np.float32)
+
+    def _gk_classes(self, sg: SeriesGroup) -> pd.DataFrame:
+        """Stündlich: Preis, Residuallast und ob Braunkohle preissetzend ist."""
+        key = f"{sg.codes[0]}|{sg.residual}|{sg.lignite}|{sg.hard_coal}|{sg.gas}"
+        cached = self._gk_hours.get(key)
+        if cached is not None:
+            return cached
+        e = self.energy
+        need = [sg.codes[0], sg.residual]
+        if any(c not in e.columns for c in need):
+            out = pd.DataFrame(columns=["price", "residual", "lignite"])
+        else:
+            idx = pd.date_range(e.index.min(), e.index.max(), freq="h")
+            win = UTIL_DAYS * 24
+
+            def util(code: str) -> pd.Series:
+                if code not in e.columns:
+                    return pd.Series(np.nan, index=idx)
+                g = e[code].reindex(idx)
+                lo = g.rolling(win, min_periods=win // 3).quantile(UTIL_Q[0])
+                hi = g.rolling(win, min_periods=win // 3).quantile(UTIL_Q[1])
+                return ((g - lo) / (hi - lo).where(hi - lo > 0)).clip(0, 1)
+
+            price = e[sg.codes[0]].reindex(idx)
+            lig, coal, gas = util(sg.lignite), util(sg.hard_coal), util(sg.gas)
+            marginal = (
+                lig.between(*LIGNITE_PART) & (coal < OTHERS_LOW) & (gas < OTHERS_LOW) & (price > 0)
+            )
+            out = pd.DataFrame(
+                {"price": price, "residual": e[sg.residual].reindex(idx), "lignite": marginal}
+            )
+        self._gk_hours[key] = out
+        return out
+
+    def _grenzkosten(self, sg: SeriesGroup, meta: pd.DataFrame) -> pd.DataFrame:
+        """Preisniveau in Stunden hoher Residuallast und in Braunkohle-Stunden je Fenster."""
+        cls = self._gk_classes(sg)
+        issues = pd.DatetimeIndex(meta["issue_time"])
+        uniq = issues.unique()
+        windows = sorted(set(sg.windows))
+        names = [f"gk_{k}_{w}d" for w in windows for k in ("hoch", "braunkohle")]
+        rows: dict[pd.Timestamp, list[float]] = {}
+        if len(cls):
+            t = cls.index
+            price = cls["price"].to_numpy(np.float64)
+            resid = cls["residual"].to_numpy(np.float64)
+            lig = cls["lignite"].to_numpy(bool)
+            for i in uniq:
+                end = min(self._known_until(sg.codes[0], i), self._known_until(sg.residual, i))
+                hi = int(t.searchsorted(end))
+                vals: list[float] = []
+                for w in windows:
+                    lo = int(t.searchsorted(end - pd.Timedelta(days=w)))
+                    p, r, m = price[lo:hi], resid[lo:hi], lig[lo:hi]
+                    ok = np.isfinite(p) & np.isfinite(r)
+                    high = ok & (r >= np.quantile(r[ok], HIGH_Q)) if ok.sum() else ok
+                    brk = ok & m
+                    vals.append(float(np.median(p[high])) if high.sum() >= MIN_HOURS else np.nan)
+                    vals.append(float(np.median(p[brk])) if brk.sum() >= MIN_HOURS else np.nan)
+                rows[i] = vals
+        tab = pd.DataFrame.from_dict(rows, orient="index", columns=names)
+        tab = tab.reindex(uniq)
+        # Bezugsniveau: kürzestes Fenster mit Wert, nach unten begrenzt (Ziel wird dadurch geteilt)
+        niveau = pd.Series(np.nan, index=tab.index)
+        for w in windows:
+            niveau = niveau.fillna(tab[f"gk_hoch_{w}d"])
+        tab["gk_niveau"] = niveau.clip(lower=sg.floor)
+        # letztes vollständig bekanntes Tagesmittel des Preises relativ zum Niveau
+        if sg.codes[0] in self.daily_mean.columns:
+            dm = self.daily_mean[sg.codes[0]]
+            full = []
+            for i in tab.index:
+                known = self._known_until(sg.codes[0], i).tz_convert(BERLIN)
+                d = (known - H).date()
+                full.append(pd.Timestamp(d if known.hour == 0 else d - timedelta(days=1)))
+            tab["gk_vortag_rel"] = (
+                dm.reindex(pd.DatetimeIndex(full)).to_numpy() / tab["gk_niveau"].to_numpy()
+            )
+        out = tab.reindex(issues)
+        out.index = meta.index
+        return out.astype(np.float32)
 
     def _weather_runs(self, meta: pd.DataFrame) -> pd.Series:
         """Wetterlauf je Zeile: der jüngste, der zum Ausgabezeitpunkt verarbeitet vorlag."""

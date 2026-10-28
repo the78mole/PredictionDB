@@ -63,13 +63,21 @@ class SeriesGroup(BaseModel):
     - ``asof``: letzter zum Ausgabezeitpunkt veröffentlichter Wert (Spalte ``published`` im
       Snapshot) und seine Änderung gegenüber dem Stand ``change_days`` Tage davor; für Tages-,
       Wochen- und Monatswerte wie Brennstoffpreise und Marktwerte.
+    - ``grenzkosten``: implizites Brennstoff- und CO2-Niveau aus dem Strommarkt selbst. Je
+      Ausgabezeitpunkt der Median des Preises (``codes[0]``) über die zuletzt bekannten
+      ``windows`` Tage, einmal in den Stunden hoher Residuallast (oberes Quartil des Fensters,
+      Gas oder Steinkohle preissetzend) und einmal in den Stunden, in denen Braunkohle in
+      Teillast läuft und Steinkohle und Gas fast stehen (Braunkohle preissetzend, folgt dem
+      CO2-Preis; docs/analysen/eua-rueckrechnung). Dazu ``gk_niveau`` (kürzestes Fenster mit
+      Wert, mindestens ``floor``) als Bezugsgröße für ``Variant.scale`` und das letzte
+      Tagesmittel des Preises relativ dazu.
     - ``outlook``: erwartete Änderung aus der jüngsten veröffentlichten Ausgabe einer
       Monatsprognose (EIA STEO). ``codes`` sind die Stämme (``steo_brent``), gespeichert je
       Vorlauf k als ``<stamm>_h<kk>``; Merkmal ``ol_<stamm>_h<k>`` = log(Prognose Vorlauf k /
       Prognose laufender Monat) für jedes k in ``horizons``.
     """
 
-    mode: Literal["lags", "forecast", "asof", "outlook"]
+    mode: Literal["lags", "forecast", "asof", "outlook", "grenzkosten"]
     codes: list[str]
     lags: list[LagKind] = Field(
         default_factory=lambda: list[LagKind](["day", "mean_day", "mean_7d"])
@@ -77,10 +85,20 @@ class SeriesGroup(BaseModel):
     known_local_hour: int = Field(default=10, ge=0, le=23)
     change_days: int = Field(default=28, ge=1)
     horizons: list[int] = Field(default_factory=lambda: [1, 2, 3])
+    #: ``grenzkosten``: Fenster in Tagen, Mindestniveau (EUR/MWh) und die Reihen der Klassen
+    windows: list[int] = Field(default_factory=lambda: [14, 28, 56])
+    floor: float = Field(default=20.0, gt=0)
+    residual: str = "residual_load"
+    lignite: str = "gen_lignite"
+    hard_coal: str = "gen_hard_coal"
+    gas: str = "gen_gas"
 
     @property
     def stored_codes(self) -> list[str]:
         """Reihen in ``energy.value_best``, die die Gruppe braucht."""
+        if self.mode == "grenzkosten":
+            extra = [self.residual, self.lignite, self.hard_coal, self.gas]
+            return list(dict.fromkeys([*self.codes, *extra]))
         if self.mode != "outlook":
             return list(self.codes)
         ks = sorted({0, *self.horizons})
@@ -108,6 +126,9 @@ class Variant(BaseModel):
     requires_weather: bool = False
     #: Frühester Ausgabetag fürs Training (z. B. Beginn GFS v16 oder der Gebotszone DE-LU)
     train_from: date | None = None
+    #: Ziel zusätzlich durch diese Merkmalsspalte teilen, je Ziel-Code (z. B. Preis durch
+    #: ``gk_niveau``): Abweichungen werden relativ zum Niveau gelernt, nicht in EUR/MWh
+    scale: dict[str, str] = Field(default_factory=dict)
 
 
 class BacktestConfig(BaseModel):
