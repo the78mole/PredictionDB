@@ -57,7 +57,7 @@ from wx_exchange.publish import Publisher, plan
 from wx_ingest.bronze import Bronze
 from wx_ingest.cli import DEFAULT_CONFIG, parse_run
 from wx_ingest.config import GfsConfig
-from wx_ingest.gfs import Endpoint, read_templates, write_templates
+from wx_ingest.gfs import read_templates, write_templates
 from wx_ingest.ingest import GfsIngestor
 from wx_process.config import ProcessConfig, WxProcessSettings
 from wx_process.store import Store
@@ -134,6 +134,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--minutes", type=float, help="danach keine neue Datei mehr beginnen (Job-Zeitgrenze)"
     )
     ib.add_argument("--rebuild", action="store_true", help="vorhandenen Layer nicht übernehmen")
+    ib.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        metavar="N",
+        help="Prozesse, Anfragen und Dateien werden aufgeteilt (ein Prozess nutzt einen Kern)",
+    )
 
     im = cmd.add_parser("idx-manifest", help="Layer-Beschreibungen ins Manifest übernehmen")
     im.add_argument("layers", type=Path, help="Verzeichnis mit Layer-Beschreibungen (*.json)")
@@ -273,11 +280,7 @@ def _archive_client(args: argparse.Namespace, config: GfsConfig) -> httpx.AsyncC
     for ep in config.endpoints:
         if ep.archive:
             ep.concurrency = args.archive_concurrency
-    timeout = httpx.Timeout(60.0, connect=15.0)
-    # Ohne .idx (GDEX) laufen viele kleine Range-Anfragen; der Pool darf nicht bremsen
-    pool = max(100, sum(ep.concurrency for ep in config.endpoints))
-    limits = httpx.Limits(max_connections=pool, max_keepalive_connections=pool)
-    return httpx.AsyncClient(timeout=timeout, follow_redirects=True, limits=limits)
+    return idx.archive_client(config)
 
 
 def _sample_runs(first: datetime, end: datetime | None) -> list[datetime]:
@@ -327,11 +330,7 @@ async def _templates(args: argparse.Namespace, config: GfsConfig) -> int:
 async def _idx_build(args: argparse.Namespace, config: GfsConfig, registry: Registry) -> int:
     deadline = time.monotonic() + args.minutes * 60 if args.minutes else None
     async with _archive_client(args, config) as client:
-        endpoints = [
-            Endpoint(ep, client)
-            for ep in config.endpoints
-            if ep.archive and ep.kind == "header_scan"
-        ]
+        endpoints = idx.archive_endpoints(config, client)
         if not endpoints:
             print("keine header_scan-Endpunkte in der Konfiguration", file=sys.stderr)
             return 1
@@ -346,6 +345,7 @@ async def _idx_build(args: argparse.Namespace, config: GfsConfig, registry: Regi
             parallel_files=args.parallel_files,
             deadline=deadline,
             rebuild=args.rebuild,
+            workers=args.workers,
         )
     args.out.write_text(json.dumps(asdict(layer), indent=1))
     print(json.dumps(asdict(layer) | {"absent": len(layer.absent), "failed": len(layer.failed)}))

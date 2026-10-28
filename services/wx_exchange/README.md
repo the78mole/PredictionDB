@@ -121,7 +121,9 @@ Die Annotationen eines Layers tragen den Stand: `complete`, `failed` (Dateien, d
 Start nachholt), `absent` (fehlen im Archiv) und `unknown` (Zeilen mit Namen, die nicht in der
 NCEP-Tabelle stehen). Der Abschlussjob schreibt das Manifest auch, wenn einzelne Monatsjobs
 scheitern; ein erneuter Start nimmt nur Monate ohne vollständigen Layer und übernimmt dabei schon
-gebaute `.idx`. Einen Monat holen:
+gebaute `.idx`. Ein Prozess schafft nur einen Kern; auf einer ausgelasteten Maschine teilt
+`idx-build --workers N` Dateien und gleichzeitige Anfragen auf N Prozesse auf (gleiche Last auf
+das Archiv). Einen Monat holen:
 
 ```bash
 oras manifest fetch ghcr.io/the78mole/predictiondb-data/gfs-0p25-gdex-idx:v1 \

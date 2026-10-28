@@ -26,17 +26,22 @@ import asyncio
 import gzip
 import io
 import json
+import multiprocessing
 import tarfile
 import time
 from collections import Counter
 from collections.abc import Iterable
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+import httpx
+
 from gribkit.headers import idx_line, is_known
 from gribkit.idx import parse_idx
-from predictiondb_core.log import get_logger
+from predictiondb_core.log import configure_logging, get_logger
+from predictiondb_core.settings import get_settings
 from wx_exchange.artifact import ATTRIBUTION_GDEX, LICENSE, PREFIX, month_bounds
 from wx_exchange.oci import EMPTY, MANIFEST, Registry
 from wx_exchange.publish import months_between
@@ -255,6 +260,174 @@ def _unknown(text: str) -> Iterable[str]:
             yield f"{e.var}:{e.level}"
 
 
+def archive_client(config: GfsConfig) -> httpx.AsyncClient:
+    """HTTP-Client für die Archiv-Endpunkte; der Pool wächst mit deren ``concurrency``."""
+    timeout = httpx.Timeout(60.0, connect=15.0)
+    # Ohne .idx (GDEX) laufen viele kleine Range-Anfragen; der Pool darf nicht bremsen
+    pool = max(100, sum(ep.concurrency for ep in config.endpoints))
+    limits = httpx.Limits(max_connections=pool, max_keepalive_connections=pool)
+    return httpx.AsyncClient(timeout=timeout, follow_redirects=True, limits=limits)
+
+
+def archive_endpoints(config: GfsConfig, client: httpx.AsyncClient) -> list[Endpoint]:
+    return [
+        Endpoint(ep, client) for ep in config.endpoints if ep.archive and ep.kind == "header_scan"
+    ]
+
+
+_Item = tuple[datetime, int, str]
+
+
+@dataclass
+class _Scan:
+    """Ergebnis eines Durchgangs über Dateien (ein Prozess oder ein Worker)."""
+
+    files: dict[str, bytes] = field(default_factory=dict)
+    absent: set[str] = field(default_factory=set)
+    failed: list[_Item] = field(default_factory=list)
+    skipped: list[str] = field(default_factory=list)
+
+
+async def _scan(
+    endpoints: list[Endpoint],
+    items: list[_Item],
+    *,
+    label: str,
+    parallel_files: int,
+    deadline: float | None,
+    retries: int,
+    retry_pause: float,
+) -> _Scan:
+    """Liest die ``.idx`` der Dateien in ``items``; Fehlschläge mit Pausen erneut versuchen."""
+    out = _Scan()
+    failed: list[_Item] = []
+    sem = asyncio.Semaphore(parallel_files)
+    done = 0
+
+    async def one(run: datetime, step: int, name: str) -> None:
+        nonlocal done
+        async with sem:
+            if deadline is not None and time.monotonic() > deadline:
+                out.skipped.append(file_code(run, step))
+                return
+            try:
+                text = await _inventory(endpoints, run, step)
+            except Exception as exc:
+                log.warning("idx_failed", file=name, error=_describe(exc))
+                failed.append((run, step, name))
+                return
+            if text is None:
+                out.absent.add(file_code(run, step))
+            else:
+                out.files[name] = text.encode()
+            done += 1
+            if done % 93 == 0:
+                log.info(
+                    "idx_progress",
+                    layer=label,
+                    done=done,
+                    todo=len(items),
+                    absent=len(out.absent),
+                    failed=len(failed),
+                )
+
+    # Das Archiv bricht unter Last immer wieder Verbindungen ab: fehlgeschlagene Dateien nach
+    # einer Pause erneut versuchen, statt sie erst dem nächsten Start zu überlassen
+    pending = items
+    for attempt in range(retries + 1):
+        if attempt:
+            pause = retry_pause * attempt
+            log.info("idx_retry", layer=label, files=len(pending), pause=pause)
+            await asyncio.sleep(pause)
+        failed.clear()
+        await asyncio.gather(*(one(*t) for t in pending))
+        pending = list(failed)
+        if not pending or (deadline is not None and time.monotonic() > deadline):
+            break
+    out.failed = pending
+    return out
+
+
+def _worker(
+    config: GfsConfig,
+    items: list[_Item],
+    label: str,
+    parallel_files: int,
+    deadline: float | None,
+    retries: int,
+    retry_pause: float,
+) -> _Scan:
+    """Eigener Prozess mit eigener Ereignisschleife und eigenem Client (``--workers``)."""
+    settings = get_settings()
+    configure_logging(settings.log_level, settings.log_json)
+
+    async def go() -> _Scan:
+        async with archive_client(config) as client:
+            return await _scan(
+                archive_endpoints(config, client),
+                items,
+                label=label,
+                parallel_files=parallel_files,
+                deadline=deadline,
+                retries=retries,
+                retry_pause=retry_pause,
+            )
+
+    return asyncio.run(go())
+
+
+async def _scan_workers(
+    config: GfsConfig,
+    items: list[_Item],
+    workers: int,
+    *,
+    label: str,
+    parallel_files: int,
+    deadline: float | None,
+    retries: int,
+    retry_pause: float,
+) -> _Scan:
+    """Verteilt die Dateien auf ``workers`` Prozesse.
+
+    Ein Prozess schafft nur einen Kern; Anfragen, TLS und Ereignisschleife kosten mehr Rechenzeit
+    als das Lesen der Köpfe. Gleichzeitige Anfragen und Dateien werden aufgeteilt, die Last
+    auf das Archiv bleibt also dieselbe.
+    """
+    share = config.model_copy(deep=True)
+    for ep in share.endpoints:
+        if ep.archive:
+            ep.concurrency = max(1, ep.concurrency // workers)
+    per_worker = max(1, parallel_files // workers)
+    chunks = [items[i::workers] for i in range(workers)]
+    loop = asyncio.get_running_loop()
+    ctx = multiprocessing.get_context("spawn")
+    with ProcessPoolExecutor(max_workers=workers, mp_context=ctx) as pool:
+        parts = await asyncio.gather(
+            *(
+                loop.run_in_executor(
+                    pool,
+                    _worker,
+                    share,
+                    chunk,
+                    f"{label}/{i + 1}",
+                    per_worker,
+                    deadline,
+                    retries,
+                    retry_pause,
+                )
+                for i, chunk in enumerate(chunks)
+                if chunk
+            )
+        )
+    out = _Scan()
+    for part in parts:
+        out.files |= part.files
+        out.absent |= part.absent
+        out.failed += part.failed
+        out.skipped += part.skipped
+    return out
+
+
 async def build_layer(
     registry: Registry,
     config: GfsConfig,
@@ -269,6 +442,7 @@ async def build_layer(
     rebuild: bool = False,
     retries: int = 3,
     retry_pause: float = 120.0,
+    workers: int = 1,
 ) -> IdxLayer:
     """Baut den Layer eines Monats und einer Laufzeit und lädt den Blob hoch.
 
@@ -276,7 +450,8 @@ async def build_layer(
     als ``.idx`` noch als im Archiv fehlend stehen. Ab ``deadline`` (``time.monotonic()``)
     beginnt keine neue Datei mehr; der Rest gilt als fehlgeschlagen und kommt beim nächsten
     Start dran. Fehlgeschlagene Dateien werden bis zu ``retries`` Mal nach einer wachsenden
-    Pause (``retry_pause``, ``2 * retry_pause``, …) erneut versucht.
+    Pause (``retry_pause``, ``2 * retry_pause``, …) erneut versucht. Mit ``workers > 1``
+    lesen so viele Prozesse (je mit eigenem Client aus ``config``) statt ``endpoints``.
     Das Manifest schreibt erst :func:`merge_manifest`.
     """
     runs = _runs(config, month, hour, start, end)
@@ -292,65 +467,35 @@ async def build_layer(
         for step in config.step_list()
         if file_name(config, run, step) not in files and file_code(run, step) not in absent
     ]
+    label = layer_key(month, hour)
     log.info(
         "idx_layer_start",
-        layer=layer_key(month, hour),
+        layer=label,
         runs=len(runs),
         present=len(files),
         todo=len(todo),
+        workers=workers,
     )
-    failed: list[tuple[datetime, int, str]] = []
-    skipped: list[str] = []
-    sem = asyncio.Semaphore(parallel_files)
-    done = 0
-
-    async def one(run: datetime, step: int, name: str) -> None:
-        nonlocal done
-        async with sem:
-            if deadline is not None and time.monotonic() > deadline:
-                skipped.append(file_code(run, step))
-                return
-            try:
-                text = await _inventory(endpoints, run, step)
-            except Exception as exc:
-                log.warning("idx_failed", file=name, error=_describe(exc))
-                failed.append((run, step, name))
-                return
-            if text is None:
-                absent.add(file_code(run, step))
-            else:
-                files[name] = text.encode()
-            done += 1
-            if done % 93 == 0:
-                log.info(
-                    "idx_progress",
-                    layer=layer_key(month, hour),
-                    done=done,
-                    todo=len(todo),
-                    absent=len(absent),
-                    failed=len(failed),
-                )
-
-    # Das Archiv bricht unter Last immer wieder Verbindungen ab: fehlgeschlagene Dateien nach
-    # einer Pause erneut versuchen, statt sie erst dem nächsten Start zu überlassen
-    pending = todo
-    for attempt in range(retries + 1):
-        if attempt:
-            pause = retry_pause * attempt
-            log.info("idx_retry", layer=layer_key(month, hour), files=len(pending), pause=pause)
-            await asyncio.sleep(pause)
-        failed.clear()
-        await asyncio.gather(*(one(*t) for t in pending))
-        pending = list(failed)
-        if not pending or (deadline is not None and time.monotonic() > deadline):
-            break
+    opts: dict[str, Any] = {
+        "label": label,
+        "parallel_files": parallel_files,
+        "deadline": deadline,
+        "retries": retries,
+        "retry_pause": retry_pause,
+    }
+    if workers > 1 and todo:
+        scanned = await _scan_workers(config, todo, workers, **opts)
+    else:
+        scanned = await _scan(endpoints, todo, **opts)
+    files |= scanned.files
+    absent |= scanned.absent
     log.info(
         "idx_progress",
-        layer=layer_key(month, hour),
-        done=done,
+        layer=label,
+        done=len(todo) - len(scanned.failed) - len(scanned.skipped),
         todo=len(todo),
         absent=len(absent),
-        failed=len(pending) + len(skipped),
+        failed=len(scanned.failed) + len(scanned.skipped),
     )
     unknown: Counter[str] = Counter()
     for data in files.values():
@@ -365,7 +510,7 @@ async def build_layer(
         runs=len(runs),
         files=len(files),
         absent=sorted(absent),
-        failed=sorted([file_code(r, st) for r, st, _ in pending] + skipped),
+        failed=sorted([file_code(r, st) for r, st, _ in scanned.failed] + scanned.skipped),
         unknown=sum(unknown.values()),
         unknown_names=[k for k, _ in unknown.most_common(_MAX_LISTED)],
         built=datetime.now(UTC).isoformat(timespec="seconds"),
