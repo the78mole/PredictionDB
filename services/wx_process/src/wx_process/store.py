@@ -9,6 +9,7 @@ idempotent sind.
 from __future__ import annotations
 
 import json
+import time
 from collections import defaultdict
 from collections.abc import Iterable
 from datetime import date, datetime
@@ -17,14 +18,19 @@ from typing import Any, Literal, NamedTuple, cast
 import numpy as np
 from numpy.typing import NDArray
 from psycopg import Connection as PgConnection
-from psycopg.errors import UniqueViolation
+from psycopg.errors import LockNotAvailable, UniqueViolation
 from sqlalchemy import Engine, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from predictiondb_core.log import get_logger
 from wx_process.features import ClusterWeights
 
 log = get_logger(__name__)
+
+#: Höchstens so lange auf die exklusive Sperre eines Chunks warten (Entpacken, Packen)
+CHUNK_LOCK_TIMEOUT = "5s"
+#: Ein gesperrter Chunk wird frühestens nach so vielen Sekunden erneut versucht
+BUSY_RETRY_S = 600.0
 
 SilverStatus = Literal["loading", "present"]
 SilverOrigin = Literal["bronze", "ghcr"]
@@ -65,6 +71,7 @@ class CapacityTable:
 class Store:
     def __init__(self, engine: Engine) -> None:
         self.engine = engine
+        self._busy: dict[str, float] = {}
 
     def source_id(self, code: str) -> int:
         with self.engine.connect() as c:
@@ -258,19 +265,40 @@ class Store:
                 {"s": start, "e": end},
             ).all()
         chunks = [Chunk(str(r[0]), r[1], r[2]) for r in rows]
+        now = time.monotonic()
+        done = []
         for ch in chunks:
-            with self.engine.begin() as c:
-                c.execute(
-                    text("SELECT decompress_chunk(CAST(:n AS regclass), true)"), {"n": ch.name}
-                )
-            log.info("chunk.decompressed", chunk=ch.name, start=f"{ch.start:%Y-%m-%d}")
-        return chunks
+            if now - self._busy.get(ch.name, -BUSY_RETRY_S) < BUSY_RETRY_S:
+                continue  # eben noch gesperrt: in komprimierte Chunks schreiben (langsamer)
+            if self._chunk_op("decompress_chunk", ch):
+                done.append(ch)
+                log.info("chunk.decompressed", chunk=ch.name, start=f"{ch.start:%Y-%m-%d}")
+        return done
 
     def compress_values(self, chunks: Iterable[Chunk]) -> None:
+        """Packt die Chunks wieder; gesperrte bleiben für die Kompressions-Policy liegen."""
         for ch in chunks:
+            if self._chunk_op("compress_chunk", ch):
+                log.info("chunk.compressed", chunk=ch.name, start=f"{ch.start:%Y-%m-%d}")
+
+    def _chunk_op(self, fn: Literal["decompress_chunk", "compress_chunk"], ch: Chunk) -> bool:
+        """Entpacken und Packen brauchen eine exklusive Sperre auf den Chunk.
+
+        Wartet die Anweisung auf einen Leser (z. B. ``ml-train snapshot`` in einer langen
+        Transaktion), stellen sich alle weiteren Leser des Chunks hinter ihr an. Deshalb nur
+        kurz warten und bei Erfolglosigkeit den Chunk vorerst so lassen, wie er ist.
+        """
+        try:
             with self.engine.begin() as c:
-                c.execute(text("SELECT compress_chunk(CAST(:n AS regclass), true)"), {"n": ch.name})
-            log.info("chunk.compressed", chunk=ch.name, start=f"{ch.start:%Y-%m-%d}")
+                c.execute(text(f"SET LOCAL lock_timeout = '{CHUNK_LOCK_TIMEOUT}'"))
+                c.execute(text(f"SELECT {fn}(CAST(:n AS regclass), true)"), {"n": ch.name})
+        except OperationalError as exc:
+            if not isinstance(exc.orig, LockNotAvailable):
+                raise
+            self._busy[ch.name] = time.monotonic()
+            log.warning("chunk.locked", op=fn, chunk=ch.name, start=f"{ch.start:%Y-%m-%d}")
+            return False
+        return True
 
     # --- Zustand -----------------------------------------------------------------------------
 

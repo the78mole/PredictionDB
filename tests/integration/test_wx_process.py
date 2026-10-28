@@ -235,3 +235,31 @@ def test_backfill_into_compressed_chunk(engine: Engine) -> None:
     assert compressed() == [True]
     count = _q(engine, "SELECT count(*) FROM feat.nwp_value WHERE run_time = :r", r=RUN)[0][0]
     assert count == n
+
+
+def test_decompress_skips_chunk_locked_by_reader(engine: Engine) -> None:
+    """Liest eine lange Transaktion den Chunk, bleibt er gepackt, statt alle Leser zu stauen."""
+    _setup(engine)
+    config = ProcessConfig.from_yaml("config/process/gfs_0p25.yaml")
+    source = GfsConfig.model_validate(source_config([(0, 21, 3)]))
+    bronze = MemoryStore()
+    fill_bronze(bronze, STEPS)
+    store = Store(engine)
+    WxPipeline(config, source, bronze, Silver(MemoryStore()), store).process(
+        RUN, clustering=VERSION
+    )
+    with engine.begin() as c:
+        c.execute(
+            text("""SELECT compress_chunk(c, true) FROM show_chunks('feat.nwp_value') c
+                    JOIN timescaledb_information.chunks i
+                      ON format('%I.%I', i.chunk_schema, i.chunk_name)::regclass = c
+                   WHERE i.range_start <= :r AND i.range_end > :r"""),
+            {"r": RUN},
+        )
+    with engine.connect() as reader, reader.begin():
+        reader.execute(text("SELECT count(*) FROM feat.nwp_value WHERE run_time = :r"), {"r": RUN})
+        assert store.decompress_values(RUN, RUN) == []
+    # gesperrt gewesen: erst nach BUSY_RETRY_S wieder versuchen
+    assert store.decompress_values(RUN, RUN) == []
+    store._busy.clear()
+    assert [c.start <= RUN < c.end for c in store.decompress_values(RUN, RUN)] == [True]
