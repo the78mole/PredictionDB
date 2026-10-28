@@ -8,7 +8,9 @@ zusammenhängenden Blöcken.
 Wind und PV werden als Kapazitätsfaktor gelernt (Ziel durch installierte Leistung), weil
 Entscheidungsbäume nicht über den Bestand der Trainingszeit hinaus extrapolieren. Der Preis
 kann relativ zum Mittel der letzten bekannten Tage gelernt werden (``center``), damit
-Preisniveaus wie 2022 nicht als feste Werte gelernt werden.
+Preisniveaus wie 2022 nicht als feste Werte gelernt werden, und zusätzlich durch ein
+Niveaumerkmal geteilt werden (``Variant.scale``, z. B. den Grenzkostenindex): Dann lernt das
+Modell Abweichungen relativ zum Brennstoff- und CO2-Niveau statt in EUR/MWh.
 """
 
 from __future__ import annotations
@@ -57,13 +59,18 @@ class QuantileModel:
     params: LgbmParams
     normalize_by: list[str] = field(default_factory=list)
     center: str | None = None
+    scale: str | None = None
     boosters: dict[str, lgb.Booster] = field(default_factory=dict)
 
     def _scale(self, X: pd.DataFrame) -> np.ndarray:
-        if not self.normalize_by:
-            return np.ones(len(X))
-        cap = X[self.normalize_by].sum(axis=1).to_numpy(dtype=np.float64)
-        return np.where(cap > 0, cap, np.nan)
+        out = np.ones(len(X))
+        if self.normalize_by:
+            cap = X[self.normalize_by].sum(axis=1).to_numpy(dtype=np.float64)
+            out = np.where(cap > 0, cap, np.nan)
+        if self.scale is not None:
+            lvl = X[self.scale].to_numpy(dtype=np.float64)
+            out = out * np.where(lvl > 0, lvl, np.nan)
+        return out
 
     def _offset(self, X: pd.DataFrame) -> np.ndarray:
         if self.center is None:
@@ -106,12 +113,21 @@ class QuantileModel:
             "features": self.features,
             "normalize_by": self.normalize_by,
             "center": self.center,
+            "scale": self.scale,
             "files": files,
         }
 
     @classmethod
     def load(cls, d: dict[str, Any], base: Path, params: LgbmParams) -> QuantileModel:
-        m = cls(d["target"], d["quantiles"], d["features"], params, d["normalize_by"], d["center"])
+        m = cls(
+            d["target"],
+            d["quantiles"],
+            d["features"],
+            params,
+            d["normalize_by"],
+            d["center"],
+            d.get("scale"),
+        )
         for name, f in d["files"].items():
             m.boosters[name] = lgb.Booster(model_str=(base / f).read_text())
         return m
@@ -147,11 +163,20 @@ class TwoStageModel:
     def _model(self, t: StageTarget, features: list[str], frame: FeatureFrame) -> QuantileModel:
         normalize = [c for c in t.normalize_by if c in frame.X.columns]
         center = t.center if t.center and t.center in frame.X.columns else None
+        scale = self._scale_column(t, frame)
         if normalize:
             # Bestand wirkt sonst wie ein Zeitindex: Außerhalb der Trainingsspanne landet jede
             # Prognose im Blatt der letzten Trainingsmonate (gemessen: +6 GW Bias Wind 2024)
             features = [f for f in features if not f.startswith("cap_")]
-        return QuantileModel(t.code, self.cfg.quantiles, features, self.cfg.lgbm, normalize, center)
+        return QuantileModel(
+            t.code, self.cfg.quantiles, features, self.cfg.lgbm, normalize, center, scale
+        )
+
+    def _scale_column(self, t: StageTarget, frame: FeatureFrame) -> str | None:
+        col = self.variant.scale.get(t.code)
+        if col is not None and col not in frame.X.columns:
+            raise ValueError(f"Variante {self.variant.name!r}: Bezugsspalte {col!r} fehlt")
+        return col
 
     @property
     def uses_stage1(self) -> bool:
@@ -210,6 +235,7 @@ class TwoStageModel:
                 median_only,
                 [c for c in t.normalize_by if c in frame.X.columns],
                 t.center if t.center and t.center in frame.X.columns else None,
+                self._scale_column(t, frame),
             )
             m.fit(frame.X[~test], frame.y[t.code].to_numpy()[~test])
             out[test] = m.predict(frame.X[test])["q50"].to_numpy()
@@ -221,7 +247,12 @@ class TwoStageModel:
         cols = [
             c
             for m in [*self.stage1.values(), *self.stage2.values()]
-            for c in [*m.features, *m.normalize_by, *([m.center] if m.center else [])]
+            for c in [
+                *m.features,
+                *m.normalize_by,
+                *([m.center] if m.center else []),
+                *([m.scale] if m.scale else []),
+            ]
         ]
         return [c for c in dict.fromkeys(cols) if c not in own]
 

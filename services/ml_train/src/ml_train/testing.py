@@ -58,6 +58,11 @@ def synthetic_snapshot(
     load += rng.normal(0, 900, n)
     resid = load - gen_wind - gen_solar
     price = 20 + 0.0018 * resid + rng.normal(0, 6, n)
+    # Fossile Erzeugung nach Merit-Order: Braunkohle zuerst, dann Steinkohle, dann Gas
+    thermal = np.clip(resid, 0, None)
+    lignite = np.clip(thermal, 3000, 15000)
+    hard_coal = np.clip(thermal - 15000, 500, 12000)
+    gas = np.clip(thermal - 27000, 1000, 25000)
 
     energy = pd.concat(
         [
@@ -69,6 +74,10 @@ def synthetic_snapshot(
                 "gen_solar": np.clip(gen_solar, 0, None),
                 "da_price_de_lu": price,
                 "da_price_at": price + 5 + rng.normal(0, 4, n),
+                "residual_load": resid,
+                "gen_lignite": lignite,
+                "gen_hard_coal": hard_coal,
+                "gen_gas": gas,
             }.items()
         ],
         ignore_index=True,
