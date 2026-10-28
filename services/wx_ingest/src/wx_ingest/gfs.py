@@ -308,7 +308,13 @@ class Endpoint:
         return None
 
     async def _walk(
-        self, url: str, start: int, stop: int, first: bytes | None = None
+        self,
+        url: str,
+        start: int,
+        stop: int,
+        first: bytes | None = None,
+        *,
+        complete: bool = False,
     ) -> list[tuple[int, Head]]:
         """Köpfe der Nachrichten von ``start`` bis genau ``stop``."""
         out: list[tuple[int, Head]] = []
@@ -319,7 +325,7 @@ class Endpoint:
             else:
                 data = (await self._range(url, off, off + HEAD_BYTES - 1)).content
             try:
-                head = parse_head(data)
+                head = parse_head(data, complete=complete)
             except HeaderError as exc:
                 raise StaleIndex(f"Kopf an Byte {off} von {url}: {exc}") from exc
             out.append((off, head))
@@ -341,8 +347,12 @@ class Endpoint:
         except (KeyError, ValueError) as exc:
             raise FetchError(f"{url}: Dateigröße weder in Content-Range noch per HEAD") from exc
 
-    async def scan(self, url: str) -> tuple[str, list[IdxEntry]]:
-        """Inventar einer Datei aus ihren Köpfen; liefert die URL nach Weiterleitungen mit."""
+    async def scan(self, url: str, *, complete: bool = False) -> tuple[str, list[IdxEntry]]:
+        """Inventar einer Datei aus ihren Köpfen; liefert die URL nach Weiterleitungen mit.
+
+        ``complete``: Namen und Bezugsdatum wie ``wgrib2 -s`` (vollständige ``.idx``), sonst
+        die Schlüssel der Vorlagen.
+        """
         first = await self._range(url, 0, HEAD_BYTES - 1)
         # OSDF leitet auf einen Cache weiter; der bleibt für die Datei derselbe
         url = str(first.url)
@@ -353,7 +363,7 @@ class Endpoint:
         bounds = sorted({0, *(b for b in found if b is not None)})
         parts = await asyncio.gather(
             *(
-                self._walk(url, a, b, first.content)
+                self._walk(url, a, b, first.content, complete=complete)
                 for a, b in zip(bounds, [*bounds[1:], size], strict=True)
             )
         )
@@ -460,6 +470,32 @@ class Endpoint:
     def _scan_url(self, run: datetime, step: int) -> str:
         assert self.config.path is not None
         return f"{self.config.url.rstrip('/')}/{self.config.path.format(run=run, step=step)}"
+
+    async def complete_inventory(self, run: datetime, step: int) -> list[IdxEntry]:
+        """Alle Nachrichten einer Datei mit Namen wie ``wgrib2 -s`` (für eine ``.idx``).
+
+        Passen die Abschnitte nicht aneinander, wird die ganze Datei geladen.
+        """
+        url = self._scan_url(run, step)
+        try:
+            return (await self.scan(url, complete=True))[1]
+        except StaleIndex as exc:
+            log.warning("scan_failed", url=url, error=str(exc))
+        async with _FULL_DOWNLOAD:
+            resp = await self.get(url)
+            if resp.status_code in (403, 404):
+                raise StepUnavailable(url)
+            if resp.status_code != 200:
+                raise FetchError(f"ganze Datei {url}: HTTP {resp.status_code}")
+            data = resp.content
+            del resp
+            try:
+                return [
+                    entry(i, start, parse_head(data[start : start + HEAD_BYTES], complete=True))
+                    for i, (start, _end) in enumerate(_message_bounds(data), start=1)
+                ]
+            except HeaderError as exc:
+                raise FetchError(f"{url}: {exc}") from exc
 
     async def build_templates(
         self,

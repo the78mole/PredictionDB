@@ -104,6 +104,31 @@ Dateien bzw. Attributen), `imported` (noch die Kopie aus GHCR, kein eigener Bau)
 `local_missing`. Verglichen wird ohne Download über die Annotation `content`; nur für Abweichungen
 wird der Layer geladen.
 
+## Vollständige .idx zu GDEX
+
+Das NCAR-Archiv GDEX d084001 (GFS vor v16) hat keine `.idx`. Der Workflow `gfs-idx.yml` liest
+je Datei alle Nachrichtenköpfe und schreibt eine `.idx` im Format von `wgrib2 -s` mit allen
+Nachrichten (geprüft: an GFS-v15-Dateien auf AWS Zeile für Zeile gleich den `.idx` von NOAA).
+Abgelegt wird ein einziges Artefakt mit einem Layer je Monat und Laufzeit:
+
+```text
+ghcr.io/the78mole/predictiondb-data/gfs-0p25-gdex-idx:v1
+  Layer gfs-0p25-gdex-idx-2019-07-00z.tar.gz   org.predictiondb.month=2019-07, .hour=0
+        └─ 2019/20190701/gfs.0p25.2019070100.f000.grib2.idx …
+```
+
+Die Annotationen eines Layers tragen den Stand: `complete`, `failed` (Dateien, die der nächste
+Start nachholt), `absent` (fehlen im Archiv) und `unknown` (Zeilen mit Namen, die nicht in der
+NCEP-Tabelle stehen). Der Abschlussjob schreibt das Manifest auch, wenn einzelne Monatsjobs
+scheitern; ein erneuter Start nimmt nur Monate ohne vollständigen Layer und übernimmt dabei schon
+gebaute `.idx`. Einen Monat holen:
+
+```bash
+oras manifest fetch ghcr.io/the78mole/predictiondb-data/gfs-0p25-gdex-idx:v1 \
+  | jq -r '.layers[] | select(.annotations["org.predictiondb.month"]=="2019-07") | .digest'
+oras blob fetch -o 2019-07-00z.tar.gz ghcr.io/the78mole/predictiondb-data/gfs-0p25-gdex-idx@sha256:…
+```
+
 ## Aufruf
 
 ```bash

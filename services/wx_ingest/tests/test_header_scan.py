@@ -8,8 +8,10 @@ import pytest
 from obstore.store import MemoryStore
 
 from gribkit import IdxEntry
+from gribkit.headers import idx_line
 from wx_ingest import gfs
 from wx_ingest.bronze import Bronze
+from wx_ingest.config import EndpointConfig
 from wx_ingest.ingest import GfsIngestor
 from wx_ingest.testing import GDEX_PATH, RUN, FakeGfsHost, make_client, make_config
 
@@ -285,3 +287,33 @@ async def test_template_retries_failed_step_once(monkeypatch: pytest.MonkeyPatch
     async with make_client(host) as client:
         ep = ingestor(Bronze(MemoryStore()), client).endpoints[0]
         assert await ep.build_templates(RUN, [3, 6], SPECS) == [3, 6]
+
+
+def scan_endpoint() -> EndpointConfig:
+    return EndpointConfig.model_validate({**GDEX, "path": GDEX_PATH})
+
+
+async def test_complete_inventory_like_noaa_idx() -> None:
+    # Vollständige .idx aus den Köpfen: dieselben Zeilen wie die .idx des S3-Spiegels
+    # (dort CLMR, wgrib2 schreibt CLWMR), Bezugsdatum aus Sektion 1
+    aws = FakeGfsHost("aws.test", {3})
+    host = FakeGfsHost("gdex.test", {3}, index=False)
+    async with make_client(host) as client:
+        ep = gfs.Endpoint(scan_endpoint(), client)
+        entries = await ep.complete_inventory(RUN, 3)
+    (want,) = aws.idx.values()
+    got = [idx_line(e).split(":") for e in entries]
+    # Die synthetische Hybrid-Nachricht trägt Fläche 2 (Vorgabe von ecCodes), nicht 1
+    fixed = want.replace("CLMR:1 hybrid", "CLWMR:2 hybrid")
+    expected = [w.split(":") for w in fixed.splitlines()]
+    # alles außer dem Datum (die synthetischen Nachrichten tragen ein eigenes)
+    assert [g[:2] + g[3:] for g in got] == [w[:2] + w[3:] for w in expected]
+    assert all(g[2].startswith("d=") and len(g[2]) == 12 for g in got)
+
+
+async def test_complete_inventory_missing_file() -> None:
+    host = FakeGfsHost("gdex.test", {0}, index=False)
+    async with make_client(host) as client:
+        ep = gfs.Endpoint(scan_endpoint(), client)
+        with pytest.raises(gfs.StepUnavailable):
+            await ep.complete_inventory(RUN, 3)
