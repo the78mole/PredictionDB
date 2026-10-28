@@ -22,9 +22,10 @@ Monorepo als [uv](https://docs.astral.sh/uv/)-Workspace (Kapitel 6.1 der Archite
 | Pfad | Inhalt |
 |---|---|
 | `packages/core` | `predictiondb_core`: Konfiguration (`PDB_*`), Logging, S3- und DB-Zugriff, Garage-Init |
-| `packages/*`, `services/*` | weitere Bibliotheken und Dienste, je mit eigener `pyproject.toml` |
+| `packages/gribkit` | GRIB2-Hilfen: `.idx`-Parser, Range-Merging, Zuschnitt |
+| `services/*` | Dienste je mit eigener `pyproject.toml` und README: `wx_ingest`, `wx_process`, `wx_exchange`, `energy_ingest`, `mastr_ingest`, `ml_train` |
 | `migrations/` | Alembic-Migrationen (SQL inkl. TimescaleDB-Befehle) |
-| `compose.yaml` | Stack für die VM: TimescaleDB, Garage (Single Node), `garage-init`, `migrate` |
+| `compose.yaml` | Stack für die VM: TimescaleDB, Garage (Single Node), Ingest (GFS, Energie, MaStR), `wx-process`, Grafana mit Prometheus; Profile `backfill`, `history` (GFS-Historie) und `ml` (Training, Inferenz), Übersicht in Kapitel 8.2 der Architektur |
 | `docker/Dockerfile` | ein Image für alle Python-Dienste |
 | `deploy/systemd/`, `scripts/vm-update.sh` | Auto-Update des Stacks auf der VM |
 | `predict/` | schlanker Prognose-Stack für Nutzer der Prognosen: ein Container mit Modellpaket, Eingänge direkt von freien Quellen, Ausgabe als Dateien und HTTP, eigene `compose.yaml` ([README](predict/README.md)) |
