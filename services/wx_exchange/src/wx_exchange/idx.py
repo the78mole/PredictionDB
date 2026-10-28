@@ -483,8 +483,8 @@ async def build_layer(
     """Baut den Layer eines Monats und einer Laufzeit und lädt den Blob hoch.
 
     Ein vorhandener Layer wird übernommen; neu gelesen werden nur Dateien, die darin weder
-    als ``.idx`` noch als im Archiv fehlend oder defekt stehen. Ab ``deadline`` (``time.monotonic()``)
-    beginnt keine neue Datei mehr; der Rest gilt als fehlgeschlagen und kommt beim nächsten
+    als ``.idx`` noch als im Archiv fehlend oder defekt stehen. Ab ``deadline``
+    (``time.monotonic()``) beginnt keine neue Datei mehr; der Rest gilt als fehlgeschlagen und kommt beim nächsten
     Start dran. Fehlgeschlagene Dateien werden bis zu ``retries`` Mal nach einer wachsenden
     Pause (``retry_pause``, ``2 * retry_pause``, …) erneut versucht. Mit ``workers > 1``
     lesen so viele Prozesse (je mit eigenem Client aus ``config``) statt ``endpoints``.
