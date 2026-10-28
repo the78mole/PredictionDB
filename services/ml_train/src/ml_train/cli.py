@@ -464,11 +464,12 @@ def _terminate(signum: int, _: object) -> None:
 
 def run_job(cfg: ModelConfig, sha: str, a: argparse.Namespace) -> int:
     """Snapshot, Backtest oder Training mit Fortschritt in ``meta.ml_job``."""
-    variants = {
-        "snapshot": [],
-        "backtest": a.variant or [v.name for v in cfg.variants],
-        "fit": [a.variant],
-    }[a.cmd]
+    # nur der Eintrag des laufenden Befehls: snapshot hat kein --variant
+    variants: list[str] = []
+    if a.cmd == "backtest":
+        variants = a.variant or [v.name for v in cfg.variants]
+    elif a.cmd == "fit":
+        variants = [a.variant]
     args = {k: v for k, v in vars(a).items() if k not in ("cmd", "verbose") and v is not None}
     job = open_job_log()
     job.start(a.cmd, cfg.name, variants, args)
