@@ -212,6 +212,47 @@ die letzten 8 Trainingstage bekannt.
 5. **Freie CO2-Quelle suchen.** Ohne CO2 fehlt ein Drittel der Grenzkosten eines Gaskraftwerks.
 6. **Die Nachbarpreise prüfen.** Der stark negative Beitrag des Tschechien-Mittels in
    `wetter_frei` (−42 €/MWh bei einem CZ-Preis über dem deutschen) sieht nach Überanpassung aus.
+7. **Tankstellenpreise als schneller Ölindikator** (Vorschlag des Nutzers, Bewertung siehe
+   unten).
+
+## Nachtrag: Tankstellen- und Heizölpreise als Indikator
+
+Idee des Nutzers (28.10.2026): Tankstellenpreise bilden schnelle Ölpreisschwankungen gut ab.
+Bereinigt um Tankrabatt und nachfragebedingte Aufschläge (Wochenende, Ferien) ließe sich daraus
+ein verlässlicher Indikator ableiten. Wegen der 12-Uhr-Regel (seit 1.4.2026 dürfen Tankstellen
+nur um 12 Uhr erhöhen, senken jederzeit) wäre der Preis kurz vor 12 Uhr der richtige
+Messzeitpunkt. Er spiegelt den Stand des Vortags ohne die Erhöhung des Tages.
+
+**Nutzen.** Für den Strompreis zählen vor allem Gas und CO2, Öl verstromt Deutschland kaum. Der
+Ölpreis hilft also nur, soweit er mit Gas mitläuft. 2026 tat er das (Brent und Gas stiegen ab
+März gemeinsam), und in den v2-Modellen tragen die Ölreihen (Brent, Diesel, ULSD) schon den
+größten Teil des kleinen Brennstoffbeitrags. Ein tagesaktueller Dieselindex würde vor allem die
+Verzögerung verkürzen: ULSD (EIA) erscheint nur wöchentlich, das Oil Bulletin ebenso, die
+Weltbank monatlich mit rund fünf Wochen Verzug. Dagegen steht der Rauschanteil: Steuern, der
+nationale CO2-Preis und der Tankrabatt sind feste Blöcke, das Produkt selbst macht nur etwa die
+Hälfte des Endpreises aus, und die Margen schwanken seit der 12-Uhr-Regel stärker (laut ADAC
+Risikoaufschläge und größere Tagesspanne). Der Nutzen für den Strompreis dürfte deshalb kleiner
+sein als der des impliziten Grenzkostenindex aus Vorschlag 1, aber er ist billig zu haben.
+
+**Quellen.**
+
+| Quelle | Inhalt | Lizenz und Abruf | Einschätzung |
+|---|---|---|---|
+| Tankerkönig-API (creativecommons.tankerkoenig.de) | Echtzeitpreise je Tankstelle aus der MTS-K | CC BY 4.0 mit Namensnennung, MTS-K-Bedingungen gelten mit. Höchstens 1 Abfrage je Minute, Umkreis bis 25 km, Massenabruf wird gesperrt, keine Weitergabe an Mineralölfirmen | **Nutzbar für einen täglichen Stichprobenindex**: z. B. 50 bis 100 feste Tankstellen über ganz Deutschland, um 11:50 Uhr abgefragt (`prices.php`, 10 IDs je Abfrage, also 5 bis 10 Abfragen am Tag). Liefert aber keine Vergangenheit. |
+| Tankerkönig-Historie (git) | alle Preisänderungen ab 2014 | CC BY-NC-SA 4.0, nur verifizierte Nutzer | **Nicht für Training geeignet**: Nicht-kommerziell und Weitergabe unter gleicher Lizenz verträgt sich nicht mit frei veröffentlichten Modellen (schon am 23.10. verworfen). |
+| Destatis, Dashboard Deutschland | Tagesdurchschnitt Diesel, E5, E10 aus der MTS-K, wöchentlich veröffentlicht | vermutlich dl-de/by-2-0; ob das Dashboard eine API mit Historie hat, ist noch zu prüfen | **Kandidat für die Trainingshistorie** (Tagesmittel, gleiche Definition vor und nach der 12-Uhr-Regel). |
+| EU Weekly Oil Bulletin | Wochenpreise je Land | CC BY 4.0, schon in der Datenbank | bleibt Rückgrat und Gegenprobe |
+| Tecson (tecson.de) | Heizölpreise je Region | keine API, keine Lizenz, nur „Copyright © TECSON“ auf der Webseite | **Scheidet aus**: Abruf nur durch Auslesen der Webseite und nicht frei. Heizöl DE ist über das Oil Bulletin (wöchentlich) bereits drin. |
+
+**Bereinigung.** Steuern und Tankrabatt sind bekannte feste Beträge und lassen sich abziehen
+(Netto-Produktpreis). Wochentag, Ferien und Feiertage gehören als Kalendermerkmale ins Modell oder
+in ein kleines Regressionsmodell für den Index. Der Zeitpunkt vor 12 Uhr ist erst seit April
+2026 sinnvoll; für die Zeit davor bleibt nur das Tagesmittel.
+
+**Mögliche Umsetzung** (Freigabe offen): neue Quelle `tankerkoenig` mit täglichem
+Stichprobenindex Diesel/E5 netto um 11:50 Uhr, dazu `destatis_kraftstoff` für die Tagesmittel als
+Historie, und in `de_lu_v2` die Reihe in der Gruppe `brennstoffe`. Vorher die Dashboard-API und
+deren Lizenz prüfen.
 
 ## Dateien
 
