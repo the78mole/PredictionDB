@@ -60,7 +60,7 @@ flowchart LR
     BT --> REG
     REG -- "ml-train predict<br/>(Dienst ml-predict)" --> FC[("fcst.prediction")]
     REG -- "registry sync" --> META[("meta.model_version,<br/>model_metric, model_event")]
-    FC & META --> GF["Grafana<br/>Status-Dashboard"]
+    FC & META --> GF["Grafana<br/>Prognose und Energiedaten"]
 ```
 
 Die Bausteine:
@@ -405,7 +405,7 @@ Eingerichtet wird das erst, wenn mindestens drei Jahre GFS-Trainingsdaten vorlie
 - **Vergleich mit der ÜNB-Prognose:** Die Übertragungsnetzbetreiber veröffentlichen ihre
   Day-Ahead-Lastprognose bis 10:00 Ortszeit am Vortag (VO 543/2013 Art. 6.1 b). Die Panels
   „Lastprognose: eigene Modelle gegen ÜNB“ und „Preisprognose: eigene Modelle gegen
-  Day-Ahead-Preis“ im Status-Dashboard zeigen deshalb je Liefertag die P50-Prognose des Laufs
+  Day-Ahead-Preis“ im Dashboard „Prognose und Energiedaten“ zeigen deshalb je Liefertag die P50-Prognose des Laufs
   vom Vortag 10:00 Ortszeit. Hinweis: `de_lu_v2` nutzt die ÜNB-Prognose selbst als Merkmal,
   sofern sie zum Ausgabezeitpunkt schon veröffentlicht war.
 - **Registry:** Verzeichnisbaum lokal oder in Garage:
@@ -424,7 +424,7 @@ Eingerichtet wird das erst, wenn mindestens drei Jahre GFS-Trainingsdaten vorlie
   und Backtest-Kennzahlen nach `meta.model_version`, `meta.model_metric` und `meta.model_event`.
   `fit`, `promote` und jeder `predict`-Lauf gleichen selbst ab. Die Sicht
   `fcst.prediction_error` stellt jede gespeicherte P50-Prognose dem Ist-Wert gegenüber; daraus
-  zeigt das Status-Dashboard den Prognosefehler im Betrieb.
+  zeigt das Dashboard „Prognose und Energiedaten“ den Prognosefehler im Betrieb.
 
 - **Prognosepaket für den schlanken Stack:** `ml-train bundle <version> --out <ordner>` legt
   eine Version mit Konfiguration, Bestand aus dem MaStR und bei Wetter-Varianten den

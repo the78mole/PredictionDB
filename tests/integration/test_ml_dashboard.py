@@ -27,7 +27,7 @@ pytestmark = [
 ]
 
 ROOT = Path(__file__).parents[2]
-DASHBOARD = ROOT / "config/grafana/dashboards/status.json"
+DASHBOARD = ROOT / "config/grafana/dashboards/prognose-energiedaten.json"
 CONFIG = "it_ml_dash"
 TARGETS = {"load_actual": 50_000.0, "da_price_de_lu": 80.0}
 

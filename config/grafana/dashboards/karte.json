@@ -19,10 +19,34 @@
   "links": [
     {
       "type": "link",
-      "title": "Status",
-      "url": "/d/pdb-status/predictiondb-status",
+      "title": "Prognose und Energiedaten",
+      "url": "/d/pdb-prognose-energie/predictiondb-prognose-und-energiedaten",
       "icon": "dashboard",
-      "tooltip": "PredictionDB Status",
+      "tooltip": "Modelle, Prognosefehler, Energiedaten und Anlagenbestand",
+      "targetBlank": false,
+      "includeVars": false,
+      "keepTime": false,
+      "asDropdown": false,
+      "tags": []
+    },
+    {
+      "type": "link",
+      "title": "Wetter",
+      "url": "/d/pdb-wetter/predictiondb-wetter",
+      "icon": "dashboard",
+      "tooltip": "GFS-Läufe, Downloads, Silber und Gold",
+      "targetBlank": false,
+      "includeVars": false,
+      "keepTime": false,
+      "asDropdown": false,
+      "tags": []
+    },
+    {
+      "type": "link",
+      "title": "System",
+      "url": "/d/pdb-system/predictiondb-system",
+      "icon": "dashboard",
+      "tooltip": "Auslastung der VM, Dienste, Speicher und Datenbank",
       "targetBlank": false,
       "includeVars": false,
       "keepTime": false,

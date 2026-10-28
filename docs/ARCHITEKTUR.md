@@ -1318,7 +1318,7 @@ Analyse-Jobs sind bewusst einfach gehalten: eine YAML-Datei, ein Befehl, ein Ord
 
 ### 7.10 Prognose-Dashboard (Last und Preis DE-LU)
 
-Neben dem Status-Dashboard (`config/grafana/dashboards/status.json`) gibt es ein eigenes Grafana-Dashboard `prognose.json` für Netzlast und Day-Ahead-Preis der Gebotszone DE-LU. Es zeigt in zwei Diagrammen, was kommt und wie gut die Prognosen gestern waren. Alle Zeiten gelten in Europe/Berlin, Tagesgrenzen liegen auf Mitternacht (Sommer- und Winterzeittage haben 23 bzw. 25 Stunden).
+Neben den Status-Dashboards (`config/grafana/dashboards/`: `prognose-energiedaten.json` „Prognose und Energiedaten“, `wetter.json` „Wetter“, `system.json` „System“, untereinander und mit der Karte verlinkt) gibt es ein eigenes Grafana-Dashboard `prognose.json` für Netzlast und Day-Ahead-Preis der Gebotszone DE-LU. Es zeigt in zwei Diagrammen, was kommt und wie gut die Prognosen gestern waren. Alle Zeiten gelten in Europe/Berlin, Tagesgrenzen liegen auf Mitternacht (Sommer- und Winterzeittage haben 23 bzw. 25 Stunden).
 
 **Diagramm 1: Ausblick von −2 bis +7 Tage.** Zeitachse fest von vorgestern 00:00 bis zum Ende des siebten Folgetags (Grafana `now-2d/d` bis `now+7d/d`), Last in GW auf der linken, Preis in €/MWh auf der rechten Achse, eine senkrechte Linie markiert „jetzt“.
 
@@ -1344,7 +1344,7 @@ Weitere Prognosequellen (z. B. Wind/PV der ÜNB oder Prognosen anderer Anbieter,
 - Abfragen als Views im Schema `fcst`: `fcst.v_outlook` (Diagramm 1) und `fcst.v_yesterday_envelope` (Diagramm 2, je Größe und Zeitpunkt Ist, Vortagesprognose, Min, Max, P10, P90 und Anzahl der Prognosen). Grafana liest sie mit dem Lesebenutzer wie das Status-Dashboard.
 - `energy.value` hält je Reihe und Zeitpunkt nur den letzten Wert (Upsert in `energy_ingest`). Damit der Fehlerschlauch auch frühere ENTSO-E-Stände einschließt, schreibt `energy_ingest` bei Prognosereihen zusätzlich jeden neuen Stand in `energy.forecast_vintage (series_id, ts, published, value)`, Hypertable mit Primärschlüssel `(series_id, ts, published)`. Ist-Reihen brauchen das nicht.
 - Die Week-Ahead-Lastprognose von ENTSO-E (Tagesminimum und -maximum je Tag) wird als zusätzliche Reihe geladen.
-- Das Dashboard liegt als JSON unter `config/grafana/dashboards/prognose.json` und wird wie das Status-Dashboard provisioniert. Quellenvermerke (ENTSO-E, SMARD) stehen im Panel-Text.
+- Das Dashboard liegt als JSON unter `config/grafana/dashboards/prognose.json` und wird wie die Status-Dashboards provisioniert. Quellenvermerke (ENTSO-E, SMARD) stehen im Panel-Text.
 
 ### 7.10.1 Karten-Dashboard (Cluster, Wetter, Erzeugung)
 

@@ -80,7 +80,7 @@ docker compose --profile history up -d    # wx-import + wx-process-backfill
 `SILVER_VERSION` vorliegen. Selbst geladenes Silber bleibt unangetastet. Den lokalen Bestand meldet
 er nach `meta.silver_run` (zu Beginn eines Durchgangs alle zu holenden Läufe als `loading`, jeden
 geholten als `present`); `wx-process` meldet dort jedes Silber, das es baut oder liest. Daraus
-zeigt das Status-Dashboard je Monat den Anteil der GFS-Läufe mit lokalem Silber (grün) und im
+zeigt das Dashboard „Wetter“ je Monat den Anteil der GFS-Läufe mit lokalem Silber (grün) und im
 Download (gelb, dazu laufende Bronze-Downloads aus `meta.backfill_run`). `wx-process` erkennt
 importierte Läufe ohne Bronze, nimmt das Silber unverändert und rechnet nur Gold (in
 `meta.nwp_run` mit `endpoint = ghcr`).

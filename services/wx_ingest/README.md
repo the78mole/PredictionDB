@@ -60,7 +60,7 @@ abgebrochener Backfill wird mit demselben Aufruf fortgesetzt. Läufe, die im Arc
 bleiben `pending` und werden nicht als Fehler gewertet.
 
 Jeder Aufruf protokolliert sich in `meta.backfill_job` (Zeitraum, Läufe, Fortschritt, geladene
-Bytes, Status). Das Status-Dashboard zeigt daraus die laufenden und die letzten zehn beendeten
+Bytes, Status). Das Dashboard „Wetter“ zeigt daraus die laufenden und die letzten zehn beendeten
 Jobs. Ohne erreichbare Datenbank wird nur gewarnt und weitergeladen; `--no-job-log` schaltet das
 Protokoll ab. Ein Job, der ohne Abschluss endet (Container hart beendet), gilt beim nächsten Start
 nach einer Stunde ohne Lebenszeichen als abgebrochen.
