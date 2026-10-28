@@ -192,3 +192,46 @@ def test_features_written(engine: Engine) -> None:
     assert r2.n_values == r.n_values
     n2 = _q(engine, "SELECT count(*) FROM feat.nwp_value WHERE run_time = :r", r=RUN)[0][0]
     assert n2 == n
+
+
+def test_backfill_into_compressed_chunk(engine: Engine) -> None:
+    """Backfill entpackt den komprimierten Ziel-Chunk, schreibt und packt ihn wieder."""
+    _setup(engine)
+    config = ProcessConfig.from_yaml("config/process/gfs_0p25.yaml")
+    source = GfsConfig.model_validate(source_config([(0, 21, 3)]))
+    bronze = MemoryStore()
+    fill_bronze(bronze, STEPS)
+    store = Store(engine)
+    pipeline = WxPipeline(config, source, bronze, Silver(MemoryStore()), store)
+    n = pipeline.process(RUN, clustering=VERSION).n_values
+
+    def compressed() -> list[bool]:
+        return [
+            bool(r[0])
+            for r in _q(
+                engine,
+                """SELECT is_compressed FROM timescaledb_information.chunks
+                   WHERE hypertable_schema = 'feat' AND hypertable_name = 'nwp_value'
+                     AND range_start <= :r AND range_end > :r""",
+                r=RUN,
+            )
+        ]
+
+    with engine.begin() as c:
+        c.execute(
+            text("""SELECT compress_chunk(c, true) FROM show_chunks('feat.nwp_value') c
+                    JOIN timescaledb_information.chunks i
+                      ON format('%I.%I', i.chunk_schema, i.chunk_name)::regclass = c
+                   WHERE i.range_start <= :r AND i.range_end > :r"""),
+            {"r": RUN},
+        )
+        # Werte ohne Verarbeitungsstand: das COPY ohne DELETE stößt auf sie und ersetzt dann
+        c.execute(
+            text("DELETE FROM meta.nwp_feature_run WHERE clustering_version = :v"), {"v": VERSION}
+        )
+    assert compressed() == [True]
+    out = pipeline.backfill(RUN, RUN, clustering=VERSION, decompress=True)
+    assert [o.status for o in out] == ["processed"] and out[0].n_values == n
+    assert compressed() == [True]
+    count = _q(engine, "SELECT count(*) FROM feat.nwp_value WHERE run_time = :r", r=RUN)[0][0]
+    assert count == n
