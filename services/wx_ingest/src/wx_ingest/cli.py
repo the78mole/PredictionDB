@@ -58,9 +58,10 @@ def parse_steps(text: str) -> list[int]:
     return sorted(steps)
 
 
-def parse_hours(text: str) -> list[int]:
+def parse_hours_ordered(text: str) -> list[int]:
+    """Laufzeiten in der angegebenen Reihenfolge (Priorität), ohne Doppelte."""
     try:
-        hours = sorted({int(h) for h in text.split(",")})
+        hours = list(dict.fromkeys(int(h) for h in text.split(",")))
     except ValueError:
         raise argparse.ArgumentTypeError(f"Laufzeiten {text!r} nicht lesbar (z. B. 0,12)") from None
     if any(h not in (0, 6, 12, 18) for h in hours):
@@ -68,11 +69,23 @@ def parse_hours(text: str) -> list[int]:
     return hours
 
 
-def add_backfill_args(p: argparse.ArgumentParser) -> None:
-    """Zeitraum und Laufauswahl, gemeinsam für ``wx-ingest`` und ``wx-process``."""
+def parse_hours(text: str) -> list[int]:
+    return sorted(parse_hours_ordered(text))
+
+
+def add_backfill_args(p: argparse.ArgumentParser, *, ordered: bool = False) -> None:
+    """Zeitraum und Laufauswahl, gemeinsam für ``wx-ingest`` und ``wx-process``.
+
+    ``ordered`` behält die Reihenfolge von ``--runs`` als Priorität bei (``wx-process``).
+    """
     p.add_argument("start", type=parse_run)
     p.add_argument("end", type=parse_run, nargs="?", help="Standard: jetzt")
-    p.add_argument("--runs", type=parse_hours, metavar="HH,…", help="nur diese Läufe, z. B. 0,12")
+    p.add_argument(
+        "--runs",
+        type=parse_hours_ordered if ordered else parse_hours,
+        metavar="HH,…",
+        help="nur diese Läufe, z. B. 0,12" + (" (in dieser Reihenfolge)" if ordered else ""),
+    )
     p.add_argument("--newest-first", action="store_true", help="jüngste Läufe zuerst")
 
 

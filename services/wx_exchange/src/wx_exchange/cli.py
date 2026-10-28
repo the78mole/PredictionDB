@@ -55,7 +55,7 @@ from wx_exchange.importer import Importer
 from wx_exchange.oci import Registry, RegistryError
 from wx_exchange.publish import Publisher, plan
 from wx_ingest.bronze import Bronze
-from wx_ingest.cli import DEFAULT_CONFIG, parse_run
+from wx_ingest.cli import DEFAULT_CONFIG, parse_hours_ordered, parse_run
 from wx_ingest.config import GfsConfig
 from wx_ingest.gfs import read_templates, write_templates
 from wx_ingest.ingest import GfsIngestor
@@ -66,17 +66,6 @@ log = get_logger(__name__)
 
 DEFAULT_REPOSITORY = "the78mole/predictiondb-data/gfs-0p25-silver"
 SOURCE_URL = "https://github.com/the78mole/predictiondb"
-
-
-def parse_hours_ordered(text: str) -> list[int]:
-    """Wie ``wx_ingest.cli.parse_hours``, aber in der angegebenen Reihenfolge (Priorität)."""
-    try:
-        hours = list(dict.fromkeys(int(h) for h in text.split(",")))
-    except ValueError:
-        raise argparse.ArgumentTypeError(f"Laufzeiten {text!r} nicht lesbar (z. B. 0,12)") from None
-    if any(h not in (0, 6, 12, 18) for h in hours):
-        raise argparse.ArgumentTypeError("GFS-Läufe nur 0, 6, 12, 18 UTC")
-    return hours
 
 
 def build_parser() -> argparse.ArgumentParser:
