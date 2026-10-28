@@ -2238,6 +2238,774 @@
       }
     },
     {
+      "type": "timeseries",
+      "title": "Heute: Preis mit D+1 bis D+7 · Champion",
+      "id": 59,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 67
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT ts AS time, code AS metric, value\n  FROM energy.value_best\n WHERE code IN ('da_price_de_lu') AND $__timeFilter(ts)\n ORDER BY 1"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "-- Je Vorlauftag n die Prognose vom Tag n vor dem Liefertag, 10:00 Ortszeit (wie in den\n-- Vergleichspanels: zeitgleich mit der Day-Ahead-Lastprognose der ÜNB)\nSELECT p.valid_time AS time,\n       'D+' || ((p.valid_time AT TIME ZONE 'Europe/Berlin')::date\n                - (p.issue_time AT TIME ZONE 'Europe/Berlin')::date) AS metric, p.value\n  FROM fcst.prediction p\n WHERE p.target = 'da_price_de_lu' AND p.quantile = 0.5\n   AND p.model_version = (SELECT version FROM meta.model_version WHERE role = 'champion'\n                            ORDER BY created DESC LIMIT 1)\n   AND extract(hour FROM p.issue_time AT TIME ZONE 'Europe/Berlin') = 10\n   AND $__timeFilter(p.valid_time)\n ORDER BY 1, 2"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix:€/MWh",
+          "custom": {
+            "lineWidth": 1
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "da_price_de_lu"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Day-Ahead-Preis"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 3
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+1"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#3b82f6"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+2"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8b5cf6"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+3"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#c026d3"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+4"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#e11d48"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+5"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#f97316"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+6"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#f59e0b"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+7"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#facc15"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "description": "Der heutige Liefertag (00 bis 24 Uhr Ortszeit) mit dem Day-Ahead-Preis und allen Vorhersagen des aktuellen Champions: D+1 wurde gestern um 10:00 gerechnet, D+2 vorgestern usw. bis D+7 (Median P50). Dunkle Farben = kurzer Vorlauf, helle = langer.",
+      "timeFrom": "now/d",
+      "timeShift": "0d/d",
+      "hideTimeOverride": true,
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Morgen: Preis mit D+1 bis D+7 · Champion",
+      "id": 60,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 67
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT ts AS time, code AS metric, value\n  FROM energy.value_best\n WHERE code IN ('da_price_de_lu') AND $__timeFilter(ts)\n ORDER BY 1"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "-- Je Vorlauftag n die Prognose vom Tag n vor dem Liefertag, 10:00 Ortszeit (wie in den\n-- Vergleichspanels: zeitgleich mit der Day-Ahead-Lastprognose der ÜNB)\nSELECT p.valid_time AS time,\n       'D+' || ((p.valid_time AT TIME ZONE 'Europe/Berlin')::date\n                - (p.issue_time AT TIME ZONE 'Europe/Berlin')::date) AS metric, p.value\n  FROM fcst.prediction p\n WHERE p.target = 'da_price_de_lu' AND p.quantile = 0.5\n   AND p.model_version = (SELECT version FROM meta.model_version WHERE role = 'champion'\n                            ORDER BY created DESC LIMIT 1)\n   AND extract(hour FROM p.issue_time AT TIME ZONE 'Europe/Berlin') = 10\n   AND $__timeFilter(p.valid_time)\n ORDER BY 1, 2"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix:€/MWh",
+          "custom": {
+            "lineWidth": 1
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "da_price_de_lu"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Day-Ahead-Preis"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 3
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+1"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#3b82f6"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+2"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8b5cf6"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+3"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#c026d3"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+4"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#e11d48"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+5"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#f97316"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+6"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#f59e0b"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+7"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#facc15"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "description": "Der morgige Liefertag (00 bis 24 Uhr Ortszeit) mit allen Vorhersagen des aktuellen Champions: D+1 wurde heute um 10:00 gerechnet (erscheint also erst ab 10 Uhr), D+2 gestern usw. bis D+7 (Median P50). Den Day-Ahead-Preis für morgen gibt es erst nach der Auktion, etwa ab 13 Uhr.",
+      "timeFrom": "now/d",
+      "timeShift": "0d+1d/d",
+      "hideTimeOverride": true,
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Heute: Preis mit D+1 bis D+7 · Challenger ${challenger:text}",
+      "id": 61,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 77
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT ts AS time, code AS metric, value\n  FROM energy.value_best\n WHERE code IN ('da_price_de_lu') AND $__timeFilter(ts)\n ORDER BY 1"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "-- Je Vorlauftag n die Prognose vom Tag n vor dem Liefertag, 10:00 Ortszeit (wie in den\n-- Vergleichspanels: zeitgleich mit der Day-Ahead-Lastprognose der ÜNB)\nSELECT p.valid_time AS time,\n       'D+' || ((p.valid_time AT TIME ZONE 'Europe/Berlin')::date\n                - (p.issue_time AT TIME ZONE 'Europe/Berlin')::date) AS metric, p.value\n  FROM fcst.prediction p\n WHERE p.target = 'da_price_de_lu' AND p.quantile = 0.5\n   AND p.model_version = '${challenger}'\n   AND extract(hour FROM p.issue_time AT TIME ZONE 'Europe/Berlin') = 10\n   AND $__timeFilter(p.valid_time)\n ORDER BY 1, 2"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix:€/MWh",
+          "custom": {
+            "lineWidth": 1
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "da_price_de_lu"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Day-Ahead-Preis"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 3
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+1"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#3b82f6"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+2"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8b5cf6"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+3"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#c026d3"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+4"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#e11d48"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+5"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#f97316"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+6"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#f59e0b"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+7"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#facc15"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "description": "Der heutige Liefertag (00 bis 24 Uhr Ortszeit) mit dem Day-Ahead-Preis und allen Vorhersagen des oben gewählten Challengers (Variable Challenger): D+1 wurde gestern um 10:00 gerechnet, D+2 vorgestern usw. bis D+7 (Median P50). Dunkle Farben = kurzer Vorlauf, helle = langer.",
+      "timeFrom": "now/d",
+      "timeShift": "0d/d",
+      "hideTimeOverride": true,
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Morgen: Preis mit D+1 bis D+7 · Challenger ${challenger:text}",
+      "id": 62,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 77
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT ts AS time, code AS metric, value\n  FROM energy.value_best\n WHERE code IN ('da_price_de_lu') AND $__timeFilter(ts)\n ORDER BY 1"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "-- Je Vorlauftag n die Prognose vom Tag n vor dem Liefertag, 10:00 Ortszeit (wie in den\n-- Vergleichspanels: zeitgleich mit der Day-Ahead-Lastprognose der ÜNB)\nSELECT p.valid_time AS time,\n       'D+' || ((p.valid_time AT TIME ZONE 'Europe/Berlin')::date\n                - (p.issue_time AT TIME ZONE 'Europe/Berlin')::date) AS metric, p.value\n  FROM fcst.prediction p\n WHERE p.target = 'da_price_de_lu' AND p.quantile = 0.5\n   AND p.model_version = '${challenger}'\n   AND extract(hour FROM p.issue_time AT TIME ZONE 'Europe/Berlin') = 10\n   AND $__timeFilter(p.valid_time)\n ORDER BY 1, 2"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix:€/MWh",
+          "custom": {
+            "lineWidth": 1
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "da_price_de_lu"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Day-Ahead-Preis"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 3
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+1"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#3b82f6"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+2"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8b5cf6"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+3"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#c026d3"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+4"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#e11d48"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+5"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#f97316"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+6"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#f59e0b"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+7"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#facc15"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "description": "Der morgige Liefertag (00 bis 24 Uhr Ortszeit) mit allen Vorhersagen des oben gewählten Challengers (Variable Challenger): D+1 wurde heute um 10:00 gerechnet (erscheint also erst ab 10 Uhr), D+2 gestern usw. bis D+7 (Median P50). Den Day-Ahead-Preis für morgen gibt es erst nach der Auktion, etwa ab 13 Uhr.",
+      "timeFrom": "now/d",
+      "timeShift": "0d+1d/d",
+      "hideTimeOverride": true,
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
       "type": "table",
       "title": "Champion und Challenger im Backtest (MAE)",
       "id": 41,
@@ -2249,7 +3017,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 67
+        "y": 87
       },
       "description": "MAE der Medianprognose je Vorlauftag aus dem Backtest der aktiven Versionen (meta.model_metric). Gesamt und RMSE über alle Vorlauftage. P10–P90 = Anteil der Ist-Werte im 80-%-Band (Soll 80 %). Last in MW, Preis in €/MWh.",
       "targets": [
@@ -2332,7 +3100,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 67
+        "y": 87
       },
       "description": "Wie der Backtest, aber aus den gespeicherten Live-Prognosen (fcst.prediction) der letzten 14 Liefertage gegen die Ist-Werte, Ausgabe um 08 UTC.\n\n- **D+1, D+2, D+7**: MAE (mittlerer absoluter Fehler) für den 1., 2. bzw. 7. Tag nach der Ausgabe, also um wie viel die Prognose im Mittel danebenliegt, egal in welche Richtung (Last in MW, Preis in €/MWh).\n- **Bias**: mittlere Abweichung mit Vorzeichen (positiv: Prognose im Schnitt zu hoch, negativ: zu niedrig). Ein Bias nahe 0 bei hohem MAE heißt: die Fehler streuen, sind aber nicht systematisch.\n- **Werte**: Anzahl der verglichenen Stundenwerte.",
       "targets": [
@@ -2408,7 +3176,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 75
+        "y": 95
       },
       "panels": []
     },
@@ -2424,7 +3192,7 @@
         "h": 10,
         "w": 14,
         "x": 0,
-        "y": 76
+        "y": 96
       },
       "targets": [
         {
@@ -2566,7 +3334,7 @@
         "h": 10,
         "w": 10,
         "x": 14,
-        "y": 76
+        "y": 96
       },
       "targets": [
         {
@@ -2635,7 +3403,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 86
+        "y": 106
       },
       "targets": [
         {
@@ -2724,7 +3492,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 86
+        "y": 106
       },
       "targets": [
         {
@@ -2855,7 +3623,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 94
+        "y": 114
       },
       "panels": []
     },
@@ -2871,7 +3639,7 @@
         "h": 8,
         "w": 10,
         "x": 0,
-        "y": 95
+        "y": 115
       },
       "targets": [
         {
@@ -2992,7 +3760,7 @@
         "h": 8,
         "w": 14,
         "x": 10,
-        "y": 95
+        "y": 115
       },
       "targets": [
         {

@@ -421,6 +421,12 @@ Eingerichtet wird das erst, wenn mindestens drei Jahre GFS-Trainingsdaten vorlie
   Champion, eine für den Challenger, den die Variable „Challenger“ oben im Dashboard auswählt
   (Vorgabe: jüngster). So sieht man, wie sich die Vorhersage mit kürzer werdendem Vorlauf dem
   Ist annähert.
+- **Preis heute und morgen mit allen Vorlauftagen:** Darunter dieselbe Vierergruppe für den
+  Preis, links heute, rechts morgen (oben Champion, unten der gewählte Challenger). Für morgen
+  erscheint D+1 erst nach dem Lauf um 10:00 und der Day-Ahead-Preis erst nach der Auktion (etwa
+  13 Uhr). Zeitbereich je Panel `timeFrom: now/d` mit `timeShift: 0d/d` (heute) bzw. `0d+1d/d`
+  (morgen): Grafana rechnet die Verschiebung als `now/d-0d+1d/d` und rundet beide Grenzen auf
+  ganze Tage in Ortszeit, auch bei 23 oder 25 Stunden. Negative Verschiebungen verwirft Grafana.
 - **Registry:** Verzeichnisbaum lokal oder in Garage:
 
   ```text

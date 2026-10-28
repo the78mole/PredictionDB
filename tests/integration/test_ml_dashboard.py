@@ -221,4 +221,7 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
             got = c.execute(text(sql)).mappings().all()
             assert "D+3" in {r["metric"] for r in got if r["time"] in set(day)}
             c.execute(text(_sql(panels[pid + 1], 1).replace("${challenger}", version))).all()
+            # Preis heute und morgen: dieselbe Abfrage wie gestern
+            for other in (pid + 4, pid + 5):
+                assert _sql(panels[other], 1) == _sql(panels[pid + 1], 1)
             c.execute(text(_sql(panels[pid], 0))).all()
