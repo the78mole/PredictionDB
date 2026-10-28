@@ -34,8 +34,9 @@ on:
         type: number
         default: 8
       concurrency:
+        # 8 Jobs mit je 96 Anfragen brachten OSDF dazu, Verbindungen abzubrechen
         description: Gleichzeitige Anfragen je Job ans Archiv
-        default: "96"
+        default: "48"
       limit:
         description: Höchstens so viele Monatsjobs je Start (Matrix-Grenze 256)
         default: "256"
@@ -93,7 +94,8 @@ jobs:
       contents: read
       packages: write
     strategy:
-      max-parallel: ${{ inputs.max_parallel }}
+      # Beim Start über die API kommt die Eingabe als Text; fromJSON macht daraus eine Zahl
+      max-parallel: ${{ fromJSON(inputs.max_parallel) }}
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.plan.outputs.matrix) }}

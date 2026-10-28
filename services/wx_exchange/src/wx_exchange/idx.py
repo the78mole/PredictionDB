@@ -213,6 +213,11 @@ def unpack(data: bytes) -> dict[str, bytes]:
     return out
 
 
+def _describe(exc: BaseException) -> str:
+    """Fehlertext mit Typ; Zeitüberschreitungen von httpx haben keinen eigenen Text."""
+    return f"{type(exc).__name__}: {exc}".rstrip(": ")
+
+
 async def _inventory(endpoints: list[Endpoint], run: datetime, step: int) -> str | None:
     """``.idx``-Text der Datei; ``None``, wenn sie auf keinem Endpunkt liegt.
 
@@ -232,7 +237,7 @@ async def _inventory(endpoints: list[Endpoint], run: datetime, step: int) -> str
                 endpoint=ep.name,
                 run=f"{run:%Y%m%d%H}",
                 step=step,
-                error=str(exc),
+                error=_describe(exc),
             )
             error = exc
             continue
@@ -262,13 +267,17 @@ async def build_layer(
     parallel_files: int = 12,
     deadline: float | None = None,
     rebuild: bool = False,
+    retries: int = 3,
+    retry_pause: float = 120.0,
 ) -> IdxLayer:
     """Baut den Layer eines Monats und einer Laufzeit und lädt den Blob hoch.
 
     Ein vorhandener Layer wird übernommen; neu gelesen werden nur Dateien, die darin weder
     als ``.idx`` noch als im Archiv fehlend stehen. Ab ``deadline`` (``time.monotonic()``)
     beginnt keine neue Datei mehr; der Rest gilt als fehlgeschlagen und kommt beim nächsten
-    Start dran. Das Manifest schreibt erst :func:`merge_manifest`.
+    Start dran. Fehlgeschlagene Dateien werden bis zu ``retries`` Mal nach einer wachsenden
+    Pause (``retry_pause``, ``2 * retry_pause``, …) erneut versucht.
+    Das Manifest schreibt erst :func:`merge_manifest`.
     """
     runs = _runs(config, month, hour, start, end)
     files: dict[str, bytes] = {}
@@ -290,7 +299,8 @@ async def build_layer(
         present=len(files),
         todo=len(todo),
     )
-    failed: list[str] = []
+    failed: list[tuple[datetime, int, str]] = []
+    skipped: list[str] = []
     sem = asyncio.Semaphore(parallel_files)
     done = 0
 
@@ -298,20 +308,20 @@ async def build_layer(
         nonlocal done
         async with sem:
             if deadline is not None and time.monotonic() > deadline:
-                failed.append(file_code(run, step))
+                skipped.append(file_code(run, step))
                 return
             try:
                 text = await _inventory(endpoints, run, step)
             except Exception as exc:
-                log.warning("idx_failed", file=name, error=str(exc))
-                failed.append(file_code(run, step))
+                log.warning("idx_failed", file=name, error=_describe(exc))
+                failed.append((run, step, name))
                 return
             if text is None:
                 absent.add(file_code(run, step))
             else:
                 files[name] = text.encode()
             done += 1
-            if done % 93 == 0 or done == len(todo):
+            if done % 93 == 0:
                 log.info(
                     "idx_progress",
                     layer=layer_key(month, hour),
@@ -321,7 +331,27 @@ async def build_layer(
                     failed=len(failed),
                 )
 
-    await asyncio.gather(*(one(*t) for t in todo))
+    # Das Archiv bricht unter Last immer wieder Verbindungen ab: fehlgeschlagene Dateien nach
+    # einer Pause erneut versuchen, statt sie erst dem nächsten Start zu überlassen
+    pending = todo
+    for attempt in range(retries + 1):
+        if attempt:
+            pause = retry_pause * attempt
+            log.info("idx_retry", layer=layer_key(month, hour), files=len(pending), pause=pause)
+            await asyncio.sleep(pause)
+        failed.clear()
+        await asyncio.gather(*(one(*t) for t in pending))
+        pending = list(failed)
+        if not pending or (deadline is not None and time.monotonic() > deadline):
+            break
+    log.info(
+        "idx_progress",
+        layer=layer_key(month, hour),
+        done=done,
+        todo=len(todo),
+        absent=len(absent),
+        failed=len(pending) + len(skipped),
+    )
     unknown: Counter[str] = Counter()
     for data in files.values():
         unknown.update(_unknown(data.decode()))
@@ -335,7 +365,7 @@ async def build_layer(
         runs=len(runs),
         files=len(files),
         absent=sorted(absent),
-        failed=sorted(failed),
+        failed=sorted([file_code(r, st) for r, st, _ in pending] + skipped),
         unknown=sum(unknown.values()),
         unknown_names=[k for k, _ in unknown.most_common(_MAX_LISTED)],
         built=datetime.now(UTC).isoformat(timespec="seconds"),
