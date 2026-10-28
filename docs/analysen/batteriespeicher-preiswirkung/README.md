@@ -130,7 +130,7 @@ wie 5 GW mit 2 h.
 Ab welchem Zubau (2 h) die Schwellen erreicht sind ([tabellen/schwellen.csv](tabellen/schwellen.csv)):
 
 | Schwelle | EE wie heute | mit 50 % mehr PV, 25 % mehr Wind | 3–6 GW abgeregelt |
-|---|---|---|
+|---|---|---|---|
 | Tagesspanne −10 % | 1,8–1,9 GW | 3,5 GW | 2,4–2,8 GW |
 | Abendpreis −5 €/MWh | 3,0–3,4 GW | 4,4 GW | 3,3–3,6 GW |
 | Mittagspreis +5 €/MWh | 3,2–3,3 GW | 8,1–11,7 GW | 4,3–6,0 GW |
