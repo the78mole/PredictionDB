@@ -203,3 +203,22 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
         pct = c.execute(text(_sql(panels[40], 2))).mappings().all()
         champ = [r for r in pct if r["metric"].endswith("Champion Fehler %")]
         assert champ and champ[0]["value"] == pytest.approx(100 / 80)
+
+        # Gestern mit allen Vorlauftagen: Lauf 10 Uhr Ortszeit, drei Tage vor dem Liefertag
+        # (vor dem Lauf aus _fill, damit sich die Zeilen nicht überschneiden)
+        local = (now - timedelta(days=5)).tz_convert("Europe/Berlin").normalize()
+        issue = (local + timedelta(hours=10)).tz_convert("UTC")
+        day = pd.date_range(local + timedelta(days=3), periods=3, freq="h").tz_convert("UTC")
+    with engine.begin() as c:
+        for i, v in enumerate(versions):
+            c.execute(
+                text("INSERT INTO fcst.prediction VALUES (:m, 'load_actual', :i, :t, 0.5, :v)"),
+                [{"m": v, "i": issue.to_pydatetime(), "t": t.to_pydatetime(), "v": i} for t in day],
+            )
+    with engine.connect() as c:
+        for pid, version in ((55, versions[0]), (57, versions[1])):
+            sql = _sql(panels[pid], 1).replace("${challenger}", version)
+            got = c.execute(text(sql)).mappings().all()
+            assert "D+3" in {r["metric"] for r in got if r["time"] in set(day)}
+            c.execute(text(_sql(panels[pid + 1], 1).replace("${challenger}", version))).all()
+            c.execute(text(_sql(panels[pid], 0))).all()

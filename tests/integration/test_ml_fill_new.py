@@ -10,7 +10,7 @@ import pandas as pd
 import pytest
 from sqlalchemy import Engine, text
 
-from ml_train.predict import missing_issues, write_predictions
+from ml_train.predict import missing_compare_issues, write_predictions
 from predictiondb_core.db import create_db_engine
 from predictiondb_core.settings import Settings
 
@@ -49,16 +49,14 @@ def _rows(version: str, issues: list[pd.Timestamp]) -> pd.DataFrame:
     )
 
 
-def test_missing_issues_follow_peers_in_window(engine: Engine) -> None:
-    t0 = pd.Timestamp("2099-01-05T08", tz="UTC")
-    hours = [t0 + pd.Timedelta(hours=h) for h in range(6)]
-    write_predictions(engine, _rows(OLD, hours[:4]))
-    write_predictions(engine, _rows(OTHER, [hours[4], hours[5]]))
-    write_predictions(engine, _rows(NEW, [hours[1]]))
+def test_missing_compare_issues_in_window(engine: Engine) -> None:
+    # Winterzeit: 08 UTC (Fehler D+1) und 09 UTC = 10 Uhr Ortszeit (ÜNB-Vergleich) je Tag
+    day1 = [pd.Timestamp("2099-01-05T08", tz="UTC"), pd.Timestamp("2099-01-05T09", tz="UTC")]
+    day2 = [t + pd.Timedelta(days=1) for t in day1]
+    write_predictions(engine, _rows(NEW, [day1[1], day1[1] + pd.Timedelta(hours=3)]))
+    write_predictions(engine, _rows(OTHER, day1 + day2))
 
-    got = missing_issues(engine, NEW, [OLD, OTHER, NEW], hours[0], hours[4])
-    # hours[1] hat die neue Version schon, hours[5] liegt hinter dem Fenster
-    assert got == [hours[0], hours[2], hours[3], hours[4]]
-    # ohne andere Versionen gibt es nichts nachzurechnen
-    assert missing_issues(engine, NEW, [NEW], hours[0], hours[5]) == []
-    assert missing_issues(engine, OLD, [OLD, OTHER], hours[0], hours[5]) == hours[4:]
+    since, until = day1[0] - pd.Timedelta(hours=2), day2[1] - pd.Timedelta(minutes=30)
+    # day1[1] hat die Version schon, day2[1] liegt hinter dem Fenster; andere Versionen zählen nicht
+    assert missing_compare_issues(engine, NEW, since, until) == [day1[0], day2[0]]
+    assert missing_compare_issues(engine, OLD, since, until) == [*day1, day2[0]]

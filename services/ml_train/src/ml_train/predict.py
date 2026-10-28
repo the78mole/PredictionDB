@@ -10,9 +10,9 @@ mit der Day-Ahead-Lastprognose der ÜNB, für den Vergleich im Dashboard nie feh
 ist leakage-sicher: Merkmale nutzen nur Werte, die zum Ausgabezeitpunkt veröffentlicht waren.
 
 Kommt eine Version neu hinzu (``--fill-new``), rechnet sie rückwirkend die Ausgabezeitpunkte
-der Vergleichsgrafiken (08 UTC, 10 Uhr Ortszeit) nach, die die übrigen aktiven Versionen im
-Fenster schon haben. Sie erscheint so sofort neben Champion und Challengern, mit demselben
-Veröffentlichungsstand der Eingänge wie diese.
+der Vergleichsgrafiken (08 UTC, 10 Uhr Ortszeit) im Fenster nach. Sie erscheint so sofort neben
+Champion und Challengern, mit demselben Veröffentlichungsstand der Eingänge wie diese, und mit
+einem Fenster von acht Tagen zeigt sie für gestern alle Vorlauftage D+1 bis D+7.
 """
 
 from __future__ import annotations
@@ -78,33 +78,23 @@ def last_issue(engine: Engine, versions: list[str]) -> pd.Timestamp | None:
     return None if t is None else pd.Timestamp(t).tz_convert("UTC")
 
 
-MISSING_ISSUES = text("""
+OWN_ISSUES = text("""
     SELECT DISTINCT issue_time FROM fcst.prediction
-     WHERE model_version = ANY(:peers) AND issue_time >= :since AND issue_time <= :until
-    EXCEPT
-    SELECT DISTINCT issue_time FROM fcst.prediction
-     WHERE model_version = :version AND issue_time >= :since AND issue_time <= :until
-    ORDER BY 1""")
+     WHERE model_version = :version AND issue_time >= :since AND issue_time <= :until""")
 
 
-def missing_issues(
-    engine: Engine, version: str, peers: list[str], since: pd.Timestamp, until: pd.Timestamp
+def missing_compare_issues(
+    engine: Engine, version: str, since: pd.Timestamp, until: pd.Timestamp
 ) -> list[pd.Timestamp]:
-    """Ausgabezeitpunkte im Fenster, die andere Versionen haben, ``version`` aber nicht."""
-    peers = [p for p in peers if p != version]
-    if not peers:
-        return []
+    """Ausgabezeitpunkte der Vergleichsgrafiken im Fenster, die ``version`` noch nicht hat."""
     with engine.connect() as c:
         rows = c.execute(
-            MISSING_ISSUES,
-            {
-                "peers": peers,
-                "version": version,
-                "since": since.to_pydatetime(),
-                "until": until.to_pydatetime(),
-            },
+            OWN_ISSUES,
+            {"version": version, "since": since.to_pydatetime(), "until": until.to_pydatetime()},
         ).scalars()
-        return [pd.Timestamp(t).tz_convert("UTC") for t in rows]
+        have = {pd.Timestamp(t).tz_convert("UTC") for t in rows}
+    hours = pd.date_range(since.ceil("h"), until, freq="h")
+    return [h for h in hours if compare_issue(h) and h not in have]
 
 
 def compare_issue(issue: pd.Timestamp) -> bool:
