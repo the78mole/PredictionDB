@@ -6,6 +6,8 @@ Genutzte Endpunkte::
     /public_power?country=de&start=…&end=…        -> unix_seconds, production_types[name, data] (MW)
     /public_power_forecast?country=de&production_type=solar&forecast_type=day-ahead&…
                                                   -> unix_seconds, forecast_values (MW)
+    /cbet?country=de&start=…&end=…                -> unix_seconds, countries[name, data] (GW)
+    /cbpf?country=de&start=…&end=…                -> wie /cbet, physikalische Flüsse (GW)
 
 Zeitstempel bezeichnen den Beginn des Intervalls. Lizenz laut API-Dokumentation (v2.0): CC BY 4.0
 mit Quellenangabe Energy-Charts.info, soweit nicht anders angegeben. Für ``/price`` steht die
@@ -13,6 +15,10 @@ Lizenz im Feld ``license_info``; für DE-LU ist es CC BY 4.0 von Bundesnetzagent
 für andere Gebotszonen nur private und interne Nutzung. Neben DE-LU lädt die Quelle die
 Nachbarzonen mit CC BY 4.0 (``NEIGHBOUR_ZONES``, Datensätze ``price_<kürzel>``). Fehlt der
 Vermerk oder weicht er ab, schreibt die Quelle keine Preise (``FormatError``).
+
+``/cbet`` (Handel) und ``/cbpf`` (physikalische Flüsse) liefern je Grenzpartner und als Summe
+den Austausch Deutschlands in GW, positiv als Import; gespeichert wird in MW. Die Antwort hat
+kein ``license_info``, damit gilt laut API-Dokumentation CC BY 4.0.
 """
 
 from __future__ import annotations
@@ -25,7 +31,7 @@ from typing import Any
 import httpx
 
 from energy_ingest.http import Http
-from energy_ingest.model import NEIGHBOUR_ZONES, QUARTER_HOUR, SeriesData, series
+from energy_ingest.model import NEIGHBOUR_ZONES, QUARTER_HOUR, XB_PARTNERS, SeriesData, series
 from energy_ingest.sources import FormatError, SourceError, clip
 from predictiondb_core.log import get_logger
 
@@ -62,6 +68,12 @@ FORECASTS: dict[str, str] = {
     "wind_offshore": "gen_da_forecast_wind_offshore",
     "load": "load_da_forecast",
 }
+
+
+# Datensatz -> Endpunkt und Präfix der Reihen-Codes
+CROSS_BORDER: dict[str, str] = {"cbet": "xb_trade_", "cbpf": "xb_flow_"}
+
+GW = 1000.0
 
 
 def _iso(ts: datetime) -> str:
@@ -105,6 +117,7 @@ class EnergyCharts:
             *(f"price_{z}" for z in NEIGHBOUR_ZONES.values()),
             "public_power",
             *(f"forecast_{t}" for t in FORECASTS),
+            *CROSS_BORDER,
         ]
 
     def max_chunk(self, dataset: str) -> timedelta:
@@ -170,5 +183,23 @@ class EnergyCharts:
             stamps = [datetime.fromtimestamp(int(s), tz=UTC) for s in data["unix_seconds"]]
             pts = _points(stamps, data.get("forecast_values") or [], start, end)
             return [SeriesData(series(FORECASTS[ptype]), _resolution(stamps), pts)] if pts else []
+
+        if dataset in CROSS_BORDER:
+            data = self._get(dataset, {"country": self.country, **window})
+            if not data or not data.get("unix_seconds"):
+                return []
+            stamps = [datetime.fromtimestamp(int(s), tz=UTC) for s in data["unix_seconds"]]
+            res = _resolution(stamps)
+            out = []
+            for c in data.get("countries", []):
+                partner = XB_PARTNERS.get(str(c.get("name", "")).strip())
+                if partner is None:
+                    log.warning("energy_charts.unknown_partner", name=c.get("name"))
+                    continue
+                values = [None if v is None else float(v) * GW for v in c.get("data") or []]
+                pts = _points(stamps, values, start, end)
+                if pts:
+                    out.append(SeriesData(series(CROSS_BORDER[dataset] + partner), res, pts))
+            return out
 
         raise KeyError(dataset)

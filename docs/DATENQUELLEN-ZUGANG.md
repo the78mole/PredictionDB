@@ -34,8 +34,8 @@ Betreiber unter Nennung der Quellen frei veröffentlichen.
 | NCAR GDEX d084001 | GFS-Historie vor v16 (bis 2021-03-22 06Z, nur `gfs-history.yml` mit `source: gdex`) | nein | CC BY 4.0, „NCEP GFS 0.25 Degree Global Forecast Grids Historical Archive, Research Data Archive at NCAR, doi:10.5065/D65D8PWK“ |
 | Marktstammdatenregister (MaStR) | installierte Leistung PV/Wind | nein | Datenlizenz Deutschland – Namensnennung 2.0 |
 | SMARD (Bundesnetzagentur) | Day-Ahead-Preis, Last, Erzeugung, Prognosen | nein | CC BY 4.0, „Bundesnetzagentur \| SMARD.de“ |
-| Energy-Charts (Fraunhofer ISE) | Day-Ahead-Preis DE-LU und 14 Nachbarzonen, Erzeugung, Last, PV/Wind-Prognose | nein | CC BY 4.0, „Energy-Charts.info“; Preise DE-LU und Nachbarzonen: CC BY 4.0, „Bundesnetzagentur \| SMARD.de“ |
-| ENTSO-E, freier Teil (`entsoe_last`) | Day-Ahead-Lastprognose (6.1.b) | Token (siehe unten) | CC BY 4.0, „ENTSO-E Transparency Platform“ |
+| Energy-Charts (Fraunhofer ISE) | Day-Ahead-Preis DE-LU und 14 Nachbarzonen, Erzeugung, Last, PV/Wind-Prognose, Handel und physikalische Flüsse je Grenze | nein | CC BY 4.0, „Energy-Charts.info“; Preise DE-LU und Nachbarzonen: CC BY 4.0, „Bundesnetzagentur \| SMARD.de“ |
+| ENTSO-E, freier Teil (`entsoe_last`) | Day-Ahead-Lastprognose (6.1.b) für DE und 11 Nachbarzonen | Token (siehe unten) | CC BY 4.0, „ENTSO-E Transparency Platform“ |
 | `pdb_marktwert` | Monats- und Jahresmarktwerte | – | eigene Berechnung aus SMARD |
 | EIA, eigene Reihen (`eia`) | ULSD (Diesel/Gasöl) | optional, kostenlos | Public Domain |
 | EIA Short-Term Energy Outlook (`eia_steo`) | Monatsprognosen Brent und Henry Hub je Ausgabe | nein | Public Domain (nur die Prognosen; die Ist-Werte von Thomson Reuters in derselben Tabelle werden nicht übernommen) |
@@ -97,7 +97,8 @@ Erzeugung frei, `pdb_marktwert` die Marktwerte, Weltbank und Oil Bulletin die Br
 
 ### ENTSO-E Transparency Platform
 
-Der Token schaltet die freie Day-Ahead-Lastprognose (`entsoe_last`) ohne weiteren Schalter frei.
+Der Token schaltet die freien Day-Ahead-Lastprognosen (`entsoe_last`, Deutschland und
+Nachbarzonen) ohne weiteren Schalter frei.
 Für Preis, Ist-Last, Erzeugung und Wind/PV-Prognose (`entsoe`) braucht es zusätzlich
 `PDB_ALLOW_ENTSO_E=true`.
 
@@ -152,7 +153,6 @@ nicht geladen:
 
 | Reihe | Quelle | Nutzen für die Prognose |
 |---|---|---|
-| Grenzüberschreitender Handel und physikalische Flüsse | Energy-Charts `/cbet`, `/cbpf` | Import/Export als Teil der Residuallast |
 | Nettoerzeugung inkl. Industrie-Eigenversorgung | Energy-Charts `/total_power` | vollständigere Erzeugungs- und Lastbilanz |
 | Installierte Leistung je Energieträger | Energy-Charts `/installed_power` | Plausibilitätsprüfung zu MaStR, Kraftwerkspark konventionell |
 | Lastprognosen Woche/Monat/Jahr voraus, Übertragungskapazitäten | ENTSO-E (Free-Re-use-Liste, Token nötig) | längere Vorläufe, Engpässe an den Grenzen |

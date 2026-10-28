@@ -70,5 +70,20 @@ def test_free_load_forecast_is_separate_source(make_http: Callable[..., Http]) -
     http = make_http(fixture_handler("entsoe_ack.xml", status=200))
     free, unfree = EntsoeLast(http, "tok"), Entsoe(http, "tok")
     assert free.free and not unfree.free
-    assert free.datasets() == ["load_forecast"]
-    assert "load_forecast" not in unfree.datasets()
+    assert free.datasets()[0] == "load_forecast"
+    assert "load_forecast_fr" in free.datasets()
+    assert not set(free.datasets()) & set(unfree.datasets())
+
+
+def test_neighbour_load_forecast(make_http: Callable[..., Http]) -> None:
+    xml = (FIXTURES / "entsoe_a44.xml").read_bytes()
+
+    def h(req: httpx.Request) -> httpx.Response:
+        assert req.url.params["documentType"] == "A65"
+        assert req.url.params["processType"] == "A01"
+        assert req.url.params["outBiddingZone_Domain"] == "10YFR-RTE------C"
+        return httpx.Response(200, content=xml)
+
+    (data,) = EntsoeLast(make_http(h), "tok").fetch("load_forecast_fr", T0, T1)
+    assert data.code == "load_da_forecast_fr"
+    assert data.info.kind == "load_da_forecast"
