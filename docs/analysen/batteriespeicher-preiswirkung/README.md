@@ -57,6 +57,14 @@ von 82 €/kW/a bei 2 GW auf 53 bei 10 GW und 36 bei 20 GW. Mit mehr PV liegt er
 63 €/kW/a. Das bremst den Ausbau irgendwo zwischen 15 und 30 GW, wenn nicht Regelleistung,
 Intraday und Netzentgeltbefreiung den Rest bezahlen.
 
+**Energy Sharing (§42c EnWG) mobilisiert kaum zusätzliche Speicher.** Für Ü20- und
+Bestandsanlagen bringt die Gemeinschaft bei 8 bis 9 ct/kWh nur 1 bis 3 ct je geteilter kWh mehr
+als die heutige Vergütung, kleine Ü20-Anlagen verlieren das an die Messkosten. Den Vorteil haben
+die Mitglieder (2027 rund 11 bis 16 ct/kWh). Ü20-Speicher rechnen sich über den Eigenverbrauch,
+nicht über die ESC. Selbst wenn bis 2029 die Hälfte der Ü20-Anlagen nachrüstet, sinkt die
+Tagesspanne 2030 nur um 1 bis 3 Prozentpunkte zusätzlich (siehe
+[Ergänzung: Energy Sharing](#ergänzung-energy-sharing-42c-enwg)).
+
 **Für das Prognosemodell:** Die Wirkung ist so groß, dass das Modell sie schon 2027 als
 systematischen Fehler zeigen wird, vor allem am Mittag zu niedrig und am Abend zu hoch. Ein
 Vorschlag für Merkmale steht unten.
@@ -195,6 +203,211 @@ fast allen Klassen kleiner als 2024 und 2025
 ([tabellen/rueckblick_tagesspanne.csv](tabellen/rueckblick_tagesspanne.csv)). Weil 2026 das
 Erdgas teuer war, steigt das Tagesmittel mit, die Kennzahl ist deshalb nur ein Hinweis.
 
+## Ergänzung: Energy Sharing (§42c EnWG)
+
+Frage des Nutzers: Lohnen sich Energy Sharing Communities (ESC) für Ü20-Anlagen mit Speicher und
+für Bestandsanlagen, wenn mehrere Anlagen in einer Gemeinschaft erlaubt sind? Die Annahmen dazu
+sind 8 bis 9 ct/kWh Erzeugerpreis, 0,5 bis 1 ct/kWh Direktvermarktung und der Strompreisanstieg
+2027. Und wie viel zusätzliche Speicherleistung käme dadurch, mit welcher Preiswirkung? Gerechnet
+mit `esc.py`, Tabellen `tabellen/esc_*.csv`.
+
+### Kurz
+
+- **Für Ü20-Anlagen bringt die ESC wenig, für ihren Speicher fast nichts.** Gegen die
+  Anschlussvergütung nach §23b EEG bringt der geteilte Strom 1 bis 3 ct/kWh mehr. Bei kleinen
+  Anlagen frisst das intelligente Messsystem (50 bis 130 €/a) diesen Vorteil auf. Eine Anlage mit
+  30 kWp braucht 9 ct und mehrere Dutzend Haushalte, dann bleiben 300 bis 570 €/a übrig. Ein nachgerüsteter
+  Speicher rechnet sich bei einer Ü20-Anlage mit eigenem Haushalt trotzdem gut, aber über den
+  Eigenverbrauch: 2027 bringt er rund 300 €/a für 5 kWh, das sind über 15 Jahre gut 800 €/kWh.
+  Die ESC ändert daran fast nichts.
+- **Bestandsanlagen wechseln nur, wenn ihre Vergütung unter dem ESC-Preis abzüglich Kosten
+  liegt.** Die Schwelle liegt bei 7,0 bis 8,5 ct/kWh. Darunter fallen vor allem kleine Anlagen von
+  Mitte 2021 bis Juli 2022 (6,2 bis 7,5 ct) und größere Anlagen mit ohnehin niedrigeren Sätzen.
+  Für eine Anlage mit 10 kWp sind es dann 25 bis 120 €/a mehr, bei 11 ct bis gut 200 €/a.
+- **Den eigentlichen Vorteil haben die Mitglieder.** Steigt der Börsenpreis 2027 wie erwartet,
+  liegt die Beschaffungskomponente im Haushaltstarif bei 18 bis 21 ct/kWh netto. Ein ESC-Preis von
+  8 bis 9 ct spart dann 11 bis 16 ct/kWh brutto, mit der regionalen Stromsteuerbefreiung 13 bis
+  18 ct. Das ist Spielraum für höhere Erzeugerpreise. Erst ab etwa 11 ct lohnt sich die ESC auch
+  für die meisten Erzeuger spürbar.
+- **Ein höherer Börsenpreis macht die ESC für Erzeuger nicht besser, sondern schlechter.** Er hebt
+  auch den Jahresmarktwert Solar, den die Ü20-Anlage nach §23b ohnehin bekommt (2025: 4,6 ct,
+  2027: 6,1 bis 7,7 ct). Ein fester Erzeugerpreis von 8 ct verliert damit seinen Abstand.
+- **Die zusätzlichen Speicher bewegen den Preis kaum.** Bis 2029 fallen 7,2 GW PV bis 100 kW aus
+  der Förderung. Rüstet ein Viertel davon mit 0,5 kW je kWp nach, sind das 0,9 GW und 1,8 GWh.
+  Laufen sie im Eigenverbrauch und für die Gemeinschaft, verringern sie die Tagesspanne 2030 um
+  weitere 0,5 Prozentpunkte. Fährt ein Direktvermarkter sie nach dem Preis, sind es 1,5
+  Prozentpunkte, bei Nachrüstung der Hälfte 3 Prozentpunkte. Der Großspeicherzubau ist um eine
+  Größenordnung wichtiger.
+
+![Energy Sharing](grafiken/esc.png)
+
+### Rechtsstand (Oktober 2026)
+
+- **§42c EnWG** ([gesetze-im-internet.de](https://www.gesetze-im-internet.de/enwg_2005/__42c.html)),
+  beschlossen im Dezember 2025. Gemeinsame Nutzung von Strom aus EE-Anlagen oder Speichern ist
+  ab 1.6.2026 im Bilanzierungsgebiet eines Verteilnetzbetreibers möglich, ab 1.6.2028 auch im
+  direkt angrenzenden Gebiet derselben Regelzone. Teilnehmen dürfen natürliche Personen,
+  Personengesellschaften, kleine und mittlere Unternehmen und juristische Personen, deren
+  Mitglieder Letztverbraucher sind. Der Betrieb darf nicht überwiegend gewerblich sein.
+  Speicher dürfen nur EE-Strom aufnehmen.
+- **„Eine Anlage“:** Der Gesetzestext spricht durchgehend von „einer Anlage“ bzw. „der Anlage“.
+  Ob eine Gemeinschaft mehrere Anlagen bündeln darf, regelt er nicht ausdrücklich. Diese Ergänzung
+  nimmt an, dass das geklärt ist, wie vom Nutzer vorausgesetzt.
+- **Lieferantenpflichten** entfallen für Anlagen bis 30 kW, im Mehrparteienhaus bis 100 kW. Nötig
+  sind Viertelstundenwerte (intelligentes Messsystem oder RLM), ein Vertrag mit
+  Aufteilungsschlüssel und ein Preis in ct/kWh.
+- **Keine Netzentgeltvorteile.** Netzentgelte, Umlagen und Steuern fallen auf den geteilten Strom
+  voll an. Der Bundesrat hatte Ermäßigungen angeregt, die Bundesregierung verwies auf die
+  Zuständigkeit der Bundesnetzagentur. Einziger finanzieller Vorteil ist die Stromsteuerbefreiung
+  für Strom aus EE-Anlagen unter 2 MW, der im Umkreis von 4,5 km verbraucht wird (§9 Abs. 1 Nr. 3
+  StromStG mit §12b StromStV). Quelle: [FfE, Gesetzliche Premiere für Energy Sharing,
+  27.2.2026](https://www.ffe.de/wp-content/uploads/2026/03/FfE_Gesetzliche-Premiere-fuer-Energy-Sharing-Regulatorische-Rahmenbedingungen-und-naechste-Schritte.pdf),
+  S. 8.
+- **Vermarktungsform:** Der geteilte Strom gilt als sonstige Direktvermarktung. Für den Rest
+  hebt §21b Abs. 2 EEG die starre Aufteilung nur für die Kombination mit dem Marktprämienmodell
+  auf, nicht für die feste Einspeisevergütung (FfE, S. 8). Eine Bestandsanlage, die teilt, muss
+  den Rest also über einen Direktvermarkter verkaufen. Massenmarktfähige Direktvermarktung unter
+  25 kW fehlt laut FfE noch.
+- **Ü20:** Ausgeförderte Anlagen bis 100 kW bekommen bis Ende 2032 den Jahresmarktwert Solar,
+  höchstens 10 ct, abzüglich Vermarktungskosten (§23b, §25 Abs. 2 EEG,
+  [gesetze-im-internet.de](https://www.gesetze-im-internet.de/eeg_2014/__23b.html)). Der Abzug lag
+  2025 bei 0,715 ct (mit intelligentem Messsystem halbiert), 2024 bei 1,808 ct. Die Kombination
+  mit sonstiger Direktvermarktung fällt nicht unter die Ausnahme von §21b Abs. 2. Gerechnet ist
+  deshalb: Wer teilt, verkauft auch den Rest über einen Direktvermarkter zum Stundenpreis.
+
+### Annahmen
+
+- **Preisniveau 2027** aus freien Daten (keine Terminpreise). Der Day-Ahead-Preis lag 2025 im
+  Mittel bei 89 €/MWh, von August bis Oktober 2026 bei 145 €/MWh (SMARD). Der EIA-STEO vom Oktober
+  2026 erwartet Brent 2027 im Mittel bei 84 $/bbl, 20 % unter August bis Oktober 2026, Henry Hub
+  etwa gleich. Mit einer Elastizität von 1 (der Anstieg 2025 auf 2026 passte dazu) ergibt das
+  rund 116 €/MWh („STEO-Richtung“). Als obere Variante bleibt es bei 145 €/MWh. Die Stundenpreise
+  2025 werden dafür skaliert, nur die positiven. So bleibt der Solarmittag billig, steigt aber
+  mit, wie 2026 beobachtet.
+- **Haushaltstarif:** BDEW Strompreisanalyse 08/2026, 37,0 ct/kWh, davon Beschaffung und
+  Vertrieb 15,2 ct netto
+  ([BDEW](https://www.bdew.de/media/documents/BDEW_Strompreisanalyse_082026.pdf)). Für 2027
+  steigt die Beschaffung um die Änderung des H0-gewichteten Börsenpreises (2025: 9,3 ct, 2027:
+  12,1 bzw. 15,2 ct), der Arbeitspreis entsprechend auf 40,3 bzw. 44,0 ct brutto.
+- **Anlagen:** PV-Form und Preise stündlich aus SMARD 2025, Haushalt mit dem dynamisierten
+  H0-Profil (3 500 kWh), Ü20-Ertrag 850 kWh/kWp, Speicher 1 kWh und 0,5 kW je kWp, 90 %
+  Rundlaufwirkungsgrad. Der Speicher lädt zuerst für den eigenen Bedarf der nächsten 12 Stunden,
+  dann teilt die Anlage, und für die Gemeinschaft lädt er nur, wenn der Stundenpreis unter dem
+  ESC-Erlös nach Verlust liegt. Die Gemeinschaft besteht aus 1 bis 50 Haushalten mit
+  H0-Profil.
+- **Messung:** 100 €/a für das intelligente Messsystem an der Anlage, wenn es nicht ohnehin
+  vorhanden ist. Die Preisobergrenzen nach §30 MsbG liegen je nach Leistung und Netzbetreiber bei
+  50 bis 130 €/a (z. B. [e-netz Südhessen
+  2026](https://www.e-netz-suedhessen.de/fileadmin/download/Preisblatt_smart_meter_rollout_2026.pdf)).
+  Bestandsanlagen über 7 kW haben es ohnehin.
+- **Bestandsanlagen:** Vergütung für Anlagen bis 10 kWp nach Inbetriebnahme (BSW-Übersicht nach
+  EEG 2021, [solarwirtschaft.de](https://www.solarwirtschaft.de/datawall/uploads/2021/02/EEG-Verguetungsuebersicht-Basis.pdf);
+  EEG 2023 §48 und §49). Der Rest im Marktprämienmodell bringt den anzulegenden Wert, also die
+  Vergütung plus 0,4 ct, abzüglich Direktvermarktungskosten.
+
+### Ü20-Anlagen
+
+Mehrerlös 2027 (STEO-Richtung) gegenüber §23b ohne Speicher, €/a, 1 ct Kosten
+([tabellen/esc_kurz.csv](tabellen/esc_kurz.csv)):
+
+| Anlage | ESC-Preis | 10 Haushalte, ohne Speicher | 10 Haushalte, mit Speicher | nur Speicher, ohne ESC |
+|---|---|---|---|---|
+| 5 kWp mit Haushalt | 8 ct | −57 | +223 | +302 |
+| 5 kWp mit Haushalt | 9 ct | −31 | +239 | +302 |
+| 5 kWp mit Haushalt, Messsystem vorhanden | 9 ct | +69 | +339 | +302 |
+| 5 kWp Volleinspeisung | 9 ct | +11 | +11 | 0 |
+| 30 kWp Volleinspeisung | 8 ct | −129 | +154 | 0 |
+| 30 kWp Volleinspeisung | 9 ct | +12 | +336 | 0 |
+| 30 kWp Volleinspeisung, 50 Haushalte | 9 ct | +568 | +568 | 0 |
+
+- Ohne Speicher teilt eine 5-kWp-Anlage schon mit fünf Haushalten fast ihren ganzen Überschuss.
+  Mehr Mitglieder bringen nichts mehr. Je geteilter kWh gewinnt sie gegenüber §23b nur
+  8 − 1 − (6,1 − 0,7) = 1,6 ct.
+- Der Speicher ist bei der Ü20-Anlage mit Haushalt der eigentliche Gewinn, aber nicht wegen der
+  ESC. Er ersetzt Netzstrom zu 40 ct. Was er über 15 Jahre wert ist: ohne ESC 906 €/kWh, mit
+  ESC 740 bis 870 €/kWh, weil er dann Überschuss verbraucht, der sonst zu 7 bis 8 ct geteilt
+  würde ([tabellen/esc_speicherwert.csv](tabellen/esc_speicherwert.csv)). Die Annahme des
+  Nutzers, dass Ü20-Anlagen bei günstigen Bedingungen nachrüsten, ist damit gut begründet. Die
+  Bedingung ist aber der Wechsel in den Eigenverbrauch, nicht die ESC.
+- Bei Volleinspeisung (kein Haushalt am Anlagenzähler) ist ein Speicher für die ESC 0 bis 200
+  €/kWh wert. Er verschiebt Mittagsstrom (Spotwert 2027 rund 6 ct) in den Abend, bekommt dort aber
+  auch nur den festen ESC-Preis. Ein fester Preis je kWh belohnt die Verschiebung nicht. Ein nach
+  Tageszeit gestaffelter ESC-Preis würde das ändern. §42c verlangt nur einen Preis in ct/kWh und
+  schließt das nicht aus.
+- Mit dem höheren Niveau (145 €/MWh) wird es für Erzeuger enger: Der Jahresmarktwert steigt auf
+  7,7 ct, und 8 ct ESC-Preis bringen bei Volleinspeisung durchweg weniger als §23b. Ab 2033
+  entfällt §23b. Dann ist die Alternative nur noch die Direktvermarktung zum Stundenpreis, und
+  die ESC wird für Ü20-Anlagen wichtiger.
+
+### Bestandsanlagen
+
+10 kWp, 10 kWh Speicher, 10 Haushalte in der Gemeinschaft, Mehrerlös in €/a gegenüber der festen
+Einspeisevergütung ([tabellen/esc_bestand.csv](tabellen/esc_bestand.csv)):
+
+| Vergütung (Inbetriebnahme) | 8 ct, 1 ct Kosten | 9 ct, 0,5 ct Kosten | 11 ct, 1 ct Kosten |
+|---|---|---|---|
+| 6,2 ct (Juli 2022) | +24 | +118 | +211 |
+| 6,8 ct (Januar 2022) | −12 | +81 | +174 |
+| 7,5 ct (Juli 2021) | −51 | +42 | +134 |
+| 7,8 ct (Februar 2026) | −70 | +22 | +115 |
+| 8,2 ct (August 2022, EEG 2023) | −94 | −2 | +90 |
+| 9,9 ct (Januar 2020) | −195 | −104 | −15 |
+
+Die Gemeinschaft nimmt rund 6 200 der 6 300 kWh Einspeisung ab. Wer wechselt, verliert auf dem
+Rest 0,1 bis 0,6 ct (Marktprämie plus 0,4 ct, minus Direktvermarktung) und gewinnt auf dem
+geteilten Strom die Differenz zwischen ESC-Preis abzüglich Kosten und seiner Vergütung. Die
+Bestandsanlagen bis 100 kW von Mitte 2021 bis Juli 2022 kommen laut MaStR auf grob 2,5 bis 3 GW
+(Jahrgang 2021: 2,4 GW, 2022: 3,4 GW bis 100 kW; der Anteil vor August 2022 ist geschätzt). Ihr Speicher ändert durch die ESC kaum seine Fahrweise, weil er weiter zuerst den
+eigenen Haushalt versorgt.
+
+### Mitglieder
+
+Ersparnis je geteilter kWh gegenüber Beschaffung und Vertrieb im Haushaltstarif
+([tabellen/esc_mitglied.csv](tabellen/esc_mitglied.csv)):
+
+| Preisniveau | Beschaffung + Vertrieb netto | ESC 8 ct | ESC 9 ct | ESC 11 ct | 9 ct mit Stromsteuerbefreiung |
+|---|---|---|---|---|---|
+| 2025 | 15,2 ct | 8,6 ct | 7,4 ct | 5,0 ct | 9,8 ct |
+| 2027 STEO-Richtung | 18,0 ct | 11,9 ct | 10,7 ct | 8,3 ct | 13,2 ct |
+| 2027 Niveau Aug–Okt 2026 | 21,1 ct | 15,5 ct | 14,4 ct | 12,0 ct | 16,8 ct |
+
+Brutto, Netzentgelte und Umlagen sind auf beiden Seiten gleich. Das bestätigt die Aussage des
+Nutzers: Bei steigendem Strompreis werden 8 bis 9 ct für Abnehmer sehr günstig. Der Vorteil
+überzeichnet aber: Der geteilte Strom kommt vor allem mittags. Sein Börsenwert liegt 2027 bei
+3 bis 12 ct/kWh (`spotwert_geteilt` in [tabellen/esc_ue20.csv](tabellen/esc_ue20.csv)), und der
+Reststromlieferant wird den teureren Rest (Abend, Winter) einpreisen.
+
+### Mobilisierte Speicher und Preiswirkung
+
+Ü20-Welle aus dem MaStR-Bestand in Betrieb, Anlagen bis 100 kW
+([tabellen/esc_ue20_welle.csv](tabellen/esc_ue20_welle.csv), Abruf mit `mastr_pv_jahrgaenge.py`):
+Ende 2026 sind 2,1 GW aus der Förderung, Ende 2027 3,0 GW, Ende 2029 7,2 GW und Ende 2032
+17,3 GW. Die großen Jahrgänge 2009 bis 2012 fallen 2029 bis 2032 heraus.
+
+Zusätzliche Speicher bei Nachrüstung (0,5 kW und 1 kWh je kWp) und ihre Wirkung, eingesetzt in
+die Simulation oben (empirische Kurve, 2 h, auf dem Pfad „Zubau wie 2026“ mit 70 % am
+Day-Ahead-Preis wirksam; [tabellen/esc_mobilisierung.csv](tabellen/esc_mobilisierung.csv)):
+
+| Jahr | Nachrüstquote | Speicher GW / GWh | Tagesspanne zusätzlich, lastfolgend | preisgeführt |
+|---|---|---|---|---|
+| 2027 | 25 % | 0,26 / 0,52 | −0,2 Prozentpunkte | −0,7 Prozentpunkte |
+| 2027 | 50 % | 0,52 / 1,03 | −0,4 | −1,4 |
+| 2030 | 25 % | 0,90 / 1,81 | −0,5 | −1,5 |
+| 2030 | 50 % | 1,81 / 3,61 | −0,9 | −3,0 |
+
+„Lastfolgend“ heißt: Der Speicher deckt Eigenverbrauch und Gemeinschaft, wirkt also nur zu 30 %
+wie ein marktgeführter Speicher. „Preisgeführt“ heißt: Ein Direktvermarkter fährt ihn nach dem
+Börsenpreis, zu 100 %. Zum Vergleich: Der Pfad selbst senkt die Spanne bis 2030 schon um 29 %.
+Die ESC macht aus den Ü20-Speichern also keinen preisrelevanten Faktor. Wichtiger wäre, ob die
+Direktvermarktung über die ESC die vielen kleinen Speicher überhaupt preisgeführt fahren lässt.
+Dann zählt nicht nur die Ü20-Nachrüstung, sondern der ganze Heimspeicherbestand von 15,6 GW.
+Schon 10 % davon preisgeführt wären so viel wie die Hälfte aller Ü20-Anlagen bis 2029
+nachgerüstet.
+
+Nicht gerechnet: Netzentgeltvorteile (gibt es nicht), Stromsteuer beim Erzeuger, Kosten für
+Gründung und Abrechnung der Gemeinschaft, Prognosefehler im Speicherbetrieb, Wolken (die
+SMARD-Form glättet über ganz Deutschland, der geteilte Anteil ist deshalb eher zu hoch).
+
 ## Modell
 
 1. **Speicherbestand:** öffentliche Einheitenübersicht des MaStR (`mastr_abruf.py`). Einheiten
@@ -284,10 +497,19 @@ Nur ein Vorschlag, nicht umgesetzt.
   Speichertabellen werden dort aber noch nicht ausgewertet.
 - [SMARD](https://www.smard.de) (Bundesnetzagentur), Stundenwerte ab 2019 für Day-Ahead-Preis
   DE-LU, Netzlast, Residuallast und Erzeugung je Energieträger, CC BY 4.0 (`smard_abruf.py`).
+- MaStR-Einheitenübersicht Solar (in Betrieb) je Inbetriebnahmejahr und Größenklasse, Abruf
+  28.10.2026 (`mastr_pv_jahrgaenge.py`).
+- [EIA Short-Term Energy Outlook](https://www.eia.gov/outlooks/steo/) Oktober 2026, Tabelle 2
+  (Brent, Henry Hub), gemeinfrei. H0-Profil aus
+  [pv-speicher-szenario-2027/daten](../pv-speicher-szenario-2027/daten).
 - Merit-Order-Treppen aus [merit-order/tabellen](../merit-order/tabellen) (Stand 27.10.2026).
 - Von Hand übernommen, nur zur Einordnung: Netzanschlussanfragen und -zusagen 2025 (pv
   magazine, s. o.), Bestand Ende September 2026 von
   [Energy-Charts](https://www.energy-charts.info), Szenariorahmen NEP 2037 (Genehmigung 2023).
+  Für die Energy-Sharing-Ergänzung: Haushaltsstrompreis und Beschaffungsanteil (BDEW
+  Strompreisanalyse 08/2026), EEG-Vergütungssätze (BSW-Übersicht, EEG 2023), Abzug nach §23b,
+  Preisobergrenzen für intelligente Messsysteme (Preisblatt e-netz Südhessen 2026) und die
+  Einordnung der FfE, alle mit Link im Abschnitt.
 
 ## Nachrechnen
 
@@ -303,6 +525,16 @@ Auswerten (gut zwei Minuten, Tabellen und Grafiken landen in diesem Ordner):
 ```bash
 uv run --no-project --with pandas --with numpy --with scipy --with matplotlib \
     python docs/analysen/batteriespeicher-preiswirkung/auswertung.py --daten ./speicher-daten
+```
+
+Energy-Sharing-Ergänzung: PV-Jahrgänge aus dem MaStR holen (rund 20 Minuten), dann `esc.py`
+(wenige Sekunden). `esc.py` liest `tabellen/simulation.csv` und `tabellen/zeitachse.csv` aus
+`auswertung.py`:
+
+```bash
+uv run --no-project --with requests python docs/analysen/batteriespeicher-preiswirkung/mastr_pv_jahrgaenge.py ./speicher-daten/mastr
+uv run --no-project --with pandas --with numpy --with matplotlib \
+    python docs/analysen/batteriespeicher-preiswirkung/esc.py --daten ./speicher-daten
 ```
 
 Annahmen (Basisjahr, Wirkungsgrad, Speicherdauer, Marktanteile, Schwellen) stehen oben in
