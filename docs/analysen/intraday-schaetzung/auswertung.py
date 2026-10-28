@@ -12,7 +12,6 @@ from pathlib import Path
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
-from sklearn.linear_model import LinearRegression
 
 d = Path(sys.argv[1])
 out = d / "out"
@@ -26,7 +25,7 @@ ida = pd.read_csv(io.StringIO("\n".join(lines[:split])), sep=";", dtype=str)
 reb = pd.read_csv(io.StringIO("\n".join(lines[split:])), sep=";", dtype=str)
 
 
-def num(s):
+def num(s: pd.Series) -> pd.Series:
     return pd.to_numeric(
         s.str.replace(".", "", regex=False).str.replace(",", ".", regex=False), errors="coerce"
     )
@@ -87,7 +86,7 @@ print(f"Nutzbare Viertelstunden: {len(df)}")
 
 
 # --- 1) Wie weit liegt Intraday überhaupt vom Day-Ahead weg?
-def stats(g):
+def stats(g: pd.DataFrame) -> pd.Series:
     s = g["spread"]
     return pd.Series(
         {
@@ -134,10 +133,10 @@ print("\nKorrelation mit Spread:", corr.to_dict())
 # --- 3) Modelle, Zeit-Split
 train = df[df.index < pd.Timestamp("2025-01-01", tz="UTC")]
 test = df[df.index >= pd.Timestamp("2025-01-01", tz="UTC")]
-res = {}
+res: dict[str, dict[str, float]] = {}
 
 
-def score(name, pred_spread, part=test):
+def score(name: str, pred_spread: np.ndarray, part: pd.DataFrame = test) -> None:
     err = part["spread"] - pred_spread
     sst = ((part["spread"] - part["spread"].mean()) ** 2).sum()
     tag = (err.groupby(part.index.tz_convert("Europe/Berlin").date).mean()).abs().mean()
@@ -160,7 +159,7 @@ b1 = np.array([prof.get(k, fallback.get(k[1:], 0.0)) for k in key])
 score("B1 DA + Tagesprofil", b1)
 
 
-def lin_x(part):
+def lin_x(part: pd.DataFrame) -> pd.DataFrame:
     x = pd.DataFrame(
         {
             "err_wind": part["err_wind"],
@@ -173,9 +172,14 @@ def lin_x(part):
     return x.join(pd.get_dummies(part["hour"], prefix="h", dtype=float))
 
 
-lr = LinearRegression().fit(lin_x(train), train["spread"])
-score("L1 linear Prognosefehler", lr.predict(lin_x(test)))
-coef = pd.Series(lr.coef_, index=lin_x(train).columns)
+def design(part: pd.DataFrame) -> np.ndarray:
+    x = lin_x(part).reindex(columns=lin_x(train).columns, fill_value=0.0)
+    return np.column_stack([np.ones(len(x)), x.to_numpy(dtype=float)])
+
+
+beta = np.linalg.lstsq(design(train), train["spread"].to_numpy(dtype=float), rcond=None)[0]
+score("L1 linear Prognosefehler", design(test) @ beta)
+coef = pd.Series(beta[1:], index=lin_x(train).columns)
 print(
     "\nL1-Koeffizienten (EUR/MWh je GW):",
     coef[[c for c in coef.index if not c.startswith("h_")]].round(2).to_dict(),
@@ -208,7 +212,7 @@ g = lgb.LGBMRegressor(
     verbose=-1,
 )
 g.fit(train[feat], train["spread"])
-score("G1 LightGBM Prognosefehler", g.predict(test[feat]))
+score("G1 LightGBM Prognosefehler", np.asarray(g.predict(test[feat])))
 feat0 = ["da", "res_fc", "res_fc_intrahour", "hour", "qh", "month", "dow", "da_qh"]
 g0 = lgb.LGBMRegressor(
     n_estimators=600,
@@ -222,7 +226,7 @@ g0 = lgb.LGBMRegressor(
     verbose=-1,
 )
 g0.fit(train[feat0], train["spread"])
-score("G0 LightGBM ohne Ist-Werte (nur vorab bekannt)", g0.predict(test[feat0]))
+score("G0 LightGBM ohne Ist-Werte (nur vorab bekannt)", np.asarray(g0.predict(test[feat0])))
 t3 = pd.DataFrame(res).T.round(3)
 t3.to_csv(out / "t3_modelle_test_2025_2026.csv")
 print(
