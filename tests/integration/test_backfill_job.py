@@ -27,6 +27,12 @@ RUN = datetime(2099, 1, 1, tzinfo=UTC)
 RUNS = [RUN + timedelta(hours=12 * i) for i in range(3)]
 
 
+def _panels() -> dict[int, dict]:  # type: ignore[type-arg]
+    """Panels nach id, auch die in zugeklappten Zeilen."""
+    top = json.loads(DASHBOARD.read_text())["panels"]
+    return {p["id"]: p for t in top for p in [t, *t.get("panels", [])]}
+
+
 @pytest.fixture
 def engine() -> Iterator[Engine]:
     eng = create_db_engine(Settings())
@@ -54,7 +60,7 @@ def test_job_log_lifecycle(engine: Engine) -> None:
     assert (row["n_complete"], row["n_skipped"], row["n_incomplete"]) == (2, 1, 1)
     assert (row["n_failed_steps"], row["bytes_stored"], row["status"]) == (1, 100, "running")
 
-    panels = {p["id"]: p for p in json.loads(DASHBOARD.read_text())["panels"]}
+    panels = _panels()
     with engine.connect() as c:
         running = c.execute(text(panels[25]["targets"][0]["rawSql"])).mappings().all()
     assert any(r["Job"] == jobs.job_id and float(r["Fortschritt"]) == 100.0 for r in running)
@@ -144,7 +150,7 @@ def test_run_log_queue_and_dashboard(engine: Engine) -> None:
     assert (runs[newest]["status"], runs[newest]["steps_done"]) == ("running", 1)
     assert (runs[newest]["bytes_stored"], runs[middle]["status"]) == (100, "skipped")
 
-    panels = {p["id"]: p for p in json.loads(DASHBOARD.read_text())["panels"]}
+    panels = _panels()
     with engine.connect() as c:
         queue = c.execute(text(panels[27]["targets"][0]["rawSql"])).mappings().all()
         done = c.execute(text(panels[28]["targets"][0]["rawSql"])).mappings().all()
@@ -183,7 +189,7 @@ def test_live_job(engine: Engine) -> None:
     jobs.finish("aborted", "beendet")
     runs = _runs(engine, jobs.job_id)
     assert (runs[RUNS[1]]["status"], runs[RUNS[2]]["status"]) == ("complete", "handed_over")
-    panels = {p["id"]: p for p in json.loads(DASHBOARD.read_text())["panels"]}
+    panels = _panels()
     with engine.connect() as c:
         done = c.execute(text(panels[26]["targets"][0]["rawSql"])).mappings().all()
     mine = next(r for r in done if r["Job"] == jobs.job_id)
