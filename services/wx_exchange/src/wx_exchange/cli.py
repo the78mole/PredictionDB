@@ -574,7 +574,9 @@ async def _gefs_vm(
         )
         while True:
             try:
-                result = await vm.cycle(gold_limit=args.gold_limit)
+                result = await vm.cycle(
+                    gold_limit=args.gold_limit, history_every=args.watch or 1800
+                )
                 print(json.dumps(result.as_dict(), default=str), flush=True)
             except (RegistryError, httpx.HTTPError) as exc:
                 if not args.watch:

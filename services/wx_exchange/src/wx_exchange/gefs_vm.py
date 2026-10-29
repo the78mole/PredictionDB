@@ -466,13 +466,19 @@ class GefsVm:
                 self._mark(imported, "ghcr")
         return counts
 
-    def process_gold(self, limit: int | None = None) -> Counter[str]:
+    def process_gold(
+        self, limit: int | None = None, before: datetime | None = None
+    ) -> Counter[str]:
         counts: Counter[str] = Counter()
         if self.gold is None:
             return counts
         done = self.gold.done(self.regions.version)
         local = self.local.runs()
-        todo = sorted((r for r, i in local.items() if i.fingerprint == self.fp and r not in done))
+        todo = sorted(
+            r
+            for r, i in local.items()
+            if i.fingerprint == self.fp and r not in done and (before is None or r < before)
+        )
         # jüngste zuerst: der Live-Betrieb braucht den neuen Lauf sofort
         for run in todo[::-1][:limit]:
             try:
@@ -506,17 +512,29 @@ class GefsVm:
             deleted += 1
         return deleted, kept
 
-    async def cycle(self, *, gold_limit: int | None = None) -> CycleResult:
+    async def cycle(
+        self, *, gold_limit: int | None = None, history_every: float = 1800
+    ) -> CycleResult:
+        """Live-Aufbau und Historie nebeneinander.
+
+        Der erste Aufbau des laufenden Monats dauert Stunden (≈ 20 min je Lauf). Solange er läuft,
+        importiert der Durchgang alle ``history_every`` Sekunden, was Actions inzwischen nach GHCR
+        geschoben hat, und rechnet dafür Gold (höchstens ``gold_limit`` Läufe je Runde).
+        """
         result = CycleResult()
         if not self._bronze_synced:
             await asyncio.to_thread(self.sync_bronze)
             self._bronze_synced = True
-        # Historie zuerst: der Import ist schnell, der Aufbau des aktuellen Monats dauert beim
-        # ersten Durchgang Stunden (≈ 20 min je Lauf)
-        result.imported = await asyncio.to_thread(self.import_history)
-        result.gold = await asyncio.to_thread(self.process_gold, gold_limit)
         before = set(self.local.runs())
-        result.live = await self.live()
+        live = asyncio.create_task(self.live())
+        current = month_start(self.now()) - timedelta(days=self.catch_up_days)
+        while True:
+            result.imported.update(await asyncio.to_thread(self.import_history))
+            result.gold.update(await asyncio.to_thread(self.process_gold, gold_limit, current))
+            if live.done():
+                break
+            await asyncio.wait({live}, timeout=history_every)
+        result.live = await live
         # Gold für die eben gebauten Läufe sofort, nicht erst im nächsten Durchgang
         built = len(set(self.local.runs()) - before)
         if built:
