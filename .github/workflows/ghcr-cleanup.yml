@@ -24,10 +24,20 @@ jobs:
   cleanup:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/delete-package-versions@v5
-        with:
-          owner: the78mole
-          package-name: predictiondb-data/${{ inputs.package }}
-          package-type: container
-          min-versions-to-keep: 0
-          delete-only-untagged-versions: "true"
+      # actions/delete-package-versions löscht höchstens 100 Versionen je Lauf; nach Neubauten
+      # sind es mehr. Daher erst alle untagged IDs einsammeln, dann einzeln löschen.
+      - name: Untagged Versionen löschen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE: predictiondb-data/${{ inputs.package }}
+        run: |
+          set -euo pipefail
+          base="/users/the78mole/packages/container/${PACKAGE//\//%2F}/versions"
+          gh api --paginate "$base?per_page=100" \
+            --jq '.[] | select((.metadata.container.tags | length) == 0) | .id' > untagged.txt
+          echo "Untagged: $(wc -l < untagged.txt)"
+          n=0
+          while read -r id; do
+            gh api -X DELETE "$base/$id" --silent && n=$((n + 1))
+          done < untagged.txt
+          echo "Gelöscht: $n" | tee -a "$GITHUB_STEP_SUMMARY"
