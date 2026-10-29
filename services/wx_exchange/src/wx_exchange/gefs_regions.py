@@ -4,15 +4,15 @@ Die Gewichte müssen im Runner vorliegen, weil dort schon je Region verdichtet w
 deshalb eine versionierte Datei im Repository. Eine neue Version baut die GEFS-Historie neu
 (``fingerprint`` enthält den Hash der Datei).
 
-Version 1:
+Version 2 (Version 1 reichte nur von 41 bis 63° N und 5° W bis 25° O, mit wenigen Nachbarzonen):
 
 - **DE** aus dem MaStR (DL-DE BY 2.0): Leistung je 0,5°-Zelle für Wind an Land, Wind auf See
   und PV (Frei- plus Dachflächen), dazu die leistungsgewichtete Nabenhöhe. Die Zellwerte kommen
   als CSV aus der Datenbank der VM (Abfrage ``config/gefs/mastr_cells.sql``).
-- **DE** und alle Nachbar- und Kopplungszonen zusätzlich flächengewichtet (``<zone>:area``),
-  aus den Grenzen von Natural Earth (gemeinfrei). DK1/DK2, NO2, SE3/SE4 und IT-Nord sind aus
-  Verwaltungsregionen zusammengesetzt. Freie Anlagenregister der Nachbarn ersetzen das in einer
-  späteren Version (``<zone>:wind``, ``<zone>:pv``).
+- **Alle Gebotszonen des Verbundnetzes** (``ZONES``, auch DE) flächengewichtet
+  (``<zone>:area``), aus den Grenzen von Natural Earth (gemeinfrei). Zonen innerhalb eines
+  Landes sind aus Verwaltungsregionen zusammengesetzt. Freie Anlagenregister der Nachbarn
+  ergänzen das in einer späteren Version (``<zone>:wind``, ``<zone>:pv``).
 """
 
 from __future__ import annotations
@@ -39,22 +39,44 @@ NATURAL_EARTH = (
 ADMIN0 = "ne_10m_admin_0_countries"
 ADMIN1 = "ne_10m_admin_1_states_provinces"
 
-#: Zone → Länder (ADM0_A3) bzw. Land und Verwaltungsregionen (admin-1 ``name``, bei Italien
-#: ``region``)
-ZONES: dict[str, dict[str, Any]] = {
-    "DE": {"adm0": "DEU"},
-    "AT": {"adm0": "AUT"},
-    "BE": {"adm0": "BEL"},
-    "CH": {"adm0": "CHE"},
-    "CZ": {"adm0": "CZE"},
-    "DK1": {"adm1": "DNK", "names": ["Nordjylland", "Midtjylland", "Syddanmark"]},
-    "DK2": {"adm1": "DNK", "names": ["Hovedstaden", "Sjaælland"]},
-    "FR": {"adm0": "FRA"},
-    "HU": {"adm0": "HUN"},
-    "IT-Nord": {
-        "adm1": "ITA",
-        "field": "region",
-        "names": [
+
+def _land(code: str) -> list[dict[str, Any]]:
+    return [{"adm0": code}]
+
+
+def _parts(adm0: str, names: list[str], field: str = "name") -> list[dict[str, Any]]:
+    return [{"adm1": adm0, "field": field, "names": names}]
+
+
+#: Gebotszone → Teile: ganze Länder (``ADM0_A3``) oder Verwaltungsregionen eines Landes
+#: (admin-1 ``name``, bei Italien ``region``, bei Großbritannien ``geonunit``). Umfang: das
+#: synchrone Verbundnetz Kontinentaleuropa plus Nordeuropa, GB und Irland (ENTSO-E), dazu
+#: Ukraine, Moldau und die Türkei; ohne Maghreb, Island und Zypern (Nutzer 2026-10-29).
+#: Norwegische und schwedische Zonen folgen den Grenzen der Provinzen nur näherungsweise.
+ZONES: dict[str, list[dict[str, Any]]] = {
+    "DE": _land("DEU"),
+    "AL": _land("ALB"),
+    "AT": _land("AUT"),
+    "BA": _land("BIH"),
+    "BE": _land("BEL"),
+    "BG": _land("BGR"),
+    "CH": _land("CHE"),
+    "CZ": _land("CZE"),
+    "DK1": _parts("DNK", ["Nordjylland", "Midtjylland", "Syddanmark"]),
+    "DK2": _parts("DNK", ["Hovedstaden", "Sjaælland"]),
+    "EE": _land("EST"),
+    "ES": _land("ESP"),
+    "FI": _land("FIN"),
+    "FR": _land("FRA"),
+    "GB": _parts("GBR", ["England", "Scotland", "Wales"], "geonunit"),
+    "GR": _land("GRC"),
+    "HR": _land("HRV"),
+    "HU": _land("HUN"),
+    # Single Electricity Market: Irland und Nordirland
+    "IE": _land("IRL") + _parts("GBR", ["Northern Ireland"], "geonunit"),
+    "IT-Nord": _parts(
+        "ITA",
+        [
             "Piemonte",
             "Valle d'Aosta",
             "Lombardia",
@@ -64,13 +86,36 @@ ZONES: dict[str, dict[str, Any]] = {
             "Liguria",
             "Emilia-Romagna",
         ],
-    },
-    "NL": {"adm0": "NLD"},
-    "NO2": {"adm1": "NOR", "names": ["Vest-Agder", "Aust-Agder", "Rogaland", "Telemark"]},
-    "PL": {"adm0": "POL"},
-    "SE3": {
-        "adm1": "SWE",
-        "names": [
+        "region",
+    ),
+    "IT-CNor": _parts("ITA", ["Toscana", "Marche", "Umbria"], "region"),
+    "IT-CSud": _parts("ITA", ["Lazio", "Abruzzo", "Campania"], "region"),
+    "IT-Sud": _parts("ITA", ["Molise", "Apulia", "Basilicata"], "region"),
+    "IT-Calabria": _parts("ITA", ["Calabria"], "region"),
+    "IT-Sicilia": _parts("ITA", ["Sicily"], "region"),
+    "IT-Sardegna": _parts("ITA", ["Sardegna"], "region"),
+    "LT": _land("LTU"),
+    "LV": _land("LVA"),
+    "MD": _land("MDA"),
+    "ME": _land("MNE"),
+    "MK": _land("MKD"),
+    "NL": _land("NLD"),
+    "NO1": _parts(
+        "NOR", ["Oslo", "Akershus", "Østfold", "Hedmark", "Oppland", "Buskerud", "Vestfold"]
+    ),
+    "NO2": _parts("NOR", ["Vest-Agder", "Aust-Agder", "Rogaland", "Telemark"]),
+    "NO3": _parts("NOR", ["Møre og Romsdal", "Sør-Trøndelag", "Nord-Trøndelag"]),
+    "NO4": _parts("NOR", ["Nordland", "Troms", "Finnmark"]),
+    "NO5": _parts("NOR", ["Hordaland", "Sogn og Fjordane"]),
+    "PL": _land("POL"),
+    "PT": _land("PRT"),
+    "RO": _land("ROU"),
+    "RS": _land("SRB"),
+    "SE1": _parts("SWE", ["Norrbotten"]),
+    "SE2": _parts("SWE", ["Västerbotten", "Jämtland", "Västernorrland", "Gävleborg"]),
+    "SE3": _parts(
+        "SWE",
+        [
             "Stockholm",
             "Uppsala",
             "Södermanland",
@@ -83,9 +128,13 @@ ZONES: dict[str, dict[str, Any]] = {
             "Västmanland",
             "Dalarna",
         ],
-    },
-    "SE4": {"adm1": "SWE", "names": ["Skåne", "Blekinge", "Kronoberg", "Halland", "Kalmar"]},
-    "SI": {"adm0": "SVN"},
+    ),
+    "SE4": _parts("SWE", ["Skåne", "Blekinge", "Kronoberg", "Halland", "Kalmar"]),
+    "SI": _land("SVN"),
+    "SK": _land("SVK"),
+    "TR": _land("TUR"),
+    "UA": _land("UKR"),
+    "XK": _land("KOS"),
 }
 
 #: MaStR-Technologie → Region in DE
@@ -118,22 +167,26 @@ def load_natural_earth(directory: Path) -> tuple[dict[str, Any], dict[str, Any]]
 
 def zone_rings(zone: str, admin0: dict[str, Any], admin1: dict[str, Any]) -> list[F64]:
     """Außenringe der Polygone einer Zone als Arrays (lon, lat)."""
-    spec = ZONES[zone]
-    if "adm0" in spec:
-        feats = [f for f in admin0["features"] if f["properties"].get("ADM0_A3") == spec["adm0"]]
-    else:
-        key = spec.get("field", "name")
-        feats = [
+    feats: list[dict[str, Any]] = []
+    for part in ZONES[zone]:
+        if "adm0" in part:
+            found0 = [
+                f for f in admin0["features"] if f["properties"].get("ADM0_A3") == part["adm0"]
+            ]
+            if not found0:
+                raise ValueError(f"{zone}: keine Grenzen für {part['adm0']}")
+            feats += found0
+            continue
+        key = part["field"]
+        found1 = [
             f
             for f in admin1["features"]
-            if f["properties"].get("adm0_a3") == spec["adm1"]
-            and f["properties"].get(key) in spec["names"]
+            if f["properties"].get("adm0_a3") == part["adm1"]
+            and f["properties"].get(key) in part["names"]
         ]
-        found = {f["properties"].get(key) for f in feats}
-        if missing := set(spec["names"]) - found:
+        if missing := set(part["names"]) - {f["properties"].get(key) for f in found1}:
             raise ValueError(f"{zone}: Regionen nicht gefunden: {sorted(missing)}")
-    if not feats:
-        raise ValueError(f"{zone}: keine Grenzen gefunden")
+        feats += found1
     rings: list[F64] = []
     for f in feats:
         g = f["geometry"]
@@ -185,6 +238,8 @@ def area_cells(rings: list[F64], bbox: BBox, res: float, sub: int = 6) -> list[l
                     [round(float(la), 3), round(float(lo), 3), frac * math.cos(math.radians(la))]
                 )
     total = sum(c[2] for c in cells)
+    if total <= 0:
+        raise ValueError("Zone liegt außerhalb des Ausschnitts")
     return [[c[0], c[1], round(c[2] / total, 6)] for c in cells]
 
 

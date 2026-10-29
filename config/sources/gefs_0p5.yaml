@@ -1,7 +1,7 @@
 # NOAA GEFS v12, 0,5°, aus dem AWS-Archiv noaa-gefs-pds (NOAA Open Data, gemeinfrei).
 # Verdichtet wird nur im Runner (GitHub Actions, wx-exchange gefs publish): je Lauf, Mitglied
 # und Schritt die Felder unten per Byte-Bereich laden, auf Europa zuschneiden und zu Kennzahlen
-# je Region (config/gefs/regions_v1.json.gz) verdichten. GRIB bleibt nie liegen; nach GHCR geht
+# je Region (config/gefs/regions_v2.json.gz) verdichten. GRIB bleibt nie liegen; nach GHCR geht
 # nur das Silber (Werte je Mitglied, Schritt, Region und Größe). Siehe docs/ARCHITEKTUR.md 5.6.
 code: gefs_0p5
 base_url: https://noaa-gefs-pds.s3.amazonaws.com
@@ -23,8 +23,9 @@ fields:
   dswrf: {product: a, param: DSWRF, level: surface}
   u100: {product: b, param: UGRD, level: 100 m above ground}
   v100: {product: b, param: VGRD, level: 100 m above ground}
-bbox: {north: 63, south: 41, west: -5, east: 25}
-regions: config/gefs/regions_v1.json.gz
+# Verbundnetz: ENTSO-E (mit Nordeuropa, GB, Irland), Ukraine, Moldau, Türkei (Nutzer 2026-10-29)
+bbox: {north: 71.5, south: 34.5, west: -10.5, east: 45}
+regions: config/gefs/regions_v2.json.gz
 # gleichzeitige Anfragen ans Archiv je Job
 concurrency: 48
 # Läufe jünger als das gelten als noch nicht vollständig veröffentlicht (nicht als fehlend)

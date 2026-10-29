@@ -195,7 +195,15 @@ def test_repository_config_loads() -> None:
     assert len(cfg.members) == 31 and len(cfg.steps.list()) == 65
     assert cfg.first_run == datetime(2021, 3, 22, 12, tzinfo=UTC)
     regions = Regions.load(cfg.regions)
-    assert {"DE:wind_on", "DE:wind_off", "DE:pv", "DE:area", "FR:area"} <= set(regions.codes)
+    assert {
+        "DE:wind_on",
+        "DE:wind_off",
+        "DE:pv",
+        "DE:area",
+        "ES:area",
+        "TR:area",
+        "NO4:area",
+    } <= set(regions.codes)
     for r in regions.regions:
         assert r.share.sum() == pytest.approx(1.0)
         assert (r.lat <= cfg.bbox.north).all() and (r.lat >= cfg.bbox.south).all()

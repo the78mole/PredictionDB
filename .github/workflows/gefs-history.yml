@@ -2,24 +2,24 @@ name: GEFS-Ensemble
 
 # Baut das GEFS-Silber im Runner (nie auf der VM): je Job ein Monat der 00Z-Läufe, je Lauf
 # 31 Mitglieder × 65 Schritte per Byte-Bereich aus dem AWS-Archiv, je Region und Mitglied
-# verdichtet (config/sources/gefs_0p5.yaml, config/gefs/regions_v1.json.gz). Nach GHCR geht nur
+# verdichtet (config/sources/gefs_0p5.yaml, config/gefs/regions_v2.json.gz). Nach GHCR geht nur
 # das Silber: ghcr.io/the78mole/predictiondb-data/gefs-0p5-silver (Tag JJJJ-MM-00z). Die VM holt
 # es später per Import.
 #
-# Der Plan liest den Stand aus den Manifesten und nimmt nur Monate mit Lücken, jüngste zuerst;
-# ein erneuter Start setzt also fort. Läufe jünger als pending_hours gelten nicht als fehlend.
-# Täglich per Zeitplan kommen die neuen Läufe dazu (00Z ist gegen 06 UTC vollständig).
+# Nur abgeschlossene Monate: Den aktuellen Monat baut die VM selbst (mit Bronze, ARCHITEKTUR.md
+# 5.6). Ohne Eingabe endet der Plan deshalb am letzten Lauf des Vormonats. Er liest den Stand aus
+# den Manifesten und nimmt nur Monate mit Lücken, jüngste zuerst; ein erneuter Start setzt also
+# fort. Der wöchentliche Zeitplan füllt Lücken, z. B. wenn die VM am Monatsende ausgefallen war.
 on:
   schedule:
-    - cron: "40 7 * * *"
-    - cron: "40 10 * * *"
+    - cron: "40 7 * * 1"
   workflow_dispatch:
     inputs:
       start:
         description: Frühester Lauf (leer = Beginn der GFS-v16-Historie)
         default: ""
       end:
-        description: Spätester Lauf (leer = jetzt)
+        description: Spätester Lauf (leer = Ende des Vormonats)
         default: ""
       rebuild:
         description: Vorhandene Läufe neu bauen, nur Änderungen hochladen
@@ -57,8 +57,8 @@ jobs:
           END: ${{ inputs.end }}
           REBUILD: ${{ inputs.rebuild == true }}
         run: |
-          args=(gefs plan "$START")
-          [ -n "$END" ] && args+=("$END")
+          END=${END:-$(date -u -d "$(date -u +%Y-%m-01) -6 hours" +%Y-%m-%dT%H)}
+          args=(gefs plan "$START" "$END")
           [ "$REBUILD" = "true" ] && args+=(--all)
           uv run --no-sync wx-exchange "${args[@]}"
 
@@ -94,7 +94,7 @@ jobs:
           END: ${{ inputs.end }}
           REBUILD: ${{ inputs.rebuild == true }}
         run: |
-          args=(gefs publish "$MONTH" "$HOUR" --start "$START" --parallel-runs 2)
-          [ -n "$END" ] && args+=(--end "$END")
+          END=${END:-$(date -u -d "$(date -u +%Y-%m-01) -6 hours" +%Y-%m-%dT%H)}
+          args=(gefs publish "$MONTH" "$HOUR" --start "$START" --end "$END" --parallel-runs 2)
           [ "$REBUILD" = "true" ] && args+=(--rebuild)
           uv run --no-sync wx-exchange "${args[@]}"
