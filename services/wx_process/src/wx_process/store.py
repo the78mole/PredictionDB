@@ -34,6 +34,7 @@ BUSY_RETRY_S = 600.0
 
 SilverStatus = Literal["loading", "present"]
 SilverOrigin = Literal["bronze", "ghcr"]
+BronzeStatus = Literal["loading", "present", "deleted"]
 
 
 class Chunk(NamedTuple):
@@ -409,6 +410,36 @@ class Store:
                 VALUES (:s, :r, :st, :o)
                 ON CONFLICT (source_id, run_time) DO UPDATE SET status = EXCLUDED.status,
                   origin = EXCLUDED.origin, updated_at = now()"""),
+                params,
+            )
+
+    # --- Bronze-Bestand (meta.bronze_run, GEFS auf der VM, nur für das Status-Dashboard) -----
+
+    def bronze_runs(self, source_id: int) -> dict[datetime, str]:
+        with self.engine.connect() as c:
+            rows = c.execute(
+                text("SELECT run_time, status FROM meta.bronze_run WHERE source_id = :s"),
+                {"s": source_id},
+            ).all()
+        return {r[0]: str(r[1]) for r in rows}
+
+    def mark_bronze(
+        self,
+        source_id: int,
+        runs: Iterable[datetime],
+        status: BronzeStatus,
+        nbytes: int | None = None,
+    ) -> None:
+        params = [{"s": source_id, "r": r, "st": status, "b": nbytes} for r in runs]
+        if not params:
+            return
+        with self.engine.begin() as c:
+            c.execute(
+                text("""
+                INSERT INTO meta.bronze_run (source_id, run_time, status, bytes)
+                VALUES (:s, :r, :st, :b)
+                ON CONFLICT (source_id, run_time) DO UPDATE SET status = EXCLUDED.status,
+                  bytes = coalesce(EXCLUDED.bytes, meta.bronze_run.bytes), updated_at = now()"""),
                 params,
             )
 

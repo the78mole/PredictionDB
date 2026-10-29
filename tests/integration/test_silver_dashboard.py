@@ -1,4 +1,5 @@
-"""Silber-Bestand je Lauf (``meta.silver_run``) und die Monatsbalken für Bronze, Silber und Gold.
+"""Bestand je Lauf (``meta.silver_run``, ``meta.bronze_run``) und die Monatsbalken für Bronze,
+Silber und Gold, links GFS, rechts GEFS.
 
 Läuft nur mit ``PDB_INTEGRATION=1`` nach ``migrate``. Meldet Läufe im April 2021 über
 ``wx_process.store.Store`` wie ``wx-process`` und ``wx-import``, legt einen laufenden
@@ -39,10 +40,11 @@ def engine() -> Iterator[Engine]:
     eng = create_db_engine(Settings())
     yield eng
     with eng.begin() as c:
-        c.execute(
-            text("DELETE FROM meta.silver_run WHERE run_time >= :a AND run_time < :b"),
-            {"a": APRIL, "b": MAY},
-        )
+        for table in ("meta.silver_run", "meta.bronze_run"):
+            c.execute(
+                text(f"DELETE FROM {table} WHERE run_time >= :a AND run_time < :b"),
+                {"a": APRIL, "b": MAY},
+            )
         c.execute(text("DELETE FROM meta.backfill_job WHERE host = :h"), {"h": HOST})
         c.execute(
             text("DELETE FROM meta.nwp_feature_run WHERE run_time >= :a AND run_time < :b"),
@@ -88,8 +90,8 @@ def test_store_and_month_bars(engine: Engine) -> None:
     def april(hours: str) -> tuple[float, float]:
         with engine.connect() as c:
             rows = {r[0]: r[1:] for r in c.execute(text(_panel_sql(hours))).all()}
-        assert "2021-03" in rows and min(rows) == "2021-03"
-        return tuple(float(v) for v in rows["2021-04"])  # type: ignore[return-value]
+        assert "2021-03" in rows and min(k for k in rows if k) == "2021-03"
+        return tuple(float(v) for v in rows["2021-04"][:2])  # type: ignore[return-value]
 
     # 00Z: alles fertig
     assert april("'0'") == (100.0, 0.0)
@@ -147,7 +149,8 @@ def test_gold_month_bars(engine: Engine) -> None:
 
     with engine.connect() as c:
         rows = {r[0]: r[1:] for r in c.execute(text(_panel_sql("'0'", 47))).all()}
-    assert tuple(float(v) for v in rows["2021-04"]) == (round(1000 / 30, 1), round(1000 / 30, 1))
+    gfs = tuple(float(v) for v in rows["2021-04"][:2])
+    assert gfs == (round(1000 / 30, 1), round(1000 / 30, 1))
 
 
 def test_bronze_month_bars(engine: Engine) -> None:
@@ -183,4 +186,62 @@ def test_bronze_month_bars(engine: Engine) -> None:
     with engine.connect() as c:
         rows = {r[0]: r[1:] for r in c.execute(text(_panel_sql("'6'", 52))).all()}
     # fertig: 4 aus Silber (Bronze) + 4 aus Downloads = 8, im Download 1 von 30
-    assert tuple(float(v) for v in rows["2021-04"]) == (round(800 / 30, 1), round(100 / 30, 1))
+    gfs = tuple(float(v) for v in rows["2021-04"][:2])
+    assert gfs == (round(800 / 30, 1), round(100 / 30, 1))
+
+
+def _gefs_april(engine: Engine, panel_id: int) -> tuple[float, ...]:
+    with engine.connect() as c:
+        result = c.execute(text(_panel_sql("'0'", panel_id)))
+        cols = list(result.keys())
+        rows = result.all()
+    # je Monat drei Zeilen: GFS (beschriftet), GEFS, Lücke
+    i = next(i for i, r in enumerate(rows) if r[0] == "2021-04")
+    assert rows[i + 1][0] == "" and all(v is None for v in rows[i + 2][1:])
+    gefs = [j for j, k in enumerate(cols) if k.startswith("GEFS")]
+    assert all(rows[i][j] is None for j in gefs)
+    return tuple(float(rows[i + 1][j] or 0) for j in gefs)
+
+
+def test_gefs_month_bars(engine: Engine) -> None:
+    """GEFS als rechter Balken: je Tag ein 00Z-Lauf, Bronze aus meta.bronze_run."""
+    store = Store(engine)
+    sid = store.source_id("gefs_0p5")
+    runs = _runs(0)
+    # Bronze: 10 vorhanden, 2 im Download (einer davon veraltet), 3 nach der Frist gelöscht
+    store.mark_bronze(sid, runs[:10], "loading")
+    store.mark_bronze(sid, runs[:10], "present", 1000)
+    store.mark_bronze(sid, runs[10:12], "loading")
+    store.mark_bronze(sid, runs[12:15], "deleted")
+    with engine.begin() as c:
+        c.execute(
+            text(
+                "UPDATE meta.bronze_run SET updated_at = now() - interval '1 day' "
+                "WHERE source_id = :s AND run_time = :r"
+            ),
+            {"s": sid, "r": runs[11]},
+        )
+    assert store.bronze_runs(sid)[runs[0]] == "present"
+    assert _gefs_april(engine, 52) == (round(1000 / 30, 1), round(100 / 30, 1), 10.0)
+
+    # Silber: 20 vorhanden, 1 im Bau
+    store.mark_silver(sid, runs[:20], "present", "ghcr")
+    store.mark_silver(sid, runs[20:21], "loading", "bronze")
+    assert _gefs_april(engine, 46) == (round(2000 / 30, 1), round(100 / 30, 1))
+
+    # Gold: 6 mit aktueller Version, 1 mit alter; Rest der 20 mit Silber in Arbeit
+    future = datetime(2099, 1, 1, tzinfo=UTC)
+    with engine.begin() as c:
+        for i, r in enumerate(runs[:7]):
+            c.execute(
+                text("""INSERT INTO meta.nwp_feature_run (source_id, run_time, clustering_version,
+                          features_version, silver_key, n_values, processed_at)
+                        VALUES (:s, :r, :v, '1', 'test', 0, :t)"""),
+                {
+                    "s": sid,
+                    "r": r,
+                    "v": "it_alt" if i == 6 else CLUSTERING,
+                    "t": future + timedelta(minutes=i if i < 6 else -1),
+                },
+            )
+    assert _gefs_april(engine, 47) == (20.0, round(1400 / 30, 1))

@@ -388,8 +388,14 @@ async def test_vm_builds_current_month_with_bronze_and_imports_history(tmp_path:
         )
         await pub.publish_month("2099-01", 0, jan[0], jan[-1])
         vm = vm_for(tmp_path, archive, fake, c, now)
+        states: list[tuple[datetime, str, int | None]] = []
+        vm.bronze.on_state = lambda r, st, n: states.append((r, st, n))
         result = await vm.cycle()
 
+    # Status je Lauf für das Dashboard: erst laden, dann vorhanden mit Bytes
+    assert [(r, st) for r, st, _ in states if st == "loading"] == [(r, "loading") for r in feb]
+    present = {r: n for r, st, n in states if st == "present"}
+    assert set(present) == set(feb) and all(n and n > 0 for n in present.values())
     # aktueller Monat selbst gebaut, mit Bronze; der 31.01. lag schon in GHCR (sonst baut die
     # VM die letzten Tage des Vormonats mit), Januar wird importiert
     assert vm.bronze.runs() == feb
