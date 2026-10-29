@@ -196,11 +196,16 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
         assert live and live[0]["Bias"] == pytest.approx(1.0)
         assert any(r["Aktion"] == "Champion" for r in rows[43])
         assert rows[39] and rows[40]
-        for pid in (39, 40):
-            for ref in range(1, len(panels[pid]["targets"])):
+        for pid in (39, 40, 65, 66):
+            for ref in range(len(panels[pid]["targets"])):
                 c.execute(text(_sql(panels[pid], ref))).all()
+        # Absolut- und Prozentwerte getrennt: 39/40 nur MAE/RMSE, 65/66 nur Fehler %
+        assert all(
+            "Fehler %" not in t["rawSql"] for pid in (39, 40) for t in panels[pid]["targets"]
+        )
+        assert all("Fehler %" in t["rawSql"] for pid in (65, 66) for t in panels[pid]["targets"])
         # Relativer Fehler (WAPE): Tages-MAE / mittlerer |Ist|, hier 1 / 80 €/MWh
-        pct = c.execute(text(_sql(panels[40], 2))).mappings().all()
+        pct = c.execute(text(_sql(panels[66]))).mappings().all()
         champ = [r for r in pct if r["metric"].endswith("Champion Fehler %")]
         assert champ and champ[0]["value"] == pytest.approx(100 / 80)
 

@@ -855,7 +855,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Prognosefehler Last D+1 (Tagesmittel)",
+      "title": "Prognosefehler Last D+1 absolut (Tagesmittel)",
       "id": 39,
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -868,7 +868,7 @@
         "y": 23
       },
       "timeFrom": "30d",
-      "description": "**Was die Linien zeigen**\n\nFehler der Medianprognose (P50) für den Folgetag (D+1) aus der Ausgabe um 08 UTC (wie im Backtest) gegen den Ist-Wert, als Tagesmittel je Modellversion aus fcst.prediction_error. Ohne Gesamtsumme, da sich Fehler verschiedener Modelle nicht addieren. ENTSO-E Day-Ahead dient als Vergleich und wird genauso berechnet.\n\n**Kennzahlen**\n\n- **MAE** (mittlerer absoluter Fehler, durchgezogen, linke Achse in MW): Um wie viel die Prognose im Tagesmittel danebenliegt, egal ob zu hoch oder zu niedrig. Beispiel: MAE 1.500 MW heißt, jede Stunde liegt im Schnitt 1.500 MW neben dem Ist-Wert.\n- **RMSE** (Wurzel aus dem mittleren quadrierten Fehler, gestrichelt, linke Achse): Wie MAE, aber große Ausreißer zählen überproportional. RMSE ist immer mindestens so groß wie MAE. Liegt RMSE deutlich über MAE, stecken einzelne grobe Fehlstunden im Tag; liegen beide nah beieinander, ist der Fehler gleichmäßig verteilt.\n- **Fehler %** (WAPE, gepunktet, rechte Achse): Tages-MAE geteilt durch den mittleren Betrag des Ist-Werts der Last am selben Tag (WAPE = Σ|Prognose − Ist| / Σ|Ist|), gekappt bei 100 %. Macht Tage mit unterschiedlichem Niveau vergleichbar: 10 % heißt, die Prognose liegt im Schnitt um ein Zehntel des Ist-Werts daneben.",
+      "description": "**Was die Linien zeigen**\n\nFehler der Medianprognose (P50) für den Folgetag (D+1) aus der Ausgabe um 08 UTC (wie im Backtest) gegen den Ist-Wert, als Tagesmittel je Modellversion aus fcst.prediction_error. Ohne Gesamtsumme, da sich Fehler verschiedener Modelle nicht addieren. ENTSO-E Day-Ahead dient als Vergleich und wird genauso berechnet.\n\n**Kennzahlen**\n\n- **MAE** (mittlerer absoluter Fehler, durchgezogen, in MW): Um wie viel die Prognose im Tagesmittel danebenliegt, egal ob zu hoch oder zu niedrig. Beispiel: MAE 1.500 MW heißt, jede Stunde liegt im Schnitt 1.500 MW neben dem Ist-Wert.\n- **RMSE** (Wurzel aus dem mittleren quadrierten Fehler, gestrichelt): Wie MAE, aber große Ausreißer zählen überproportional. RMSE ist immer mindestens so groß wie MAE. Liegt RMSE deutlich über MAE, stecken einzelne grobe Fehlstunden im Tag; liegen beide nah beieinander, ist der Fehler gleichmäßig verteilt.\n\nDen relativen Fehler in % zeigt das Panel darunter.",
       "targets": [
         {
           "refId": "A",
@@ -902,28 +902,6 @@
           "editorMode": "code",
           "format": "time_series",
           "rawSql": "WITH h AS (\n  SELECT time_bucket('1 hour', ts) AS ts, code, avg(value) AS value\n    FROM energy.value_best WHERE code IN ('load_actual', 'load_da_forecast') AND $__timeFilter(ts)\n   GROUP BY 1, 2)\nSELECT time_bucket('1 day', a.ts, 'Europe/Berlin') AS time, 'ENTSO-E Day-Ahead MAE' AS metric,\n       avg(abs(f.value - a.value)) AS value\n  FROM h a JOIN h f ON f.ts = a.ts AND f.code = 'load_da_forecast'\n WHERE a.code = 'load_actual'\n GROUP BY 1, 2 ORDER BY 1"
-        },
-        {
-          "refId": "D",
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "pdb-postgres"
-          },
-          "rawQuery": true,
-          "editorMode": "code",
-          "format": "time_series",
-          "rawSql": "SELECT time_bucket('1 day', e.valid_time, 'Europe/Berlin') AS time,\n       v.variant || ' ' || to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') || ' · ' || CASE v.role WHEN 'champion' THEN 'Champion' WHEN 'challenger' THEN 'Challenger' WHEN 'baseline' THEN 'Baseline' WHEN 'previous' THEN 'Vorgänger' ELSE 'ausgemustert' END || ' Fehler %' AS metric,\n       least(100 * sum(abs(e.err)) / nullif(sum(abs(e.actual)), 0), 100) AS value\n  FROM fcst.prediction_error e JOIN meta.model_version v ON v.version = e.model_version\n WHERE e.target = 'load_actual' AND e.lead_day = 1 AND e.err IS NOT NULL\n   AND extract(hour FROM e.issue_time AT TIME ZONE 'UTC') = 8\n   AND $__timeFilter(e.valid_time)\n GROUP BY 1, 2 ORDER BY 1"
-        },
-        {
-          "refId": "E",
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "pdb-postgres"
-          },
-          "rawQuery": true,
-          "editorMode": "code",
-          "format": "time_series",
-          "rawSql": "WITH h AS (\n  SELECT time_bucket('1 hour', ts) AS ts, code, avg(value) AS value\n    FROM energy.value_best WHERE code IN ('load_actual', 'load_da_forecast') AND $__timeFilter(ts)\n   GROUP BY 1, 2)\nSELECT time_bucket('1 day', a.ts, 'Europe/Berlin') AS time, 'ENTSO-E Day-Ahead Fehler %' AS metric,\n       least(100 * sum(abs(f.value - a.value)) / nullif(sum(abs(a.value)), 0), 100) AS value\n  FROM h a JOIN h f ON f.ts = a.ts AND f.code = 'load_da_forecast'\n WHERE a.code = 'load_actual'\n GROUP BY 1, 2 ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -969,40 +947,6 @@
                 }
               }
             ]
-          },
-          {
-            "matcher": {
-              "id": "byRegexp",
-              "options": ".* Fehler %$"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "percent"
-              },
-              {
-                "id": "decimals",
-                "value": 1
-              },
-              {
-                "id": "min",
-                "value": 0
-              },
-              {
-                "id": "custom.axisPlacement",
-                "value": "right"
-              },
-              {
-                "id": "custom.axisLabel",
-                "value": "Fehler in % vom Ist"
-              },
-              {
-                "id": "custom.lineStyle",
-                "value": {
-                  "fill": "dot"
-                }
-              }
-            ]
           }
         ]
       },
@@ -1020,7 +964,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Prognosefehler Preis D+1 (Tagesmittel)",
+      "title": "Prognosefehler Preis D+1 absolut (Tagesmittel)",
       "id": 40,
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -1033,7 +977,7 @@
         "y": 23
       },
       "timeFrom": "30d",
-      "description": "**Was die Linien zeigen**\n\nFehler der Medianprognose (P50) für den Folgetag (D+1) aus der Ausgabe um 08 UTC (wie im Backtest) gegen den Ist-Wert, als Tagesmittel je Modellversion aus fcst.prediction_error. Ohne Gesamtsumme, da sich Fehler verschiedener Modelle nicht addieren.\n\n**Kennzahlen**\n\n- **MAE** (mittlerer absoluter Fehler, durchgezogen, linke Achse in €/MWh): Um wie viel die Prognose im Tagesmittel danebenliegt, egal ob zu hoch oder zu niedrig. Beispiel: MAE 20 €/MWh heißt, jede Stunde liegt im Schnitt 20 €/MWh neben dem Ist-Wert.\n- **RMSE** (Wurzel aus dem mittleren quadrierten Fehler, gestrichelt, linke Achse): Wie MAE, aber große Ausreißer zählen überproportional. RMSE ist immer mindestens so groß wie MAE. Liegt RMSE deutlich über MAE, stecken einzelne grobe Fehlstunden im Tag; liegen beide nah beieinander, ist der Fehler gleichmäßig verteilt.\n- **Fehler %** (WAPE, gepunktet, rechte Achse): Tages-MAE geteilt durch den mittleren Betrag des Ist-Preises am selben Tag (WAPE = Σ|Prognose − Ist| / Σ|Ist|), gekappt bei 100 %. Macht Tage mit unterschiedlichem Niveau vergleichbar: 10 % heißt, die Prognose liegt im Schnitt um ein Zehntel des Ist-Werts daneben.\n\nBewusst kein stundenweiser MAPE: Preise liegen oft nahe 0 € oder sind negativ, einzelne Stunden würden den Mittelwert sonst sprengen. An Tagen mit durchweg niedrigen Preisen fällt die Prozentzahl trotzdem hoch aus, daher die Kappung bei 100 %.",
+      "description": "**Was die Linien zeigen**\n\nFehler der Medianprognose (P50) für den Folgetag (D+1) aus der Ausgabe um 08 UTC (wie im Backtest) gegen den Ist-Wert, als Tagesmittel je Modellversion aus fcst.prediction_error. Ohne Gesamtsumme, da sich Fehler verschiedener Modelle nicht addieren.\n\n**Kennzahlen**\n\n- **MAE** (mittlerer absoluter Fehler, durchgezogen, in €/MWh): Um wie viel die Prognose im Tagesmittel danebenliegt, egal ob zu hoch oder zu niedrig. Beispiel: MAE 20 €/MWh heißt, jede Stunde liegt im Schnitt 20 €/MWh neben dem Ist-Wert.\n- **RMSE** (Wurzel aus dem mittleren quadrierten Fehler, gestrichelt): Wie MAE, aber große Ausreißer zählen überproportional. RMSE ist immer mindestens so groß wie MAE. Liegt RMSE deutlich über MAE, stecken einzelne grobe Fehlstunden im Tag; liegen beide nah beieinander, ist der Fehler gleichmäßig verteilt.\n\nDen relativen Fehler in % zeigt das Panel darunter.",
       "targets": [
         {
           "refId": "A",
@@ -1056,17 +1000,6 @@
           "editorMode": "code",
           "format": "time_series",
           "rawSql": "SELECT time_bucket('1 day', e.valid_time, 'Europe/Berlin') AS time,\n       v.variant || ' ' || to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') || ' · ' || CASE v.role WHEN 'champion' THEN 'Champion' WHEN 'challenger' THEN 'Challenger' WHEN 'baseline' THEN 'Baseline' WHEN 'previous' THEN 'Vorgänger' ELSE 'ausgemustert' END || ' RMSE' AS metric, sqrt(avg(e.err ^ 2)) AS value\n  FROM fcst.prediction_error e JOIN meta.model_version v ON v.version = e.model_version\n WHERE e.target = 'da_price_de_lu' AND e.lead_day = 1 AND e.err IS NOT NULL\n   AND extract(hour FROM e.issue_time AT TIME ZONE 'UTC') = 8\n   AND $__timeFilter(e.valid_time)\n GROUP BY 1, 2 ORDER BY 1"
-        },
-        {
-          "refId": "C",
-          "datasource": {
-            "type": "grafana-postgresql-datasource",
-            "uid": "pdb-postgres"
-          },
-          "rawQuery": true,
-          "editorMode": "code",
-          "format": "time_series",
-          "rawSql": "SELECT time_bucket('1 day', e.valid_time, 'Europe/Berlin') AS time,\n       v.variant || ' ' || to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') || ' · ' || CASE v.role WHEN 'champion' THEN 'Champion' WHEN 'challenger' THEN 'Challenger' WHEN 'baseline' THEN 'Baseline' WHEN 'previous' THEN 'Vorgänger' ELSE 'ausgemustert' END || ' Fehler %' AS metric,\n       least(100 * sum(abs(e.err)) / nullif(sum(abs(e.actual)), 0), 100) AS value\n  FROM fcst.prediction_error e JOIN meta.model_version v ON v.version = e.model_version\n WHERE e.target = 'da_price_de_lu' AND e.lead_day = 1 AND e.err IS NOT NULL\n   AND extract(hour FROM e.issue_time AT TIME ZONE 'UTC') = 8\n   AND $__timeFilter(e.valid_time)\n GROUP BY 1, 2 ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -1113,37 +1046,156 @@
                 }
               }
             ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Prognosefehler Last D+1 in % (Tagesmittel)",
+      "id": 65,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 31
+      },
+      "timeFrom": "30d",
+      "description": "**Was die Linien zeigen**\n\nFehler der Medianprognose (P50) für den Folgetag (D+1) aus der Ausgabe um 08 UTC (wie im Backtest) gegen den Ist-Wert, als Tagesmittel je Modellversion aus fcst.prediction_error. Ohne Gesamtsumme, da sich Fehler verschiedener Modelle nicht addieren. ENTSO-E Day-Ahead dient als Vergleich und wird genauso berechnet.\n\n**Kennzahl**\n\n**Fehler %** (WAPE): Tages-MAE geteilt durch den mittleren Betrag des Ist-Werts der Last am selben Tag (WAPE = Σ|Prognose − Ist| / Σ|Ist|), gekappt bei 100 %. Macht Tage mit unterschiedlichem Niveau vergleichbar: 10 % heißt, die Prognose liegt im Schnitt um ein Zehntel des Ist-Werts daneben. Die Absolutwerte (MAE, RMSE) zeigt das Panel darüber.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
           },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT time_bucket('1 day', e.valid_time, 'Europe/Berlin') AS time,\n       v.variant || ' ' || to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') || ' · ' || CASE v.role WHEN 'champion' THEN 'Champion' WHEN 'challenger' THEN 'Challenger' WHEN 'baseline' THEN 'Baseline' WHEN 'previous' THEN 'Vorgänger' ELSE 'ausgemustert' END || ' Fehler %' AS metric,\n       least(100 * sum(abs(e.err)) / nullif(sum(abs(e.actual)), 0), 100) AS value\n  FROM fcst.prediction_error e JOIN meta.model_version v ON v.version = e.model_version\n WHERE e.target = 'load_actual' AND e.lead_day = 1 AND e.err IS NOT NULL\n   AND extract(hour FROM e.issue_time AT TIME ZONE 'UTC') = 8\n   AND $__timeFilter(e.valid_time)\n GROUP BY 1, 2 ORDER BY 1"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "WITH h AS (\n  SELECT time_bucket('1 hour', ts) AS ts, code, avg(value) AS value\n    FROM energy.value_best WHERE code IN ('load_actual', 'load_da_forecast') AND $__timeFilter(ts)\n   GROUP BY 1, 2)\nSELECT time_bucket('1 day', a.ts, 'Europe/Berlin') AS time, 'ENTSO-E Day-Ahead Fehler %' AS metric,\n       least(100 * sum(abs(f.value - a.value)) / nullif(sum(abs(a.value)), 0), 100) AS value\n  FROM h a JOIN h f ON f.ts = a.ts AND f.code = 'load_da_forecast'\n WHERE a.code = 'load_actual'\n GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "lineWidth": 1,
+            "showPoints": "always",
+            "pointSize": 4,
+            "spanNulls": false
+          },
+          "decimals": 1,
+          "min": 0
+        },
+        "overrides": [
           {
             "matcher": {
               "id": "byRegexp",
-              "options": ".* Fehler %$"
+              "options": "^ENTSO-E.*"
             },
             "properties": [
               {
-                "id": "unit",
-                "value": "percent"
-              },
-              {
-                "id": "decimals",
-                "value": 1
-              },
-              {
-                "id": "min",
-                "value": 0
-              },
-              {
-                "id": "custom.axisPlacement",
-                "value": "right"
-              },
-              {
-                "id": "custom.axisLabel",
-                "value": "Fehler in % vom Ist"
-              },
-              {
-                "id": "custom.lineStyle",
+                "id": "color",
                 "value": {
-                  "fill": "dot"
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Prognosefehler Preis D+1 in % (Tagesmittel)",
+      "id": 66,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 31
+      },
+      "timeFrom": "30d",
+      "description": "**Was die Linien zeigen**\n\nFehler der Medianprognose (P50) für den Folgetag (D+1) aus der Ausgabe um 08 UTC (wie im Backtest) gegen den Ist-Wert, als Tagesmittel je Modellversion aus fcst.prediction_error. Ohne Gesamtsumme, da sich Fehler verschiedener Modelle nicht addieren.\n\n**Kennzahl**\n\n**Fehler %** (WAPE): Tages-MAE geteilt durch den mittleren Betrag des Ist-Preises am selben Tag (WAPE = Σ|Prognose − Ist| / Σ|Ist|), gekappt bei 100 %. Macht Tage mit unterschiedlichem Niveau vergleichbar: 10 % heißt, die Prognose liegt im Schnitt um ein Zehntel des Ist-Werts daneben. Die Absolutwerte (MAE, RMSE) zeigt das Panel darüber.\n\nBewusst kein stundenweiser MAPE: Preise liegen oft nahe 0 € oder sind negativ, einzelne Stunden würden den Mittelwert sonst sprengen. An Tagen mit durchweg niedrigen Preisen fällt die Prozentzahl trotzdem hoch aus, daher die Kappung bei 100 %.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT time_bucket('1 day', e.valid_time, 'Europe/Berlin') AS time,\n       v.variant || ' ' || to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') || ' · ' || CASE v.role WHEN 'champion' THEN 'Champion' WHEN 'challenger' THEN 'Challenger' WHEN 'baseline' THEN 'Baseline' WHEN 'previous' THEN 'Vorgänger' ELSE 'ausgemustert' END || ' Fehler %' AS metric,\n       least(100 * sum(abs(e.err)) / nullif(sum(abs(e.actual)), 0), 100) AS value\n  FROM fcst.prediction_error e JOIN meta.model_version v ON v.version = e.model_version\n WHERE e.target = 'da_price_de_lu' AND e.lead_day = 1 AND e.err IS NOT NULL\n   AND extract(hour FROM e.issue_time AT TIME ZONE 'UTC') = 8\n   AND $__timeFilter(e.valid_time)\n GROUP BY 1, 2 ORDER BY 1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "custom": {
+            "lineWidth": 1,
+            "showPoints": "always",
+            "pointSize": 4,
+            "spanNulls": false
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^ENTSO-E.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
                 }
               }
             ]
@@ -1174,7 +1226,7 @@
         "h": 16,
         "w": 12,
         "x": 0,
-        "y": 31
+        "y": 39
       },
       "targets": [
         {
@@ -1315,7 +1367,7 @@
         "h": 16,
         "w": 12,
         "x": 12,
-        "y": 31
+        "y": 39
       },
       "targets": [
         {
@@ -1427,7 +1479,7 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 47
+        "y": 55
       },
       "targets": [
         {
@@ -1667,7 +1719,7 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 47
+        "y": 55
       },
       "targets": [
         {
@@ -1874,7 +1926,7 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 57
+        "y": 65
       },
       "targets": [
         {
@@ -2114,7 +2166,7 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 57
+        "y": 65
       },
       "targets": [
         {
@@ -2321,7 +2373,7 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 67
+        "y": 75
       },
       "targets": [
         {
@@ -2528,7 +2580,7 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 67
+        "y": 75
       },
       "targets": [
         {
@@ -2735,7 +2787,7 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 77
+        "y": 85
       },
       "targets": [
         {
@@ -2942,7 +2994,7 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 77
+        "y": 85
       },
       "targets": [
         {
@@ -3149,7 +3201,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 87
+        "y": 95
       },
       "targets": [
         {
@@ -3244,7 +3296,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 87
+        "y": 95
       },
       "targets": [
         {
@@ -3339,7 +3391,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 96
+        "y": 104
       },
       "description": "MAE der Medianprognose je Vorlauftag aus dem Backtest der aktiven Versionen (meta.model_metric). Gesamt und RMSE über alle Vorlauftage. P10–P90 = Anteil der Ist-Werte im 80-%-Band (Soll 80 %). Last in MW, Preis in €/MWh.",
       "targets": [
@@ -3422,7 +3474,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 96
+        "y": 104
       },
       "description": "Wie der Backtest, aber aus den gespeicherten Live-Prognosen (fcst.prediction) der letzten 14 Liefertage gegen die Ist-Werte, Ausgabe um 08 UTC.\n\n- **D+1, D+2, D+7**: MAE (mittlerer absoluter Fehler) für den 1., 2. bzw. 7. Tag nach der Ausgabe, also um wie viel die Prognose im Mittel danebenliegt, egal in welche Richtung (Last in MW, Preis in €/MWh).\n- **Bias**: mittlere Abweichung mit Vorzeichen (positiv: Prognose im Schnitt zu hoch, negativ: zu niedrig). Ein Bias nahe 0 bei hohem MAE heißt: die Fehler streuen, sind aber nicht systematisch.\n- **Werte**: Anzahl der verglichenen Stundenwerte.",
       "targets": [
@@ -3498,7 +3550,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 104
+        "y": 112
       },
       "panels": []
     },
@@ -3514,7 +3566,7 @@
         "h": 10,
         "w": 14,
         "x": 0,
-        "y": 105
+        "y": 113
       },
       "targets": [
         {
@@ -3656,7 +3708,7 @@
         "h": 10,
         "w": 10,
         "x": 14,
-        "y": 105
+        "y": 113
       },
       "targets": [
         {
@@ -3725,7 +3777,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 115
+        "y": 123
       },
       "targets": [
         {
@@ -3814,7 +3866,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 115
+        "y": 123
       },
       "targets": [
         {
@@ -3945,7 +3997,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 123
+        "y": 131
       },
       "panels": []
     },
@@ -3961,7 +4013,7 @@
         "h": 8,
         "w": 10,
         "x": 0,
-        "y": 124
+        "y": 132
       },
       "targets": [
         {
@@ -4082,7 +4134,7 @@
         "h": 8,
         "w": 14,
         "x": 10,
-        "y": 124
+        "y": 132
       },
       "targets": [
         {
