@@ -1508,6 +1508,21 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "D+0"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#14b8a6"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "D+1"
             },
             "properties": [
@@ -1694,6 +1709,21 @@
               {
                 "id": "custom.lineWidth",
                 "value": 3
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+0"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#14b8a6"
+                }
               }
             ]
           },
@@ -1925,6 +1955,21 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "D+0"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#14b8a6"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "D+1"
             },
             "properties": [
@@ -2111,6 +2156,21 @@
               {
                 "id": "custom.lineWidth",
                 "value": 3
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+0"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#14b8a6"
+                }
               }
             ]
           },
@@ -2309,6 +2369,21 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "D+0"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#14b8a6"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "D+1"
             },
             "properties": [
@@ -2413,7 +2488,7 @@
           }
         ]
       },
-      "description": "Der heutige Liefertag (00 bis 24 Uhr Ortszeit) mit dem Day-Ahead-Preis und allen Vorhersagen des aktuellen Champions: D+1 wurde gestern um 10:00 gerechnet, D+2 vorgestern usw. bis D+7 (Median P50). Dunkle Farben = kurzer Vorlauf, helle = langer.",
+      "description": "Der heutige Liefertag (00 bis 24 Uhr Ortszeit) mit dem Day-Ahead-Preis und allen Vorhersagen des aktuellen Champions: D+0 (türkis, nur Modelle mit Resttag) kommt vom Lauf am Liefertag selbst, D+1 wurde gestern um 10:00 gerechnet, D+2 vorgestern usw. bis D+7 (Median P50). Dunkle Farben = kurzer Vorlauf, helle = langer.",
       "timeFrom": "now/d",
       "timeShift": "0d/d",
       "hideTimeOverride": true,
@@ -2495,6 +2570,21 @@
               {
                 "id": "custom.lineWidth",
                 "value": 3
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+0"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#14b8a6"
+                }
               }
             ]
           },
@@ -2693,6 +2783,21 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "D+0"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#14b8a6"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "D+1"
             },
             "properties": [
@@ -2797,7 +2902,7 @@
           }
         ]
       },
-      "description": "Der heutige Liefertag (00 bis 24 Uhr Ortszeit) mit dem Day-Ahead-Preis und allen Vorhersagen des oben gewählten Challengers (Variable Challenger): D+1 wurde gestern um 10:00 gerechnet, D+2 vorgestern usw. bis D+7 (Median P50). Dunkle Farben = kurzer Vorlauf, helle = langer.",
+      "description": "Der heutige Liefertag (00 bis 24 Uhr Ortszeit) mit dem Day-Ahead-Preis und allen Vorhersagen des oben gewählten Challengers (Variable Challenger): D+0 (türkis, nur Modelle mit Resttag) kommt vom Lauf am Liefertag selbst, D+1 wurde gestern um 10:00 gerechnet, D+2 vorgestern usw. bis D+7 (Median P50). Dunkle Farben = kurzer Vorlauf, helle = langer.",
       "timeFrom": "now/d",
       "timeShift": "0d/d",
       "hideTimeOverride": true,
@@ -2879,6 +2984,21 @@
               {
                 "id": "custom.lineWidth",
                 "value": 3
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "D+0"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#14b8a6"
+                }
               }
             ]
           },
@@ -3006,6 +3126,196 @@
       }
     },
     {
+      "type": "barchart",
+      "title": "Fehler je Vorlauftag im Betrieb: Preis (28 Tage, gegen Vorwoche)",
+      "id": 63,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 87
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "-- MAE je Vorlauftag der aktiven Modelle (Lauf 10 Uhr Ortszeit, letzte 28 Tage) und als\n-- Maßstab dieselbe Stunde eine Woche vorher (ab D+7 zwei Wochen, da zum Lauf noch unbekannt),\n-- auf denselben Stunden. Liegt das Modell nicht klar darunter, trägt der Vorlauftag kaum noch.\nWITH e AS (\n  SELECT e.lead_day, e.valid_time, e.actual, abs(e.err) AS ae,\n         CASE v.role WHEN 'champion' THEN 'Champion' ELSE 'Challenger' END || ' ' || v.variant\n           || ' ' || to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM.') AS verfahren\n    FROM fcst.prediction_error e JOIN meta.model_version v ON v.version = e.model_version\n   WHERE v.role IN ('champion', 'challenger') AND e.target = 'da_price_de_lu' AND e.err IS NOT NULL\n     AND extract(hour FROM e.issue_time AT TIME ZONE 'Europe/Berlin') = 10\n     AND e.valid_time >= now() - interval '28 days'),\nwk AS (\n  SELECT time_bucket('1 hour', ts) AS h, avg(value) AS v\n    FROM energy.value_best\n   WHERE code = 'da_price_de_lu' AND ts >= now() - interval '45 days'\n   GROUP BY 1),\nref AS (SELECT DISTINCT lead_day, valid_time, actual FROM e)\nSELECT 'D+' || lead_day AS \"Vorlauf\", verfahren AS \"Verfahren\", avg(ae) AS \"MAE\"\n  FROM e GROUP BY 1, 2\nUNION ALL\nSELECT 'D+' || r.lead_day, 'Vorwoche (gleiche Stunde)', avg(abs(r.actual - w.v))\n  FROM ref r JOIN wk w\n    ON w.h = r.valid_time - make_interval(days => 7 * ceil((r.lead_day + 1) / 7.0)::int)\n GROUP BY 1\n ORDER BY 1, 2"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "columnField": "Verfahren",
+            "rowField": "Vorlauf",
+            "valueField": "MAE",
+            "emptyValue": "null"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix:€/MWh",
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^Champion.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^Vorwoche.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "description": "Mittlerer absoluter Fehler je Vorlauftag im Betrieb der letzten 28 Tage, je aktiver Modellversion (Lauf um 10 Uhr Ortszeit), daneben als einfacher Maßstab der Wert derselben Stunde eine Woche vorher (für D+7 zwei Wochen, weil die Vorwoche zum Lauf noch nicht bekannt ist). Wo ein Modell nicht klar unter dem Maßstab liegt, bringt der Vorlauftag kaum Information. Wenige Tage Betrieb = große Streuung.",
+      "options": {
+        "xField": "Vorlauf\\Verfahren",
+        "orientation": "vertical",
+        "groupWidth": 0.8,
+        "barWidth": 0.95,
+        "showValue": "never",
+        "stacking": "none",
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "type": "barchart",
+      "title": "Fehler je Vorlauftag im Betrieb: Last (28 Tage, gegen Vorwoche)",
+      "id": 64,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 87
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "-- MAE je Vorlauftag der aktiven Modelle (Lauf 10 Uhr Ortszeit, letzte 28 Tage) und als\n-- Maßstab dieselbe Stunde eine Woche vorher (ab D+7 zwei Wochen, da zum Lauf noch unbekannt),\n-- auf denselben Stunden. Liegt das Modell nicht klar darunter, trägt der Vorlauftag kaum noch.\nWITH e AS (\n  SELECT e.lead_day, e.valid_time, e.actual, abs(e.err) AS ae,\n         CASE v.role WHEN 'champion' THEN 'Champion' ELSE 'Challenger' END || ' ' || v.variant\n           || ' ' || to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM.') AS verfahren\n    FROM fcst.prediction_error e JOIN meta.model_version v ON v.version = e.model_version\n   WHERE v.role IN ('champion', 'challenger') AND e.target = 'load_actual' AND e.err IS NOT NULL\n     AND extract(hour FROM e.issue_time AT TIME ZONE 'Europe/Berlin') = 10\n     AND e.valid_time >= now() - interval '28 days'),\nwk AS (\n  SELECT time_bucket('1 hour', ts) AS h, avg(value) AS v\n    FROM energy.value_best\n   WHERE code = 'load_actual' AND ts >= now() - interval '45 days'\n   GROUP BY 1),\nref AS (SELECT DISTINCT lead_day, valid_time, actual FROM e)\nSELECT 'D+' || lead_day AS \"Vorlauf\", verfahren AS \"Verfahren\", avg(ae) AS \"MAE\"\n  FROM e GROUP BY 1, 2\nUNION ALL\nSELECT 'D+' || r.lead_day, 'Vorwoche (gleiche Stunde)', avg(abs(r.actual - w.v))\n  FROM ref r JOIN wk w\n    ON w.h = r.valid_time - make_interval(days => 7 * ceil((r.lead_day + 1) / 7.0)::int)\n GROUP BY 1\n ORDER BY 1, 2"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "columnField": "Verfahren",
+            "rowField": "Vorlauf",
+            "valueField": "MAE",
+            "emptyValue": "null"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "megwatt",
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^Champion.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^Vorwoche.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "description": "Mittlerer absoluter Fehler je Vorlauftag im Betrieb der letzten 28 Tage, je aktiver Modellversion (Lauf um 10 Uhr Ortszeit), daneben als einfacher Maßstab der Wert derselben Stunde eine Woche vorher (für D+7 zwei Wochen, weil die Vorwoche zum Lauf noch nicht bekannt ist). Wo ein Modell nicht klar unter dem Maßstab liegt, bringt der Vorlauftag kaum Information. Wenige Tage Betrieb = große Streuung.",
+      "options": {
+        "xField": "Vorlauf\\Verfahren",
+        "orientation": "vertical",
+        "groupWidth": 0.8,
+        "barWidth": 0.95,
+        "showValue": "never",
+        "stacking": "none",
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
       "type": "table",
       "title": "Champion und Challenger im Backtest (MAE)",
       "id": 41,
@@ -3017,7 +3327,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 87
+        "y": 96
       },
       "description": "MAE der Medianprognose je Vorlauftag aus dem Backtest der aktiven Versionen (meta.model_metric). Gesamt und RMSE über alle Vorlauftage. P10–P90 = Anteil der Ist-Werte im 80-%-Band (Soll 80 %). Last in MW, Preis in €/MWh.",
       "targets": [
@@ -3030,7 +3340,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT CASE v.role WHEN 'champion' THEN 'Champion' WHEN 'challenger' THEN 'Challenger' WHEN 'baseline' THEN 'Baseline' WHEN 'previous' THEN 'Vorgänger' ELSE 'ausgemustert' END || ' · ' || v.variant || ' ' || to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM.') AS \"Version\", CASE m.target WHEN 'load_actual' THEN 'Last MW' WHEN 'da_price_de_lu' THEN 'Preis €/MWh' END AS \"Ziel\",\n       avg(m.mae) FILTER (WHERE m.lead_day = 1) AS \"D+1\",\n       avg(m.mae) FILTER (WHERE m.lead_day = 2) AS \"D+2\",\n       avg(m.mae) FILTER (WHERE m.lead_day = 7) AS \"D+7\",\n       avg(m.mae) FILTER (WHERE m.lead_day = 0) AS \"Gesamt\",\n       avg(m.rmse) FILTER (WHERE m.lead_day = 0) AS \"RMSE\",\n       avg(m.coverage80) FILTER (WHERE m.lead_day = 0) AS \"P10–P90\"\n  FROM meta.model_metric m JOIN meta.model_version v USING (version)\n WHERE v.role <> 'retired' AND m.target IN ('load_actual', 'da_price_de_lu')\n GROUP BY v.version, v.variant, v.created, v.role, m.target\n ORDER BY m.target DESC, CASE v.role WHEN 'champion' THEN 0 WHEN 'challenger' THEN 1 WHEN 'baseline' THEN 2 WHEN 'previous' THEN 3 ELSE 4 END, v.created DESC"
+          "rawSql": "SELECT CASE v.role WHEN 'champion' THEN 'Champion' WHEN 'challenger' THEN 'Challenger' WHEN 'baseline' THEN 'Baseline' WHEN 'previous' THEN 'Vorgänger' ELSE 'ausgemustert' END || ' · ' || v.variant || ' ' || to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM.') AS \"Version\", CASE m.target WHEN 'load_actual' THEN 'Last MW' WHEN 'da_price_de_lu' THEN 'Preis €/MWh' END AS \"Ziel\",\n       avg(m.mae) FILTER (WHERE m.lead_day = 1) AS \"D+1\",\n       avg(m.mae) FILTER (WHERE m.lead_day = 2) AS \"D+2\",\n       avg(m.mae) FILTER (WHERE m.lead_day = 7) AS \"D+7\",\n       avg(m.mae) FILTER (WHERE m.lead_day = -1) AS \"Gesamt\",\n       avg(m.rmse) FILTER (WHERE m.lead_day = -1) AS \"RMSE\",\n       avg(m.coverage80) FILTER (WHERE m.lead_day = -1) AS \"P10–P90\"\n  FROM meta.model_metric m JOIN meta.model_version v USING (version)\n WHERE v.role <> 'retired' AND m.target IN ('load_actual', 'da_price_de_lu')\n GROUP BY v.version, v.variant, v.created, v.role, m.target\n ORDER BY m.target DESC, CASE v.role WHEN 'champion' THEN 0 WHEN 'challenger' THEN 1 WHEN 'baseline' THEN 2 WHEN 'previous' THEN 3 ELSE 4 END, v.created DESC"
         }
       ],
       "fieldConfig": {
@@ -3100,7 +3410,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 87
+        "y": 96
       },
       "description": "Wie der Backtest, aber aus den gespeicherten Live-Prognosen (fcst.prediction) der letzten 14 Liefertage gegen die Ist-Werte, Ausgabe um 08 UTC.\n\n- **D+1, D+2, D+7**: MAE (mittlerer absoluter Fehler) für den 1., 2. bzw. 7. Tag nach der Ausgabe, also um wie viel die Prognose im Mittel danebenliegt, egal in welche Richtung (Last in MW, Preis in €/MWh).\n- **Bias**: mittlere Abweichung mit Vorzeichen (positiv: Prognose im Schnitt zu hoch, negativ: zu niedrig). Ein Bias nahe 0 bei hohem MAE heißt: die Fehler streuen, sind aber nicht systematisch.\n- **Werte**: Anzahl der verglichenen Stundenwerte.",
       "targets": [
@@ -3176,7 +3486,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 95
+        "y": 104
       },
       "panels": []
     },
@@ -3192,7 +3502,7 @@
         "h": 10,
         "w": 14,
         "x": 0,
-        "y": 96
+        "y": 105
       },
       "targets": [
         {
@@ -3334,7 +3644,7 @@
         "h": 10,
         "w": 10,
         "x": 14,
-        "y": 96
+        "y": 105
       },
       "targets": [
         {
@@ -3403,7 +3713,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 106
+        "y": 115
       },
       "targets": [
         {
@@ -3492,7 +3802,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 106
+        "y": 115
       },
       "targets": [
         {
@@ -3623,7 +3933,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 114
+        "y": 123
       },
       "panels": []
     },
@@ -3639,7 +3949,7 @@
         "h": 8,
         "w": 10,
         "x": 0,
-        "y": 115
+        "y": 124
       },
       "targets": [
         {
@@ -3760,7 +4070,7 @@
         "h": 8,
         "w": 14,
         "x": 10,
-        "y": 115
+        "y": 124
       },
       "targets": [
         {

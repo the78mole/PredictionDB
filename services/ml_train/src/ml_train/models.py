@@ -11,6 +11,10 @@ kann relativ zum Mittel der letzten bekannten Tage gelernt werden (``center``), 
 Preisniveaus wie 2022 nicht als feste Werte gelernt werden, und zusätzlich durch ein
 Niveaumerkmal geteilt werden (``Variant.scale``, z. B. den Grenzkostenindex): Dann lernt das
 Modell Abweichungen relativ zum Brennstoff- und CO2-Niveau statt in EUR/MWh.
+
+Mit ``calibration.months`` werden die äußeren Quantile je Vorlauftag nachkalibriert
+(``CalibrationConfig``): Quantil-Bäume sind auf den Trainingsdaten zu sicher, das Band P10-P90
+enthielt im Backtest nur 55-70 % statt 80 % der Ist-Werte.
 """
 
 from __future__ import annotations
@@ -24,7 +28,7 @@ import lightgbm as lgb
 import numpy as np
 import pandas as pd
 
-from ml_train.config import LgbmParams, ModelConfig, StageTarget, Variant
+from ml_train.config import CalibrationConfig, LgbmParams, ModelConfig, StageTarget, Variant
 from ml_train.dataset import FeatureFrame
 from ml_train.jobs import Progress, no_progress
 
@@ -61,6 +65,8 @@ class QuantileModel:
     center: str | None = None
     scale: str | None = None
     boosters: dict[str, lgb.Booster] = field(default_factory=dict)
+    #: Verschiebung je Vorlauftag und Quantil im Lernraum (Kalibrierung), sonst 0
+    shifts: dict[int, dict[str, float]] = field(default_factory=dict)
 
     def _scale(self, X: pd.DataFrame) -> np.ndarray:
         out = np.ones(len(X))
@@ -92,12 +98,46 @@ class QuantileModel:
             )
         return self
 
-    def predict(self, X: pd.DataFrame) -> pd.DataFrame:
+    def _raw(self, X: pd.DataFrame) -> np.ndarray:
         Xf = X[self.features]
-        raw = np.column_stack([self.boosters[qname(q)].predict(Xf) for q in self.quantiles])
+        return np.column_stack([self.boosters[qname(q)].predict(Xf) for q in self.quantiles])
+
+    def predict(self, X: pd.DataFrame) -> pd.DataFrame:
+        raw = self._raw(X)
+        if self.shifts and "lead_day" in X:
+            lead = X["lead_day"].to_numpy()
+            for d, sh in self.shifts.items():
+                rows = lead == d
+                for j, q in enumerate(self.quantiles):
+                    raw[rows, j] += sh.get(qname(q), 0.0)
         raw.sort(axis=1)  # keine sich kreuzenden Quantile
         vals = raw * self._scale(X)[:, None] + self._offset(X)[:, None]
         return pd.DataFrame(vals, index=X.index, columns=[qname(q) for q in self.quantiles])
+
+    def calibration_shifts(
+        self, X: pd.DataFrame, y: pd.Series | np.ndarray, cal: CalibrationConfig
+    ) -> dict[int, dict[str, float]]:
+        """Verschiebung je Vorlauftag, damit jedes äußere Quantil q auf ``X``/``y`` (Daten, die
+        dieses Modell nicht gesehen hat) wirklich den Anteil q der Ist-Werte unterschreitet."""
+        r = (np.asarray(y, dtype=np.float64) - self._offset(X)) / self._scale(X)
+        raw = self._raw(X)
+        ok = np.isfinite(r) & np.isfinite(raw).all(axis=1)
+        lead = X["lead_day"].to_numpy()
+        out: dict[int, dict[str, float]] = {}
+        for d in np.unique(lead[ok]):
+            rows = ok & (lead == d)
+            n = int(rows.sum())
+            if n < cal.min_rows:
+                continue
+            sh = {}
+            for j, q in enumerate(self.quantiles):
+                if q == 0.5:
+                    continue
+                # endliche Stichprobe: Quantilstufe wie bei konformaler Vorhersage nach außen
+                level = min(1.0, q * (n + 1) / n) if q > 0.5 else max(0.0, (q * (n + 1) - 1) / n)
+                sh[qname(q)] = float(np.quantile(r[rows] - raw[rows, j], level))
+            out[int(d)] = sh
+        return out
 
     # --- Ablage ------------------------------------------------------------------------------
 
@@ -115,6 +155,7 @@ class QuantileModel:
             "center": self.center,
             "scale": self.scale,
             "files": files,
+            "shifts": {str(d): sh for d, sh in self.shifts.items()},
         }
 
     @classmethod
@@ -130,6 +171,7 @@ class QuantileModel:
         )
         for name, f in d["files"].items():
             m.boosters[name] = lgb.Booster(model_str=(base / f).read_text())
+        m.shifts = {int(k): v for k, v in d.get("shifts", {}).items()}
         return m
 
 
@@ -153,6 +195,8 @@ class TwoStageModel:
         self.variant = variant
         self.stage1: dict[str, QuantileModel] = {}
         self.stage2: dict[str, QuantileModel] = {}
+        #: Vorlauftage, für die das Modell gelernt hat (ältere Versionen: 1 bis 7)
+        self.lead_days: list[int] = list(cfg.issue.lead_days)
 
     # Merkmale je Ziel -------------------------------------------------------------------------
 
@@ -203,9 +247,44 @@ class TwoStageModel:
     def fit_steps(self) -> int:
         """Zahl der Rückmeldungen von :meth:`fit` an ``progress``."""
         oof = self.uses_stage1 and bool(self.cfg.stage2)
-        return len(self.cfg.stage1) * (2 if oof else 1) + len(self.cfg.stage2)
+        once = len(self.cfg.stage1) * (2 if oof else 1) + len(self.cfg.stage2)
+        return once * (2 if self.cfg.calibration.months else 1)
 
     def fit(self, frame: FeatureFrame, progress: Progress = no_progress) -> TwoStageModel:
+        shifts = self._calibrate(frame, progress) if self.cfg.calibration.months else {}
+        self._fit(frame, progress)
+        for code, sh in shifts.items():
+            (self.stage1.get(code) or self.stage2[code]).shifts = sh
+        return self
+
+    def _calibrate(
+        self, frame: FeatureFrame, progress: Progress
+    ) -> dict[str, dict[int, dict[str, float]]]:
+        """Verschiebungen je Ziel aus einem Modell ohne die letzten ``months`` Monate."""
+        cal = self.cfg.calibration
+        issues = frame.meta["issue_time"]
+        cut = issues.max() - pd.DateOffset(months=cal.months)
+        hold = (issues > cut).to_numpy()
+        # Lernziele des Kalibriermodells enden vor dem Kalibrierzeitraum
+        early = (~hold) & (frame.meta["ts"] <= cut).to_numpy()
+        if hold.sum() < cal.min_rows or early.sum() < 1000:
+            return {}
+        cfg0 = self.cfg.model_copy(update={"calibration": CalibrationConfig()})
+        m0 = TwoStageModel(cfg0, self.variant)._fit(
+            frame.subset(early), lambda s: progress(f"Kalibrierung · {s}")
+        )
+        test = frame.subset(hold)
+        out: dict[str, dict[int, dict[str, float]]] = {}
+        s1: dict[str, np.ndarray] = {}
+        for code, m in m0.stage1.items():
+            out[code] = m.calibration_shifts(test.X, test.y[code], cal)
+            s1[code] = m.predict(test.X)["q50"].to_numpy()
+        X2 = m0._with_stage1(test.X, s1) if m0.uses_stage1 else test.X
+        for code, m in m0.stage2.items():
+            out[code] = m.calibration_shifts(X2, test.y[code], cal)
+        return out
+
+    def _fit(self, frame: FeatureFrame, progress: Progress = no_progress) -> TwoStageModel:
         base = self._base_features(frame)
         oof: dict[str, np.ndarray] = {}
         for t in self.cfg.stage1:
@@ -257,6 +336,19 @@ class TwoStageModel:
         return [c for c in dict.fromkeys(cols) if c not in own]
 
     def predict(self, frame: FeatureFrame) -> dict[str, pd.DataFrame]:
+        """Quantile je Ziel; zum Ausgabezeitpunkt schon bekannte Ist-Werte (``frame.known``)
+        ersetzen die Prognose in allen Quantilen."""
+        res = self._predict(frame)
+        if frame.known is not None:
+            for code, p in res.items():
+                if code in frame.known:
+                    kn = frame.known[code].to_numpy()
+                    hit = np.isfinite(kn)
+                    if hit.any():
+                        p.loc[hit, :] = np.repeat(kn[hit, None], p.shape[1], axis=1)
+        return res
+
+    def _predict(self, frame: FeatureFrame) -> dict[str, pd.DataFrame]:
         res: dict[str, pd.DataFrame] = {}
         s1: dict[str, np.ndarray] = {}
         for code, m in self.stage1.items():
@@ -273,6 +365,7 @@ class TwoStageModel:
         out.mkdir(parents=True, exist_ok=True)
         spec = {
             "variant": self.variant.model_dump(mode="json"),
+            "lead_days": self.lead_days,
             "stage1": {c: m.save(out) for c, m in self.stage1.items()},
             "stage2": {c: m.save(out) for c, m in self.stage2.items()},
         }
@@ -285,6 +378,7 @@ class TwoStageModel:
         m = cls(cfg, Variant.model_validate(spec["variant"]))
         m.stage1 = {c: QuantileModel.load(d, base, cfg.lgbm) for c, d in spec["stage1"].items()}
         m.stage2 = {c: QuantileModel.load(d, base, cfg.lgbm) for c, d in spec["stage2"].items()}
+        m.lead_days = spec.get("lead_days", [1, 2, 3, 4, 5, 6, 7])
         return m
 
 
