@@ -429,6 +429,12 @@ class GefsVm:
         end = month_start(self.now()) - timedelta(hours=1)
         local = self.local.runs()
         existing = set(self.registry.tags())
+        # schon lokal, aber nicht im Bestand (Neustart zwischen Speichern und Melden): nachmelden
+        ledger = (
+            {r for r, st in self.ledger.silver_runs(self.source_id).items() if st == "present"}
+            if self.ledger is not None
+            else None
+        )
         # jüngste Monate zuerst: sie zählen fürs Training am meisten
         months = months_between(max(self.history_start, self.config.first_run), end)
         for month in reversed(months):
@@ -438,6 +444,7 @@ class GefsVm:
                     continue
                 art = GefsMonth.from_manifest(month, hour, self.registry.manifest(t))
                 imported: list[datetime] = []
+                repair: dict[Origin, list[datetime]] = {}
                 for run, layer in sorted(art.layers.items(), reverse=True):
                     if run < self.history_start or layer.fingerprint != self.fp:
                         counts["other_fingerprint" if run >= self.history_start else "early"] += 1
@@ -446,15 +453,14 @@ class GefsVm:
                     if limit is not None and counts["imported"] >= limit:
                         counts["more"] = 1
                         break
-                    if have is not None and have.digest == layer.digest:
-                        counts["present"] += 1
-                        continue
-                    if (
-                        have is not None
-                        and have.origin == "bronze"
-                        and have.content == layer.content
+                    if have is not None and (
+                        have.digest == layer.digest
+                        or (have.origin == "bronze" and have.content == layer.content)
                     ):
                         counts["present"] += 1
+                        if ledger is not None and run not in ledger:
+                            repair.setdefault(have.origin, []).append(run)
+                            counts["remarked"] += 1
                         continue
                     try:
                         data = self.registry.blob(layer.digest)
@@ -470,6 +476,8 @@ class GefsVm:
                     imported.append(run)
                     counts["imported"] += 1
                 self._mark(imported, "ghcr")
+                for origin, runs in repair.items():
+                    self._mark(runs, origin)
                 if counts["more"]:
                     return counts
         return counts
