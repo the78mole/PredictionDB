@@ -1,5 +1,5 @@
 """Bestand je Lauf (``meta.silver_run``, ``meta.bronze_run``) und die Monatsbalken für Bronze,
-Silber und Gold, links GFS, rechts GEFS.
+Silber und Gold mit je Monat drei Balken: GFS DE, GFS Europa, GEFS.
 
 Läuft nur mit ``PDB_INTEGRATION=1`` nach ``migrate``. Meldet Läufe im April 2021 über
 ``wx_process.store.Store`` wie ``wx-process`` und ``wx-import``, legt einen laufenden
@@ -190,17 +190,26 @@ def test_bronze_month_bars(engine: Engine) -> None:
     assert gfs == (round(800 / 30, 1), round(100 / 30, 1))
 
 
-def _gefs_april(engine: Engine, panel_id: int) -> tuple[float, ...]:
+def _bar(engine: Engine, panel_id: int, prefix: str, hours: str = "'0'") -> tuple[float, ...]:
+    """Werte des Balkens ``prefix`` im April 2021; die anderen Zeilen bleiben dafür leer."""
     with engine.connect() as c:
-        result = c.execute(text(_panel_sql("'0'", panel_id)))
+        result = c.execute(text(_panel_sql(hours, panel_id)))
         cols = list(result.keys())
         rows = result.all()
-    # je Monat drei Zeilen: GFS (beschriftet), GEFS, Lücke
+    # je Monat vier Zeilen: GFS DE (beschriftet), GFS Europa, GEFS, Lücke
     i = next(i for i, r in enumerate(rows) if r[0] == "2021-04")
-    assert rows[i + 1][0] == "" and all(v is None for v in rows[i + 2][1:])
-    gefs = [j for j, k in enumerate(cols) if k.startswith("GEFS")]
-    assert all(rows[i][j] is None for j in gefs)
-    return tuple(float(rows[i + 1][j] or 0) for j in gefs)
+    assert [r[0] for r in rows[i + 1 : i + 4]] == ["", "", ""]
+    assert all(v is None for v in rows[i + 3][1:])
+    k = ["GFS DE", "GFS Europa", "GEFS"].index(prefix)
+    own = [j for j, n in enumerate(cols) if n.startswith(prefix + " ")]
+    for other in range(3):
+        if other != k:
+            assert all(rows[i + other][j] is None for j in own)
+    return tuple(float(rows[i + k][j] or 0) for j in own)
+
+
+def _gefs_april(engine: Engine, panel_id: int) -> tuple[float, ...]:
+    return _bar(engine, panel_id, "GEFS")
 
 
 def test_gefs_month_bars(engine: Engine) -> None:
@@ -245,3 +254,20 @@ def test_gefs_month_bars(engine: Engine) -> None:
                 },
             )
     assert _gefs_april(engine, 47) == (20.0, round(1400 / 30, 1))
+
+
+def test_gfs_europa_month_bars(engine: Engine) -> None:
+    """GFS Europa (gfs_0p5) als mittlerer Balken, unabhängig von GFS DE."""
+    store = Store(engine)
+    sid = store.source_id("gfs_0p5")
+    runs = _runs(0)
+    store.mark_silver(sid, runs[:15], "present", "ghcr")
+    store.mark_silver(sid, runs[15:18], "loading", "ghcr")
+    store.mark_silver(sid, runs[:3], "present", "bronze")
+    assert _bar(engine, 46, "GFS Europa") == (50.0, 10.0)
+    # Bronze: nur die 3 aus lokalem Bronze gebauten Läufe
+    assert _bar(engine, 52, "GFS Europa") == (10.0, 0.0)
+    # Gold gibt es noch nicht: alle 15 mit Silber in Arbeit
+    assert _bar(engine, 47, "GFS Europa") == (0.0, 50.0)
+    # GFS DE bleibt leer
+    assert _bar(engine, 46, "GFS DE") == (0.0, 0.0)

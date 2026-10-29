@@ -1175,7 +1175,7 @@
     },
     {
       "type": "barchart",
-      "title": "Bronze lokal je Monat (Anteil der Läufe, links GFS, rechts GEFS)",
+      "title": "Bronze lokal je Monat (Anteil der Läufe: GFS DE, GFS Europa, GEFS)",
       "id": 52,
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -1187,7 +1187,7 @@
         "x": 0,
         "y": 29
       },
-      "description": "Je Monat der Anteil der erwarteten GFS-Läufe (linker Balken) (wie beim Silber-Panel, Laufzeiten oben unter „GFS-Läufe“), deren zugeschnittene GRIB-Schritte (Bronze) vollständig in Garage wx-bronze liegen. Grün = fertig: ein Download-Lauf (gfs-ingest oder gfs-backfill) hat den Lauf vollständig abgelegt oder vollständig vorgefunden (meta.backfill_run complete/skipped), oder das lokale Silber wurde aus Bronze gerechnet (meta.silver_run origin bronze). Gelb = gerade im Bronze-Download. Läufe, deren Silber nur aus GHCR importiert wurde, haben lokal kein Bronze. GEFS (rechter Balken, blau): je Tag ein 00Z-Lauf ab 23.03.2021. Bronze lädt nur wx-gefs auf der VM für den laufenden Monat und hält es etwa 6 Monate (meta.bronze_run). Blau = vorhanden, orange = im Download, grau = nach der Frist gelöscht (Silber liegt dann lokal und in GHCR). Monate, deren Silber aus GitHub Actions kommt, haben kein Bronze.",
+      "description": "Je Monat der Anteil der erwarteten GFS-DE-Läufe (linker Balken) (wie beim Silber-Panel, Laufzeiten oben unter „GFS-Läufe“), deren zugeschnittene GRIB-Schritte (Bronze) vollständig in Garage wx-bronze liegen. Grün = fertig: ein Download-Lauf (gfs-ingest oder gfs-backfill) hat den Lauf vollständig abgelegt oder vollständig vorgefunden (meta.backfill_run complete/skipped), oder das lokale Silber wurde aus Bronze gerechnet (meta.silver_run origin bronze). Gelb = gerade im Bronze-Download. Läufe, deren Silber nur aus GHCR importiert wurde, haben lokal kein Bronze. Je Monat drei Balken, beschriftet ist der linke. GFS Europa (Mitte, lila; 0,5° fürs ganze Verbundnetz, Quelle gfs_0p5): Bronze nur, wo die VM den Lauf selbst geladen hat; die Historie kommt als Silber aus GHCR. GEFS (rechts, blau): je Tag ein 00Z-Lauf ab 23.03.2021. Bronze lädt nur wx-gefs auf der VM für den laufenden Monat und hält es etwa 6 Monate (meta.bronze_run). Blau = vorhanden, orange = im Download, grau = nach der Frist gelöscht (Silber liegt dann lokal und in GHCR).",
       "targets": [
         {
           "refId": "A",
@@ -1198,7 +1198,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "-- Erwartete Läufe wie im Silber-Panel. Grün: Bronze liegt vollständig in wx-bronze, d. h. ein\n-- Download hat den Lauf abgeschlossen oder vollständig vorgefunden (meta.backfill_run complete\n-- bzw. skipped) oder das Silber wurde lokal aus Bronze gerechnet (meta.silver_run origin bronze).\n-- Gelb: gerade im Bronze-Download (meta.backfill_run running).\n-- GEFS (zweiter Balken): erwartet je Tag ein 00Z-Lauf ab 23.03.2021. Bronze hält nur die VM\n-- (wx-gefs, meta.bronze_run): blau vorhanden, orange im Download, grau nach der Frist gelöscht.\nWITH soll AS (\n  SELECT t FROM generate_series(timestamptz '2021-03-22 12:00+00',\n                                date_bin('6 hours', now() - interval '5 hours', timestamptz '2000-01-01'),\n                                interval '6 hours') t\n   WHERE extract(hour FROM t AT TIME ZONE 'UTC')::int::text IN ($gfs_lauf)),\nq AS (SELECT source_id FROM meta.source WHERE code = 'gfs_0p25'),\ndl AS (SELECT r.run_time, bool_or(r.status IN ('complete', 'skipped')) AS fertig,\n              bool_or(r.status = 'running') AS laden\n         FROM meta.backfill_run r JOIN meta.backfill_job j USING (job_id)\n        WHERE j.source_id = (SELECT source_id FROM q)\n        GROUP BY r.run_time),\nsilber AS (SELECT run_time FROM meta.silver_run\n            WHERE source_id = (SELECT source_id FROM q) AND origin = 'bronze' AND status = 'present'),\nz AS (\n  SELECT soll.t,\n         CASE WHEN dl.fertig OR silber.run_time IS NOT NULL THEN 'fertig'\n              WHEN dl.laden THEN 'laden' END AS zustand\n    FROM soll LEFT JOIN dl ON dl.run_time = soll.t LEFT JOIN silber ON silber.run_time = soll.t),\ngsoll AS (\n  SELECT t FROM generate_series(timestamptz '2021-03-23 00:00+00',\n                                date_bin('1 day', now() - interval '8 hours', timestamptz '2000-01-01'),\n                                interval '1 day') t),\ngq AS (SELECT source_id FROM meta.source WHERE code = 'gefs_0p5'),\ngz AS (\n  SELECT gsoll.t,\n         CASE WHEN b.status = 'present' THEN 'fertig'\n              WHEN b.status = 'loading' AND b.updated_at > now() - interval '12 hours' THEN 'laden'\n              WHEN b.status = 'deleted' THEN 'geloescht' END AS zustand\n    FROM gsoll LEFT JOIN meta.bronze_run b\n      ON b.run_time = gsoll.t AND b.source_id = (SELECT source_id FROM gq)),\ngfs AS (\n  SELECT to_char(t AT TIME ZONE 'UTC', 'YYYY-MM') AS \"Monat\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'fertig') / count(*), 1) AS \"GFS fertig\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'laden') / count(*), 1) AS \"GFS im Download\"\n    FROM z\n   GROUP BY 1),\ngefs AS (\n  SELECT to_char(t AT TIME ZONE 'UTC', 'YYYY-MM') AS \"Monat\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'fertig') / count(*), 1) AS \"GEFS fertig\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'laden') / count(*), 1) AS \"GEFS im Download\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'geloescht') / count(*), 1) AS \"GEFS gelöscht (Frist)\"\n    FROM gz\n   GROUP BY 1),\nm AS (SELECT * FROM gfs FULL JOIN gefs USING (\"Monat\"))\nSELECT CASE WHEN b.k = 0 THEN m.\"Monat\" ELSE '' END AS \"Monat\",\n       CASE WHEN b.k = 0 THEN m.\"GFS fertig\" END AS \"GFS fertig\",\n       CASE WHEN b.k = 0 THEN m.\"GFS im Download\" END AS \"GFS im Download\",\n       CASE WHEN b.k = 1 THEN m.\"GEFS fertig\" END AS \"GEFS fertig\",\n       CASE WHEN b.k = 1 THEN m.\"GEFS im Download\" END AS \"GEFS im Download\",\n       CASE WHEN b.k = 1 THEN m.\"GEFS gelöscht (Frist)\" END AS \"GEFS gelöscht (Frist)\"\n  FROM m CROSS JOIN (VALUES (0), (1), (2)) AS b(k)\n ORDER BY m.\"Monat\", b.k"
+          "rawSql": "-- Erwartete Läufe wie im Silber-Panel. Grün: Bronze liegt vollständig in wx-bronze, d. h. ein\n-- Download hat den Lauf abgeschlossen oder vollständig vorgefunden (meta.backfill_run complete\n-- bzw. skipped) oder das Silber wurde lokal aus Bronze gerechnet (meta.silver_run origin bronze).\n-- Gelb: gerade im Bronze-Download (meta.backfill_run running).\n-- GFS Europa (mittlerer Balken, 0,5°): Läufe wie oben; Bronze lädt nur die VM selbst (Silber aus\n-- Bronze bzw. meta.backfill_run). GEFS (rechter Balken): je Tag ein 00Z-Lauf ab 23.03.2021,\n-- Bronze hält nur wx-gefs (meta.bronze_run), grau = nach der Frist gelöscht.\nWITH soll AS (\n  SELECT t FROM generate_series(timestamptz '2021-03-22 12:00+00',\n                                date_bin('6 hours', now() - interval '5 hours', timestamptz '2000-01-01'),\n                                interval '6 hours') t\n   WHERE extract(hour FROM t AT TIME ZONE 'UTC')::int::text IN ($gfs_lauf)),\nq AS (SELECT source_id FROM meta.source WHERE code = 'gfs_0p25'),\ndl AS (SELECT r.run_time, bool_or(r.status IN ('complete', 'skipped')) AS fertig,\n              bool_or(r.status = 'running') AS laden\n         FROM meta.backfill_run r JOIN meta.backfill_job j USING (job_id)\n        WHERE j.source_id = (SELECT source_id FROM q)\n        GROUP BY r.run_time),\nsilber AS (SELECT run_time FROM meta.silver_run\n            WHERE source_id = (SELECT source_id FROM q) AND origin = 'bronze' AND status = 'present'),\nz AS (\n  SELECT soll.t,\n         CASE WHEN dl.fertig OR silber.run_time IS NOT NULL THEN 'fertig'\n              WHEN dl.laden THEN 'laden' END AS zustand\n    FROM soll LEFT JOIN dl ON dl.run_time = soll.t LEFT JOIN silber ON silber.run_time = soll.t),\nesoll AS (SELECT t FROM soll),\neq AS (SELECT source_id FROM meta.source WHERE code = 'gfs_0p5'),\nedl AS (SELECT r.run_time, bool_or(r.status IN ('complete', 'skipped')) AS fertig,\n               bool_or(r.status = 'running') AS laden\n          FROM meta.backfill_run r JOIN meta.backfill_job j USING (job_id)\n         WHERE j.source_id = (SELECT source_id FROM eq)\n         GROUP BY r.run_time),\nez AS (\n  SELECT esoll.t,\n         CASE WHEN edl.fertig OR s.run_time IS NOT NULL THEN 'fertig'\n              WHEN edl.laden THEN 'laden' END AS zustand\n    FROM esoll LEFT JOIN edl ON edl.run_time = esoll.t\n    LEFT JOIN meta.silver_run s\n      ON s.run_time = esoll.t AND s.source_id = (SELECT source_id FROM eq)\n     AND s.origin = 'bronze' AND s.status = 'present'),\ngsoll AS (\n  SELECT t FROM generate_series(timestamptz '2021-03-23 00:00+00',\n                                date_bin('1 day', now() - interval '8 hours', timestamptz '2000-01-01'),\n                                interval '1 day') t),\ngq AS (SELECT source_id FROM meta.source WHERE code = 'gefs_0p5'),\ngz AS (\n  SELECT gsoll.t,\n         CASE WHEN b.status = 'present' THEN 'fertig'\n              WHEN b.status = 'loading' AND b.updated_at > now() - interval '12 hours' THEN 'laden'\n              WHEN b.status = 'deleted' THEN 'geloescht' END AS zustand\n    FROM gsoll LEFT JOIN meta.bronze_run b\n      ON b.run_time = gsoll.t AND b.source_id = (SELECT source_id FROM gq)),\ngfs AS (\n  SELECT to_char(t AT TIME ZONE 'UTC', 'YYYY-MM') AS \"Monat\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'fertig') / count(*), 1) AS \"GFS DE fertig\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'laden') / count(*), 1) AS \"GFS DE im Download\"\n    FROM z\n   GROUP BY 1),\neu AS (\n  SELECT to_char(t AT TIME ZONE 'UTC', 'YYYY-MM') AS \"Monat\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'fertig') / count(*), 1) AS \"GFS Europa fertig\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'laden') / count(*), 1) AS \"GFS Europa im Download\"\n    FROM ez\n   GROUP BY 1),\ngefs AS (\n  SELECT to_char(t AT TIME ZONE 'UTC', 'YYYY-MM') AS \"Monat\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'fertig') / count(*), 1) AS \"GEFS fertig\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'laden') / count(*), 1) AS \"GEFS im Download\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'geloescht') / count(*), 1) AS \"GEFS gelöscht (Frist)\"\n    FROM gz\n   GROUP BY 1),\nm AS (SELECT * FROM gfs FULL JOIN eu USING (\"Monat\") FULL JOIN gefs USING (\"Monat\"))\n-- Grafanas Balkendiagramm kennt keine Stapelgruppen: je Monat vier Zeilen (GFS DE,\n-- GFS Europa, GEFS, Lücke), beschriftet ist nur die erste\nSELECT CASE WHEN b.k = 0 THEN m.\"Monat\" ELSE '' END AS \"Monat\",\n       CASE WHEN b.k = 0 THEN m.\"GFS DE fertig\" END AS \"GFS DE fertig\",\n       CASE WHEN b.k = 0 THEN m.\"GFS DE im Download\" END AS \"GFS DE im Download\",\n       CASE WHEN b.k = 1 THEN m.\"GFS Europa fertig\" END AS \"GFS Europa fertig\",\n       CASE WHEN b.k = 1 THEN m.\"GFS Europa im Download\" END AS \"GFS Europa im Download\",\n       CASE WHEN b.k = 2 THEN m.\"GEFS fertig\" END AS \"GEFS fertig\",\n       CASE WHEN b.k = 2 THEN m.\"GEFS im Download\" END AS \"GEFS im Download\",\n       CASE WHEN b.k = 2 THEN m.\"GEFS gelöscht (Frist)\" END AS \"GEFS gelöscht (Frist)\"\n  FROM m CROSS JOIN (VALUES (0), (1), (2), (3)) AS b(k)\n ORDER BY m.\"Monat\", b.k"
         }
       ],
       "options": {
@@ -1250,7 +1250,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "GFS fertig"
+              "options": "GFS DE fertig"
             },
             "properties": [
               {
@@ -1265,7 +1265,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "GFS im Download"
+              "options": "GFS DE im Download"
             },
             "properties": [
               {
@@ -1273,6 +1273,36 @@
                 "value": {
                   "mode": "fixed",
                   "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GFS Europa fertig"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GFS Europa im Download"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FF8FD0"
                 }
               }
             ]
@@ -1327,7 +1357,7 @@
     },
     {
       "type": "barchart",
-      "title": "Silber lokal je Monat (Anteil der Läufe, links GFS, rechts GEFS)",
+      "title": "Silber lokal je Monat (Anteil der Läufe: GFS DE, GFS Europa, GEFS)",
       "id": 46,
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -1339,7 +1369,7 @@
         "x": 0,
         "y": 38
       },
-      "description": "Je Monat der Anteil der erwarteten GFS-Läufe (linker Balken) (ab v16, 22.03.2021 12Z, bis zum jüngsten veröffentlichten Lauf; Laufzeiten oben unter „GFS-Läufe“ wählbar), deren Silber vollständig in Garage wx-silver liegt. Grün = fertig, gelb = gerade im Download: im laufenden Import-Durchgang aus GHCR (wx-import) vorgesehen oder im Bronze-Backfill (gfs-backfill) in Arbeit. Läufe, die im NOAA-Archiv fehlen, bleiben offen, daher erreichen manche Monate keine 100 %. GEFS (rechter Balken, blau): je Tag ein 00Z-Lauf ab 23.03.2021, die Laufzeit-Auswahl gilt nur für GFS. Blau = Silber liegt in wx-silver (aus GHCR importiert oder von wx-gefs gebaut), orange = wx-gefs baut es gerade aus Bronze.",
+      "description": "Je Monat der Anteil der erwarteten GFS-DE-Läufe (linker Balken) (ab v16, 22.03.2021 12Z, bis zum jüngsten veröffentlichten Lauf; Laufzeiten oben unter „GFS-Läufe“ wählbar), deren Silber vollständig in Garage wx-silver liegt. Grün = fertig, gelb = gerade im Download: im laufenden Import-Durchgang aus GHCR (wx-import) vorgesehen oder im Bronze-Backfill (gfs-backfill) in Arbeit. Läufe, die im NOAA-Archiv fehlen, bleiben offen, daher erreichen manche Monate keine 100 %. Je Monat drei Balken, beschriftet ist der linke. GFS Europa (Mitte, lila; Quelle gfs_0p5, Laufzeiten wie GFS DE): Silber in wx-silver (aus GHCR oder auf der VM gebaut). GEFS (rechts, blau): je Tag ein 00Z-Lauf ab 23.03.2021; blau = Silber liegt vor (aus GHCR oder von wx-gefs gebaut), orange = wx-gefs baut es gerade im laufenden Monat.",
       "targets": [
         {
           "refId": "A",
@@ -1350,7 +1380,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "-- Erwartet: alle GFS-Läufe ab v16 (22.03.2021 12Z) bis zum jüngsten, der veröffentlicht sein sollte\n-- (NOAA ca. 3,5-5 h nach Laufzeit), nur die gewählten Laufzeiten. Grün: Silber liegt vollständig\n-- in wx-silver (meta.silver_run present). Gelb: im laufenden Import-Durchgang aus GHCR vorgesehen\n-- (loading, höchstens 12 h alt) oder gerade im Bronze-Download (meta.backfill_run running).\n-- GEFS (zweiter Balken): erwartet je Tag ein 00Z-Lauf ab 23.03.2021, Silber aus wx-gefs\n-- (meta.silver_run, Quelle gefs_0p5): blau vorhanden, orange im Bau aus Bronze.\nWITH soll AS (\n  SELECT t FROM generate_series(timestamptz '2021-03-22 12:00+00',\n                                date_bin('6 hours', now() - interval '5 hours', timestamptz '2000-01-01'),\n                                interval '6 hours') t\n   WHERE extract(hour FROM t AT TIME ZONE 'UTC')::int::text IN ($gfs_lauf)),\ns AS (SELECT r.run_time, r.status, r.updated_at\n        FROM meta.silver_run r JOIN meta.source q USING (source_id)\n       WHERE q.code = 'gfs_0p25'),\nbronze AS (SELECT DISTINCT run_time FROM meta.backfill_run WHERE status = 'running'),\nz AS (\n  SELECT soll.t,\n         CASE WHEN s.status = 'present' THEN 'fertig'\n              WHEN s.status = 'loading' AND s.updated_at > now() - interval '12 hours' THEN 'laden'\n              WHEN bronze.run_time IS NOT NULL THEN 'laden' END AS zustand\n    FROM soll LEFT JOIN s ON s.run_time = soll.t LEFT JOIN bronze ON bronze.run_time = soll.t),\ngsoll AS (\n  SELECT t FROM generate_series(timestamptz '2021-03-23 00:00+00',\n                                date_bin('1 day', now() - interval '8 hours', timestamptz '2000-01-01'),\n                                interval '1 day') t),\ngq AS (SELECT source_id FROM meta.source WHERE code = 'gefs_0p5'),\ngz AS (\n  SELECT gsoll.t,\n         CASE WHEN s.status = 'present' THEN 'fertig'\n              WHEN s.status = 'loading' AND s.updated_at > now() - interval '12 hours' THEN 'laden'\n         END AS zustand\n    FROM gsoll LEFT JOIN meta.silver_run s\n      ON s.run_time = gsoll.t AND s.source_id = (SELECT source_id FROM gq)),\ngfs AS (\n  SELECT to_char(t AT TIME ZONE 'UTC', 'YYYY-MM') AS \"Monat\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'fertig') / count(*), 1) AS \"GFS fertig\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'laden') / count(*), 1) AS \"GFS im Download\"\n    FROM z\n   GROUP BY 1),\ngefs AS (\n  SELECT to_char(t AT TIME ZONE 'UTC', 'YYYY-MM') AS \"Monat\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'fertig') / count(*), 1) AS \"GEFS fertig\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'laden') / count(*), 1) AS \"GEFS im Bau\"\n    FROM gz\n   GROUP BY 1),\nm AS (SELECT * FROM gfs FULL JOIN gefs USING (\"Monat\"))\nSELECT CASE WHEN b.k = 0 THEN m.\"Monat\" ELSE '' END AS \"Monat\",\n       CASE WHEN b.k = 0 THEN m.\"GFS fertig\" END AS \"GFS fertig\",\n       CASE WHEN b.k = 0 THEN m.\"GFS im Download\" END AS \"GFS im Download\",\n       CASE WHEN b.k = 1 THEN m.\"GEFS fertig\" END AS \"GEFS fertig\",\n       CASE WHEN b.k = 1 THEN m.\"GEFS im Bau\" END AS \"GEFS im Bau\"\n  FROM m CROSS JOIN (VALUES (0), (1), (2)) AS b(k)\n ORDER BY m.\"Monat\", b.k"
+          "rawSql": "-- Erwartet: alle GFS-Läufe ab v16 (22.03.2021 12Z) bis zum jüngsten, der veröffentlicht sein sollte\n-- (NOAA ca. 3,5-5 h nach Laufzeit), nur die gewählten Laufzeiten. Grün: Silber liegt vollständig\n-- in wx-silver (meta.silver_run present). Gelb: im laufenden Import-Durchgang aus GHCR vorgesehen\n-- (loading, höchstens 12 h alt) oder gerade im Bronze-Download (meta.backfill_run running).\n-- GFS Europa (mittlerer Balken, 0,5°): Läufe wie oben, meta.silver_run der Quelle gfs_0p5.\n-- GEFS (rechter Balken): je Tag ein 00Z-Lauf ab 23.03.2021, Silber aus wx-gefs.\nWITH soll AS (\n  SELECT t FROM generate_series(timestamptz '2021-03-22 12:00+00',\n                                date_bin('6 hours', now() - interval '5 hours', timestamptz '2000-01-01'),\n                                interval '6 hours') t\n   WHERE extract(hour FROM t AT TIME ZONE 'UTC')::int::text IN ($gfs_lauf)),\ns AS (SELECT r.run_time, r.status, r.updated_at\n        FROM meta.silver_run r JOIN meta.source q USING (source_id)\n       WHERE q.code = 'gfs_0p25'),\nbronze AS (SELECT DISTINCT run_time FROM meta.backfill_run WHERE status = 'running'),\nz AS (\n  SELECT soll.t,\n         CASE WHEN s.status = 'present' THEN 'fertig'\n              WHEN s.status = 'loading' AND s.updated_at > now() - interval '12 hours' THEN 'laden'\n              WHEN bronze.run_time IS NOT NULL THEN 'laden' END AS zustand\n    FROM soll LEFT JOIN s ON s.run_time = soll.t LEFT JOIN bronze ON bronze.run_time = soll.t),\nesoll AS (SELECT t FROM soll),\neq AS (SELECT source_id FROM meta.source WHERE code = 'gfs_0p5'),\nez AS (\n  SELECT esoll.t,\n         CASE WHEN s.status = 'present' THEN 'fertig'\n              WHEN s.status = 'loading' AND s.updated_at > now() - interval '12 hours' THEN 'laden'\n         END AS zustand\n    FROM esoll LEFT JOIN meta.silver_run s\n      ON s.run_time = esoll.t AND s.source_id = (SELECT source_id FROM eq)),\ngsoll AS (\n  SELECT t FROM generate_series(timestamptz '2021-03-23 00:00+00',\n                                date_bin('1 day', now() - interval '8 hours', timestamptz '2000-01-01'),\n                                interval '1 day') t),\ngq AS (SELECT source_id FROM meta.source WHERE code = 'gefs_0p5'),\ngz AS (\n  SELECT gsoll.t,\n         CASE WHEN s.status = 'present' THEN 'fertig'\n              WHEN s.status = 'loading' AND s.updated_at > now() - interval '12 hours' THEN 'laden'\n         END AS zustand\n    FROM gsoll LEFT JOIN meta.silver_run s\n      ON s.run_time = gsoll.t AND s.source_id = (SELECT source_id FROM gq)),\ngfs AS (\n  SELECT to_char(t AT TIME ZONE 'UTC', 'YYYY-MM') AS \"Monat\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'fertig') / count(*), 1) AS \"GFS DE fertig\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'laden') / count(*), 1) AS \"GFS DE im Download\"\n    FROM z\n   GROUP BY 1),\neu AS (\n  SELECT to_char(t AT TIME ZONE 'UTC', 'YYYY-MM') AS \"Monat\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'fertig') / count(*), 1) AS \"GFS Europa fertig\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'laden') / count(*), 1) AS \"GFS Europa im Download\"\n    FROM ez\n   GROUP BY 1),\ngefs AS (\n  SELECT to_char(t AT TIME ZONE 'UTC', 'YYYY-MM') AS \"Monat\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'fertig') / count(*), 1) AS \"GEFS fertig\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'laden') / count(*), 1) AS \"GEFS im Download\"\n    FROM gz\n   GROUP BY 1),\nm AS (SELECT * FROM gfs FULL JOIN eu USING (\"Monat\") FULL JOIN gefs USING (\"Monat\"))\n-- Grafanas Balkendiagramm kennt keine Stapelgruppen: je Monat vier Zeilen (GFS DE,\n-- GFS Europa, GEFS, Lücke), beschriftet ist nur die erste\nSELECT CASE WHEN b.k = 0 THEN m.\"Monat\" ELSE '' END AS \"Monat\",\n       CASE WHEN b.k = 0 THEN m.\"GFS DE fertig\" END AS \"GFS DE fertig\",\n       CASE WHEN b.k = 0 THEN m.\"GFS DE im Download\" END AS \"GFS DE im Download\",\n       CASE WHEN b.k = 1 THEN m.\"GFS Europa fertig\" END AS \"GFS Europa fertig\",\n       CASE WHEN b.k = 1 THEN m.\"GFS Europa im Download\" END AS \"GFS Europa im Download\",\n       CASE WHEN b.k = 2 THEN m.\"GEFS fertig\" END AS \"GEFS fertig\",\n       CASE WHEN b.k = 2 THEN m.\"GEFS im Download\" END AS \"GEFS im Download\"\n  FROM m CROSS JOIN (VALUES (0), (1), (2), (3)) AS b(k)\n ORDER BY m.\"Monat\", b.k"
         }
       ],
       "options": {
@@ -1402,7 +1432,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "GFS fertig"
+              "options": "GFS DE fertig"
             },
             "properties": [
               {
@@ -1417,7 +1447,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "GFS im Download"
+              "options": "GFS DE im Download"
             },
             "properties": [
               {
@@ -1425,6 +1455,36 @@
                 "value": {
                   "mode": "fixed",
                   "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GFS Europa fertig"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GFS Europa im Download"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FF8FD0"
                 }
               }
             ]
@@ -1447,7 +1507,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "GEFS im Bau"
+              "options": "GEFS im Download"
             },
             "properties": [
               {
@@ -1464,7 +1524,7 @@
     },
     {
       "type": "barchart",
-      "title": "Gold lokal je Monat (Anteil der Läufe mit Wetter-Features, links GFS, rechts GEFS)",
+      "title": "Gold lokal je Monat (Anteil der Läufe mit Wetter-Features: GFS DE, GFS Europa, GEFS)",
       "id": 47,
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -1476,7 +1536,7 @@
         "x": 0,
         "y": 47
       },
-      "description": "Je Monat der Anteil der erwarteten GFS-Läufe (linker Balken) (wie beim Silber-Panel, Laufzeiten oben unter „GFS-Läufe“), für die die Wetter-Features je Cluster (Gold, feat.nwp_value) mit der aktuellen Clusterung und Feature-Version gerechnet sind. Grün = fertig, gelb = in Arbeit: Silber liegt lokal vor, Gold steht noch aus (wx-process-backfill rechnet stündlich nach, nur für die Laufzeiten in GFS_BACKFILL_RUNS). Eine neue Clusterung macht alle Läufe wieder gelb, bis sie neu gerechnet sind. GEFS (rechter Balken, blau): Ensemble-Kennzahlen je Gebotszone (feat.nwp_value, Quelle gefs_0p5) mit der zuletzt verwendeten Regionen- und Kennzahlen-Version. Blau = fertig, orange = Silber liegt vor, Gold steht noch aus (wx-gefs rechnet je Durchgang höchstens GEFS_GOLD_LIMIT ältere Läufe).",
+      "description": "Je Monat der Anteil der erwarteten GFS-DE-Läufe (linker Balken) (wie beim Silber-Panel, Laufzeiten oben unter „GFS-Läufe“), für die die Wetter-Features je Cluster (Gold, feat.nwp_value) mit der aktuellen Clusterung und Feature-Version gerechnet sind. Grün = fertig, gelb = in Arbeit: Silber liegt lokal vor, Gold steht noch aus (wx-process-backfill rechnet stündlich nach, nur für die Laufzeiten in GFS_BACKFILL_RUNS). Eine neue Clusterung macht alle Läufe wieder gelb, bis sie neu gerechnet sind. Je Monat drei Balken, beschriftet ist der linke. GFS Europa (Mitte, lila): Features je Gebotszone der Quelle gfs_0p5, bis es eine Clusterung für das 0,5°-Gitter gibt nur Silber (hell). GEFS (rechts, blau): Ensemble-Kennzahlen je Gebotszone (Quelle gefs_0p5); orange = Silber liegt vor, Gold steht noch aus.",
       "targets": [
         {
           "refId": "A",
@@ -1487,7 +1547,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "-- Erwartete Läufe wie im Silber-Panel. Grün: meta.nwp_feature_run hat den Lauf für die aktuelle\n-- Clusterung (jüngste mit Gitter-Gewichten) und die zuletzt verwendete Feature-Version.\n-- Gelb: Silber liegt vor (meta.silver_run present), Gold fehlt noch.\n-- GEFS (zweiter Balken): blau mit der zuletzt verwendeten Regionen- und Kennzahlen-Version\n-- (meta.nwp_feature_run, Quelle gefs_0p5), orange Silber vorhanden, Gold steht aus.\nWITH soll AS (\n  SELECT t FROM generate_series(timestamptz '2021-03-22 12:00+00',\n                                date_bin('6 hours', now() - interval '5 hours', timestamptz '2000-01-01'),\n                                interval '6 hours') t\n   WHERE extract(hour FROM t AT TIME ZONE 'UTC')::int::text IN ($gfs_lauf)),\nq AS (SELECT source_id FROM meta.source WHERE code = 'gfs_0p25'),\ncl AS (SELECT c.clustering_version FROM assets.clustering c\n        WHERE EXISTS (SELECT 1 FROM assets.grid_weight w\n                       WHERE w.clustering_version = c.clustering_version AND w.grid = 'gfs_0p25')\n        ORDER BY c.created_at DESC LIMIT 1),\nfv AS (SELECT features_version FROM meta.nwp_feature_run\n        WHERE source_id = (SELECT source_id FROM q) ORDER BY processed_at DESC LIMIT 1),\ngold AS (SELECT f.run_time FROM meta.nwp_feature_run f\n          WHERE f.source_id = (SELECT source_id FROM q)\n            AND f.clustering_version = (SELECT clustering_version FROM cl)\n            AND f.features_version = (SELECT features_version FROM fv)),\nsilber AS (SELECT run_time FROM meta.silver_run\n            WHERE source_id = (SELECT source_id FROM q) AND status = 'present'),\nz AS (\n  SELECT soll.t,\n         CASE WHEN gold.run_time IS NOT NULL THEN 'fertig'\n              WHEN silber.run_time IS NOT NULL THEN 'arbeit' END AS zustand\n    FROM soll LEFT JOIN gold ON gold.run_time = soll.t LEFT JOIN silber ON silber.run_time = soll.t),\ngsoll AS (\n  SELECT t FROM generate_series(timestamptz '2021-03-23 00:00+00',\n                                date_bin('1 day', now() - interval '8 hours', timestamptz '2000-01-01'),\n                                interval '1 day') t),\ngq AS (SELECT source_id FROM meta.source WHERE code = 'gefs_0p5'),\ngv AS (SELECT clustering_version, features_version FROM meta.nwp_feature_run\n        WHERE source_id = (SELECT source_id FROM gq) ORDER BY processed_at DESC LIMIT 1),\ngz AS (\n  SELECT gsoll.t,\n         CASE WHEN f.run_time IS NOT NULL THEN 'fertig'\n              WHEN s.run_time IS NOT NULL THEN 'arbeit' END AS zustand\n    FROM gsoll\n    LEFT JOIN meta.nwp_feature_run f\n      ON f.run_time = gsoll.t AND f.source_id = (SELECT source_id FROM gq)\n     AND (f.clustering_version, f.features_version) = (SELECT * FROM gv)\n    LEFT JOIN meta.silver_run s\n      ON s.run_time = gsoll.t AND s.source_id = (SELECT source_id FROM gq) AND s.status = 'present'),\ngfs AS (\n  SELECT to_char(t AT TIME ZONE 'UTC', 'YYYY-MM') AS \"Monat\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'fertig') / count(*), 1) AS \"GFS fertig\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'arbeit') / count(*), 1) AS \"GFS in Arbeit\"\n    FROM z\n   GROUP BY 1),\ngefs AS (\n  SELECT to_char(t AT TIME ZONE 'UTC', 'YYYY-MM') AS \"Monat\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'fertig') / count(*), 1) AS \"GEFS fertig\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'arbeit') / count(*), 1) AS \"GEFS in Arbeit\"\n    FROM gz\n   GROUP BY 1),\nm AS (SELECT * FROM gfs FULL JOIN gefs USING (\"Monat\"))\nSELECT CASE WHEN b.k = 0 THEN m.\"Monat\" ELSE '' END AS \"Monat\",\n       CASE WHEN b.k = 0 THEN m.\"GFS fertig\" END AS \"GFS fertig\",\n       CASE WHEN b.k = 0 THEN m.\"GFS in Arbeit\" END AS \"GFS in Arbeit\",\n       CASE WHEN b.k = 1 THEN m.\"GEFS fertig\" END AS \"GEFS fertig\",\n       CASE WHEN b.k = 1 THEN m.\"GEFS in Arbeit\" END AS \"GEFS in Arbeit\"\n  FROM m CROSS JOIN (VALUES (0), (1), (2)) AS b(k)\n ORDER BY m.\"Monat\", b.k"
+          "rawSql": "-- Erwartete Läufe wie im Silber-Panel. Grün: meta.nwp_feature_run hat den Lauf für die aktuelle\n-- Clusterung (jüngste mit Gitter-Gewichten) und die zuletzt verwendete Feature-Version.\n-- Gelb: Silber liegt vor (meta.silver_run present), Gold fehlt noch.\n-- GFS Europa (mittlerer Balken) und GEFS (rechter Balken): grün mit der zuletzt verwendeten\n-- Clusterung und Feature-Version der Quelle (meta.nwp_feature_run), sonst in Arbeit, wenn Silber\n-- vorliegt.\nWITH soll AS (\n  SELECT t FROM generate_series(timestamptz '2021-03-22 12:00+00',\n                                date_bin('6 hours', now() - interval '5 hours', timestamptz '2000-01-01'),\n                                interval '6 hours') t\n   WHERE extract(hour FROM t AT TIME ZONE 'UTC')::int::text IN ($gfs_lauf)),\nq AS (SELECT source_id FROM meta.source WHERE code = 'gfs_0p25'),\ncl AS (SELECT c.clustering_version FROM assets.clustering c\n        WHERE EXISTS (SELECT 1 FROM assets.grid_weight w\n                       WHERE w.clustering_version = c.clustering_version AND w.grid = 'gfs_0p25')\n        ORDER BY c.created_at DESC LIMIT 1),\nfv AS (SELECT features_version FROM meta.nwp_feature_run\n        WHERE source_id = (SELECT source_id FROM q) ORDER BY processed_at DESC LIMIT 1),\ngold AS (SELECT f.run_time FROM meta.nwp_feature_run f\n          WHERE f.source_id = (SELECT source_id FROM q)\n            AND f.clustering_version = (SELECT clustering_version FROM cl)\n            AND f.features_version = (SELECT features_version FROM fv)),\nsilber AS (SELECT run_time FROM meta.silver_run\n            WHERE source_id = (SELECT source_id FROM q) AND status = 'present'),\nz AS (\n  SELECT soll.t,\n         CASE WHEN gold.run_time IS NOT NULL THEN 'fertig'\n              WHEN silber.run_time IS NOT NULL THEN 'arbeit' END AS zustand\n    FROM soll LEFT JOIN gold ON gold.run_time = soll.t LEFT JOIN silber ON silber.run_time = soll.t),\nesoll AS (SELECT t FROM soll),\neq AS (SELECT source_id FROM meta.source WHERE code = 'gfs_0p5'),\nev AS (SELECT clustering_version, features_version FROM meta.nwp_feature_run\n        WHERE source_id = (SELECT source_id FROM eq) ORDER BY processed_at DESC LIMIT 1),\nez AS (\n  SELECT esoll.t,\n         CASE WHEN f.run_time IS NOT NULL THEN 'fertig'\n              WHEN s.run_time IS NOT NULL THEN 'arbeit' END AS zustand\n    FROM esoll\n    LEFT JOIN meta.nwp_feature_run f\n      ON f.run_time = esoll.t AND f.source_id = (SELECT source_id FROM eq)\n     AND (f.clustering_version, f.features_version) = (SELECT * FROM ev)\n    LEFT JOIN meta.silver_run s\n      ON s.run_time = esoll.t AND s.source_id = (SELECT source_id FROM eq) AND s.status = 'present'),\ngsoll AS (\n  SELECT t FROM generate_series(timestamptz '2021-03-23 00:00+00',\n                                date_bin('1 day', now() - interval '8 hours', timestamptz '2000-01-01'),\n                                interval '1 day') t),\ngq AS (SELECT source_id FROM meta.source WHERE code = 'gefs_0p5'),\ngv AS (SELECT clustering_version, features_version FROM meta.nwp_feature_run\n        WHERE source_id = (SELECT source_id FROM gq) ORDER BY processed_at DESC LIMIT 1),\ngz AS (\n  SELECT gsoll.t,\n         CASE WHEN f.run_time IS NOT NULL THEN 'fertig'\n              WHEN s.run_time IS NOT NULL THEN 'arbeit' END AS zustand\n    FROM gsoll\n    LEFT JOIN meta.nwp_feature_run f\n      ON f.run_time = gsoll.t AND f.source_id = (SELECT source_id FROM gq)\n     AND (f.clustering_version, f.features_version) = (SELECT * FROM gv)\n    LEFT JOIN meta.silver_run s\n      ON s.run_time = gsoll.t AND s.source_id = (SELECT source_id FROM gq) AND s.status = 'present'),\ngfs AS (\n  SELECT to_char(t AT TIME ZONE 'UTC', 'YYYY-MM') AS \"Monat\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'fertig') / count(*), 1) AS \"GFS DE fertig\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'arbeit') / count(*), 1) AS \"GFS DE in Arbeit\"\n    FROM z\n   GROUP BY 1),\neu AS (\n  SELECT to_char(t AT TIME ZONE 'UTC', 'YYYY-MM') AS \"Monat\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'fertig') / count(*), 1) AS \"GFS Europa fertig\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'arbeit') / count(*), 1) AS \"GFS Europa in Arbeit\"\n    FROM ez\n   GROUP BY 1),\ngefs AS (\n  SELECT to_char(t AT TIME ZONE 'UTC', 'YYYY-MM') AS \"Monat\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'fertig') / count(*), 1) AS \"GEFS fertig\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'arbeit') / count(*), 1) AS \"GEFS in Arbeit\"\n    FROM gz\n   GROUP BY 1),\nm AS (SELECT * FROM gfs FULL JOIN eu USING (\"Monat\") FULL JOIN gefs USING (\"Monat\"))\n-- Grafanas Balkendiagramm kennt keine Stapelgruppen: je Monat vier Zeilen (GFS DE,\n-- GFS Europa, GEFS, Lücke), beschriftet ist nur die erste\nSELECT CASE WHEN b.k = 0 THEN m.\"Monat\" ELSE '' END AS \"Monat\",\n       CASE WHEN b.k = 0 THEN m.\"GFS DE fertig\" END AS \"GFS DE fertig\",\n       CASE WHEN b.k = 0 THEN m.\"GFS DE in Arbeit\" END AS \"GFS DE in Arbeit\",\n       CASE WHEN b.k = 1 THEN m.\"GFS Europa fertig\" END AS \"GFS Europa fertig\",\n       CASE WHEN b.k = 1 THEN m.\"GFS Europa in Arbeit\" END AS \"GFS Europa in Arbeit\",\n       CASE WHEN b.k = 2 THEN m.\"GEFS fertig\" END AS \"GEFS fertig\",\n       CASE WHEN b.k = 2 THEN m.\"GEFS in Arbeit\" END AS \"GEFS in Arbeit\"\n  FROM m CROSS JOIN (VALUES (0), (1), (2), (3)) AS b(k)\n ORDER BY m.\"Monat\", b.k"
         }
       ],
       "options": {
@@ -1539,7 +1599,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "GFS fertig"
+              "options": "GFS DE fertig"
             },
             "properties": [
               {
@@ -1554,7 +1614,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "GFS in Arbeit"
+              "options": "GFS DE in Arbeit"
             },
             "properties": [
               {
@@ -1562,6 +1622,36 @@
                 "value": {
                   "mode": "fixed",
                   "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GFS Europa fertig"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GFS Europa in Arbeit"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FF8FD0"
                 }
               }
             ]

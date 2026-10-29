@@ -719,10 +719,32 @@ Region `gefs:<code>`, Quelle `gefs_0p5`), ≈ 96 000 Werte je Lauf.
 
 **Bestand:** `wx-gefs` meldet Bronze je Lauf nach `meta.bronze_run` (im Download, vorhanden,
 nach der Frist gelöscht) und Silber nach `meta.silver_run`. Das Wetter-Dashboard zeigt GEFS in
-den Bestandsbalken für Bronze, Silber und Gold als zweiten Balken je Monat neben GFS.
+den Bestandsbalken für Bronze, Silber und Gold als dritten Balken je Monat neben GFS DE und
+GFS Europa (5.7).
 
 **Weiter:** Merkmalsgruppe `ensemble` in `ml_train` mit Horizont D+16 und Backtest je
 Vorlauftag, Europa-Karte je Gebotszone. GEFS-Reforecasts (vor 2021-03) sind nicht vorgesehen.
+
+### 5.7 GFS Europa: 0,5° fürs ganze Verbundnetz
+
+Für Preise und Flüsse der Nachbarn braucht das Modell das Wetter im ganzen Verbundnetz, nicht
+nur in DE. Dafür gibt es eine zweite GFS-Quelle `gfs_0p5`: das NCEP-Produkt `pgrb2.0p50` im
+GEFS-Ausschnitt (34,5–71,5° N, 10,5° W–45° O, 75 × 112 = 8 400 Punkte, dasselbe Gitter wie
+GEFS). DE bleibt in `gfs_0p25` mit 0,25° und stündlich bis 120 h; außerhalb DE reicht 0,5°
+dreistündlich. Es gibt damit drei Datensätze: GFS DE, GFS Europa und GEFS.
+
+- **Quelle:** `config/sources/gfs_0p5.yaml`, Läufe 00/06/12/18Z, 0–384 h dreistündlich
+  (129 Schritte), dieselben Felder wie GFS DE. Nur aus den Archiven AWS und GCS (ab
+  2021-03-22 12Z mit `.idx`), damit NOMADS für GFS DE frei bleibt. Gemessen: ≈ 45 s Ingest,
+  ≈ 27 MB Bronze und ≈ 22 MB Silber je Lauf, die Historie also ≈ 180 GB Silber.
+- **VM:** `ingest-gfs-eu` und `wx-process-eu` wie `ingest-gfs`/`wx-process` mit den Konfigurationen
+  für `gfs_0p5`; `wx-import-eu` (Profil `history`) holt die Historie aus
+  `ghcr.io/the78mole/predictiondb-data/gfs-0p5-silver`.
+- **Historie:** `gfs-history.yml` mit `source: eu` (täglich 07:47 UTC als Lückenfüller), Silber
+  wie bei GFS DE (5.5) in eigenem Paket.
+- **Gold:** folgt mit einer Clusterung für das Gitter `gfs_0p5` (Gebotszonen wie GEFS
+  `regions_v2`); bis dahin entsteht nur Silber. Danach Europa-Karte je Gebotszone und
+  Länderauswahl im Wetter-Dashboard (Standard DE).
 
 ---
 

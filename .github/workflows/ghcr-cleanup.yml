@@ -1,0 +1,33 @@
+name: GHCR aufräumen
+
+# Löscht untagged Versionen der Datenpakete unter ghcr.io/the78mole/predictiondb-data/. Sie
+# entstehen, wenn ein Monatsmanifest unter demselben Tag neu geschrieben wird (Neubau mit neuem
+# Fingerabdruck, Lückenfüller, idx-Artefakt v1). Import und VM folgen nur den Tags; die alten
+# Manifeste und ihre Layer sind Ballast. Nur von Hand starten und nicht, während ein
+# Historien-Workflow ins selbe Paket schreibt.
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Paket (ohne predictiondb-data/)
+        type: choice
+        options:
+          - gefs-0p5-silver
+          - gfs-0p25-silver
+          - gfs-0p5-silver
+          - gfs-0p25-gdex-idx
+
+permissions:
+  packages: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/delete-package-versions@v5
+        with:
+          owner: the78mole
+          package-name: predictiondb-data/${{ inputs.package }}
+          package-type: container
+          min-versions-to-keep: 0
+          delete-only-untagged-versions: "true"
