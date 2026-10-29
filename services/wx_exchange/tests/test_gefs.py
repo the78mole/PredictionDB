@@ -6,9 +6,12 @@ from typing import Any
 
 import httpx
 import numpy as np
+import obstore
 import pytest
+from obstore.store import MemoryStore
 
-from wx_exchange import gefs
+from gribkit.grib import describe, iter_messages
+from wx_exchange import gefs, gefs_vm
 from wx_exchange.gefs import (
     VARIABLES,
     FieldSpec,
@@ -18,6 +21,7 @@ from wx_exchange.gefs import (
     Message,
     Regions,
     RunBuilder,
+    decode,
     fingerprint,
     pack,
     ranges,
@@ -345,3 +349,118 @@ def test_mastr_regions(tmp_path: Path) -> None:
     assert by["DE:wind_on"]["cells"] == [[52.0, 10.0, 0.75], [53.0, 9.5, 0.25]]
     assert by["DE:pv"]["capacity_mw"] == 20 and by["DE:pv"]["cells"] == [[50.0, 8.0, 1.0]]
     assert "hub_height_m" not in by["DE:pv"]
+
+
+# --- VM: live mit Bronze, Import, Aufräumen -------------------------------------------------
+
+
+def vm_for(
+    tmp_path: Path, archive: FakeArchive, fake: FakeRegistry, c: httpx.AsyncClient, now: datetime
+) -> gefs_vm.GefsVm:
+    cfg = make_config(tmp_path)
+    return gefs_vm.GefsVm(
+        registry(fake),
+        cfg,
+        Regions.load(cfg.regions),
+        c,
+        bronze=gefs_vm.GefsBronze(MemoryStore(), cfg.bbox),
+        local=gefs_vm.GefsLocal(MemoryStore()),
+        ledger=None,
+        source_url="https://github.com/o/r",
+        history_start=datetime(2099, 1, 1, tzinfo=UTC),
+        bronze_days=10,
+        catch_up_days=1,
+        now=lambda: now,
+    )
+
+
+async def test_vm_builds_current_month_with_bronze_and_imports_history(tmp_path: Path) -> None:
+    cfg = make_config(tmp_path)
+    jan = [datetime(2099, 1, d, tzinfo=UTC) for d in (30, 31)]
+    feb = [datetime(2099, 2, d, tzinfo=UTC) for d in (1, 2)]
+    archive = FakeArchive(cfg, jan + feb)
+    fake = FakeRegistry()
+    now = datetime(2099, 2, 2, 12, tzinfo=UTC)
+    async with client(archive) as c:
+        # Januar wie aus Actions: nur nach GHCR
+        pub = GefsPublisher(
+            registry(fake), cfg, Regions.load(cfg.regions), c, source_url="x", now=now
+        )
+        await pub.publish_month("2099-01", 0, jan[0], jan[-1])
+        vm = vm_for(tmp_path, archive, fake, c, now)
+        result = await vm.cycle()
+
+    # aktueller Monat selbst gebaut, mit Bronze; der 31.01. lag schon in GHCR (sonst baut die
+    # VM die letzten Tage des Vormonats mit), Januar wird importiert
+    assert vm.bronze.runs() == feb
+    local = vm.local.runs()
+    assert {r for r, i in local.items() if i.origin == "bronze"} == set(feb)
+    assert {r for r, i in local.items() if i.origin == "ghcr"} == set(jan)
+    assert result.imported["imported"] == 2
+    # lokales Silber ist byte-gleich mit dem Layer in GHCR
+    for month, runs in (("2099-01", jan), ("2099-02", feb)):
+        art = GefsMonth.from_manifest(month, 0, fake.manifest(f"{month}-00z"))
+        for run in runs:
+            assert art.layers[run].content == local[run].content
+    assert vm.local.load(feb[0]) == fake.blobs[local[feb[0]].digest]
+    # Bronze: je Mitglied-Schritt eine zugeschnittene Datei plus run.json
+    keys = [
+        m["path"]
+        for b in obstore.list(vm.bronze.store, prefix="gefs/0p5/2099/02/01/00/")
+        for m in b
+    ]
+    assert len(keys) == 2 * 3 + 1
+    cropped = obstore.get(vm.bronze.store, "gefs/0p5/2099/02/01/00/gec00.f006.grib2").bytes()
+    msgs = list(iter_messages(bytes(cropped)))
+    assert len(msgs) == len(FIELDS)  # Produkte a und b zusammen
+    # auf den Ausschnitt 55..47 °N, 5..15 °O zugeschnitten (Archiv: 56..46 °N, 4..16 °O)
+    assert decode({"x": msgs[0]}, cfg.bbox)[1]["x"].shape == (17, 21)
+    assert describe(msgs[0]).nj == 17 and describe(msgs[0]).ni == 21
+
+    # zweiter Durchgang: nichts mehr zu laden
+    n = len(archive.requests)
+    async with client(archive) as c:
+        vm2 = vm_for(tmp_path, archive, fake, c, now)
+        vm2.bronze, vm2.local = vm.bronze, vm.local
+        again = await vm2.cycle()
+    assert again.imported["imported"] == 0 and len(archive.requests) == n
+
+
+async def test_vm_pending_run_is_not_requested(tmp_path: Path) -> None:
+    cfg = make_config(tmp_path)
+    archive = FakeArchive(cfg, [])
+    async with client(archive) as c:
+        vm = vm_for(tmp_path, archive, FakeRegistry(), c, datetime(2099, 2, 1, 5, tzinfo=UTC))
+        vm.catch_up_days = 0
+        live = await vm.live()
+    assert live[0]["counts"] == {"pending": 1}
+    # nur eine Probe auf die .idx des letzten Mitglied-Schritts
+    assert [r.method for r in archive.requests] == ["HEAD"]
+
+
+async def test_clean_bronze_only_when_silver_matches(tmp_path: Path) -> None:
+    cfg = make_config(tmp_path)
+    runs = [datetime(2099, 2, d, tzinfo=UTC) for d in (1, 2)]
+    archive = FakeArchive(cfg, runs)
+    fake = FakeRegistry()
+    async with client(archive) as c:
+        vm = vm_for(tmp_path, archive, fake, c, datetime(2099, 2, 2, 12, tzinfo=UTC))
+        await vm.live()
+        # 20 Tage später, Bronze-Frist 10 Tage; beim 2. weicht das lokale Silber ab
+        vm.now = lambda: datetime(2099, 2, 22, tzinfo=UTC)
+        info = vm.local.info(runs[1])
+        assert info is not None
+        vm.local.save(runs[1], b"x", gefs_vm.LocalInfo(**{**info.__dict__, "content": "anders"}))
+        assert vm.clean_bronze() == (1, 1)
+    assert vm.bronze.runs() == [runs[1]]
+
+
+def test_ensemble_stats() -> None:
+    rng = np.random.default_rng(0)
+    values = rng.normal(10, 2, size=(31, 3, 2, 1)).astype(np.float32)
+    values[:, 0, 1, 0] = np.nan  # f000 ohne Mittel
+    values[:25, 2, 0, 0] = np.nan  # zu wenige Mitglieder
+    s = gefs_vm.ensemble_stats(values)
+    assert s["mean"][1, 0, 0] == pytest.approx(values[:, 1, 0, 0].mean(), rel=1e-5)
+    assert s["p10"][1, 0, 0] < s["mean"][1, 0, 0] < s["p90"][1, 0, 0]
+    assert np.isnan(s["std"][0, 1, 0]) and np.isnan(s["mean"][2, 0, 0])

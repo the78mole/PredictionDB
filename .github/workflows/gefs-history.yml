@@ -34,7 +34,7 @@ permissions:
   contents: read
 
 env:
-  WX_EXCHANGE_REPOSITORY: the78mole/predictiondb-data/gefs-0p5-silver
+  WX_EXCHANGE_GEFS_REPOSITORY: the78mole/predictiondb-data/gefs-0p5-silver
   PDB_LOG_JSON: "false"
   PYTHONUNBUFFERED: "1"
 

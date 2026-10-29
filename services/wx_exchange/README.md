@@ -147,6 +147,20 @@ aus dem AWS-Archiv, ohne Bronze: je Mitglied-Schritt nur die Felder aus
 `docs/ARCHITEKTUR.md` 5.6). Der Workflow `gefs-history.yml` füllt die Historie ab 2021-03-22
 mit abgeschlossenen Monaten; den aktuellen Monat baut die VM selbst.
 
+Auf der VM läuft `wx-exchange gefs vm` als Dienst `wx-gefs` (alle 30 min):
+
+1. **Live:** Läufe des aktuellen Monats (und der letzten 3 Tage des Vormonats), sobald der
+   letzte Schritt des letzten Mitglieds auf AWS liegt. Dabei landen die Nachrichten auf den
+   Ausschnitt zugeschnitten in `wx-bronze` (`gefs/0p5/JJJJ/MM/TT/HH/<mitglied>.fSSS.grib2`), das
+   Silber in `wx-silver` (`gefs/0p5/JJJJ/MM/TT/HH.tar.gz`, byte-gleich mit dem Layer) und in GHCR.
+2. **Import:** abgeschlossene Monate aus GHCR, nur Layer mit aktuellem Fingerabdruck.
+3. **Gold:** je Lauf Mittel, Streuung, P10 und P90 über die Mitglieder je Region, Größe und
+   Schritt nach `feat.nwp_value` (Merkmal `<größe>_<kennzahl>`, Aggregation `ensemble`, Region
+   `gefs:<code>`), jüngste Läufe zuerst.
+4. **Bronze aufräumen:** nach `--bronze-days` (183), aber nur, wenn das Silber des Laufs lokal
+   und in GHCR mit gleichem Inhalts-Hash liegt; sonst bleibt sie und das Log meldet
+   `gefs_bronze_kept`.
+
 ```bash
 uv run wx-exchange gefs plan 2021-03-22T12
 WX_EXCHANGE_USERNAME=… WX_EXCHANGE_TOKEN=… uv run wx-exchange gefs publish 2026-09 0
@@ -167,6 +181,7 @@ uv run wx-exchange gfs import 2021-03-22T12 --runs 0,12 --watch 3600
 |---|---|
 | `WX_EXCHANGE_REGISTRY` | `ghcr.io` |
 | `WX_EXCHANGE_REPOSITORY` | `the78mole/predictiondb-data/gfs-0p25-silver` |
+| `WX_EXCHANGE_GEFS_REPOSITORY` | `the78mole/predictiondb-data/gefs-0p5-silver` (nur `gefs`) |
 | `WX_EXCHANGE_USERNAME`, `WX_EXCHANGE_TOKEN` | nur zum Schreiben; Lesen geht anonym |
 
 ## Tests

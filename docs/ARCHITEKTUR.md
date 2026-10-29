@@ -707,9 +707,18 @@ Manifest). Fehlende Felder bleiben NaN, ebenso Mittel und Summen in f000.
 dauert damit ≈ 50 min, die Historie mit acht Jobs parallel ≈ 7 h. Der Zeitplan in Actions füllt
 wöchentlich nur Lücken in abgeschlossenen Monaten.
 
-**Weiter:** Live-Betrieb, Import und Gold auf der VM (Mittel, Streuung, P10/P90 je Region in
-`feat.nwp_value`), dann eine Merkmalsgruppe `ensemble` in `ml_train` mit Horizont D+16 und
-Backtest je Vorlauftag. GEFS-Reforecasts (vor 2021-03) sind nicht vorgesehen.
+**VM (Dienst `wx-gefs`, `wx-exchange gefs vm`, alle 30 min):** Läufe des aktuellen Monats (und
+der letzten 3 Tage des Vormonats) baut sie selbst, sobald der letzte Schritt des letzten
+Mitglieds auf AWS liegt (≈ 3,7 GB Download, bei 8,3 MB/s ≈ 8 min je Lauf), und schiebt das
+Silber nach GHCR. Die Bronze liegt auf den Ausschnitt zugeschnitten und verlustfrei nach CCSDS
+umgepackt in `wx-bronze` (≈ 140 MB je Lauf, 6 Monate ≈ 25 GB) und wird nach 183 Tagen nur
+gelöscht, wenn das Silber lokal und in GHCR denselben Inhalts-Hash hat. Abgeschlossene Monate
+importiert sie aus GHCR. Gold: je Lauf, Region, Größe und Schritt Mittel, Streuung, P10 und P90
+über die Mitglieder in `feat.nwp_value` (Merkmal `<größe>_<kennzahl>`, Aggregation `ensemble`,
+Region `gefs:<code>`, Quelle `gefs_0p5`), ≈ 96 000 Werte je Lauf.
+
+**Weiter:** Merkmalsgruppe `ensemble` in `ml_train` mit Horizont D+16 und Backtest je
+Vorlauftag, Europa-Karte je Gebotszone. GEFS-Reforecasts (vor 2021-03) sind nicht vorgesehen.
 
 ---
 
