@@ -1,5 +1,6 @@
 import gzip
 import json
+from collections import Counter
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -470,3 +471,26 @@ def test_ensemble_stats() -> None:
     assert s["mean"][1, 0, 0] == pytest.approx(values[:, 1, 0, 0].mean(), rel=1e-5)
     assert s["p10"][1, 0, 0] < s["mean"][1, 0, 0] < s["p90"][1, 0, 0]
     assert np.isnan(s["std"][0, 1, 0]) and np.isnan(s["mean"][2, 0, 0])
+
+
+async def test_vm_cycle_imports_history_before_live(tmp_path: Path) -> None:
+    """Der erste Aufbau des laufenden Monats dauert Stunden, die Historie soll nicht warten."""
+    cfg = make_config(tmp_path)
+    archive = FakeArchive(cfg, [])
+    now = datetime(2099, 2, 2, 12, tzinfo=UTC)
+    async with client(archive) as c:
+        vm = vm_for(tmp_path, archive, FakeRegistry(), c, now)
+        order: list[str] = []
+
+        def imp() -> Counter[str]:
+            order.append("import")
+            return Counter()
+
+        async def live() -> list[dict[str, Any]]:
+            order.append("live")
+            return []
+
+        vm.import_history = imp  # type: ignore[method-assign]
+        vm.live = live  # type: ignore[method-assign]
+        await vm.cycle()
+    assert order == ["import", "live"]

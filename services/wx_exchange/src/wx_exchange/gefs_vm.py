@@ -511,8 +511,15 @@ class GefsVm:
         if not self._bronze_synced:
             await asyncio.to_thread(self.sync_bronze)
             self._bronze_synced = True
-        result.live = await self.live()
+        # Historie zuerst: der Import ist schnell, der Aufbau des aktuellen Monats dauert beim
+        # ersten Durchgang Stunden (≈ 20 min je Lauf)
         result.imported = await asyncio.to_thread(self.import_history)
         result.gold = await asyncio.to_thread(self.process_gold, gold_limit)
+        before = set(self.local.runs())
+        result.live = await self.live()
+        # Gold für die eben gebauten Läufe sofort, nicht erst im nächsten Durchgang
+        built = len(set(self.local.runs()) - before)
+        if built:
+            result.gold.update(await asyncio.to_thread(self.process_gold, built))
         result.bronze_deleted, result.bronze_kept = await asyncio.to_thread(self.clean_bronze)
         return result
