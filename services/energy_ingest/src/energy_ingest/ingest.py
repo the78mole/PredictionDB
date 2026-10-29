@@ -29,6 +29,8 @@ ANCHOR = datetime(2015, 1, 1, tzinfo=UTC)
 # format: Aufbau der Antwort weicht ab (Spalten, Einheiten), es wurde nichts geschrieben
 #: Mindestabstand, bevor ein angebrochener Block fortgesetzt wird
 MIN_RESUME = timedelta(days=1)
+#: Datensätze, die der Abgleich vor allen anderen abruft
+SYNC_FIRST = frozenset({"da_price_de_lu"})
 
 Status = Literal["ok", "empty", "failed", "format"]
 
@@ -165,11 +167,13 @@ class EnergyIngestor:
         """Laufender Abgleich des Fensters um heute (Ist-Werte, Preise, Folgetag-Prognosen)."""
         now = now or datetime.now(UTC)
         start, end = day_window(now, self.settings.lookback_days, self.settings.horizon_days)
-        return [
-            self.fetch(src, ds, start - sync_lookback(src, ds), end, now)
-            for src in self.sources
-            for ds in src.datasets()
-        ]
+        # Day-Ahead-Preise aller Quellen zuerst: Ein Zyklus dauert auf der VM über eine halbe
+        # Stunde, der Preis des Folgetags soll aber kurz nach der Auktion da sein.
+        jobs = sorted(
+            ((src, ds) for src in self.sources for ds in src.datasets()),
+            key=lambda job: job[1] not in SYNC_FIRST,
+        )
+        return [self.fetch(src, ds, start - sync_lookback(src, ds), end, now) for src, ds in jobs]
 
     def revise(self, now: datetime | None = None, *, due_only: bool = False) -> list[DatasetResult]:
         """Fragt die letzten ``revision_days`` Tage erneut ab, damit nachträgliche Korrekturen
