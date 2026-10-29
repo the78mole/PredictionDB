@@ -323,6 +323,9 @@ Registry kann dann auch ein lokaler Ordner sein (`--registry` bzw. `PDB_ML_REGIS
 
 ### 6.3 Backtest (Expanding Window)
 
+Ausführlich mit Diagrammen zu Faltungsgrenze, Kalibrierung, Kennzahlen, `backtest.parquet`
+und Champion/Challenger: [BACKTEST.md](BACKTEST.md).
+
 ```mermaid
 gantt
     dateFormat YYYY-MM-DD

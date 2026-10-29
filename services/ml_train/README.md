@@ -48,6 +48,8 @@ flowchart LR
 
 ## Aufruf
 
+Was ein Backtest genau tut (Faltungen, Kennzahlen, Freigabe): [`docs/BACKTEST.md`](../../docs/BACKTEST.md).
+
 ```bash
 uv run ml-train snapshot --out .ml-data/snap                      # aus PDB_DATABASE_URL
 uv run ml-train backtest --snapshot .ml-data/snap --out .ml-data/bt
