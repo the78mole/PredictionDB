@@ -1187,7 +1187,7 @@
         "x": 0,
         "y": 29
       },
-      "description": "Je Monat der Anteil der erwarteten GFS-DE-Läufe (linker Balken) (wie beim Silber-Panel, Laufzeiten oben unter „GFS-Läufe“), deren zugeschnittene GRIB-Schritte (Bronze) vollständig in Garage wx-bronze liegen. Grün = fertig: ein Download-Lauf (gfs-ingest oder gfs-backfill) hat den Lauf vollständig abgelegt oder vollständig vorgefunden (meta.backfill_run complete/skipped), oder das lokale Silber wurde aus Bronze gerechnet (meta.silver_run origin bronze). Gelb = gerade im Bronze-Download. Läufe, deren Silber nur aus GHCR importiert wurde, haben lokal kein Bronze. Je Monat drei Balken, beschriftet ist der linke. GFS Europa (Mitte, lila; 0,5° fürs ganze Verbundnetz, Quelle gfs_0p5): Bronze nur, wo die VM den Lauf selbst geladen hat; die Historie kommt als Silber aus GHCR. GEFS (rechts, blau): je Tag ein 00Z-Lauf ab 23.03.2021. Bronze lädt nur wx-gefs auf der VM für den laufenden Monat und hält es etwa 6 Monate (meta.bronze_run). Blau = vorhanden, orange = im Download, grau = nach der Frist gelöscht (Silber liegt dann lokal und in GHCR).",
+      "description": "Je Monat der Anteil der erwarteten GFS-DE-Läufe (linker Balken) (wie beim Silber-Panel, Laufzeiten oben unter „GFS-Läufe“), deren zugeschnittene GRIB-Schritte (Bronze) vollständig in Garage wx-bronze liegen. Grün = fertig: ein Download-Lauf (gfs-ingest oder gfs-backfill) hat den Lauf vollständig abgelegt oder vollständig vorgefunden (meta.backfill_run complete/skipped), oder das lokale Silber wurde aus Bronze gerechnet (meta.silver_run origin bronze). Gelb = gerade im Bronze-Download. Läufe, deren Silber nur aus GHCR importiert wurde, haben lokal kein Bronze. Je Monat drei Balken, beschriftet ist der linke. GFS Europa (Mitte, lila; 0,5° fürs ganze Verbundnetz, Quelle gfs_0p5): Bronze nur, wo die VM den Lauf selbst geladen hat; die Historie kommt als Silber aus GHCR. GEFS (rechts, blau): je Tag ein 00Z-Lauf ab 23.03.2021. Bronze lädt nur wx-gefs auf der VM für den laufenden Monat und hält es etwa 6 Monate (meta.bronze_run). Blau = vorhanden, orange = im Download, grau = nach der Frist gelöscht (Silber liegt dann lokal und in GHCR).\n\nZuständige Dienste: GFS DE ingest-gfs (live) und gfs-backfill (Historie, derzeit aus); GFS Europa ingest-gfs-eu; GEFS wx-gefs (hält Bronze 183 Tage).",
       "targets": [
         {
           "refId": "A",
@@ -1369,7 +1369,7 @@
         "x": 0,
         "y": 38
       },
-      "description": "Je Monat der Anteil der erwarteten GFS-DE-Läufe (linker Balken) (ab v16, 22.03.2021 12Z, bis zum jüngsten veröffentlichten Lauf; Laufzeiten oben unter „GFS-Läufe“ wählbar), deren Silber vollständig in Garage wx-silver liegt. Grün = fertig, gelb = gerade im Download: im laufenden Import-Durchgang aus GHCR (wx-import) vorgesehen oder im Bronze-Backfill (gfs-backfill) in Arbeit. Läufe, die im NOAA-Archiv fehlen, bleiben offen, daher erreichen manche Monate keine 100 %. Je Monat drei Balken, beschriftet ist der linke. GFS Europa (Mitte, lila; Quelle gfs_0p5, Laufzeiten wie GFS DE): Silber in wx-silver (aus GHCR oder auf der VM gebaut). GEFS (rechts, blau): je Tag ein 00Z-Lauf ab 23.03.2021; blau = Silber liegt vor (aus GHCR oder von wx-gefs gebaut), orange = wx-gefs baut es gerade im laufenden Monat.",
+      "description": "Je Monat der Anteil der erwarteten GFS-DE-Läufe (linker Balken) (ab v16, 22.03.2021 12Z, bis zum jüngsten veröffentlichten Lauf; Laufzeiten oben unter „GFS-Läufe“ wählbar), deren Silber vollständig in Garage wx-silver liegt. Grün = fertig, gelb = gerade im Download: im laufenden Import-Durchgang aus GHCR (wx-import) vorgesehen oder im Bronze-Backfill (gfs-backfill) in Arbeit. Läufe, die im NOAA-Archiv fehlen, bleiben offen, daher erreichen manche Monate keine 100 %. Je Monat drei Balken, beschriftet ist der linke. GFS Europa (Mitte, lila; Quelle gfs_0p5, Laufzeiten wie GFS DE): Silber in wx-silver (aus GHCR oder auf der VM gebaut). GEFS (rechts, blau): je Tag ein 00Z-Lauf ab 23.03.2021; blau = Silber liegt vor (aus GHCR oder von wx-gefs gebaut), orange = wx-gefs baut es gerade im laufenden Monat.\n\nZuständige Dienste (Bronze → Silber bzw. Import aus GHCR): GFS DE wx-process (live) und wx-import (Historie); GFS Europa wx-process-eu (live) und wx-import-eu (Historie); GEFS wx-gefs (live und Import).",
       "targets": [
         {
           "refId": "A",
@@ -1536,7 +1536,7 @@
         "x": 0,
         "y": 47
       },
-      "description": "Je Monat der Anteil der erwarteten GFS-DE-Läufe (linker Balken) (wie beim Silber-Panel, Laufzeiten oben unter „GFS-Läufe“), für die die Wetter-Features je Cluster (Gold, feat.nwp_value) mit der aktuellen Clusterung und Feature-Version gerechnet sind. Grün = fertig, gelb = in Arbeit: Silber liegt lokal vor, Gold steht noch aus (wx-process-backfill rechnet stündlich nach, nur für die Laufzeiten in GFS_BACKFILL_RUNS). Eine neue Clusterung macht alle Läufe wieder gelb, bis sie neu gerechnet sind. Je Monat drei Balken, beschriftet ist der linke. GFS Europa (Mitte, lila): Features je Gebotszone der Quelle gfs_0p5, bis es eine Clusterung für das 0,5°-Gitter gibt nur Silber (hell). GEFS (rechts, blau): Ensemble-Kennzahlen je Gebotszone (Quelle gefs_0p5); orange = Silber liegt vor, Gold steht noch aus.",
+      "description": "Je Monat der Anteil der erwarteten GFS-DE-Läufe (linker Balken) (wie beim Silber-Panel, Laufzeiten oben unter „GFS-Läufe“), für die die Wetter-Features je Cluster (Gold, feat.nwp_value) mit der aktuellen Clusterung und Feature-Version gerechnet sind. Grün = fertig, gelb = in Arbeit: Silber liegt lokal vor, Gold steht noch aus (wx-process-backfill rechnet stündlich nach, nur für die Laufzeiten in GFS_BACKFILL_RUNS). Eine neue Clusterung macht alle Läufe wieder gelb, bis sie neu gerechnet sind. Je Monat drei Balken, beschriftet ist der linke. GFS Europa (Mitte, lila): Features je Gebotszone der Quelle gfs_0p5, bis es eine Clusterung für das 0,5°-Gitter gibt nur Silber (hell). GEFS (rechts, blau): Ensemble-Kennzahlen je Gebotszone (Quelle gefs_0p5); orange = Silber liegt vor, Gold steht noch aus.\n\nZuständige Dienste (Silber → Gold): GFS DE wx-process (live) und wx-process-backfill (Historie); GFS Europa noch keiner (Gold folgt mit einer Clusterung für gfs_0p5); GEFS wx-gefs.",
       "targets": [
         {
           "refId": "A",
@@ -1723,7 +1723,7 @@
             "type": "prometheus",
             "uid": "pdb-prometheus"
           },
-          "expr": "sum by (container_label_com_docker_compose_service) (rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_service=~\"ingest-gfs|gfs-.+|wx-.+\"}[2m])) * 100",
+          "expr": "sum by (container_label_com_docker_compose_service) (rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_service=~\"ingest-gfs.*|gfs-.+|wx-.+\"}[2m])) * 100",
           "legendFormat": "{{container_label_com_docker_compose_service}}",
           "range": true
         },
@@ -1733,7 +1733,7 @@
             "type": "prometheus",
             "uid": "pdb-prometheus"
           },
-          "expr": "sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_service=~\"ingest-gfs|gfs-.+|wx-.+\"}[2m])) * 100",
+          "expr": "sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_service=~\"ingest-gfs.*|gfs-.+|wx-.+\"}[2m])) * 100",
           "legendFormat": "Gesamt",
           "range": true
         }
@@ -1778,6 +1778,114 @@
                 }
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ingest-gfs"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "ingest-gfs – GFS DE live: Download → Bronze"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ingest-gfs-eu"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "ingest-gfs-eu – GFS Europa live: Download → Bronze"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "gfs-backfill"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "gfs-backfill – GFS DE Historie: Download → Bronze (AWS)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "wx-process"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "wx-process – GFS DE live: Bronze → Silber → Gold"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "wx-process-eu"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "wx-process-eu – GFS Europa live: Bronze → Silber (Gold folgt)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "wx-process-backfill"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "wx-process-backfill – GFS DE Historie: Silber → Gold"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "wx-import"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "wx-import – GFS DE Historie: Silber aus GHCR"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "wx-import-eu"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "wx-import-eu – GFS Europa Historie: Silber aus GHCR"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "wx-gefs"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "wx-gefs – GEFS: live Download → Bronze → Silber (→ GHCR), Historie aus GHCR, Silber → Gold"
+              }
+            ]
           }
         ]
       },
@@ -1787,7 +1895,7 @@
           "sort": "desc"
         }
       },
-      "description": "CPU je Container der Wetterkette (cAdvisor): ingest-gfs, gfs-backfill, wx-process, wx-process-backfill, wx-import und einmalige Läufe dieser Dienste per docker compose run (Muster ingest-gfs, gfs-*, wx-*). Der Tooltip zeigt zusätzlich die Summe. Alle Dienste stehen im Dashboard „System“."
+      "description": "CPU je Container der Wetterkette (cAdvisor), gestapelt; der Tooltip zeigt zusätzlich die Summe. Wer was macht:\n- ingest-gfs: GFS DE live: Download → Bronze\n- ingest-gfs-eu: GFS Europa live: Download → Bronze\n- gfs-backfill: GFS DE Historie: Download → Bronze (AWS)\n- wx-process: GFS DE live: Bronze → Silber → Gold\n- wx-process-eu: GFS Europa live: Bronze → Silber (Gold folgt)\n- wx-process-backfill: GFS DE Historie: Silber → Gold\n- wx-import: GFS DE Historie: Silber aus GHCR\n- wx-import-eu: GFS Europa Historie: Silber aus GHCR\n- wx-gefs: GEFS: live Download → Bronze → Silber (→ GHCR), Historie aus GHCR, Silber → Gold\nDazu einmalige Läufe dieser Dienste per docker compose run (Muster ingest-gfs*, gfs-*, wx-*). Alle Dienste stehen im Dashboard „System“."
     }
   ],
   "templating": {
