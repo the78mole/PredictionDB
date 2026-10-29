@@ -1,5 +1,7 @@
+import asyncio
 import gzip
 import json
+from collections import Counter
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -470,3 +472,33 @@ def test_ensemble_stats() -> None:
     assert s["mean"][1, 0, 0] == pytest.approx(values[:, 1, 0, 0].mean(), rel=1e-5)
     assert s["p10"][1, 0, 0] < s["mean"][1, 0, 0] < s["p90"][1, 0, 0]
     assert np.isnan(s["std"][0, 1, 0]) and np.isnan(s["mean"][2, 0, 0])
+
+
+async def test_vm_cycle_imports_history_while_live_runs(tmp_path: Path) -> None:
+    """Der erste Aufbau des laufenden Monats dauert Stunden, die Historie soll nicht warten."""
+    cfg = make_config(tmp_path)
+    archive = FakeArchive(cfg, [])
+    now = datetime(2099, 2, 2, 12, tzinfo=UTC)
+    async with client(archive) as c:
+        vm = vm_for(tmp_path, archive, FakeRegistry(), c, now)
+        imports = 0
+        second_import = asyncio.Event()
+        loop = asyncio.get_running_loop()
+
+        def imp() -> Counter[str]:
+            nonlocal imports
+            imports += 1
+            if imports == 2:
+                loop.call_soon_threadsafe(second_import.set)
+            return Counter(imported=1)
+
+        async def live() -> list[dict[str, Any]]:
+            # Live endet erst, wenn der Import zweimal gelaufen ist
+            await second_import.wait()
+            return []
+
+        vm.import_history = imp  # type: ignore[method-assign]
+        vm.live = live  # type: ignore[method-assign]
+        result = await asyncio.wait_for(vm.cycle(history_every=0.01), timeout=5)
+    # wiederholt, solange Live läuft, nicht erst danach
+    assert imports >= 2 and result.imported["imported"] == imports
