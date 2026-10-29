@@ -277,3 +277,19 @@ def test_price_sources_come_before_slow_entsoe_in_sync() -> None:
         for slow in ("entsoe", "entsoe_last"):
             assert ALL_SOURCES.index(fast) < ALL_SOURCES.index(slow)
     assert ALL_SOURCES.index("netztransparenz") < ALL_SOURCES.index("pdb_marktwert")
+
+
+def test_sync_fetches_day_ahead_prices_first() -> None:
+    class PriceSource(FakeSource):
+        def datasets(self) -> list[str]:
+            return ["load_actual", "da_price_de_lu"]
+
+    slow, fast = FakeSource("slow"), PriceSource("fast")
+    ingestor = EnergyIngestor([slow, fast], FakeStore(), EnergySettings())
+    results = ingestor.sync(NOW)
+    assert [(r.source, r.dataset) for r in results] == [
+        ("fast", "da_price_de_lu"),
+        ("slow", "a"),
+        ("slow", "b"),
+        ("fast", "load_actual"),
+    ]
