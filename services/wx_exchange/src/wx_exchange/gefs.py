@@ -3,7 +3,7 @@
 Je Lauf, Mitglied (``gec00``, ``gep01`` … ``gep30``) und Schritt werden aus der ``.idx`` der
 Dateien ``pgrb2a``/``pgrb2b`` (0,5°) nur die Nachrichten der Felder in
 ``config/sources/gefs_0p5.yaml`` geladen, auf den Europa-Ausschnitt zugeschnitten und zu
-Kennzahlen je Region verdichtet (Gewichte aus ``config/gefs/regions_v1.json.gz``, Summe je
+Kennzahlen je Region verdichtet (Gewichte aus ``config/gefs/regions_v2.json.gz``, Summe je
 Region 1). Nichtlineare Größen (Wind in Nabenhöhe, Leistungskurve, PV-Modell) werden wie in
 ``wx_process.features`` erst je Zelle gerechnet und dann gewichtet. Erst danach, auf der VM,
 wird über die Mitglieder verdichtet (Mittel, Streuung, Quantile); das Silber behält jedes

@@ -29,7 +29,8 @@ Beispiele::
     wx-exchange gefs publish 2026-10 0
 
     # Regionen und Gewichte neu bauen (MaStR-CSV von der VM, Natural Earth wird geladen)
-    wx-exchange gefs regions --mastr de_capacity_0p5.csv --out config/gefs/regions_v1.json.gz
+    wx-exchange gefs regions --mastr de_capacity_0p5.csv --version v2 \
+        --out config/gefs/regions_v2.json.gz
 
 Registry und Repository kommen aus ``WX_EXCHANGE_REGISTRY`` (``ghcr.io``) und
 ``WX_EXCHANGE_REPOSITORY`` (Standard Silber, bei ``idx-*`` das ``.idx``-Artefakt), die
