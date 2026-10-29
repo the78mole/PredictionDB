@@ -21,6 +21,7 @@ import hashlib
 import io
 import json
 import tarfile
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -165,19 +166,30 @@ def pack(store: ObjectStore, prefix: str) -> tuple[bytes, str]:
     return buf.getvalue(), content_hash(files)
 
 
-def unpack(data: bytes, store: ObjectStore, prefix: str) -> int:
-    """Schreibt den Tar nach ``prefix``; das Wurzel-``zarr.json`` (``complete``) kommt zuletzt."""
+def unpack(data: bytes, store: ObjectStore, prefix: str, *, workers: int = 16) -> int:
+    """Schreibt den Tar nach ``prefix``; das Wurzel-``zarr.json`` (``complete``) kommt zuletzt.
+
+    Die Dateien gehen parallel hinaus (``workers``): Ein Put nach Garage dauert unter Last
+    ≈ 0,3 s, ein GFS-Europa-Lauf hat ≈ 100 Chunks.
+    """
     with tarfile.open(fileobj=io.BytesIO(data), mode="r") as tar:
-        members = [m for m in tar.getmembers() if m.isfile()]
-        for m in members:
+        files: list[tuple[str, bytes]] = []
+        for m in tar.getmembers():
+            if not m.isfile():
+                continue
             if m.name.startswith("/") or ".." in m.name.split("/"):
                 raise ValueError(f"unzulässiger Pfad im Tar: {m.name}")
-        members.sort(key=lambda m: m.name == "zarr.json")
-        for m in members:
             f = tar.extractfile(m)
             assert f is not None
-            obstore.put(store, f"{prefix}/{m.name}", f.read())
-    return len(members)
+            files.append((m.name, f.read()))
+    root = [f for f in files if f[0] == "zarr.json"]
+    rest = [f for f in files if f[0] != "zarr.json"]
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+        # list() wartet alle ab und reicht Fehler weiter, bevor zarr.json geschrieben wird
+        list(pool.map(lambda f: obstore.put(store, f"{prefix}/{f[0]}", f[1]), rest))
+    for name, body in root:
+        obstore.put(store, f"{prefix}/{name}", body)
+    return len(files)
 
 
 # --- Manifest --------------------------------------------------------------------------------
