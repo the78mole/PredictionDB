@@ -1,4 +1,6 @@
 name: GFS-Historie
+run-name: >-
+  GFS-Historie ${{ inputs.source || (github.event.schedule == '47 7 * * *' && 'eu') || 'aws' }}
 
 # Baut die GFS-Historie im Runner statt auf der gedrosselten VM: Je Job ein Monat einer
 # Laufzeit, Bronze nur im Runner, Silber als OCI-Artefakt nach

@@ -170,10 +170,14 @@ class GefsLocal:
 
     def __init__(self, store: ObjectStore) -> None:
         self.store = store
+        # Pfad -> (Stand des .json im Listing, Info): runs() holt nur Neues oder Geändertes.
+        # Ohne Merker las jede Gold- und Import-Runde alle ≈ 2 000 .json einzeln (≈ 100 s).
+        self._cache: dict[str, tuple[tuple[Any, ...], LocalInfo]] = {}
 
     def save(self, run: datetime, data: bytes, info: LocalInfo) -> None:
         obstore.put(self.store, run_path(run) + ".tar.gz", data)
         obstore.put(self.store, run_path(run) + ".json", json.dumps(info.__dict__).encode())
+        self._cache.pop(run_path(run) + ".json", None)
 
     def info(self, run: datetime) -> LocalInfo | None:
         try:
@@ -187,13 +191,20 @@ class GefsLocal:
 
     def runs(self) -> dict[datetime, LocalInfo]:
         out: dict[datetime, LocalInfo] = {}
+        cache: dict[str, tuple[tuple[Any, ...], LocalInfo]] = {}
         for batch in obstore.list(self.store, prefix=PREFIX + "/"):
             for m in batch:
-                if m["path"].endswith(".json"):
-                    run = parse_run_path(m["path"])
-                    info = self.info(run) if run is not None else None
-                    if run is not None and info is not None:
-                        out[run] = info
+                path = m["path"]
+                run = parse_run_path(path) if path.endswith(".json") else None
+                if run is None:
+                    continue
+                stamp = (m.get("e_tag"), m.get("last_modified"), m.get("size"))
+                hit = self._cache.get(path)
+                info = hit[1] if hit is not None and hit[0] == stamp else self.info(run)
+                if info is not None:
+                    out[run] = info
+                    cache[path] = (stamp, info)
+        self._cache = cache
         return out
 
 
