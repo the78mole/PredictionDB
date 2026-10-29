@@ -200,6 +200,27 @@ class GefsLocal:
 # --- Gold ------------------------------------------------------------------------------------
 
 
+def _nan_percentiles(values: F32, qs: dict[str, float]) -> dict[str, F32]:
+    """Wie ``np.nanpercentile(values, q, axis=0)`` (linear), aber vektorisiert.
+
+    ``nanpercentile`` rechnet bei NaN jede Zelle einzeln in Python (≈ 3 s je GEFS-Lauf); hier
+    einmal sortieren (NaN ans Ende) und je Zelle zwischen den beiden Nachbarn interpolieren.
+    """
+    srt = np.sort(values, axis=0)
+    n = np.isfinite(values).sum(axis=0)
+    last = np.maximum(n - 1, 0)
+    out = {}
+    for key, q in qs.items():
+        pos = last * (q / 100.0)
+        lo = np.floor(pos).astype(np.intp)
+        hi = np.minimum(lo + 1, last)
+        a = np.take_along_axis(srt, lo[None], axis=0)[0]
+        b = np.take_along_axis(srt, hi[None], axis=0)[0]
+        res = a + (b - a) * (pos - lo)
+        out[key] = np.where(n > 0, res, np.nan).astype(np.float32)
+    return out
+
+
 def ensemble_stats(values: F32) -> dict[str, F32]:
     """Kennzahlen über die Mitglieder (Achse 0); NaN, wo zu wenige Mitglieder gültig sind."""
     valid = np.isfinite(values).sum(axis=0)
@@ -209,9 +230,8 @@ def ensemble_stats(values: F32) -> dict[str, F32]:
         out = {
             "mean": np.nanmean(values, axis=0),
             "std": np.nanstd(values, axis=0),
-            "p10": np.nanpercentile(values, 10, axis=0),
-            "p90": np.nanpercentile(values, 90, axis=0),
         }
+    out.update(_nan_percentiles(values, {"p10": 10, "p90": 90}))
     for k in out:
         out[k] = np.where(valid >= MIN_MEMBERS, out[k], np.nan).astype(np.float32)
     return out
@@ -495,6 +515,8 @@ class GefsVm:
             for r, i in local.items()
             if i.fingerprint == self.fp and r not in done and (before is None or r < before)
         )
+        if limit is not None and len(todo) > limit:
+            counts["more"] = 1  # der Durchgang macht ohne Pause weiter
         # jüngste zuerst: der Live-Betrieb braucht den neuen Lauf sofort
         for run in todo[::-1][:limit]:
             try:
@@ -541,8 +563,9 @@ class GefsVm:
         Der erste Aufbau des laufenden Monats dauert Stunden (≈ 20 min je Lauf). Der Import aus
         GHCR läuft als eigene Aufgabe in Portionen von ``import_limit`` Läufen ohne Pause, solange
         dort mehr bereitliegt, sonst alle ``history_every`` Sekunden; er wartet nicht auf Gold.
-        Daneben rechnet der Durchgang alle ``gold_every`` Sekunden Gold für Läufe mit fertigem
-        Silber, jüngste zuerst (höchstens ``gold_limit`` je Runde).
+        Daneben rechnet der Durchgang Gold für Läufe mit fertigem Silber, jüngste zuerst, in
+        Runden zu höchstens ``gold_limit`` Läufen: bei Rückstand ohne Pause, sonst alle
+        ``gold_every`` Sekunden.
         """
         result = CycleResult()
         if not self._bronze_synced:
@@ -566,16 +589,23 @@ class GefsVm:
 
         imports = asyncio.create_task(importer())
         while True:
-            result.gold.update(await asyncio.to_thread(self.process_gold, gold_limit))
+            counts = await asyncio.to_thread(self.process_gold, gold_limit)
+            more = bool(counts.pop("more", 0))
+            result.gold.update(counts)
             pending = {t for t in (live, imports) if not t.done()}
             if not pending:
                 break
+            if more:
+                # Rückstand: gleich die nächste Runde, die Liste kommt dabei neu (jüngste zuerst)
+                continue
             await asyncio.wait(pending, timeout=gold_every, return_when=asyncio.FIRST_COMPLETED)
         await imports
         result.live = await live
         # Gold für die eben gebauten Läufe sofort, nicht erst im nächsten Durchgang
         built = len(set(self.local.runs()) - before)
         if built:
-            result.gold.update(await asyncio.to_thread(self.process_gold, built))
+            counts = await asyncio.to_thread(self.process_gold, built)
+            counts.pop("more", None)
+            result.gold.update(counts)
         result.bronze_deleted, result.bronze_kept = await asyncio.to_thread(self.clean_bronze)
         return result
