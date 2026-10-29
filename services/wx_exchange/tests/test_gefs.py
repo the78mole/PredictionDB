@@ -485,7 +485,7 @@ async def test_vm_cycle_imports_history_while_live_runs(tmp_path: Path) -> None:
         second_import = asyncio.Event()
         loop = asyncio.get_running_loop()
 
-        def imp() -> Counter[str]:
+        def imp(limit: int | None = None) -> Counter[str]:
             nonlocal imports
             imports += 1
             if imports == 2:
@@ -516,7 +516,7 @@ async def test_vm_cycle_gold_while_live_runs(tmp_path: Path) -> None:
         third_gold = asyncio.Event()
         loop = asyncio.get_running_loop()
 
-        def imp() -> Counter[str]:
+        def imp(limit: int | None = None) -> Counter[str]:
             nonlocal imports
             imports += 1
             return Counter()
@@ -540,3 +540,25 @@ async def test_vm_cycle_gold_while_live_runs(tmp_path: Path) -> None:
     # Gold ohne Grenze auf die Historie (jüngste zuerst, also die Live-Läufe), Import nur einmal
     assert len(gold) >= 3 and all(g == (48, None) for g in gold)
     assert imports == 1 and result.gold["written"] == len(gold)
+
+
+async def test_vm_import_history_in_portions(tmp_path: Path) -> None:
+    """Import in Portionen: ``more`` meldet, dass GHCR noch Läufe bereithält."""
+    cfg = make_config(tmp_path)
+    jan = [datetime(2099, 1, d, tzinfo=UTC) for d in (30, 31)]
+    archive = FakeArchive(cfg, jan)
+    fake = FakeRegistry()
+    now = datetime(2099, 2, 2, 12, tzinfo=UTC)
+    async with client(archive) as c:
+        pub = GefsPublisher(
+            registry(fake), cfg, Regions.load(cfg.regions), c, source_url="x", now=now
+        )
+        await pub.publish_month("2099-01", 0, jan[0], jan[-1])
+        vm = vm_for(tmp_path, archive, fake, c, now)
+        first = vm.import_history(limit=1)
+        second = vm.import_history(limit=1)
+        third = vm.import_history(limit=1)
+    assert (first["imported"], first["more"]) == (1, 1)
+    assert (second["imported"], second["present"]) == (1, 1)
+    assert (third["imported"], third["present"], third["more"]) == (0, 2, 0)
+    assert set(vm.local.runs()) == set(jan)

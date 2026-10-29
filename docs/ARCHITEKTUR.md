@@ -713,7 +713,8 @@ Mitglieds auf AWS liegt (≈ 3,7 GB Download, gemessen ≈ 21 min je Lauf), und 
 Silber nach GHCR. Die Bronze liegt auf den Ausschnitt zugeschnitten und verlustfrei nach CCSDS
 umgepackt in `wx-bronze` (≈ 140 MB je Lauf, 6 Monate ≈ 25 GB) und wird nach 183 Tagen nur
 gelöscht, wenn das Silber lokal und in GHCR denselben Inhalts-Hash hat. Abgeschlossene Monate
-importiert sie aus GHCR (alle 30 min). Gold rechnet sie alle 5 min für Läufe mit fertigem
+importiert sie aus GHCR (alle 30 min, in Portionen von 64 Läufen, solange mehr bereitliegt in
+jeder Runde). Gold rechnet sie alle 5 min für Läufe mit fertigem
 Silber, jüngste zuerst, also auch während der Live-Aufbau noch läuft: je Lauf, Region, Größe und Schritt Mittel, Streuung, P10 und P90
 über die Mitglieder in `feat.nwp_value` (Merkmal `<größe>_<kennzahl>`, Aggregation `ensemble`,
 Region `gefs:<code>`, Quelle `gefs_0p5`), ≈ 96 000 Werte je Lauf.

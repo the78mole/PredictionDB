@@ -423,7 +423,8 @@ class GefsVm:
         return out
 
     # abgeschlossene Monate: aus GHCR holen
-    def import_history(self) -> Counter[str]:
+    def import_history(self, limit: int | None = None) -> Counter[str]:
+        """Abgeschlossene Monate aus GHCR holen, höchstens ``limit`` Läufe (danach ``more``)."""
         counts: Counter[str] = Counter()
         end = month_start(self.now()) - timedelta(hours=1)
         local = self.local.runs()
@@ -440,6 +441,9 @@ class GefsVm:
                         counts["other_fingerprint" if run >= self.history_start else "early"] += 1
                         continue
                     have = local.get(run)
+                    if limit is not None and counts["imported"] >= limit:
+                        counts["more"] = 1
+                        break
                     if have is not None and have.digest == layer.digest:
                         counts["present"] += 1
                         continue
@@ -464,6 +468,8 @@ class GefsVm:
                     imported.append(run)
                     counts["imported"] += 1
                 self._mark(imported, "ghcr")
+                if counts["more"]:
+                    return counts
         return counts
 
     def process_gold(
@@ -518,6 +524,7 @@ class GefsVm:
         gold_limit: int | None = None,
         history_every: float = 1800,
         gold_every: float = 300,
+        import_limit: int | None = 64,
     ) -> CycleResult:
         """Live-Aufbau, Historie und Gold nebeneinander.
 
@@ -525,7 +532,8 @@ class GefsVm:
         rechnet der Durchgang alle ``gold_every`` Sekunden Gold für Läufe mit fertigem Silber,
         jüngste zuerst (höchstens ``gold_limit`` je Runde), damit jeder selbst gebaute Lauf sofort
         nutzbar ist. Alle ``history_every`` Sekunden importiert er, was Actions inzwischen nach
-        GHCR geschoben hat.
+        GHCR geschoben hat, je Runde höchstens ``import_limit`` Läufe; liegt mehr bereit, geht
+        der Import in der nächsten Runde weiter.
         """
         result = CycleResult()
         if not self._bronze_synced:
@@ -534,15 +542,21 @@ class GefsVm:
         before = set(self.local.runs())
         live = asyncio.create_task(self.live())
         last_import: float | None = None
+        more = False
         loop = asyncio.get_running_loop()
         while True:
-            if last_import is None or loop.time() - last_import >= history_every:
+            # in Portionen, damit Gold nicht auf den ganzen Import wartet; solange GHCR mehr hat,
+            # in jeder Runde weiter
+            if more or last_import is None or loop.time() - last_import >= history_every:
                 last_import = loop.time()
-                result.imported.update(await asyncio.to_thread(self.import_history))
+                counts = await asyncio.to_thread(self.import_history, import_limit)
+                more = bool(counts.pop("more", 0))
+                result.imported.update(counts)
             result.gold.update(await asyncio.to_thread(self.process_gold, gold_limit))
             if live.done():
                 break
-            await asyncio.wait({live}, timeout=min(gold_every, history_every))
+            if not more:
+                await asyncio.wait({live}, timeout=min(gold_every, history_every))
         result.live = await live
         # Gold für die eben gebauten Läufe sofort, nicht erst im nächsten Durchgang
         built = len(set(self.local.runs()) - before)
