@@ -121,7 +121,8 @@ def _fill(engine: Engine, versions: list[str], now: pd.Timestamp) -> None:
             ),
             {"c": CONFIG},
         ).scalar_one()
-        for code, base in TARGETS.items():
+        # Day-Ahead-Lastprognose der ÜNB, 2 MW über dem Ist
+        for code, base in {**TARGETS, "load_da_forecast": TARGETS["load_actual"] + 2}.items():
             ser = c.execute(
                 text(
                     "INSERT INTO energy.series (source_id, code, unit, resolution)"
@@ -133,6 +134,8 @@ def _fill(engine: Engine, versions: list[str], now: pd.Timestamp) -> None:
                 text("INSERT INTO energy.value (series_id, ts, value) VALUES (:s, :t, :v)"),
                 [{"s": ser, "t": h.to_pydatetime(), "v": base} for h in hours],
             )
+            if code not in TARGETS:
+                continue
             for i, v in enumerate(versions):
                 c.execute(
                     text("INSERT INTO fcst.prediction VALUES (:m, :c, :i, :t, 0.5, :v)"),
@@ -214,12 +217,25 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
         local = (now - timedelta(days=5)).tz_convert("Europe/Berlin").normalize()
         issue = (local + timedelta(hours=10)).tz_convert("UTC")
         day = pd.date_range(local + timedelta(days=3), periods=3, freq="h").tz_convert("UTC")
+    # D+1: Lauf 10 Uhr Ortszeit am Vortag der ersten Ist-Stunden aus _fill
+    first = (now - timedelta(days=3)).floor("D") + timedelta(hours=24)
+    d1_issue = (
+        (first - timedelta(hours=2)).tz_convert("Europe/Berlin").normalize() + timedelta(hours=10)
+    ).tz_convert("UTC")
+    d1 = pd.date_range(first, periods=6, freq="h")
     with engine.begin() as c:
         for i, v in enumerate(versions):
             c.execute(
                 text("INSERT INTO fcst.prediction VALUES (:m, 'load_actual', :i, :t, 0.5, :v)"),
                 [{"m": v, "i": issue.to_pydatetime(), "t": t.to_pydatetime(), "v": i} for t in day],
             )
+        c.execute(
+            text("INSERT INTO fcst.prediction VALUES (:m, 'load_actual', :i, :t, 0.5, :v)"),
+            [
+                {"m": versions[0], "i": d1_issue.to_pydatetime(), "t": t.to_pydatetime(), "v": 1}
+                for t in d1
+            ],
+        )
     with engine.connect() as c:
         for pid, version in ((55, versions[0]), (57, versions[1])):
             sql = _sql(panels[pid], 1).replace("${challenger}", version)
@@ -238,3 +254,6 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
             if pid == 64:
                 d3 = {r["Verfahren"].split()[0] for r in got if r["Vorlauf"] == "D+3"}
                 assert {"Champion", "Challenger"} <= d3
+                # ÜNB-Prognose nur bei D+1, auf denselben Stunden wie die Modelle
+                uenb = {r["Vorlauf"]: r["MAE"] for r in got if r["Verfahren"].startswith("ÜNB")}
+                assert uenb == {"D+1": pytest.approx(2.0)}
