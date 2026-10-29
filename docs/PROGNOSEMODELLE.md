@@ -516,8 +516,7 @@ Eingerichtet wird das erst, wenn mindestens drei Jahre GFS-Trainingsdaten vorlie
 |---|---|
 | **Kalibrierung der Quantile** (konformale Korrektur je Vorlauf auf dem letzten Trainingsjahr) | Das Band P10–P90 enthält heute 62–65 % statt 80 % der Ist-Werte |
 | **Wetter-Variante bewerten**, sobald die GFS-Historie als Gold-Features in `feat.nwp_value` liegt (Silber ab 2021 aus dem AWS-Archiv, davor aus NCAR GDEX, beides als Import aus GHCR, ARCHITEKTUR.md 5.5) | Wind und PV sind ohne Wetter nur Klimatologie (Wind an Land MAE 7,4 GW gegen 1,2 GW bei den ÜNB) |
-| **`de_lu_v2/frei` als Challenger** registrieren | Preis −5 %, Last −4 % MAE im Backtest, siehe [`de_lu_v2`](#102-de_lu_v2) |
-| **Grenzkostenindex und STEO bewerten** (Varianten `frei_gk`, `frei_gk_skaliert`, `steo`, `frei_steo`) | Preisniveau bei Brennstoff- und CO₂-Sprüngen, die die Lags erst Tage später zeigen |
+| **Grenzkostenindex und STEO im Backtest bewerten** (Varianten `frei_gk`, `frei_gk_skaliert`, `steo`, `frei_steo`; `wetter_frei_gk_skaliert` läuft bereits als Challenger) | Preisniveau bei Brennstoff- und CO₂-Sprüngen, die die Lags erst Tage später zeigen |
 | **Lastniveau über Wochen** (28-Tage-Mittel von Last und Residuallast) | In v2 verbessern Preisniveau und Brennstoffe die Last 2026 um bis zu 10 %, ein Hinweis auf ein fehlendes Lastniveau |
 | **Schulferien, bevölkerungsgewichtete Temperatur** | Last in Ferien und bei Hitze/Kälte |
 | **Trend im PV-Kapazitätsfaktor** | PV liegt im Mittel 1 GW zu hoch (Eigenverbrauch, Abregelung wachsen mit dem Bestand) |
@@ -618,7 +617,9 @@ Analyse in [`docs/analysen/prognose-de-lu-v2/`](analysen/prognose-de-lu-v2/READM
 - Wetter ist noch nicht bewertbar, weil `feat.nwp_value` erst ab 06.01.2026 Werte hat.
 
 Empfehlung: `frei` als Challenger neben `de_lu_v1/kalender`. Die Champion/Challenger-Regel
-entscheidet dann im Betrieb. Die Varianten mit `steo` und `grenzkosten` sind neuer als diese
+entscheidet dann im Betrieb. Umgesetzt: `frei` läuft seit 25.10.2026 als Challenger der Linie
+`de_lu_v2` und wird stündlich mitgerechnet, ebenso `wetter_frei` und seit 28.10.2026
+`wetter_frei_gk_skaliert`. Die Varianten mit `steo` und `grenzkosten` sind neuer als diese
 Ablation; ihre Ergebnisse stehen noch aus.
 
 ## 11. Bekannte Grenzen
