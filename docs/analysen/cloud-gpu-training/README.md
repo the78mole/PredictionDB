@@ -158,6 +158,7 @@ gefundenen Parameter.
 
 | GPU | Preis/h | Einschätzung |
 |---|---|---|
+| Tesla T4 (eigener Server) | Strom | etwa 4–6× langsamer als die 4090, 3–10× schneller als die VM-CPU (siehe unten) |
 | RTX 3090 | 0,12 $ | geht, aber etwa halb so schnell wie die 4090 bei fast gleichem Preis |
 | **RTX 4090** | **0,13 $** | **beste Wahl:** 24 GB reichen, bestes Preis-Leistungs-Verhältnis |
 | RTX 5090 | 0,39 $ | etwa 1,4× schneller als die 4090, aber dreimal so teuer |
@@ -167,6 +168,43 @@ gefundenen Parameter.
 Bei vast.ai teilen sich Instanzen die CPU-Kerne eines Rechners. Für LightGBM und die
 Datenaufbereitung sollte das Angebot ausdrücklich 32 oder mehr Kerne und mindestens 32 GB RAM
 bieten.
+
+## Eigene GPU: NVIDIA Tesla T4 im Server
+
+Die T4 (Turing, 16 GB GDDR6, 320 GB/s, 8,1 TFLOPS FP32, 65 TFLOPS FP16 mit Tensor-Kernen,
+70 W, passiv gekühlt) wäre per PCI-Passthrough an die VM durchzureichen. Gegenüber der
+RTX 4090 (1 TB/s, 83 TFLOPS FP32, 165 TFLOPS FP16) ist sie beim Training kleiner Netze etwa
+**4–6× langsamer**, gegenüber den 8 VM-Kernen ohne AVX2 aber etwa **3–10× schneller**. Mit
+Mixed Precision (FP16) nutzt sie ihre Tensor-Kerne; ohne fällt sie weiter zurück.
+
+| Modell | VM-CPU | T4 im Server | RTX 4090 (Cloud) |
+|---|---|---|---|
+| LightGBM Fit / Backtest | 45 min / 3,8 h | kaum Gewinn, bleibt auf der CPU | 5–8 min / 30–45 min (CPU-Kerne) |
+| N-HiTS Fit / Backtest | 1–3 h / 6–15 h | 45–75 min / 4–6 h | 10–15 min / ~1 h |
+| TiDE Fit / Backtest | 2–4 h / 10–20 h | 1–1,5 h / 5–8 h | 15–20 min / 1–1,5 h |
+| TFT Fit / Backtest | 15–40 h / mehrere Tage | 5–15 h / 1,5–3 Tage | 1–3 h / 6–12 h |
+| Suche N-HiTS (50) | 3–6 Tage | 15–25 h | 3–5 h |
+| Suche TiDE (50) | 1–2 Wochen | 30–40 h | 6–8 h |
+| Suche TFT (30–50) | nicht machbar | 4–12 Tage | 20–60 h |
+
+Einordnung:
+
+- **Wöchentliches Neutraining** von N-HiTS und TiDE samt Backtest passt mit der T4 bequem in
+  eine Nacht, TFT-Fit auch, ein TFT-Backtest dauert dagegen 1,5–3 Tage.
+- **LightGBM** hat nichts von der T4: Die Quantil-Ziele und vielen kleinen Boosting-Läufe
+  bleiben auf den 8 alten Kernen. Hier hilft nur mehr CPU.
+- **Engpass Datenaufbereitung:** Mit nur 8 alten Kernen kann das Füttern der GPU bremsen. Der
+  Merkmalsrahmen (2–3 GB) passt aber ganz in die 16 GB der T4; einmal hochgeladen, entfällt
+  der CPU-Datenlader.
+- **Kosten:** gebraucht ca. 200–400 €. Strom bei ca. 10 h Volllast je Woche: 0,7 kWh, rund
+  1 € im Monat (0,30 €/kWh). Gegenüber 1–8 $ Cloud-Kosten im Monat rechnet sich die Karte erst
+  nach Jahren; ihr Vorteil ist, dass nichts gemietet, eingerichtet oder übertragen werden muss.
+- **Einbau:** Die T4 ist passiv und braucht den Luftstrom eines Servergehäuses mit
+  ausreichend hoher Lüfterstufe. Das Board braucht VT-d/IOMMU für das Durchreichen an die VM;
+  der Treiber läuft dann in der VM bzw. im `ml-train`-Container (NVIDIA Container Toolkit).
+
+Mischbetrieb wäre naheliegend: N-HiTS und TiDE wöchentlich auf der T4, LightGBM auf der CPU,
+TFT-Backtests und große Suchen gelegentlich auf einer gemieteten 4090.
 
 ## Freie Daten auf fremden Hosts
 
