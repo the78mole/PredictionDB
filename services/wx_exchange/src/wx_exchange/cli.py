@@ -167,6 +167,7 @@ def build_parser() -> argparse.ArgumentParser:
     _range_args(imp)
     imp.add_argument("--force", action="store_true", help="auch vorhandenes Silber ersetzen")
     imp.add_argument("--watch", type=int, metavar="SEK", help="wiederholen im Abstand von SEK")
+    imp.add_argument("--workers", type=int, default=4, metavar="N", help="Läufe gleichzeitig")
 
     ver = cmd.add_parser("verify", help="lokales Silber mit GHCR vergleichen")
     _range_args(ver)
@@ -294,7 +295,9 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(out, indent=1))
             return 1 if out["different"] else 0
         while True:
-            result = importer_.run(args.start, _end(args, config), args.runs, force=args.force)
+            result = importer_.run(
+                args.start, _end(args, config), args.runs, force=args.force, workers=args.workers
+            )
             print(json.dumps(result.as_dict()), flush=True)
             if not args.watch:
                 return 1 if result.as_dict()["failed"] else 0

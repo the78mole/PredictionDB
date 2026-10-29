@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal
@@ -141,6 +142,7 @@ class Importer:
         hours: list[int] | None = None,
         *,
         force: bool = False,
+        workers: int = 4,
     ) -> ImportResult:
         result = ImportResult()
         known = self.ledger.silver_runs(self.source_id) if self.ledger is not None else {}
@@ -163,29 +165,34 @@ class Importer:
             self.ledger.mark_silver(self.source_id, unrecorded, "present", "ghcr")
             self.ledger.mark_silver(self.source_id, [lay.run for _, lay in todo], "loading", "ghcr")
         try:
-            for t, layer in todo:
-                run = layer.run
-                name = f"{run:%Y%m%d%H}"
-                try:
-                    data = self.registry.blob(layer.digest)
-                    prefix = self.silver.key(self.model, self.resolution, run)
-                    self._clear(prefix)
-                    unpack(data, self.store, prefix)
-                except (RegistryError, ValueError, OSError) as exc:
-                    log.warning("import_failed", run=name, error=str(exc))
-                    result.runs[name] = "failed"
-                    if self.ledger is not None:
-                        self.ledger.clear_silver_loading(self.source_id, [run])
-                    continue
-                result.runs[name] = "imported"
-                result.bytes += len(data)
-                if self.ledger is not None:
-                    self.ledger.mark_silver(self.source_id, [run], "present", "ghcr")
-                log.info("run_imported", run=name, tag=t, bytes=len(data))
+            # Mehrere Läufe zugleich: Je Lauf wartet der Import fast nur (Download, viele
+            # kleine Puts nach Garage); einzeln kam GFS Europa auf ≈ 30 Läufe pro Stunde.
+            with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+                for name, status, nbytes in pool.map(lambda e: self._fetch(*e), todo):
+                    result.runs[name] = status
+                    result.bytes += nbytes
         finally:
             if self.ledger is not None:
                 self.ledger.clear_silver_loading(self.source_id)
         return result
+
+    def _fetch(self, tag: str, layer: Layer) -> tuple[str, ImportStatus, int]:
+        run = layer.run
+        name = f"{run:%Y%m%d%H}"
+        try:
+            data = self.registry.blob(layer.digest)
+            prefix = self.silver.key(self.model, self.resolution, run)
+            self._clear(prefix)
+            unpack(data, self.store, prefix)
+        except (RegistryError, ValueError, OSError) as exc:
+            log.warning("import_failed", run=name, error=str(exc))
+            if self.ledger is not None:
+                self.ledger.clear_silver_loading(self.source_id, [run])
+            return name, "failed", 0
+        if self.ledger is not None:
+            self.ledger.mark_silver(self.source_id, [run], "present", "ghcr")
+        log.info("run_imported", run=name, tag=tag, bytes=len(data))
+        return name, "imported", len(data)
 
     def verify(
         self,

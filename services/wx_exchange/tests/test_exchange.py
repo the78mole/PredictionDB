@@ -327,6 +327,22 @@ async def test_import_order_follows_run_priority(tmp_path: Path) -> None:
     assert [layer.run for _, layer in imp.layers(start, end, [6, 0])] == [RUN, r00]
 
 
+async def test_import_several_runs_in_parallel(tmp_path: Path) -> None:
+    fake = FakeRegistry()
+    r00 = datetime(2026, 10, 20, 0, tzinfo=UTC)
+    pub = _publisher(fake, host(RUN, r00), tmp_path)
+    await pub.publish_month("2026-10", 6, RUN, RUN)
+    await pub.publish_month("2026-10", 0, r00, r00)
+
+    ledger = FakeLedger()
+    imp = Importer(registry(fake, write=False), MemoryStore(), ledger=ledger)  # type: ignore[arg-type]
+    start, end = datetime(2026, 10, 1, tzinfo=UTC), datetime(2026, 10, 31, tzinfo=UTC)
+    result = imp.run(start, end, [0, 6], workers=2)
+    assert result.runs == {"2026102000": "imported", "2026102006": "imported"}
+    assert imp.present(RUN) and imp.present(r00)
+    assert ledger.rows == {RUN: "present", r00: "present"}
+
+
 def test_registry_repository_per_source(monkeypatch: pytest.MonkeyPatch) -> None:
     """GFS Europa nutzt sein eigenes Paket, auch wenn die Umgebung das GFS-DE-Paket vorgibt."""
     monkeypatch.setenv("WX_EXCHANGE_REPOSITORY", cli.DEFAULT_REPOSITORY)
