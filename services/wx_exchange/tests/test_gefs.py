@@ -502,3 +502,41 @@ async def test_vm_cycle_imports_history_while_live_runs(tmp_path: Path) -> None:
         result = await asyncio.wait_for(vm.cycle(history_every=0.01), timeout=5)
     # wiederholt, solange Live läuft, nicht erst danach
     assert imports >= 2 and result.imported["imported"] == imports
+
+
+async def test_vm_cycle_gold_while_live_runs(tmp_path: Path) -> None:
+    """Gold für selbst gebaute Läufe nicht erst nach dem ganzen Monat, Import seltener."""
+    cfg = make_config(tmp_path)
+    archive = FakeArchive(cfg, [])
+    now = datetime(2099, 2, 2, 12, tzinfo=UTC)
+    async with client(archive) as c:
+        vm = vm_for(tmp_path, archive, FakeRegistry(), c, now)
+        imports = 0
+        gold: list[tuple[int | None, datetime | None]] = []
+        third_gold = asyncio.Event()
+        loop = asyncio.get_running_loop()
+
+        def imp() -> Counter[str]:
+            nonlocal imports
+            imports += 1
+            return Counter()
+
+        def process_gold(limit: int | None = None, before: datetime | None = None) -> Counter[str]:
+            gold.append((limit, before))
+            if len(gold) == 3:
+                loop.call_soon_threadsafe(third_gold.set)
+            return Counter(written=1)
+
+        async def live() -> list[dict[str, Any]]:
+            await third_gold.wait()
+            return []
+
+        vm.import_history = imp  # type: ignore[method-assign]
+        vm.process_gold = process_gold  # type: ignore[method-assign]
+        vm.live = live  # type: ignore[method-assign]
+        result = await asyncio.wait_for(
+            vm.cycle(gold_limit=48, history_every=3600, gold_every=0.01), timeout=5
+        )
+    # Gold ohne Grenze auf die Historie (jüngste zuerst, also die Live-Läufe), Import nur einmal
+    assert len(gold) >= 3 and all(g == (48, None) for g in gold)
+    assert imports == 1 and result.gold["written"] == len(gold)

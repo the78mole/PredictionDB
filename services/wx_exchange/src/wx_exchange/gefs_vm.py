@@ -513,13 +513,19 @@ class GefsVm:
         return deleted, kept
 
     async def cycle(
-        self, *, gold_limit: int | None = None, history_every: float = 1800
+        self,
+        *,
+        gold_limit: int | None = None,
+        history_every: float = 1800,
+        gold_every: float = 300,
     ) -> CycleResult:
-        """Live-Aufbau und Historie nebeneinander.
+        """Live-Aufbau, Historie und Gold nebeneinander.
 
         Der erste Aufbau des laufenden Monats dauert Stunden (≈ 20 min je Lauf). Solange er läuft,
-        importiert der Durchgang alle ``history_every`` Sekunden, was Actions inzwischen nach GHCR
-        geschoben hat, und rechnet dafür Gold (höchstens ``gold_limit`` Läufe je Runde).
+        rechnet der Durchgang alle ``gold_every`` Sekunden Gold für Läufe mit fertigem Silber,
+        jüngste zuerst (höchstens ``gold_limit`` je Runde), damit jeder selbst gebaute Lauf sofort
+        nutzbar ist. Alle ``history_every`` Sekunden importiert er, was Actions inzwischen nach
+        GHCR geschoben hat.
         """
         result = CycleResult()
         if not self._bronze_synced:
@@ -527,13 +533,16 @@ class GefsVm:
             self._bronze_synced = True
         before = set(self.local.runs())
         live = asyncio.create_task(self.live())
-        current = month_start(self.now()) - timedelta(days=self.catch_up_days)
+        last_import: float | None = None
+        loop = asyncio.get_running_loop()
         while True:
-            result.imported.update(await asyncio.to_thread(self.import_history))
-            result.gold.update(await asyncio.to_thread(self.process_gold, gold_limit, current))
+            if last_import is None or loop.time() - last_import >= history_every:
+                last_import = loop.time()
+                result.imported.update(await asyncio.to_thread(self.import_history))
+            result.gold.update(await asyncio.to_thread(self.process_gold, gold_limit))
             if live.done():
                 break
-            await asyncio.wait({live}, timeout=history_every)
+            await asyncio.wait({live}, timeout=min(gold_every, history_every))
         result.live = await live
         # Gold für die eben gebauten Läufe sofort, nicht erst im nächsten Durchgang
         built = len(set(self.local.runs()) - before)
