@@ -258,6 +258,21 @@ Fazit: Der größte lokale Hebel ist nicht die GPU, sondern eine neue CPU. Mit 1
 laufen LightGBM, N-HiTS und TiDE lokal in vertretbarer Zeit; TFT-Backtests und große Suchen
 bleiben ein Fall für die gemietete 4090.
 
+## KI-Beschleuniger (NPU/TPU), z. B. Hailo
+
+Karten wie Hailo-8/8L/10H oder Google Coral (Edge TPU) sind **reine Inferenz-Beschleuniger**:
+Sie rechnen ein fertig trainiertes, auf INT8 quantisiertes Netz schnell und sparsam, können
+aber nicht trainieren (kein Rückwärtsdurchlauf, keine FP32/FP16-Gradienten). Für Fit, Backtest
+und Hyperparameter-Suche bringen sie daher nichts. Für die Prognose brauchen wir sie auch
+nicht: Ein fertiges N-HiTS-, TiDE- oder TFT-Modell rechnet einen Ausgabezeitpunkt auf der
+VM-CPU in Sekunden, und LightGBM-Bäume lassen sich auf solche Karten gar nicht übertragen.
+Die Quantisierung auf INT8 würde zudem die Quantile verfälschen. Dasselbe gilt für die NPU
+in neueren Ryzen-AI-Chips.
+
+Trainieren können nur Rechenzentrums-TPUs (Google Cloud). Bei Netzen dieser Größe bringen sie
+gegenüber einer RTX 4090 keinen Vorteil, kosten mehr und verlangen PyTorch/XLA oder JAX statt
+der üblichen CUDA-Werkzeuge.
+
 ## Freie Daten auf fremden Hosts
 
 Nach dem Leitprinzip werden nur frei lizenzierte Reihen eingebunden, und die dürfen auch auf
