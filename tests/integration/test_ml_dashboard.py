@@ -215,12 +215,13 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
         # Gestern mit allen Vorlauftagen: Lauf 10 Uhr Ortszeit, drei Tage vor dem Liefertag
         # (vor dem Lauf aus _fill, damit sich die Zeilen nicht überschneiden)
         local = (now - timedelta(days=5)).tz_convert("Europe/Berlin").normalize()
-        issue = (local + timedelta(hours=10)).tz_convert("UTC")
-        day = pd.date_range(local + timedelta(days=3), periods=3, freq="h").tz_convert("UTC")
+        # Wanduhrzeit statt +10 h: am Tag der Zeitumstellung wäre das sonst 9 oder 11 Uhr
+        issue = local.replace(hour=10).tz_convert("UTC")
+        day = pd.date_range(local + pd.DateOffset(days=3), periods=3, freq="h").tz_convert("UTC")
     # D+1: Lauf 10 Uhr Ortszeit am Vortag der ersten Ist-Stunden aus _fill
     first = (now - timedelta(days=3)).floor("D") + timedelta(hours=24)
     d1_issue = (
-        (first - timedelta(hours=2)).tz_convert("Europe/Berlin").normalize() + timedelta(hours=10)
+        (first - timedelta(hours=2)).tz_convert("Europe/Berlin").normalize().replace(hour=10)
     ).tz_convert("UTC")
     d1 = pd.date_range(first, periods=6, freq="h")
     with engine.begin() as c:
