@@ -3244,7 +3244,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "-- MAE je Vorlauftag der aktiven Modelle (Lauf 10 Uhr Ortszeit, letzte 28 Tage) und als\n-- Maßstab dieselbe Stunde eine Woche vorher (ab D+7 zwei Wochen, da zum Lauf noch unbekannt),\n-- auf denselben Stunden. Liegt das Modell nicht klar darunter, trägt der Vorlauftag kaum noch.\nWITH e AS (\n  SELECT e.lead_day, e.valid_time, e.actual, abs(e.err) AS ae,\n         CASE v.role WHEN 'champion' THEN 'Champion' ELSE 'Challenger' END || ' ' || v.variant\n           || ' ' || to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM.') AS verfahren\n    FROM fcst.prediction_error e JOIN meta.model_version v ON v.version = e.model_version\n   WHERE v.role IN ('champion', 'challenger') AND e.target = 'load_actual' AND e.err IS NOT NULL\n     AND extract(hour FROM e.issue_time AT TIME ZONE 'Europe/Berlin') = 10\n     AND e.valid_time >= now() - interval '28 days'),\nwk AS (\n  SELECT time_bucket('1 hour', ts) AS h, avg(value) AS v\n    FROM energy.value_best\n   WHERE code = 'load_actual' AND ts >= now() - interval '45 days'\n   GROUP BY 1),\nref AS (SELECT DISTINCT lead_day, valid_time, actual FROM e)\nSELECT 'D+' || lead_day AS \"Vorlauf\", verfahren AS \"Verfahren\", avg(ae) AS \"MAE\"\n  FROM e GROUP BY 1, 2\nUNION ALL\nSELECT 'D+' || r.lead_day, 'Vorwoche (gleiche Stunde)', avg(abs(r.actual - w.v))\n  FROM ref r JOIN wk w\n    ON w.h = r.valid_time - make_interval(days => 7 * ceil((r.lead_day + 1) / 7.0)::int)\n GROUP BY 1\n ORDER BY 1, 2"
+          "rawSql": "-- MAE je Vorlauftag der aktiven Modelle (Lauf 10 Uhr Ortszeit, letzte 28 Tage) und als\n-- Maßstab dieselbe Stunde eine Woche vorher (ab D+7 zwei Wochen, da zum Lauf noch unbekannt),\n-- auf denselben Stunden. Liegt das Modell nicht klar darunter, trägt der Vorlauftag kaum noch.\n-- Bei D+1 zusätzlich die Day-Ahead-Lastprognose der ÜNB (ENTSO-E 6.1.b, bis 10 Uhr am Vortag\n-- veröffentlicht, also zeitgleich mit dem 10-Uhr-Lauf), ebenfalls auf denselben Stunden.\nWITH e AS (\n  SELECT e.lead_day, e.valid_time, e.actual, abs(e.err) AS ae,\n         CASE v.role WHEN 'champion' THEN 'Champion' ELSE 'Challenger' END || ' ' || v.variant\n           || ' ' || to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM.') AS verfahren\n    FROM fcst.prediction_error e JOIN meta.model_version v ON v.version = e.model_version\n   WHERE v.role IN ('champion', 'challenger') AND e.target = 'load_actual' AND e.err IS NOT NULL\n     AND extract(hour FROM e.issue_time AT TIME ZONE 'Europe/Berlin') = 10\n     AND e.valid_time >= now() - interval '28 days'),\nwk AS (\n  SELECT time_bucket('1 hour', ts) AS h, avg(value) AS v\n    FROM energy.value_best\n   WHERE code = 'load_actual' AND ts >= now() - interval '45 days'\n   GROUP BY 1),\nfc AS (\n  SELECT time_bucket('1 hour', ts) AS h, avg(value) AS v\n    FROM energy.value_best\n   WHERE code = 'load_da_forecast' AND ts >= now() - interval '30 days'\n   GROUP BY 1),\nref AS (SELECT DISTINCT lead_day, valid_time, actual FROM e)\nSELECT 'D+' || lead_day AS \"Vorlauf\", verfahren AS \"Verfahren\", avg(ae) AS \"MAE\"\n  FROM e GROUP BY 1, 2\nUNION ALL\nSELECT 'D+' || r.lead_day, 'Vorwoche (gleiche Stunde)', avg(abs(r.actual - w.v))\n  FROM ref r JOIN wk w\n    ON w.h = r.valid_time - make_interval(days => 7 * ceil((r.lead_day + 1) / 7.0)::int)\n GROUP BY 1\nUNION ALL\nSELECT 'D+1', 'ÜNB Day-Ahead (ENTSO-E)', avg(abs(r.actual - f.v))\n  FROM ref r JOIN fc f ON f.h = r.valid_time\n WHERE r.lead_day = 1\n GROUP BY 1\n ORDER BY 1, 2"
         }
       ],
       "transformations": [
@@ -3293,10 +3293,25 @@
                 }
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^ÜNB.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
           }
         ]
       },
-      "description": "Mittlerer absoluter Fehler je Vorlauftag im Betrieb der letzten 28 Tage, je aktiver Modellversion (Lauf um 10 Uhr Ortszeit), daneben als einfacher Maßstab der Wert derselben Stunde eine Woche vorher (für D+7 zwei Wochen, weil die Vorwoche zum Lauf noch nicht bekannt ist). Wo ein Modell nicht klar unter dem Maßstab liegt, bringt der Vorlauftag kaum Information. Wenige Tage Betrieb = große Streuung.",
+      "description": "Mittlerer absoluter Fehler je Vorlauftag im Betrieb der letzten 28 Tage, je aktiver Modellversion (Lauf um 10 Uhr Ortszeit), daneben als einfacher Maßstab der Wert derselben Stunde eine Woche vorher (für D+7 zwei Wochen, weil die Vorwoche zum Lauf noch nicht bekannt ist). Bei D+1 steht zusätzlich die Day-Ahead-Lastprognose der ÜNB (ENTSO-E), die zur selben Zeit vorliegt. Wo ein Modell nicht klar unter dem Maßstab liegt, bringt der Vorlauftag kaum Information. Wenige Tage Betrieb = große Streuung.",
       "options": {
         "xField": "Vorlauf\\Verfahren",
         "orientation": "vertical",
