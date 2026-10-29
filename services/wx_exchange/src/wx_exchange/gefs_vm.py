@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 import warnings
 from collections import Counter
 from collections.abc import Callable
@@ -57,7 +58,7 @@ from wx_exchange.gefs import (
     unpack,
 )
 from wx_exchange.oci import Registry, RegistryError, digest
-from wx_process.store import Store
+from wx_process.store import BronzeStatus, Store
 
 log = get_logger(__name__)
 
@@ -97,8 +98,17 @@ class GefsBronze(BronzeSink):
     def __init__(self, store: ObjectStore, bbox: BBox) -> None:
         self.store = store
         self.bbox = GribBBox(bbox.north, bbox.south, bbox.west, bbox.east)
+        # Meldung je Lauf an das Status-Dashboard (GefsVm setzt sie, wenn es eine Datenbank hat)
+        self.on_state: Callable[[datetime, BronzeStatus, int | None], None] | None = None
+        self._started: set[datetime] = set()
+        self._lock = threading.Lock()
 
     def put(self, run: datetime, member: str, step: int, messages: dict[str, bytes]) -> int:
+        with self._lock:
+            first = run not in self._started
+            self._started.add(run)
+        if first and self.on_state is not None:
+            self.on_state(run, "loading", None)
         # CCSDS ist verlustfrei; die NCEP-Packung (complex) quantisiert beim Umpacken neu und
         # verliert bis zu 0,01 Einheiten (gemessen 2026-10-29)
         data = b"".join(
@@ -110,6 +120,10 @@ class GefsBronze(BronzeSink):
     def complete(self, run: datetime, stats: dict[str, Any]) -> None:
         body = {"run": run.isoformat(), "stored_at": datetime.now(UTC).isoformat(), **stats}
         obstore.put(self.store, f"{run_path(run)}/run.json", json.dumps(body).encode())
+        with self._lock:
+            self._started.discard(run)
+        if self.on_state is not None:
+            self.on_state(run, "present", stats.get("bytes"))
 
     def runs(self, before: datetime | None = None) -> list[datetime]:
         """Läufe mit Bronze (auch unvollständige), optional nur vor ``before``."""
@@ -346,6 +360,9 @@ class GefsVm:
         self.now = now
         self.fp = fingerprint(config, regions)
         self.gold = GefsGold(ledger, local) if ledger is not None else None
+        self._bronze_synced = False
+        if ledger is not None:
+            self.bronze.on_state = self._bronze_state
 
     @property
     def source_id(self) -> int:
@@ -355,6 +372,22 @@ class GefsVm:
     def _mark(self, runs: list[datetime], origin: Origin) -> None:
         if self.ledger is not None and runs:
             self.ledger.mark_silver(self.source_id, runs, "present", origin)
+
+    def _bronze_state(self, run: datetime, status: BronzeStatus, nbytes: int | None) -> None:
+        assert self.ledger is not None
+        self.ledger.mark_bronze(self.source_id, [run], status, nbytes)
+        if status == "loading":
+            # Silber entsteht im selben Durchgang aus diesem Bronze
+            self.ledger.mark_silver(self.source_id, [run], "loading", "bronze")
+
+    def sync_bronze(self) -> int:
+        """Bronze, das noch nicht gemeldet ist (vor dem Status-Dashboard geladen), nachtragen."""
+        if self.ledger is None:
+            return 0
+        known = self.ledger.bronze_runs(self.source_id)
+        new = [r for r in self.bronze.runs() if known.get(r) != "present"]
+        self.ledger.mark_bronze(self.source_id, new, "present")
+        return len(new)
 
     # aktueller Monat: selbst bauen, Bronze halten, nach GHCR
     def _packed(self, run: datetime, silver: RunSilver, data: bytes, content: str) -> None:
@@ -468,11 +501,16 @@ class GefsVm:
                 log.warning("gefs_bronze_kept", run=f"{run:%Y%m%d%H}", ghcr=layer is not None)
                 continue
             self.bronze.delete(run)
+            if self.ledger is not None:
+                self.ledger.mark_bronze(self.source_id, [run], "deleted")
             deleted += 1
         return deleted, kept
 
     async def cycle(self, *, gold_limit: int | None = None) -> CycleResult:
         result = CycleResult()
+        if not self._bronze_synced:
+            await asyncio.to_thread(self.sync_bronze)
+            self._bronze_synced = True
         result.live = await self.live()
         result.imported = await asyncio.to_thread(self.import_history)
         result.gold = await asyncio.to_thread(self.process_gold, gold_limit)
