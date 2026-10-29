@@ -24,6 +24,10 @@ Beispiele::
     # VM: selbst aus Bronze gebautes Silber mit dem aus GHCR vergleichen
     wx-exchange gfs verify 2026-01-01T00 --runs 0,12
 
+    # GFS 0,5° fürs ganze Verbundnetz: eigenes Paket gfs-0p5-silver, sonst wie oben
+    wx-exchange gfs --config config/sources/gfs_0p5.yaml \
+        --process-config config/process/gfs_0p5.yaml publish 2026-09 0
+
     # GEFS-Ensemble (Workflow gefs-history.yml): Plan, je Job ein Monat, nur Silber nach GHCR
     wx-exchange gefs plan 2020-09-24T00
     wx-exchange gefs publish 2026-10 0
@@ -76,6 +80,11 @@ from wx_process.store import Store
 log = get_logger(__name__)
 
 DEFAULT_REPOSITORY = "the78mole/predictiondb-data/gfs-0p25-silver"
+#: Silber je Quelle; WX_EXCHANGE_REPOSITORY zeigt auf der VM auf gfs_0p25
+REPOSITORIES = {
+    "gfs_0p25": DEFAULT_REPOSITORY,
+    "gfs_0p5": "the78mole/predictiondb-data/gfs-0p5-silver",
+}
 GEFS_CONFIG = Path("config/sources/gefs_0p5.yaml")
 SOURCE_URL = "https://github.com/the78mole/predictiondb"
 
@@ -179,11 +188,18 @@ def _range_args(p: argparse.ArgumentParser) -> None:
     )
 
 
-def _registry(args: argparse.Namespace, client: httpx.Client) -> Registry:
-    default = idx.DEFAULT_REPOSITORY if args.cmd.startswith("idx-") else DEFAULT_REPOSITORY
+def _registry(args: argparse.Namespace, client: httpx.Client, config: GfsConfig) -> Registry:
+    if args.cmd.startswith("idx-"):
+        repository = args.repository or idx.DEFAULT_REPOSITORY
+    elif config.code in REPOSITORIES and config.code != "gfs_0p25":
+        # eigenes Paket, außer es ist ausdrücklich ein anderes als das GFS-DE-Silber angegeben
+        explicit = args.repository and args.repository != os.environ.get("WX_EXCHANGE_REPOSITORY")
+        repository = args.repository if explicit else REPOSITORIES[config.code]
+    else:
+        repository = args.repository or DEFAULT_REPOSITORY
     return Registry(
         args.registry,
-        args.repository or default,
+        repository,
         client,
         username=os.environ.get("WX_EXCHANGE_USERNAME"),
         password=os.environ.get("WX_EXCHANGE_TOKEN") or None,
@@ -214,7 +230,7 @@ def main(argv: list[str] | None = None) -> int:
     timeout = httpx.Timeout(120.0, connect=15.0)
 
     with httpx.Client(timeout=timeout) as client:
-        registry = _registry(args, client)
+        registry = _registry(args, client, config)
         if args.cmd == "plan":
             blocks = plan(
                 registry,
