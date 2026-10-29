@@ -5,6 +5,7 @@ import threading
 from collections import Counter
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import httpx
@@ -597,3 +598,36 @@ async def test_vm_cycle_import_does_not_wait_for_gold(tmp_path: Path) -> None:
         vm.live = live  # type: ignore[method-assign]
         result = await asyncio.wait_for(vm.cycle(gold_every=0.01), timeout=10)
     assert imports == 3 and result.imported["imported"] == 3 and "more" not in result.imported
+
+
+async def test_vm_import_remarks_local_runs_missing_in_ledger(tmp_path: Path) -> None:
+    """Neustart zwischen Speichern und Melden: der nächste Import meldet den Lauf nach."""
+    cfg = make_config(tmp_path)
+    jan = [datetime(2099, 1, d, tzinfo=UTC) for d in (30, 31)]
+    archive = FakeArchive(cfg, jan)
+    fake = FakeRegistry()
+    now = datetime(2099, 2, 2, 12, tzinfo=UTC)
+    async with client(archive) as c:
+        pub = GefsPublisher(
+            registry(fake), cfg, Regions.load(cfg.regions), c, source_url="x", now=now
+        )
+        await pub.publish_month("2099-01", 0, jan[0], jan[-1])
+        vm = vm_for(tmp_path, archive, fake, c, now)
+        assert vm.import_history()["imported"] == 2  # ohne Bestand (ledger=None)
+
+        marked: dict[datetime, str] = {jan[1]: "present"}
+
+        class Ledger:
+            def silver_runs(self, source_id: int) -> dict[datetime, str]:
+                return dict(marked)
+
+            def mark_silver(
+                self, source_id: int, runs: list[datetime], status: str, origin: str
+            ) -> None:
+                marked.update({r: status for r in runs})
+
+        vm.ledger = Ledger()  # type: ignore[assignment]
+        vm.gold = SimpleNamespace(source_id=7)  # type: ignore[assignment]
+        again = vm.import_history()
+    assert (again["imported"], again["present"], again["remarked"]) == (0, 2, 1)
+    assert marked == {jan[0]: "present", jan[1]: "present"}

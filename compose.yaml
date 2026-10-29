@@ -244,8 +244,9 @@ services:
       - vm
       - --history-start=${GEFS_HISTORY_START:-2021-03-22T12}
       - --bronze-days=${GEFS_BRONZE_DAYS:-183}
-      # Historie gedrosselt nach Gold (≈ 96 000 Werte je Lauf), damit das GFS-Gold nicht wartet
-      - --gold-limit=${GEFS_GOLD_LIMIT:-48}
+      # Gold in kleinen Runden (≈ 75 s und 96 000 Werte je Lauf), jüngste Läufe zuerst; jede Runde
+      # sieht frisch importierte Monate, und das GFS-Gold wartet nicht lange
+      - --gold-limit=${GEFS_GOLD_LIMIT:-12}
       - --watch=1800
     environment:
       <<: *app-env
