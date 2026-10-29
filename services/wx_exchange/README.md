@@ -137,6 +137,24 @@ Laufzeit) und liest die gewählten Nachrichten wie bei `idx_range` direkt über 
 Köpfe abzulaufen (Log `idx_loaded`). Dateien ohne `.idx` (noch `failed`) und `.idx`, die nicht
 zur Datei passen, laufen weiter über Vorlagen und Köpfe. `--idx-repository ''` schaltet das ab.
 
+## GEFS-Ensemble
+
+`wx-exchange gefs` baut das Silber des GEFS v12 (0,5°, 31 Mitglieder, 00Z, bis 384 h) direkt
+aus dem AWS-Archiv, ohne Bronze: je Mitglied-Schritt nur die Felder aus
+`config/sources/gefs_0p5.yaml` per Byte-Bereich, verdichtet je Region aus
+`config/gefs/regions_v1.json.gz`. Nach GHCR geht je Monat ein Manifest mit einem Layer je Lauf
+(`ghcr.io/the78mole/predictiondb-data/gefs-0p5-silver:JJJJ-MM-00z`, Inhalt siehe
+`docs/ARCHITEKTUR.md` 5.6). Der Workflow `gefs-history.yml` füllt die Historie ab 2021-03-22
+und hängt täglich den neuen Lauf an.
+
+```bash
+uv run wx-exchange gefs plan 2021-03-22T12
+WX_EXCHANGE_USERNAME=… WX_EXCHANGE_TOKEN=… uv run wx-exchange gefs publish 2026-09 0
+# neue Regionen-Datei (MaStR-CSV aus config/gefs/mastr_cells.sql)
+uv run wx-exchange gefs regions --mastr de_capacity_0p5.csv --natural-earth ne/ --version v2 \
+  --out config/gefs/regions_v2.json.gz
+```
+
 ## Aufruf
 
 ```bash
