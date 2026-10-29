@@ -158,6 +158,73 @@ nicht geladen:
 | Lastprognosen Woche/Monat/Jahr voraus, Übertragungskapazitäten | ENTSO-E (Free-Re-use-Liste, Token nötig) | längere Vorläufe, Engpässe an den Grenzen |
 | Wetter-Beobachtungen und Prognosen | DWD Open Data, ECMWF Open Data (CC BY 4.0) | Ergänzung und Abgleich zu GFS |
 
+## Anlagenbestand der Nachbarländer
+
+In Deutschland gewichtet `wx-process` die Wetterprognose je Anlagen-Cluster mit der Leistung aus
+dem MaStR (siehe `docs/ARCHITEKTUR.md`, 7.5). Für eine grobe Clusterung der Nachbarländer
+braucht man je Land zweierlei: die **installierte Leistung je Technologie** über die Zeit und eine
+**räumliche Verteilung**, die fein genug für einige wenige Cluster ist. Ein Register mit
+Einzelanlagen und Koordinaten wie das MaStR gibt es frei nur in der Schweiz. Für die übrigen
+Länder reichen Summen je Gemeinde, Provinz oder Region; bei 0,25°-Gittern und zwei bis fünf
+Clustern je Land ist das genau genug.
+
+Stand der Bewertung: Oktober 2026. Es zählen nur Quellen mit freier Lizenz, die sich regelmäßig
+und ohne Handarbeit per API oder fester Datei-URL laden lassen. Noch ist keine davon eingebunden.
+
+### Je Land
+
+| Land | Beste freie Quelle | Inhalt | Zugriff, Takt | Lizenz | Eignung |
+|---|---|---|---|---|---|
+| FR | Registre national des installations de production et de stockage (RTE, Enedis u. a.) auf ODRÉ und data.gouv.fr | alle Anlagen mit Filière, Leistung, Datum, Gemeinde (INSEE) und IRIS; unter 36 kW nur je IRIS zusammengefasst | Opendatasoft-API bzw. CSV, mehrere Stichtage im Jahr | Licence Ouverte 2.0 | gut; Koordinaten über Gemeinde-Mittelpunkt |
+| CH | Elektrizitätsproduktionsanlagen (BFE, Pronovo) auf opendata.swiss | rund 340 000 Einzelanlagen mit Kategorie, Leistung, Inbetriebnahme, Adresse und Koordinaten (LV95), PV mit Ausrichtung und Neigung | feste URL `data.geo.admin.ch/…/elektrizitaetsproduktionsanlagen_2056.csv.zip`, STAC-API, monatlich | opendata.swiss „Open use. Must provide the source“ | sehr gut, MaStR-gleich; nur Anlagen im Herkunftsnachweissystem |
+| DK | Energi Data Service `CapacityPerMunicipality` (Energinet) | Leistung und Anzahl je Gemeinde: Wind an Land, Wind auf See, PV, thermisch ≥/< 100 MW | REST-API ohne Schlüssel, monatlich | „Conditions for use of Danish public-sector data“: frei, auch kommerziell, Quellenvermerk | sehr gut |
+| NL | CBS StatLine 85005NED (PV je Gemeinde) und 70960ned (Wind an Land je Provinz) | PV-Leistung und Anlagen je Gemeinde, Wind je Provinz | OData-API, PV halbjährlich, Wind jährlich, rund ein Jahr Verzug | CC BY 4.0 | gut für PV, grob für Wind; Wind auf See über die Windparks (fest, wenige) |
+| BE | Elia Open Data `ods032`/`ods209` (PV) und `ods031` (Wind) | `monitoredcapacity` je Provinz (PV) bzw. Region und an Land/auf See (Wind), als Viertelstundenreihe | Opendatasoft-API, laufend | „Elia Open Data Licence“ (laut JRC CC BY 4.0, Text vor Einbau prüfen) | gut |
+| NO | NVE Vindkraft-API (`api.nve.no/web/WindPowerplant/GetWindPowerPlants`), NVE Vannkraft (WMS/Download) | Windparks mit Leistung, Kommune, Fylke, Elspot-Gebiet, Nabenhöhe; Wasserkraftwerke mit Lage | REST-API ohne Schlüssel, laufend | NLOD (frei, Quellenvermerk) | gut |
+| SE | Vindbrukskollen (Länsstyrelserna) | Windenergieanlagen mit Koordinaten und Leistung | Shape-Download | laut Geodatakatalog CC0, Länsstyrelsen bittet um Quellenangabe | gut für Wind; PV je Gemeinde (Energimyndigheten, PxWeb) noch prüfen |
+| AT | kein offenes Register | E-Control veröffentlicht PV je Bundesland, aber als Excel ohne Lizenzangabe | – | – | nur Landessumme; Verteilung über Ersatzgrößen |
+| CZ | kein offenes Register | ERÚ-Berichte je Kraj nur als PDF | – | – | nur Landessumme; Verteilung über Ersatzgrößen |
+| PL | URE-Register der kleinen Anlagen auf dane.gov.pl (CC0) | nur 50 kW bis 1 MW, seit 2023 nicht aktualisiert; Mikroanlagen (der Großteil der PV) fehlen | – | CC0 | ungeeignet; Landessumme und Ersatzgrößen |
+| IT | Terna Download Center, GSE Atlaimpianti | Leistung je Region (Terna) bzw. Einzelanlagen (GSE) | Download bzw. Webportal | ungeklärt bzw. ohne offene Lizenz | nur Landessumme; für IT-North Regionen nachprüfen |
+| LU | – | gehört zur Gebotszone DE-LU, wenige hundert MW | – | – | Landessumme genügt |
+
+### Landessummen je Technologie
+
+| Quelle | Länder | Takt, Verzug | Lizenz | Bemerkung |
+|---|---|---|---|---|
+| Energy-Charts `/installed_power?country=…` | alle zwölf, auch CH | jährlich, bei DK und SE schon 2026 | CC BY 4.0 (kein abweichender `license_info`) | für die Nachbarländer meist aus ENTSO-E 14.1.a übernommen; einfachste Wahl |
+| Eurostat `nrg_inf_epc` | alle außer CH | jährlich, gut ein Jahr Verzug | CC BY 4.0 | amtlich, Redundanz und Abgleich |
+| ENTSO-E 14.1.a (installierte Leistung je Gebotszone) | alle | jährlich | nicht als frei bestätigt, deshalb nicht direkt | über Energy-Charts abgedeckt |
+| Ember Monthly Wind and Solar Capacity | EU-Länder | monatlich | CC BY 4.0, Schlüssel nötig | Zwischenwerte zwischen den Jahresständen |
+
+Zwischen zwei Jahresständen wird linear interpoliert, wie bei `assets.capacity_daily`.
+
+### Ersatzgrößen für die Verteilung
+
+Wo kein Register frei verfügbar ist (AT, CZ, PL, IT), verteilt man die Landessumme über
+Ersatzgrößen:
+
+- **Wind:** Standorte aus OpenStreetMap (`power=generator` mit `generator:source=wind`, über die
+  Overpass-API). Die Erfassung ist in Mitteleuropa gut. Die Lizenz ODbL verlangt aber, dass eine
+  daraus abgeleitete Datenbank wieder unter ODbL steht. Für veröffentlichte Cluster-Gewichte ist
+  das mit CC BY 4.0 nicht vereinbar; man nutzt OSM deshalb nur für die Clustergrenzen und
+  veröffentlicht die Gewichte nicht, oder man verzichtet darauf.
+- **PV:** Bevölkerung je Rasterzelle (Eurostat GEOSTAT 1 km, CC BY 4.0). Dachanlagen folgen der
+  Besiedlung, große Freiflächenanlagen weniger; für wenige Cluster je Land reicht das.
+- **Global Energy Monitor** (Wind- und Solar-Tracker, CC BY 4.0, Parks ab etwa 10 MW bzw. 1 bis
+  20 MW mit Koordinaten): gut, aber der Download geht nur über ein Formular und die URL wechselt
+  je Ausgabe. Deshalb nur für einmalige Analysen und zum Abgleich, nicht als laufende Quelle.
+- **Open Power System Data** `renewable_power_plants` (Einzelanlagen DE, DK, FR, CH, SE, CZ,
+  PL je Powiat): letzte Ausgabe 2020, nur noch für die Historie bis dahin.
+
+### Grenzen durch den Wetter-Ausschnitt
+
+Der GFS-Ausschnitt in `config/sources/gfs_0p25.yaml` reicht von 44° bis 58° N und von 0° bis
+20° O. Er deckt NL, BE, LU, CH, AT, CZ und DK ganz ab, FR ohne die Bretagne und den äußersten
+Süden, Norditalien bis 44° N und Polen nur westlich von 20° O. Norwegen (NO1 bis NO5) und
+Schweden außer SE4 liegen fast ganz außerhalb. Wer dort Cluster bilden will, muss den
+Ausschnitt erweitern; das vergrößert Silber und die Historie entsprechend.
+
 ## Checkliste für ein neues System
 
 1. `.env.example` nach `.env` kopieren; alle `PDB_ALLOW_*` bleiben auf `false`, wenn Daten
