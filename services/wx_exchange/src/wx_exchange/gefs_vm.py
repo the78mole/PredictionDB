@@ -429,14 +429,16 @@ class GefsVm:
         end = month_start(self.now()) - timedelta(hours=1)
         local = self.local.runs()
         existing = set(self.registry.tags())
-        for month in months_between(max(self.history_start, self.config.first_run), end):
+        # jüngste Monate zuerst: sie zählen fürs Training am meisten
+        months = months_between(max(self.history_start, self.config.first_run), end)
+        for month in reversed(months):
             for hour in self.config.hours:
                 t = tag(month, hour)
                 if t not in existing:
                     continue
                 art = GefsMonth.from_manifest(month, hour, self.registry.manifest(t))
                 imported: list[datetime] = []
-                for run, layer in sorted(art.layers.items()):
+                for run, layer in sorted(art.layers.items(), reverse=True):
                     if run < self.history_start or layer.fingerprint != self.fp:
                         counts["other_fingerprint" if run >= self.history_start else "early"] += 1
                         continue
@@ -526,14 +528,13 @@ class GefsVm:
         gold_every: float = 300,
         import_limit: int | None = 64,
     ) -> CycleResult:
-        """Live-Aufbau, Historie und Gold nebeneinander.
+        """Live-Aufbau, Import der Historie und Gold nebeneinander.
 
-        Der erste Aufbau des laufenden Monats dauert Stunden (≈ 20 min je Lauf). Solange er läuft,
-        rechnet der Durchgang alle ``gold_every`` Sekunden Gold für Läufe mit fertigem Silber,
-        jüngste zuerst (höchstens ``gold_limit`` je Runde), damit jeder selbst gebaute Lauf sofort
-        nutzbar ist. Alle ``history_every`` Sekunden importiert er, was Actions inzwischen nach
-        GHCR geschoben hat, je Runde höchstens ``import_limit`` Läufe; liegt mehr bereit, geht
-        der Import in der nächsten Runde weiter.
+        Der erste Aufbau des laufenden Monats dauert Stunden (≈ 20 min je Lauf). Der Import aus
+        GHCR läuft als eigene Aufgabe in Portionen von ``import_limit`` Läufen ohne Pause, solange
+        dort mehr bereitliegt, sonst alle ``history_every`` Sekunden; er wartet nicht auf Gold.
+        Daneben rechnet der Durchgang alle ``gold_every`` Sekunden Gold für Läufe mit fertigem
+        Silber, jüngste zuerst (höchstens ``gold_limit`` je Runde).
         """
         result = CycleResult()
         if not self._bronze_synced:
@@ -541,22 +542,28 @@ class GefsVm:
             self._bronze_synced = True
         before = set(self.local.runs())
         live = asyncio.create_task(self.live())
-        last_import: float | None = None
-        more = False
-        loop = asyncio.get_running_loop()
-        while True:
-            # in Portionen, damit Gold nicht auf den ganzen Import wartet; solange GHCR mehr hat,
-            # in jeder Runde weiter
-            if more or last_import is None or loop.time() - last_import >= history_every:
-                last_import = loop.time()
+
+        async def importer() -> None:
+            while True:
                 counts = await asyncio.to_thread(self.import_history, import_limit)
                 more = bool(counts.pop("more", 0))
                 result.imported.update(counts)
+                if more:
+                    continue
+                if live.done():
+                    return
+                await asyncio.wait({live}, timeout=history_every)
+                if live.done():
+                    return
+
+        imports = asyncio.create_task(importer())
+        while True:
             result.gold.update(await asyncio.to_thread(self.process_gold, gold_limit))
-            if live.done():
+            pending = {t for t in (live, imports) if not t.done()}
+            if not pending:
                 break
-            if not more:
-                await asyncio.wait({live}, timeout=min(gold_every, history_every))
+            await asyncio.wait(pending, timeout=gold_every, return_when=asyncio.FIRST_COMPLETED)
+        await imports
         result.live = await live
         # Gold für die eben gebauten Läufe sofort, nicht erst im nächsten Durchgang
         built = len(set(self.local.runs()) - before)
