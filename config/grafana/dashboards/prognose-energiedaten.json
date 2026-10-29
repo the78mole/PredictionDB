@@ -574,7 +574,7 @@
         "x": 0,
         "y": 17
       },
-      "description": "Laufende Aufrufe von ml-train fit, backtest und snapshot (meta.ml_job) sowie die in den letzten 24 Stunden beendeten. Backtest: ein Schritt je Faltung und Variante; Training: Merkmale, je Stufe und Ziel ein Modell, Registrieren. Erledigt und Fortschritt zählen abgeschlossene Schritte, Schritt / Ergebnis zeigt den laufenden (bei beendeten Jobs Version, Snapshot-ID bzw. Ausgabeordner oder den Fehler); Fertig ca. rechnet mit gleich langen Schritten (Faltungen werden im Expanding Window länger, die Schätzung ist daher eher zu früh). hängt? = seit 5 Minuten kein Lebenszeichen.",
+      "description": "Laufende Aufrufe von ml-train fit, backtest und snapshot (meta.ml_job) sowie die in den letzten 24 Stunden beendeten.\n\n**Arten**\n\n- **Snapshot**: friert die Trainingsdaten ein. Exportiert alle Eingänge eines Modells aus der Datenbank (Energiereihen als Stundenwerte, Wetter-Features aus GFS, installierte Leistung) als Parquet-Dateien mit manifest.json. Die Snapshot-ID (Spalte Schritt / Ergebnis) ist ein Fingerabdruck aus den SHA-256-Prüfsummen der Dateien: gleiche ID heißt exakt gleiche Daten. Backtest und Training lesen nur den Snapshot, nie die Datenbank. So rechnen Backtest und Training einer Version auf identischen Daten, Ergebnisse bleiben nachvollziehbar und der Snapshot lässt sich auch ohne Datenbankzugang verarbeiten, etwa lokal oder auf einer Miet-GPU. Die ersten sechs Zeichen der ID stehen im Versionsnamen des Modells. Ein Schritt je Energiereihe und Wettermonat, dazu installierte Leistung und Speichern.\n- **Backtest**: prüft eine Konfiguration rückwirkend auf dem Snapshot, ein Schritt je Faltung und Variante.\n- **Training**: Merkmale, je Stufe und Ziel ein Modell, Registrieren.\n\n**Spalten**\n\nErledigt und Fortschritt zählen abgeschlossene Schritte, Schritt / Ergebnis zeigt den laufenden (bei beendeten Jobs Version, Snapshot-ID bzw. Ausgabeordner oder den Fehler); Fertig ca. rechnet mit gleich langen Schritten (Faltungen werden im Expanding Window länger, die Schätzung ist daher eher zu früh). hängt? = seit 5 Minuten kein Lebenszeichen.",
       "targets": [
         {
           "refId": "A",
@@ -831,6 +831,18 @@
               {
                 "id": "custom.minWidth",
                 "value": 320
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "–"
               }
             ]
           }
