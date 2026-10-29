@@ -342,6 +342,10 @@ async def test_import_several_runs_in_parallel(tmp_path: Path) -> None:
     assert imp.present(RUN) and imp.present(r00)
     assert ledger.rows == {RUN: "present", r00: "present"}
 
+    # gemeldeter Bestand: kein GET von zarr.json je Lauf
+    imp.present = lambda run: pytest.fail("present() trotz Bestandseintrag")  # type: ignore[method-assign]
+    assert set(imp.run(start, end, [0, 6]).runs.values()) == {"present"}
+
 
 def test_registry_repository_per_source(monkeypatch: pytest.MonkeyPatch) -> None:
     """GFS Europa nutzt sein eigenes Paket, auch wenn die Umgebung das GFS-DE-Paket vorgibt."""

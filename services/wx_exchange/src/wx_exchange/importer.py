@@ -153,10 +153,12 @@ class Importer:
             name = f"{run:%Y%m%d%H}"
             if layer.silver_version != SILVER_VERSION:
                 result.runs[name] = "other_version"
+            elif not force and known.get(run) == "present":
+                # Bestand schon gemeldet: kein GET je Lauf (≈ 5 000 Layer, ≈ 70 ms je GET)
+                result.runs[name] = "present"
             elif not force and self.present(run):
                 result.runs[name] = "present"
-                if known.get(run) != "present":
-                    unrecorded.append(run)
+                unrecorded.append(run)
             else:
                 todo.append((t, layer))
         if self.ledger is not None:
@@ -182,7 +184,10 @@ class Importer:
         try:
             data = self.registry.blob(layer.digest)
             prefix = self.silver.key(self.model, self.resolution, run)
-            self._clear(prefix)
+            if self.silver.attrs(self.model, self.resolution, run) is not None:
+                # nur bei vorhandenem Lauf (andere Version, --force): das List kostet unter Last
+                # mehrere Sekunden, neue Läufe haben nichts zu löschen
+                self._clear(prefix)
             unpack(data, self.store, prefix)
         except (RegistryError, ValueError, OSError) as exc:
             log.warning("import_failed", run=name, error=str(exc))
