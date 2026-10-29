@@ -28,6 +28,9 @@ Beispiele::
     wx-exchange gefs plan 2020-09-24T00
     wx-exchange gefs publish 2026-10 0
 
+    # VM: aktueller Monat live (Bronze 6 Monate, Silber nach GHCR), Historie importieren, Gold
+    wx-exchange gefs vm --history-start 2021-03-22T12 --watch 1800
+
     # Regionen und Gewichte neu bauen (MaStR-CSV von der VM, Natural Earth wird geladen)
     wx-exchange gefs regions --mastr de_capacity_0p5.csv --version v2 \
         --out config/gefs/regions_v2.json.gz
@@ -58,7 +61,7 @@ from predictiondb_core.db import create_db_engine
 from predictiondb_core.log import configure_logging, get_logger
 from predictiondb_core.s3 import s3_store
 from predictiondb_core.settings import get_settings
-from wx_exchange import gefs, gefs_regions, idx
+from wx_exchange import gefs, gefs_regions, gefs_vm, idx
 from wx_exchange.importer import Importer
 from wx_exchange.oci import Registry, RegistryError
 from wx_exchange.publish import Publisher, plan
@@ -453,6 +456,17 @@ def _gefs_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> No
         "--concurrency", type=int, help="Anfragen ans Archiv (Standard: Konfiguration)"
     )
 
+    vm = cmd.add_parser(
+        "vm", help="VM: aktueller Monat live mit Bronze, Historie aus GHCR, Gold, Aufräumen"
+    )
+    vm.add_argument("--history-start", type=parse_run, help="Standard: first_run der Konfiguration")
+    vm.add_argument("--watch", type=int, default=0, metavar="SEK", help="wiederholen (0 = einmal)")
+    vm.add_argument("--bronze-days", type=int, default=183, help="Bronze so lange behalten")
+    vm.add_argument("--catch-up-days", type=int, default=3, help="Tage des Vormonats mitnehmen")
+    vm.add_argument("--parallel-runs", type=int, default=1, metavar="N")
+    vm.add_argument("--concurrency", type=int, help="Anfragen ans Archiv (Standard: Konfiguration)")
+    vm.add_argument("--gold-limit", type=int, help="höchstens so viele Gold-Läufe je Durchgang")
+
     rg = cmd.add_parser("regions", help="Regionen und Gitter-Gewichte bauen")
     rg.add_argument("--mastr", type=Path, required=True, help="CSV der MaStR-Abfrage")
     rg.add_argument("--natural-earth", type=Path, default=Path(".natural-earth"))
@@ -469,9 +483,15 @@ def _gefs_main(args: argparse.Namespace) -> int:
         return 0
     regions = gefs.Regions.load(config.regions)
     with httpx.Client(timeout=httpx.Timeout(120.0, connect=15.0)) as client:
+        # eigene Variable: WX_EXCHANGE_REPOSITORY zeigt auf der VM auf das GFS-Silber
+        repository = (
+            args.repository
+            if args.repository and args.repository != os.environ.get("WX_EXCHANGE_REPOSITORY")
+            else os.environ.get("WX_EXCHANGE_GEFS_REPOSITORY") or gefs.DEFAULT_REPOSITORY
+        )
         registry = Registry(
             args.registry,
-            args.repository or gefs.DEFAULT_REPOSITORY,
+            repository,
             client,
             username=os.environ.get("WX_EXCHANGE_USERNAME"),
             password=os.environ.get("WX_EXCHANGE_TOKEN") or None,
@@ -491,6 +511,8 @@ def _gefs_main(args: argparse.Namespace) -> int:
             return 0
         if args.concurrency:
             config.concurrency = args.concurrency
+        if args.cmd == "vm":
+            return asyncio.run(_gefs_vm(args, config, regions, registry))
         result = asyncio.run(_gefs_publish(args, config, regions, registry))
     out = result.as_dict()
     print(json.dumps(out, indent=1))
@@ -522,6 +544,45 @@ async def _gefs_publish(
         return await publisher.publish_month(
             args.month, args.hour, args.start, args.end, rebuild=args.rebuild
         )
+
+
+async def _gefs_vm(
+    args: argparse.Namespace,
+    config: gefs.GefsConfig,
+    regions: gefs.Regions,
+    registry: Registry,
+) -> int:
+    settings = get_settings()
+    limits = httpx.Limits(
+        max_connections=config.concurrency, max_keepalive_connections=config.concurrency
+    )
+    timeout = httpx.Timeout(60.0, connect=15.0)
+    async with httpx.AsyncClient(timeout=timeout, limits=limits) as client:
+        vm = gefs_vm.GefsVm(
+            registry,
+            config,
+            regions,
+            client,
+            bronze=gefs_vm.GefsBronze(s3_store(settings.buckets.bronze), config.bbox),
+            local=gefs_vm.GefsLocal(s3_store(settings.buckets.silver)),
+            ledger=Store(create_db_engine(settings)),
+            source_url=SOURCE_URL,
+            history_start=args.history_start or config.first_run,
+            bronze_days=args.bronze_days,
+            catch_up_days=args.catch_up_days,
+            parallel_runs=args.parallel_runs,
+        )
+        while True:
+            try:
+                result = await vm.cycle(gold_limit=args.gold_limit)
+                print(json.dumps(result.as_dict(), default=str), flush=True)
+            except (RegistryError, httpx.HTTPError) as exc:
+                if not args.watch:
+                    raise
+                log.warning("gefs_vm_cycle_failed", error=str(exc))
+            if not args.watch:
+                return 0
+            await asyncio.sleep(args.watch)
 
 
 if __name__ == "__main__":

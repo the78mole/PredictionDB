@@ -26,6 +26,7 @@ import io
 import json
 import tarfile
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -501,13 +502,44 @@ def unpack(data: bytes) -> tuple[dict[str, Any], F32]:
     return meta, values.astype(np.float32)
 
 
+class BronzeSink:
+    """Ablage der geladenen Nachrichten eines Mitglied-Schritts (VM: ``gefs_vm.GefsBronze``)."""
+
+    def put(self, run: datetime, member: str, step: int, messages: dict[str, bytes]) -> int:
+        raise NotImplementedError
+
+    def complete(self, run: datetime, stats: dict[str, Any]) -> None:
+        raise NotImplementedError
+
+
 class RunBuilder:
-    def __init__(self, config: GefsConfig, regions: Regions, client: httpx.AsyncClient) -> None:
+    def __init__(
+        self,
+        config: GefsConfig,
+        regions: Regions,
+        client: httpx.AsyncClient,
+        *,
+        bronze: BronzeSink | None = None,
+    ) -> None:
         self.config = config
         self.regions = regions
         self.client = client
+        self.bronze = bronze
         self.aggregate = Aggregator(config, regions)
         self.sem = asyncio.Semaphore(config.concurrency)
+
+    async def available(self, run: datetime) -> bool:
+        """Liegt der letzte Schritt des letzten Mitglieds schon vor (Lauf vollständig)?"""
+        member, step = self.config.members[-1], self.config.steps.list()[-1]
+        products = sorted({f.product for f in self.config.fields.values()})
+        for product in products:
+            try:
+                r = await self.client.head(self.config.url(run, member, step, product) + ".idx")
+            except httpx.TransportError:
+                return False
+            if r.status_code != 200:
+                return False
+        return True
 
     async def build(self, run: datetime) -> RunSilver:
         members, steps = self.config.members, self.config.steps.list()
@@ -522,6 +554,10 @@ class RunBuilder:
             try:
                 async with self.sem:
                     msgs = await fetch_fields(self.client, self.config, run, members[m], steps[s])
+                if self.bronze is not None and msgs:
+                    counts["bytes"] += await asyncio.to_thread(
+                        self.bronze.put, run, members[m], steps[s], msgs
+                    )
                 cutout, f = await asyncio.to_thread(decode, msgs, self.config.bbox)
                 if cutout is not None:
                     values[m, s] = await asyncio.to_thread(self.aggregate, cutout, f)
@@ -539,6 +575,9 @@ class RunBuilder:
                 counts["failed"] += 1
 
         await asyncio.gather(*(one(m, s) for m in range(len(members)) for s in range(len(steps))))
+        if self.bronze is not None and counts["ok"]:
+            stats = {"files": counts["ok"], "missing": counts["missing"], "bytes": counts["bytes"]}
+            await asyncio.to_thread(self.bronze.complete, run, stats)
         return RunSilver(
             run,
             values,
@@ -711,24 +750,31 @@ class GefsPublisher:
         source_url: str,
         parallel_runs: int = 1,
         now: datetime | None = None,
+        bronze: BronzeSink | None = None,
+        on_packed: Callable[[datetime, RunSilver, bytes, str], None] | None = None,
     ) -> None:
         self.registry = registry
         self.config = config
         self.regions = regions
-        self.builder = RunBuilder(config, regions, client)
+        self.builder = RunBuilder(config, regions, client, bronze=bronze)
         self.source_url = source_url
         self.parallel_runs = max(1, parallel_runs)
         self.fp = fingerprint(config, regions)
         self.now = now
+        #: nach dem Packen eines vollständigen Laufs (VM: lokales Silber, Bestand melden)
+        self.on_packed = on_packed
+
+    def _young(self, run: datetime) -> bool:
+        now = self.now or datetime.now(UTC)
+        return now - run < timedelta(hours=self.config.pending_hours)
 
     def _status(self, run: datetime, silver: RunSilver) -> RunStatus:
         bad = silver.missing + silver.failed
         if bad <= self.config.max_missing_share * silver.total:
             return "uploaded"
-        now = self.now or datetime.now(UTC)
         if silver.failed:
             return "failed"
-        if now - run < timedelta(hours=self.config.pending_hours):
+        if self._young(run):
             return "pending"
         return "missing"
 
@@ -760,12 +806,18 @@ class GefsPublisher:
             key = f"{run:%Y%m%d%H}"
             async with sem:
                 try:
+                    # junger Lauf noch nicht vollständig: keine 2000 Anfragen ins Leere
+                    if self._young(run) and not await self.builder.available(run):
+                        result.runs[key] = "pending"
+                        return
                     silver = await self.builder.build(run)
                     status = self._status(run, silver)
                     data, content = b"", ""
                     if status == "uploaded":
                         meta = silver.meta(self.fp, self.regions.version)
                         data, content = await asyncio.to_thread(pack, meta, silver.values)
+                        if self.on_packed is not None:
+                            await asyncio.to_thread(self.on_packed, run, silver, data, content)
                 except Exception as exc:
                     log.exception("gefs_run_failed", run=key, error=str(exc))
                     status, data, content = "failed", b"", ""
