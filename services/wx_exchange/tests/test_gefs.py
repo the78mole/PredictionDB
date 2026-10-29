@@ -1,6 +1,7 @@
 import asyncio
 import gzip
 import json
+import threading
 from collections import Counter
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -562,3 +563,35 @@ async def test_vm_import_history_in_portions(tmp_path: Path) -> None:
     assert (second["imported"], second["present"]) == (1, 1)
     assert (third["imported"], third["present"], third["more"]) == (0, 2, 0)
     assert set(vm.local.runs()) == set(jan)
+
+
+async def test_vm_cycle_import_does_not_wait_for_gold(tmp_path: Path) -> None:
+    """Gold kann je Runde eine Stunde dauern; der Import holt derweil weiter Portionen."""
+    cfg = make_config(tmp_path)
+    archive = FakeArchive(cfg, [])
+    now = datetime(2099, 2, 2, 12, tzinfo=UTC)
+    async with client(archive) as c:
+        vm = vm_for(tmp_path, archive, FakeRegistry(), c, now)
+        imports = 0
+        three = threading.Event()
+
+        def imp(limit: int | None = None) -> Counter[str]:
+            nonlocal imports
+            imports += 1
+            if imports == 3:
+                three.set()
+            return Counter(imported=1, more=int(imports < 3))
+
+        def slow_gold(limit: int | None = None, before: datetime | None = None) -> Counter[str]:
+            # erste Gold-Runde endet erst, wenn der Import dreimal gelaufen ist
+            assert three.wait(timeout=5)
+            return Counter(written=1)
+
+        async def live() -> list[dict[str, Any]]:
+            return []
+
+        vm.import_history = imp  # type: ignore[method-assign]
+        vm.process_gold = slow_gold  # type: ignore[method-assign]
+        vm.live = live  # type: ignore[method-assign]
+        result = await asyncio.wait_for(vm.cycle(gold_every=0.01), timeout=10)
+    assert imports == 3 and result.imported["imported"] == 3 and "more" not in result.imported
