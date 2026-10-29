@@ -206,6 +206,58 @@ Einordnung:
 Mischbetrieb wäre naheliegend: N-HiTS und TiDE wöchentlich auf der T4, LightGBM auf der CPU,
 TFT-Backtests und große Suchen gelegentlich auf einer gemieteten 4090.
 
+## Neuere CPU oder AMD-APU mit gemeinsamem Speicher
+
+Die heutige VM-CPU ist der schwächste Punkt: Sandy Bridge (2012) hat nur AVX ohne FMA, also
+8 FP32-Operationen je Takt und Kern. Neuere Kerne schaffen deutlich mehr:
+
+| CPU-Generation | Befehlssatz | FP32 je Takt und Kern | LightGBM je Kern ggü. VM | PyTorch (Netze) je Kern ggü. VM |
+|---|---|---|---|---|
+| Sandy Bridge (VM heute) | AVX | 8 | 1× | 1× |
+| Haswell bis Skylake, Zen 2/3 | AVX2 + FMA | 32 | ca. 2× | ca. 2,5–3× |
+| Zen 4/5, Ice Lake und neuer | AVX-512 | 32–64 | ca. 2,5–3× | ca. 4–6× |
+| Sapphire Rapids und neuer | AVX-512 + AMX (BF16) | Matrixeinheit | ca. 2,5–3× | bis 10× bei BF16 |
+
+LightGBM gewinnt weniger als die Netze, weil das Bauen der Histogramme mehr am Speicher und an
+Ganzzahl-Operationen hängt als an Fließkomma-Vektoren. Der Zugewinn kommt dort vor allem aus
+Takt, IPC und Kernzahl.
+
+Geschätzte Laufzeiten (Fit / Backtest), jeweils als ganze Maschine ohne Parallellast:
+
+| Modell | VM heute (8 Kerne, AVX) | 8 Kerne AVX2 | 16 Kerne Zen 4/5 (AVX-512) | APU Strix Halo: CPU / iGPU | T4 | RTX 4090 |
+|---|---|---|---|---|---|---|
+| LightGBM | 45 min / 3,8 h | 20–25 min / 1,7–2 h | 8–12 min / 35–50 min | 8–12 min / 35–50 min (CPU) | – | 5–8 min / 30–45 min |
+| N-HiTS | 1–3 h / 6–15 h | 25–60 min / 2,5–5 h | 10–25 min / 1–2,5 h | 10–25 min / 40–90 min | 45–75 min / 4–6 h | 10–15 min / ~1 h |
+| TiDE | 2–4 h / 10–20 h | 45–90 min / 4–7 h | 20–40 min / 2–3,5 h | 20–40 min / 1,5–3 h | 1–1,5 h / 5–8 h | 15–20 min / 1–1,5 h |
+| TFT | 15–40 h / Tage | 6–15 h / 1–3 Tage | 2–6 h / 12–30 h | 2–6 h / 10–24 h | 5–15 h / 1,5–3 Tage | 1–3 h / 6–12 h |
+
+**Eine moderne 16-Kern-CPU mit AVX-512** holt bei den kleinen Netzen (N-HiTS, TiDE) etwa die
+T4 ein und ist bei LightGBM fast so schnell wie die gemietete Maschine mit 32 Kernen. Für das
+wöchentliche Neutraining von LightGBM, N-HiTS und TiDE reicht sie ohne GPU.
+
+**AMD-APU mit gemeinsamem Speicher**, Beispiel Ryzen AI Max+ 395 (Strix Halo): 16 Zen-5-Kerne
+mit AVX-512, integrierte Radeon 8060S (40 CUs, RDNA 3.5) und bis zu 128 GB LPDDR5X mit
+256 GB/s, die CPU und GPU gemeinsam nutzen.
+
+- Der CPU-Teil ist die oben genannte 16-Kern-Zen-Klasse. Für LightGBM ist das die beste der
+  lokalen Optionen.
+- Die iGPU liegt beim Training kleiner Netze etwa auf T4-Niveau bis doppelt so schnell; ihre
+  Speicherbandbreite (256 GB/s) ist sogar etwas geringer als die der T4 (320 GB/s). Gegenüber
+  der RTX 4090 bleibt sie 3–5× langsamer.
+- Der gemeinsame Speicher hilft hier wenig: Der Merkmalsrahmen hat nur 2–3 GB und passt in
+  jede GPU. Er wäre erst bei viel größeren Daten wichtig, etwa mit GEFS-Mitgliedern statt
+  Ensemble-Mittel oder ganzen Wetterfeldern statt Cluster-Werten.
+- Risiko ist die Software: PyTorch läuft auf der iGPU über ROCm, und die Unterstützung für
+  diese Chips ist jünger und weniger erprobt als CUDA. Kleinere APUs (z. B. Ryzen 8700G mit
+  Radeon 780M, 12 CUs) sind als GPU zu schwach; dort zählt nur der CPU-Teil.
+- Kosten: als Mini-PC mit 128 GB ca. 2.000–2.500 €, unter Last ca. 120–150 W. Gegenüber
+  wenigen Dollar Cloud-Kosten im Monat lohnt sich das nur, wenn die Maschine ohnehin als neuer
+  Server gebraucht wird; dann ersetzt sie VM-CPU und T4 zugleich.
+
+Fazit: Der größte lokale Hebel ist nicht die GPU, sondern eine neue CPU. Mit 16 modernen Kernen
+laufen LightGBM, N-HiTS und TiDE lokal in vertretbarer Zeit; TFT-Backtests und große Suchen
+bleiben ein Fall für die gemietete 4090.
+
 ## Freie Daten auf fremden Hosts
 
 Nach dem Leitprinzip werden nur frei lizenzierte Reihen eingebunden, und die dürfen auch auf
