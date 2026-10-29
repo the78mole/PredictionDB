@@ -665,6 +665,47 @@ flowchart LR
   Jedes Manifest trägt den Quellenvermerk in `org.predictiondb.attribution`, zusätzlich liegt ein `ATTRIBUTION.md` als eigener Layer im Index-Artefakt. Weitere Modelle bekommen eigene Artefakt-Repositories (`ecmwf-ifs-0p25-silver` usw.), damit Lizenzen nicht gemischt werden.
 - **Lizenz der Daten selbst:** Die BSL 1.1 gilt für den Code. Die veröffentlichten Daten stehen unter **CC BY 4.0** (`org.opencontainers.image.licenses: CC-BY-4.0`), Namensnennung: „PredictionDB (the78mole)“ plus die Quellenvermerke der Tabelle oben (12.9).
 
+### 5.6 GEFS-Ensemble: Silber im Runner, je Region und Mitglied
+
+Für mehrtägige Prognosen (bis D+14) und deren Unsicherheit kommt das NOAA-Ensemble GEFS v12
+(0,5°, Kontrolle `gec00` plus `gep01` bis `gep30`) dazu. Anders als beim GFS hält die VM davon
+**keine Bronze**: Das Silber entsteht ausschließlich in GitHub Actions (`gefs-history.yml`), die
+VM importiert es (Stufe 2). Ablauf je Lauf (nur 00Z, 6-stündlich bis 384 h, 31 × 65
+Mitglied-Schritte):
+
+1. Aus der `.idx` der Dateien `pgrb2a`/`pgrb2b` nur die Felder aus
+   `config/sources/gefs_0p5.yaml` per Byte-Bereich laden (TMP 2 m, UGRD/VGRD 10 m und 100 m,
+   APCP, TCDC, DSWRF; aneinander grenzende Nachrichten in einer Anfrage).
+2. Auf Europa (41–63° N, 5° W–25° O) zuschneiden und je Region verdichten. Nichtlineare Größen
+   (Wind in Nabenhöhe mit Hellmann-Exponent, Leistungskurve, PV-Modell) werden wie in
+   `wx_process.features` erst je Zelle gerechnet, dann gewichtet.
+3. Je Lauf ein reproduzierbarer Tar mit `meta.json` und `values.npy` (`float32`, Mitglied ×
+   Schritt × Region × Größe; Größen `t2m`, `wind_speed_100m`, `wind_cf`, `ghi`, `pv_cf`,
+   `cloud_cover`, `precip`). Ein Lauf hat ≈ 0,9 MB, die Historie ab 2021-03 also ≈ 2 GB.
+4. Nach `ghcr.io/the78mole/predictiondb-data/gefs-0p5-silver`, ein Manifest je Monat (Tag
+   `JJJJ-MM-00z`) mit einem Layer je Lauf wie in 5.5.3, Layer-Typ
+   `application/vnd.predictiondb.gefs-silver.v1.tar+gzip`.
+
+**Regionen** (`config/gefs/regions_v1.json.gz`, im Repository, weil der Runner sie braucht):
+DE nach MaStR-Leistung je 0,5°-Zelle für Wind an Land, Wind auf See und PV (Abfrage
+`config/gefs/mastr_cells.sql`, leistungsgewichtete Nabenhöhe), dazu flächengewichtet DE und die
+Nachbar- und Kopplungszonen AT, BE, CH, CZ, DK1, DK2, FR, HU, IT-Nord, NL, NO2, PL, SE3, SE4, SI
+aus Natural Earth (gemeinfrei). Stufe 4 ersetzt die Flächengewichte der Nachbarn durch Anlagen
+aus deren freien Registern (7.5); eine neue Datei ändert den Fingerabdruck und baut die
+Historie neu.
+
+**Stand eines Laufs:** Fehlen mehr als 10 % der Mitglied-Schritte, gilt ein Lauf jünger als
+30 h als ausstehend (NOAA veröffentlicht noch) und danach als fehlend (Annotation `missing` im
+Manifest). Fehlende Felder bleiben NaN, ebenso Mittel und Summen in f000.
+
+**Laufzeit:** Ein ganzer Lauf braucht im Test ≈ 2,6 min (Laden und Dekodieren, ~1,2 Kerne). Ein
+Monatsjob mit zwei Läufen gleichzeitig dauert damit ≈ 40 min, die Historie mit acht Jobs
+parallel einige Stunden. Täglich kommt der neue 00Z-Lauf per Zeitplan dazu.
+
+**Weiter:** Import und Gold auf der VM (Mittel, Streuung, P10/P90 je Region in
+`feat.nwp_value`), dann eine Merkmalsgruppe `ensemble` in `ml_train` mit Horizont D+14 und
+Backtest je Vorlauftag. Die GEFS-Reforecasts (2000–2019) sind zurückgestellt.
+
 ---
 
 ## 6. Software-Struktur (Python, uv)

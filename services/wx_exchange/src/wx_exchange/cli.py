@@ -24,6 +24,13 @@ Beispiele::
     # VM: selbst aus Bronze gebautes Silber mit dem aus GHCR vergleichen
     wx-exchange gfs verify 2026-01-01T00 --runs 0,12
 
+    # GEFS-Ensemble (Workflow gefs-history.yml): Plan, je Job ein Monat, nur Silber nach GHCR
+    wx-exchange gefs plan 2020-09-24T00
+    wx-exchange gefs publish 2026-10 0
+
+    # Regionen und Gewichte neu bauen (MaStR-CSV von der VM, Natural Earth wird geladen)
+    wx-exchange gefs regions --mastr de_capacity_0p5.csv --out config/gefs/regions_v1.json.gz
+
 Registry und Repository kommen aus ``WX_EXCHANGE_REGISTRY`` (``ghcr.io``) und
 ``WX_EXCHANGE_REPOSITORY`` (Standard Silber, bei ``idx-*`` das ``.idx``-Artefakt), die
 Anmeldung zum Schreiben aus ``WX_EXCHANGE_USERNAME`` und ``WX_EXCHANGE_TOKEN`` (in Actions
@@ -50,7 +57,7 @@ from predictiondb_core.db import create_db_engine
 from predictiondb_core.log import configure_logging, get_logger
 from predictiondb_core.s3 import s3_store
 from predictiondb_core.settings import get_settings
-from wx_exchange import idx
+from wx_exchange import gefs, gefs_regions, idx
 from wx_exchange.importer import Importer
 from wx_exchange.oci import Registry, RegistryError
 from wx_exchange.publish import Publisher, plan
@@ -65,6 +72,7 @@ from wx_process.store import Store
 log = get_logger(__name__)
 
 DEFAULT_REPOSITORY = "the78mole/predictiondb-data/gfs-0p25-silver"
+GEFS_CONFIG = Path("config/sources/gefs_0p5.yaml")
 SOURCE_URL = "https://github.com/the78mole/predictiondb"
 
 
@@ -74,6 +82,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--registry", default=os.environ.get("WX_EXCHANGE_REGISTRY", "ghcr.io"))
     p.add_argument("--repository", default=os.environ.get("WX_EXCHANGE_REPOSITORY"))
     sub = p.add_subparsers(dest="model", required=True)
+    _gefs_parser(sub)
     gfs = sub.add_parser("gfs", help="NOAA GFS 0,25°")
     gfs.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     gfs.add_argument("--process-config", type=Path, help="Standard: PDB_WX_PROCESS_CONFIG")
@@ -195,6 +204,8 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     settings = get_settings()
     configure_logging("DEBUG" if args.verbose else settings.log_level, settings.log_json)
+    if args.model == "gefs":
+        return _gefs_main(args)
     config = GfsConfig.from_yaml(args.config)
     timeout = httpx.Timeout(120.0, connect=15.0)
 
@@ -414,6 +425,102 @@ async def _publish(
         print(f"{len(out['failed'])} Läufe fehlgeschlagen", file=sys.stderr)
         return 1
     return 0
+
+
+# --- GEFS ------------------------------------------------------------------------------------
+
+
+def _gefs_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    gp = sub.add_parser("gefs", help="NOAA GEFS 0,5°, Ensemble je Region verdichtet")
+    gp.add_argument("--config", type=Path, default=GEFS_CONFIG)
+    cmd = gp.add_subparsers(dest="cmd", required=True)
+
+    pl = cmd.add_parser("plan", help="Matrix der Monate mit fehlenden Läufen (JSON)")
+    pl.add_argument("start", type=parse_run)
+    pl.add_argument("end", type=parse_run, nargs="?", help="Standard: jetzt")
+    pl.add_argument("--max-jobs", type=int, default=256)
+    pl.add_argument("--all", action="store_true", help="alle Monate, auch vollständige (Neubau)")
+
+    pub = cmd.add_parser("publish", help="einen Monat einer Laufzeit nach GHCR")
+    pub.add_argument("month", help="JJJJ-MM")
+    pub.add_argument("hour", type=int, choices=(0, 6, 12, 18))
+    pub.add_argument("--start", type=parse_run, help="frühester Lauf")
+    pub.add_argument("--end", type=parse_run, help="spätester Lauf (Standard: jetzt)")
+    pub.add_argument("--rebuild", action="store_true", help="neu bauen, nur Änderungen hochladen")
+    pub.add_argument("--parallel-runs", type=int, default=1, metavar="N")
+    pub.add_argument(
+        "--concurrency", type=int, help="Anfragen ans Archiv (Standard: Konfiguration)"
+    )
+
+    rg = cmd.add_parser("regions", help="Regionen und Gitter-Gewichte bauen")
+    rg.add_argument("--mastr", type=Path, required=True, help="CSV der MaStR-Abfrage")
+    rg.add_argument("--natural-earth", type=Path, default=Path(".natural-earth"))
+    rg.add_argument("--version", default="v1")
+    rg.add_argument("--out", type=Path, required=True)
+
+
+def _gefs_main(args: argparse.Namespace) -> int:
+    config = gefs.GefsConfig.from_yaml(args.config)
+    if args.cmd == "regions":
+        data = gefs_regions.build(args.mastr, args.natural_earth, config.bbox, version=args.version)
+        gefs_regions.write(data, args.out)
+        print(json.dumps({r["code"]: len(r["cells"]) for r in data["regions"]}, indent=1))
+        return 0
+    regions = gefs.Regions.load(config.regions)
+    with httpx.Client(timeout=httpx.Timeout(120.0, connect=15.0)) as client:
+        registry = Registry(
+            args.registry,
+            args.repository or gefs.DEFAULT_REPOSITORY,
+            client,
+            username=os.environ.get("WX_EXCHANGE_USERNAME"),
+            password=os.environ.get("WX_EXCHANGE_TOKEN") or None,
+        )
+        if args.cmd == "plan":
+            matrix = gefs.plan(
+                registry,
+                config,
+                regions,
+                args.start,
+                args.end or datetime.now(UTC),
+                max_jobs=args.max_jobs,
+                rebuild=args.all,
+            )
+            _github_output("matrix", json.dumps(matrix, separators=(",", ":")))
+            print(json.dumps({"jobs": len(matrix), "matrix": matrix}, indent=1))
+            return 0
+        if args.concurrency:
+            config.concurrency = args.concurrency
+        result = asyncio.run(_gefs_publish(args, config, regions, registry))
+    out = result.as_dict()
+    print(json.dumps(out, indent=1))
+    if out["failed"]:
+        print(f"{len(out['failed'])} Läufe fehlgeschlagen", file=sys.stderr)
+        return 1
+    return 0
+
+
+async def _gefs_publish(
+    args: argparse.Namespace,
+    config: gefs.GefsConfig,
+    regions: gefs.Regions,
+    registry: Registry,
+) -> gefs.MonthResult:
+    limits = httpx.Limits(
+        max_connections=config.concurrency, max_keepalive_connections=config.concurrency
+    )
+    timeout = httpx.Timeout(60.0, connect=15.0)
+    async with httpx.AsyncClient(timeout=timeout, limits=limits) as client:
+        publisher = gefs.GefsPublisher(
+            registry,
+            config,
+            regions,
+            client,
+            source_url=SOURCE_URL,
+            parallel_runs=args.parallel_runs,
+        )
+        return await publisher.publish_month(
+            args.month, args.hour, args.start, args.end, rebuild=args.rebuild
+        )
 
 
 if __name__ == "__main__":
