@@ -557,9 +557,11 @@ async def test_vm_import_history_in_portions(tmp_path: Path) -> None:
         await pub.publish_month("2099-01", 0, jan[0], jan[-1])
         vm = vm_for(tmp_path, archive, fake, c, now)
         first = vm.import_history(limit=1)
+        first_runs = list(vm.local.runs())
         second = vm.import_history(limit=1)
         third = vm.import_history(limit=1)
     assert (first["imported"], first["more"]) == (1, 1)
+    assert set(first_runs) == {jan[1]}  # jüngster Lauf zuerst
     assert (second["imported"], second["present"]) == (1, 1)
     assert (third["imported"], third["present"], third["more"]) == (0, 2, 0)
     assert set(vm.local.runs()) == set(jan)

@@ -429,14 +429,16 @@ class GefsVm:
         end = month_start(self.now()) - timedelta(hours=1)
         local = self.local.runs()
         existing = set(self.registry.tags())
-        for month in months_between(max(self.history_start, self.config.first_run), end):
+        # jüngste Monate zuerst: sie zählen fürs Training am meisten
+        months = months_between(max(self.history_start, self.config.first_run), end)
+        for month in reversed(months):
             for hour in self.config.hours:
                 t = tag(month, hour)
                 if t not in existing:
                     continue
                 art = GefsMonth.from_manifest(month, hour, self.registry.manifest(t))
                 imported: list[datetime] = []
-                for run, layer in sorted(art.layers.items()):
+                for run, layer in sorted(art.layers.items(), reverse=True):
                     if run < self.history_start or layer.fingerprint != self.fp:
                         counts["other_fingerprint" if run >= self.history_start else "early"] += 1
                         continue
