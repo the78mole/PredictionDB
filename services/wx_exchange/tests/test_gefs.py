@@ -476,6 +476,29 @@ def test_ensemble_stats() -> None:
     assert np.isnan(s["std"][0, 1, 0]) and np.isnan(s["mean"][2, 0, 0])
 
 
+def test_local_runs_reads_only_new_or_changed_info() -> None:
+    """runs() läuft jede Runde; die .json je Lauf nur beim ersten Mal oder nach Änderung lesen."""
+    local = gefs_vm.GefsLocal(MemoryStore())
+    a, b = datetime(2099, 1, 1, tzinfo=UTC), datetime(2099, 1, 2, tzinfo=UTC)
+    info = gefs_vm.LocalInfo(digest="d", content="c", fingerprint="f", origin="ghcr")
+    local.save(a, b"x", info)
+    local.save(b, b"y", info)
+    reads: list[datetime] = []
+    real = local.info
+
+    def counted(run: datetime) -> gefs_vm.LocalInfo | None:
+        reads.append(run)
+        return real(run)
+
+    local.info = counted  # type: ignore[method-assign]
+    assert set(local.runs()) == {a, b} and len(reads) == 2
+    assert set(local.runs()) == {a, b} and len(reads) == 2  # aus dem Merker
+    local.save(
+        b, b"z", gefs_vm.LocalInfo(digest="e", content="c", fingerprint="f", origin="bronze")
+    )
+    assert local.runs()[b].digest == "e" and reads[2:] == [b]
+
+
 def test_nan_percentiles_match_numpy() -> None:
     rng = np.random.default_rng(1)
     values = rng.random((31, 4, 3, 2)).astype(np.float32)
