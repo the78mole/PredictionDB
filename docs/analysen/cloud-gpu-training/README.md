@@ -258,7 +258,7 @@ Fazit: Der größte lokale Hebel ist nicht die GPU, sondern eine neue CPU. Mit 1
 laufen LightGBM, N-HiTS und TiDE lokal in vertretbarer Zeit; TFT-Backtests und große Suchen
 bleiben ein Fall für die gemietete 4090.
 
-## KI-Beschleuniger (NPU/TPU), z. B. Hailo
+## KI-Beschleuniger (NPU/TPU, Jetson), z. B. Hailo
 
 Karten wie Hailo-8/8L/10H oder Google Coral (Edge TPU) sind **reine Inferenz-Beschleuniger**:
 Sie rechnen ein fertig trainiertes, auf INT8 quantisiertes Netz schnell und sparsam, können
@@ -268,6 +268,20 @@ nicht: Ein fertiges N-HiTS-, TiDE- oder TFT-Modell rechnet einen Ausgabezeitpunk
 VM-CPU in Sekunden, und LightGBM-Bäume lassen sich auf solche Karten gar nicht übertragen.
 Die Quantisierung auf INT8 würde zudem die Quantile verfälschen. Dasselbe gilt für die NPU
 in neueren Ryzen-AI-Chips.
+
+**NVIDIA Jetson** (unter 1.000 €) ist anders als Hailo eine echte CUDA-GPU, PyTorch kann darauf
+trainieren. Für unsere Aufgabe ist er aber zu schwach:
+
+| Modul | Preis ca. | GPU | Speicher (gemeinsam) | Training ggü. T4 |
+|---|---|---|---|---|
+| Orin Nano Super 8 GB | 250–300 € | 1.024 CUDA-Kerne (Ampere) | 8 GB, 102 GB/s | ca. 0,2–0,3× |
+| Orin NX 16 GB | 700–900 € | 1.024 CUDA-Kerne | 16 GB, 102 GB/s | ca. 0,25–0,4× |
+| AGX Orin 32 GB (knapp über 1.000 €) | 1.000–1.300 € | 1.792 CUDA-Kerne | 32 GB, 204 GB/s | ca. 0,5–0,8× |
+
+Ein N-HiTS-Backtest dauert damit eher 10–25 h statt 4–6 h auf der T4, ein TFT-Fit 1–3 Tage.
+Die ARM-Kerne (6–12× Cortex-A78AE) sind für LightGBM nicht schneller als die heutige VM. Der
+Jetson ist für Inferenz am Rand gebaut (Roboter, Kameras), nicht für Training; eine gebrauchte
+T4 für 200–400 € oder eine neue CPU bringt mehr.
 
 Trainieren können nur Rechenzentrums-TPUs (Google Cloud). Bei Netzen dieser Größe bringen sie
 gegenüber einer RTX 4090 keinen Vorteil, kosten mehr und verlangen PyTorch/XLA oder JAX statt
