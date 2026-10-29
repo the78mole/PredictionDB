@@ -476,6 +476,55 @@ def test_ensemble_stats() -> None:
     assert np.isnan(s["std"][0, 1, 0]) and np.isnan(s["mean"][2, 0, 0])
 
 
+def test_nan_percentiles_match_numpy() -> None:
+    rng = np.random.default_rng(1)
+    values = rng.random((31, 4, 3, 2)).astype(np.float32)
+    values[rng.random(values.shape) < 0.2] = np.nan
+    values[:, 0, 0, 0] = np.nan  # kein gültiges Mitglied
+    values[:30, 1, 0, 0] = np.nan  # nur eines
+    got = gefs_vm._nan_percentiles(values, {"p10": 10, "p90": 90})
+    with np.errstate(all="ignore"), pytest.warns(RuntimeWarning):
+        ref = {k: np.nanpercentile(values, q, axis=0) for k, q in (("p10", 10), ("p90", 90))}
+    for k in ref:
+        np.testing.assert_allclose(got[k], ref[k], rtol=1e-6, atol=1e-7, equal_nan=True)
+
+
+async def test_vm_cycle_gold_without_pause_while_backlog(tmp_path: Path) -> None:
+    """Liegt mehr als eine Runde an, folgt die nächste sofort statt nach ``gold_every``."""
+    cfg = make_config(tmp_path)
+    archive = FakeArchive(cfg, [])
+    now = datetime(2099, 2, 2, 12, tzinfo=UTC)
+    async with client(archive) as c:
+        vm = vm_for(tmp_path, archive, FakeRegistry(), c, now)
+        rounds = 0
+        done = asyncio.Event()
+        loop = asyncio.get_running_loop()
+
+        def imp(limit: int | None = None) -> Counter[str]:
+            return Counter()
+
+        def gold(limit: int | None = None, before: datetime | None = None) -> Counter[str]:
+            nonlocal rounds
+            rounds += 1
+            if rounds == 3:
+                loop.call_soon_threadsafe(done.set)
+            return Counter(written=limit or 1, more=int(rounds < 3))
+
+        async def live() -> list[dict[str, Any]]:
+            await done.wait()
+            return []
+
+        vm.import_history = imp  # type: ignore[method-assign]
+        vm.process_gold = gold  # type: ignore[method-assign]
+        vm.live = live  # type: ignore[method-assign]
+        # gold_every eine Stunde: ohne Weiterlaufen bei Rückstand liefe der Test in den Timeout
+        result = await asyncio.wait_for(
+            vm.cycle(gold_limit=12, history_every=3600, gold_every=3600), timeout=5
+        )
+    # drei Runden am Stück, danach eine Schlussrunde nach dem Ende von Live
+    assert rounds == 4 and result.gold["written"] == 48 and "more" not in result.gold
+
+
 async def test_vm_cycle_imports_history_while_live_runs(tmp_path: Path) -> None:
     """Der erste Aufbau des laufenden Monats dauert Stunden, die Historie soll nicht warten."""
     cfg = make_config(tmp_path)
