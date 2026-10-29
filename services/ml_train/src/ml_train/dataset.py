@@ -2,8 +2,12 @@
 
 Eine Zeile ist ein Paar (``issue_time``, ``ts``): Prognose ausgegeben zu ``issue_time`` für die
 Stunde ab ``ts`` (UTC, Intervallbeginn wie in ``energy.value``). Ausgegeben wird einmal am Tag
-zur Stunde ``issue.hour_utc``; Ziele sind die ganzen Liefertage (Ortszeit) ``issue.lead_days``
-nach dem Ausgabetag, also 23, 24 oder 25 Stunden je Tag.
+zur Stunde ``issue.hour_utc``, fürs Training mit ``issue.hours_utc`` reihum zu verschiedenen
+Stunden; Ziele sind die ganzen Liefertage (Ortszeit) ``issue.lead_days`` nach dem Ausgabetag,
+also 23, 24 oder 25 Stunden je Tag, und für Vorlauftag 0 der Rest des Ausgabetags.
+
+Ist-Werte, die zum Ausgabezeitpunkt schon bekannt sind (Day-Ahead-Preis des Folgetags ab
+13 Uhr), sind kein Lernziel (``y`` leer); ``known`` trägt sie, damit die Inferenz sie übernimmt.
 
 Leakage-Schutz (ARCHITEKTUR.md 7.4):
 
@@ -161,6 +165,8 @@ class FeatureFrame:
     y: pd.DataFrame
     benchmarks: pd.DataFrame
     groups: dict[str, list[str]] = field(default_factory=dict)
+    #: Ist-Werte je Ziel, die zum Ausgabezeitpunkt schon bekannt sind, sonst leer
+    known: pd.DataFrame | None = None
 
     def columns(self, groups: Sequence[FeatureGroup]) -> list[str]:
         cols: list[str] = []
@@ -170,7 +176,10 @@ class FeatureFrame:
 
     def subset(self, mask: np.ndarray | pd.Series) -> FeatureFrame:
         m = np.asarray(mask, dtype=bool)
-        return FeatureFrame(self.X[m], self.meta[m], self.y[m], self.benchmarks[m], self.groups)
+        known = None if self.known is None else self.known[m]
+        return FeatureFrame(
+            self.X[m], self.meta[m], self.y[m], self.benchmarks[m], self.groups, known
+        )
 
     def __len__(self) -> int:
         return len(self.X)
@@ -216,6 +225,8 @@ class FeatureBuilder:
             t0_ns = np.datetime64(t0.tz_convert("UTC").tz_localize(None), "ns")
             for lead in self.cfg.issue.lead_days:
                 hrs = self.hours(issue_local + timedelta(days=lead))
+                if lead == 0:
+                    hrs = hrs[hrs >= t0]
                 it.append(np.full(len(hrs), t0_ns))
                 ts.append(hrs.tz_convert("UTC").tz_localize(None).to_numpy("datetime64[ns]"))
                 ld.append(np.full(len(hrs), lead, dtype=np.int16))
@@ -234,7 +245,9 @@ class FeatureBuilder:
     # --- Merkmale ----------------------------------------------------------------------------
 
     def issues(self, issue_days: Sequence[date]) -> list[pd.Timestamp]:
-        return [issue_time(d, self.cfg.issue.hour_utc) for d in issue_days]
+        """Ein Ausgabezeitpunkt je Tag; mit mehreren ``train_hours`` reihum nach Datum."""
+        hours = self.cfg.issue.train_hours
+        return [issue_time(d, hours[d.toordinal() % len(hours)]) for d in issue_days]
 
     def build(self, issue_days: Sequence[date], *, need_weather: bool = False) -> FeatureFrame:
         """Merkmale für die täglichen Ausgabezeitpunkte der ``issue_days``."""
@@ -276,12 +289,26 @@ class FeatureBuilder:
 
         X = pd.concat(parts, axis=1)
         y = pd.DataFrame({c: self._lookup(c, meta["ts"]) for c in self.cfg.targets}, index=X.index)
+        known = pd.DataFrame(index=X.index)
+        for c in self.cfg.targets:
+            kn = self._known_mask(c, meta)
+            known[c] = np.where(kn, y[c].to_numpy(), np.nan)
+            y.loc[kn, c] = np.nan
         bench_codes = sorted({b for t in self.cfg.stage1 + self.cfg.stage2 for b in t.benchmarks})
         bench = pd.DataFrame({c: self._lookup(c, meta["ts"]) for c in bench_codes}, index=X.index)
-        frame = FeatureFrame(X, meta, y, bench, groups)
+        frame = FeatureFrame(X, meta, y, bench, groups, known)
         if need_weather and groups["weather"]:
             frame = frame.subset(X["wx_lead_h"].notna().to_numpy())
         return frame
+
+    def _known_mask(self, code: str, meta: pd.DataFrame) -> np.ndarray:
+        """Zielstunden, deren Ist-Wert zum Ausgabezeitpunkt schon veröffentlicht ist."""
+        issues = pd.DatetimeIndex(meta["issue_time"])
+        uniq = issues.unique()
+        until = pd.Series([self._known_until(code, i) for i in uniq], index=uniq)
+        ts = pd.DatetimeIndex(meta["ts"]).tz_convert("UTC").tz_localize(None).to_numpy()
+        lim = pd.DatetimeIndex(until.reindex(issues)).tz_convert("UTC").tz_localize(None)
+        return np.asarray(ts < lim.to_numpy(), dtype=bool)
 
     def _lookup(self, code: str, ts: pd.Series | pd.DatetimeIndex) -> np.ndarray:
         if code not in self.energy.columns:

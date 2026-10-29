@@ -220,6 +220,7 @@ def cmd_backtest(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: Job
         cfg.backtest.train_issue_stride = a.stride
     if a.issue_hour is not None:
         cfg.issue.hour_utc = a.issue_hour
+        cfg.issue.hours_utc = []
     job.step("Snapshot laden")
     snap = load_snapshot(a.snapshot)
     fb = FeatureBuilder(snap, cfg)

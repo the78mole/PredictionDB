@@ -153,12 +153,13 @@ def predict_model(
     Fehlt eine Merkmalsspalte ganz (Reihe zum Ausgabezeitpunkt nicht abrufbar), bleibt sie leer;
     LightGBM behandelt das wie im Training als fehlenden Wert.
     """
-    f = frame
+    # nur die Vorlauftage, die die Version gelernt hat (ältere Versionen ohne Resttag D+0)
+    f = frame.subset(frame.meta["lead_day"].isin(model.lead_days).to_numpy())
     if model.variant.requires_weather:
-        if "wx_lead_h" not in frame.X.columns:
+        if "wx_lead_h" not in f.X.columns:
             log.warning("predict.no_weather", version=version, issue=str(issue))
             return pd.DataFrame()
-        f = frame.subset(frame.X["wx_lead_h"].notna().to_numpy())
+        f = f.subset(f.X["wx_lead_h"].notna().to_numpy())
         if len(f) == 0:
             log.warning("predict.no_weather", version=version, issue=str(issue))
             return pd.DataFrame()
@@ -166,7 +167,12 @@ def predict_model(
     if missing:
         log.warning("predict.missing_features", version=version, columns=missing)
         f = FeatureFrame(
-            f.X.reindex(columns=[*f.X.columns, *missing]), f.meta, f.y, f.benchmarks, f.groups
+            f.X.reindex(columns=[*f.X.columns, *missing]),
+            f.meta,
+            f.y,
+            f.benchmarks,
+            f.groups,
+            f.known,
         )
     rows = []
     for target, q in model.predict(f).items():

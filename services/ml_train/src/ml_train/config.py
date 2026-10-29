@@ -25,7 +25,12 @@ class IssueConfig(BaseModel):
 
     #: Ausgabezeitpunkt je Tag (UTC); 08 UTC liegt vor dem Gebotsschluss (12 Uhr Ortszeit)
     hour_utc: int = Field(default=8, ge=0, le=23)
-    #: Liefertage nach dem Ausgabetag (Ortszeit Europe/Berlin), 1 = Folgetag
+    #: Mehrere Ausgabestunden fürs Training (UTC), reihum je Ausgabetag eine: Das Modell lernt
+    #: so alle Tageszeiten, zu denen ml-predict stündlich rechnet, bei gleicher Datenmenge.
+    #: Leer = nur ``hour_utc``
+    hours_utc: list[int] = Field(default_factory=list)
+    #: Liefertage nach dem Ausgabetag (Ortszeit Europe/Berlin), 1 = Folgetag, 0 = Rest des
+    #: Ausgabetags ab der Ausgabestunde
     lead_days: list[int] = Field(default_factory=lambda: [1, 2, 3, 4, 5, 6, 7])
     #: Ist-Werte (Last, Erzeugung) gelten ab Intervallende plus diesem Verzug als bekannt
     actual_delay_h: float = Field(default=2.0, ge=0)
@@ -33,6 +38,18 @@ class IssueConfig(BaseModel):
     price_known_local_hour: int = Field(default=13, ge=0, le=23)
     #: Ein Wetterlauf ist ab ``run_time`` plus diesem Verzug vollständig verarbeitet
     nwp_delay_h: float = Field(default=6.0, ge=0)
+
+    @property
+    def train_hours(self) -> list[int]:
+        return self.hours_utc or [self.hour_utc]
+
+    @model_validator(mode="after")
+    def _hours(self) -> IssueConfig:
+        if any(not 0 <= h <= 23 for h in self.hours_utc):
+            raise ValueError("issue.hours_utc: Stunden 0 bis 23")
+        if any(d < 0 for d in self.lead_days):
+            raise ValueError("issue.lead_days: Liefertage ab 0")
+        return self
 
 
 class StageTarget(BaseModel):
@@ -145,6 +162,21 @@ class BacktestConfig(BaseModel):
     train_issue_stride: int = Field(default=2, ge=1)
 
 
+class CalibrationConfig(BaseModel):
+    """Nachkalibrierung der Quantile je Ziel und Vorlauftag (konformal, Romano et al. 2019).
+
+    Ein zweites Modell wird ohne die letzten ``months`` Monate trainiert und sagt diese voraus.
+    Aus den Abweichungen ergibt sich je Ziel, Vorlauftag und Quantil eine Verschiebung im
+    Lernraum (nach Kapazitäts- und Niveau-Normierung), sodass z. B. P10 dort wirklich 10 % der
+    Ist-Werte unterschreiten. Der Median bleibt unverändert. Kostet eine zweite Anpassung.
+    """
+
+    #: Länge des Kalibrierzeitraums am Ende der Trainingsdaten; 0 = aus
+    months: int = Field(default=0, ge=0, le=24)
+    #: Mindestzahl Zeilen je Ziel und Vorlauftag, sonst keine Verschiebung
+    min_rows: int = Field(default=200, ge=10)
+
+
 class PromotionRule(BaseModel):
     """Champion/Challenger (ARCHITEKTUR.md 7.7)."""
 
@@ -167,6 +199,7 @@ class ModelConfig(BaseModel):
     lgbm: LgbmParams = Field(default_factory=LgbmParams)
     backtest: BacktestConfig
     promotion: PromotionRule = Field(default_factory=PromotionRule)
+    calibration: CalibrationConfig = Field(default_factory=CalibrationConfig)
     #: Reihen, die als Lags in die Merkmale gehen (zusätzlich zu den Zielgrößen)
     lag_series: list[str] = Field(default_factory=list)
     #: Reihen, deren Lags ``day`` und ``week`` dieselbe Uhrzeit in Ortszeit nehmen (Verhalten

@@ -225,3 +225,11 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
             for other in (pid + 4, pid + 5):
                 assert _sql(panels[other], 1) == _sql(panels[pid + 1], 1)
             c.execute(text(_sql(panels[pid], 0))).all()
+        # Fehler je Vorlauftag im Betrieb (Preis, Last) mit Vorwoche als Vergleich
+        for pid in (63, 64):
+            sql = _sql(panels[pid]).replace("${challenger}", versions[1])
+            got = c.execute(text(sql)).mappings().all()
+            assert all({"Vorlauf", "Verfahren", "MAE"} <= set(r) for r in got)
+            if pid == 64:
+                d3 = {r["Verfahren"].split()[0] for r in got if r["Vorlauf"] == "D+3"}
+                assert {"Champion", "Challenger"} <= d3

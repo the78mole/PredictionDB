@@ -8,7 +8,10 @@ quantiles: [0.1, 0.5, 0.9]
 
 issue:
   hour_utc: 8                  # vor Gebotsschluss (12 Uhr Ortszeit = 10/11 UTC)
-  lead_days: [1, 2, 3, 4, 5, 6, 7]
+  # Training reihum zu vier Tageszeiten: ml-predict rechnet stündlich, gelernt war bisher nur
+  # 08 UTC (nach 13 Uhr ist der Preis des Folgetags bekannt und wird übernommen, nicht gelernt)
+  hours_utc: [2, 8, 14, 20]
+  lead_days: [0, 1, 2, 3, 4, 5, 6, 7]   # 0 = Rest des Ausgabetags
   actual_delay_h: 2            # Ist-Werte ab Intervallende + 2 h bekannt
   price_known_local_hour: 13   # Auktionsergebnis D+1 ab 13 Uhr am Vortag
   nwp_delay_h: 6               # GFS-Lauf vollständig verarbeitet ca. 5,5 h nach Laufzeit
@@ -169,6 +172,11 @@ lgbm:
   subsample_freq: 1
   colsample_bytree: 0.8
   reg_lambda: 1.0
+
+# Quantile je Ziel und Vorlauftag nachkalibrieren: P10–P90 enthielt im Backtest nur 55–70 %
+# statt 80 % der Ist-Werte (docs/analysen/prognose-de-lu-v2)
+calibration:
+  months: 12
 
 backtest:
   test_from: 2024-01-01
