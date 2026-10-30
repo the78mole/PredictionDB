@@ -213,6 +213,25 @@ services:
       garage-init: {condition: service_completed_successfully}
       migrate: {condition: service_completed_successfully}
 
+  # Gold für die Historie GFS Europa (Silber von wx-import-eu), wie wx-process-backfill, aber
+  # ohne --decompress: die Chunks von feat.nwp_value entpackt und packt wx-process-backfill.
+  wx-process-backfill-eu:
+    <<: *app
+    profiles: [history]
+    stop_grace_period: 120s
+    command:
+      - wx-process
+      - --config=config/process/gfs_0p5.yaml
+      - gfs
+      - backfill
+      - ${GFS_HISTORY_START:-${GFS_BACKFILL_START:-2021-03-22T12}}
+      - --runs=${GFS_PROCESS_RUNS:-0,12,6,18}
+      - --newest-first
+      - --watch=3600
+    depends_on:
+      garage-init: {condition: service_completed_successfully}
+      migrate: {condition: service_completed_successfully}
+
   # Historie GFS Europa als Silber aus GHCR (gfs-history.yml mit source=eu, Paket
   # gfs-0p5-silver), wie wx-import.
   wx-import-eu:

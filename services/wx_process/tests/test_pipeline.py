@@ -1,4 +1,7 @@
+import gzip
+import json
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -44,6 +47,9 @@ class FakeStore:
 
     def latest_clustering(self, grid: str) -> str | None:
         return self.version
+
+    def region_ids(self, codes) -> dict[str, int]:  # type: ignore[no-untyped-def]
+        return {c: 100 + i for i, c in enumerate(codes)}
 
     def cluster_weights(self, version: str, grid: str) -> list[ClusterWeights]:
         a = np.array
@@ -152,6 +158,51 @@ def test_process_writes_features_and_skips_afterwards(setup) -> None:  # type: i
     assert (r2.status, r2.silver) == ("processed", "reused")
 
 
+def test_fixed_regions_instead_of_clustering(tmp_path: Path) -> None:
+    """GFS Europa: Gold je Region aus der Regionsdatei, auch ohne Clusterung in ``assets``."""
+    regions = {
+        "version": "vT",
+        "regions": [
+            {"code": "DE:wind_on", "technology": "wind_on", "cells": [[54.0, 9.0, 2.0]]},
+            {
+                "code": "AT:area",
+                "technology": "area",
+                "cells": [[48.0, 11.0, 1.0], [52.0, 10.0, 1.0]],
+            },
+        ],
+    }
+    path = tmp_path / "regions.json.gz"
+    path.write_bytes(gzip.compress(json.dumps(regions).encode()))
+    cfg = {
+        **CONFIG,
+        "regions": str(path),
+        "technologies": {"wind_on": {"kind": "wind"}, "area": {"kind": "area"}},
+    }
+    bronze = MemoryStore()
+    store = FakeStore(version=None)
+    pipeline = WxPipeline(
+        ProcessConfig.model_validate(cfg),
+        GfsConfig.model_validate(source_config([(0, 3, 1), (6, 6, 1)])),
+        bronze,
+        Silver(MemoryStore()),
+        store,  # type: ignore[arg-type]
+    )
+    fill_bronze(bronze, STEPS)
+    r = pipeline.process(RUN)
+    assert (r.status, r.clustering_version) == ("processed", "regions_vT")
+    assert r.coverage_min == pytest.approx(1.0)
+    by_region: dict[int, set[str]] = {}
+    names = {v: k for k, v in store.features.items()}
+    for _, f, rid, _ in store.values:
+        by_region.setdefault(rid, set()).add(names[f])
+    # gefs:DE:wind_on → 100, gefs:AT:area → 101; ohne Bestand keine Leistung
+    assert set(by_region) == {100, 101}
+    assert {"wind_cf", "t2m"} <= by_region[100] and "ghi" not in by_region[100]
+    assert {"t2m", "wind_cf", "wind_speed_hub", "ghi", "pv_cf"} <= by_region[101]
+    assert not {"wind_power", "pv_power"} & set(store.features)
+    assert pipeline.process(RUN).status == "skipped"
+
+
 def test_force_rebuilds_silver(setup) -> None:  # type: ignore[no-untyped-def]
     pipeline, bronze, _ = setup
     fill_bronze(bronze, STEPS)
@@ -244,3 +295,13 @@ def test_imported_silver_without_bronze(setup) -> None:  # type: ignore[no-untyp
     assert pipeline.process(RUN, force=True).silver == "reused"
     # ohne Silber und ohne Bronze bleibt der Lauf offen
     assert pipeline.process(RUN - timedelta(hours=6)).status == "not_ready"
+
+
+def test_repo_config_gfs_0p5_covers_all_region_technologies() -> None:
+    from wx_process.regions import RegionSet
+
+    cfg = ProcessConfig.from_yaml("config/process/gfs_0p5.yaml")
+    assert cfg.regions is not None
+    regions = RegionSet.load(cfg.regions)
+    assert regions.version == "regions_v2"
+    assert {r.technology for r in regions.regions} <= set(cfg.technologies)
