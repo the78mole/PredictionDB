@@ -7,6 +7,14 @@ x-app-env: &app-env
   PDB_GARAGE_ADMIN_URL: http://garage:3903
   PDB_GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN}
 
+# Massenschreiber (Silber/Gold, Import, GEFS): asynchroner COMMIT. Postgres wartet dann nicht bei
+# jedem COMMIT auf das WAL-fsync; ein Absturz kann die letzten Sekunden verlieren, die Läufe
+# stehen dann wieder als fällig an. Engpass auf der VM ist die Schreiblast der Platte
+# (gemessen 2026-10-30: sdb 100 % busy, Gold-Container warten auf WalSync).
+x-bulk-env: &bulk-env
+  <<: *app-env
+  PGOPTIONS: "-c synchronous_commit=off"
+
 x-app: &app
   image: ghcr.io/the78mole/predictiondb:${TAG:-latest}
   env_file: .env
@@ -39,6 +47,14 @@ services:
       - client_connection_check_interval=10s
       - -c
       - idle_in_transaction_session_timeout=30min
+      # Weniger erzwungene Checkpoints und kleineres WAL (2026-10-30: 580 von 3071 Checkpoints
+      # erzwungen bei 1 GB max_wal_size); die Platte ist der Engpass, nicht die CPU.
+      - -c
+      - max_wal_size=8GB
+      - -c
+      - checkpoint_timeout=15min
+      - -c
+      - wal_compression=zstd
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
@@ -120,6 +136,7 @@ services:
   # Rechnet alle 10 min die vollständigen Läufe der letzten 48 h, die noch fehlen.
   wx-process:
     <<: *app
+    environment: *bulk-env
     # Bronze älter als GFS_BRONZE_DAYS (Standard 92) wird gelöscht, sobald Silber vorliegt
     command: ["wx-process", "gfs", "latest", "--watch", "600", "--bronze-days", "${GFS_BRONZE_DAYS:-92}"]
     depends_on:
@@ -161,6 +178,7 @@ services:
   # hineinschreiben (ein COPY in komprimierte Chunks ist etwa dreimal langsamer).
   wx-process-backfill:
     <<: *app
+    environment: *bulk-env
     profiles: [backfill, history]
     # Zeit, um einen laufenden Feature-COPY sauber abzuschließen, bevor Docker hart beendet
     stop_grace_period: 120s
@@ -184,6 +202,7 @@ services:
   # über GHCR; gfs-backfill bleibt bei GFS_BACKFILL_START, das AWS-Archiv hat sie nicht).
   wx-import:
     <<: *app
+    environment: *bulk-env
     profiles: [history]
     command:
       - wx-exchange
@@ -210,6 +229,7 @@ services:
   # gfs_0p5; bis dahin bleibt es beim Silber (Ergebnis silver_only).
   wx-process-eu:
     <<: *app
+    environment: *bulk-env
     command: ["wx-process", "--config", "config/process/gfs_0p5.yaml", "gfs", "latest", "--watch", "600", "--bronze-days", "${GFS_BRONZE_DAYS:-92}"]
     depends_on:
       garage-init: {condition: service_completed_successfully}
@@ -219,6 +239,7 @@ services:
   # ohne --decompress: die Chunks von feat.nwp_value entpackt und packt wx-process-backfill.
   wx-process-backfill-eu:
     <<: *app
+    environment: *bulk-env
     profiles: [history]
     stop_grace_period: 120s
     command:
@@ -238,6 +259,7 @@ services:
   # gfs-0p5-silver), wie wx-import.
   wx-import-eu:
     <<: *app
+    environment: *bulk-env
     profiles: [history]
     command:
       - wx-exchange
@@ -270,7 +292,7 @@ services:
       - --gold-limit=${GEFS_GOLD_LIMIT:-12}
       - --watch=1800
     environment:
-      <<: *app-env
+      <<: *bulk-env
       WX_EXCHANGE_USERNAME: ${WX_EXCHANGE_USERNAME:-the78mole}
     depends_on:
       garage-init: {condition: service_completed_successfully}
