@@ -7,6 +7,8 @@ Beispiele::
     mastr-ingest import Gesamtdatenexport_20261001_26.1.zip   # manuell geladene Datei
     mastr-ingest cluster --new                  # neue Clusterversion auf dem jüngsten Snapshot
     mastr-ingest gemeinden vg250_schwerpunkte.csv   # Referenzpunkte je Gemeinde (ags,name,lat,lon)
+
+@relation(SWA-MAI-CLI, scope=file)
 """
 
 from __future__ import annotations
@@ -36,6 +38,7 @@ log = get_logger(__name__)
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """@relation(SWR-MAI-001, scope=function)"""
     p = argparse.ArgumentParser(
         prog="mastr-ingest",
         description="Marktstammdatenregister: Snapshot, Bestandsrekonstruktion, Gebietscluster",
@@ -99,6 +102,7 @@ def _snapshot(args: argparse.Namespace, pipeline: MastrPipeline) -> int:
 
 
 def _gemeinden(path: Path, source: str, store: Store) -> int:
+    """@relation(SWR-MAI-024, scope=function)"""
     with path.open(newline="", encoding="utf-8-sig") as f:
         sample = f.read(4096)
         f.seek(0)
@@ -125,6 +129,7 @@ def _gemeinden(path: Path, source: str, store: Store) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """@relation(SWR-MAI-001, SWR-MAI-003, scope=function)"""
     args = build_parser().parse_args(argv)
     settings = get_settings()
     configure_logging("DEBUG" if args.verbose else settings.log_level, settings.log_json)

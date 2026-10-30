@@ -1,0 +1,225 @@
+[DOCUMENT]
+TITLE: Softwarearchitektur mastr-ingest (SWA)
+PREFIX: SWA-MAI-
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @architektur
+
+[TEXT]
+STATEMENT: >>>
+Softwarearchitektur nach ISO/IEC/IEEE 12207 für das Softwareelement SYSA-SW-MAI. Jede Komponente
+entspricht einem Modul unter ``services/mastr_ingest/src/mastr_ingest`` und nennt die
+Softwareanforderungen, die sie umsetzt (``Parent``). Das Modul selbst verweist mit
+``@relation(SWA-MAI-…, scope=file)`` im Modul-Docstring zurück.
+
+Abhängigkeiten: ``predictiondb_core`` (Einstellungen, Logging, S3, DB). Abnehmer von
+``assets.grid_weight`` und ``assets.capacity_daily`` sind wx-process und ml-train.
+<<<
+
+[[SECTION]]
+TITLE: Komponenten
+
+[ELEMENT]
+UID: SWA-MAI-CLI
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Kommandozeile
+STATEMENT: >>>
+Befehle, Dauerbetrieb mit ``--watch``, Laden der Gemeinde-Referenzpunkte.
+<<<
+ORT: services/mastr_ingest/src/mastr_ingest/cli.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MAI-001
+- TYPE: Parent
+  VALUE: SWR-MAI-003
+- TYPE: Parent
+  VALUE: SWR-MAI-024
+
+[ELEMENT]
+UID: SWA-MAI-CONFIG
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Konfiguration
+STATEMENT: >>>
+Einstellungen ``PDB_MASTR_*`` und YAML-Modell mit Technologien, Gittern und Fristen.
+<<<
+ORT: services/mastr_ingest/src/mastr_ingest/config.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MAI-002
+
+[ELEMENT]
+UID: SWA-MAI-DOWNLOAD
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Export finden, laden, ablegen
+STATEMENT: >>>
+Release und Kandidaten-URLs, Link auf der Downloadseite, Download mit Fortsetzen, Bronze-Ablage mit Manifest.
+<<<
+ORT: services/mastr_ingest/src/mastr_ingest/download.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MAI-010
+- TYPE: Parent
+  VALUE: SWR-MAI-011
+- TYPE: Parent
+  VALUE: SWR-MAI-012
+
+[ELEMENT]
+UID: SWA-MAI-UNITS
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Streaming-Parser
+STATEMENT: >>>
+Tabellen im ZIP, Katalogwerte, Einheiten und Netzanschlusspunkte, Technologie und Status.
+<<<
+ORT: services/mastr_ingest/src/mastr_ingest/units.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MAI-020
+- TYPE: Parent
+  VALUE: SWR-MAI-021
+- TYPE: Parent
+  VALUE: SWR-MAI-022
+- TYPE: Parent
+  VALUE: SWR-MAI-023
+
+[ELEMENT]
+UID: SWA-MAI-CLUSTER
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Clusterung
+STATEMENT: >>>
+Leistungsgewichtetes k-Means auf Gitterzellen, Zuordnung neuer Zellen.
+<<<
+ORT: services/mastr_ingest/src/mastr_ingest/cluster.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MAI-030
+- TYPE: Parent
+  VALUE: SWR-MAI-031
+
+[ELEMENT]
+UID: SWA-MAI-CAPACITY
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Tagesbestand
+STATEMENT: >>>
+Installierte Leistung je Tag aus den Ereignissen der Einheiten.
+<<<
+ORT: services/mastr_ingest/src/mastr_ingest/capacity.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MAI-033
+
+[ELEMENT]
+UID: SWA-MAI-STORE
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Datenbankzugriff
+STATEMENT: >>>
+Schema ``assets``: Snapshots, Einheiten, Verortung, Regelzonen, Kennzahlen, Clusterungen, Gewichte, Bestand.
+<<<
+ORT: services/mastr_ingest/src/mastr_ingest/store.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MAI-003
+- TYPE: Parent
+  VALUE: SWR-MAI-020
+- TYPE: Parent
+  VALUE: SWR-MAI-023
+- TYPE: Parent
+  VALUE: SWR-MAI-024
+- TYPE: Parent
+  VALUE: SWR-MAI-025
+- TYPE: Parent
+  VALUE: SWR-MAI-026
+- TYPE: Parent
+  VALUE: SWR-MAI-031
+- TYPE: Parent
+  VALUE: SWR-MAI-032
+- TYPE: Parent
+  VALUE: SWR-MAI-033
+
+[ELEMENT]
+UID: SWA-MAI-PIPELINE
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Ablauf eines Snapshots
+STATEMENT: >>>
+Sichern, importieren, verorten, clustern, Bestand schreiben; Fälligkeit je Quartal.
+<<<
+ORT: services/mastr_ingest/src/mastr_ingest/pipeline.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MAI-003
+- TYPE: Parent
+  VALUE: SWR-MAI-025
+- TYPE: Parent
+  VALUE: SWR-MAI-026
+- TYPE: Parent
+  VALUE: SWR-MAI-031
+- TYPE: Parent
+  VALUE: SWR-MAI-033
+
+[ELEMENT]
+UID: SWA-MAI-TESTING
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Testhilfen
+STATEMENT: >>>
+Synthetischer Gesamtdatenexport im Format des MaStR. Nur für Tests.
+<<<
+ORT: services/mastr_ingest/src/mastr_ingest/testing.py
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Schnittstellen
+
+[ELEMENT]
+UID: SWA-MAI-IF-BRONZE
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: Export-Ablage
+STATEMENT: >>>
+mastr-ingest → Sicherung. Bucket ``PDB_BUCKET_ASSETS_BRONZE``, ``mastr/JJJJ-MM-TT/`` mit ZIP und ``manifest.json``.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MAI-012
+
+[ELEMENT]
+UID: SWA-MAI-IF-ASSETS
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: Schema assets
+STATEMENT: >>>
+mastr-ingest → wx-process, ml-train, Grafana. ``assets.snapshot``, ``assets.unit``, ``assets.grid_weight``, ``assets.zone_weight``, ``assets.capacity_daily``, Regionen in ``meta.region``.
+<<<
+QUELLE: ARCHITEKTUR.md 7.5
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MAI-025
+- TYPE: Parent
+  VALUE: SWR-MAI-031
+- TYPE: Parent
+  VALUE: SWR-MAI-032
+- TYPE: Parent
+  VALUE: SWR-MAI-033
+
+[ELEMENT]
+UID: SWA-MAI-IF-CONFIG
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: Quelldefinition
+STATEMENT: >>>
+Betreiber → mastr-ingest. ``config/sources/mastr.yaml``.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MAI-002
+
+[[/SECTION]]
+

@@ -3,6 +3,8 @@
 Jeder Schritt ist wiederholbar. Ein bereits gesicherter Export wird nicht erneut geladen, ein
 erneuter Import ersetzt die Einheiten des Snapshots, Gewichte und Tagesbestand der jüngsten
 Clusterung werden jedes Mal vollständig neu geschrieben.
+
+@relation(SWA-MAI-PIPELINE, scope=file)
 """
 
 from __future__ import annotations
@@ -35,6 +37,7 @@ def quarter_bounds(day: date) -> tuple[date, date]:
 
 
 def version_name(day: date, existing: set[str]) -> str:
+    """@relation(SWR-MAI-031, scope=function)"""
     base = f"v{day.year}Q{(day.month - 1) // 3 + 1}"
     if base not in existing:
         return base
@@ -100,6 +103,7 @@ class MastrPipeline:
     # --- Import ----------------------------------------------------------------------------
 
     def import_snapshot(self, manifest: ExportManifest, path: Path) -> SnapshotResult:
+        """@relation(SWR-MAI-025, SWR-MAI-026, scope=function)"""
         day = date.fromisoformat(manifest.export_date)
         sid = self.store.upsert_snapshot(
             day, manifest.version, manifest.object_key, manifest.sha256, manifest.size
@@ -135,7 +139,10 @@ class MastrPipeline:
     # --- Cluster, Gewichte, Bestand ----------------------------------------------------------
 
     def update_clusters(self, snapshot_id: int, export_date: date, *, new: bool = False) -> str:
-        """Clusterung fortschreiben bzw. neu bilden; gibt die Version zurück."""
+        """Clusterung fortschreiben bzw. neu bilden; gibt die Version zurück.
+
+        @relation(SWR-MAI-030, SWR-MAI-031, SWR-MAI-032, scope=function)
+        """
         grid = self.config.cluster_grid
         latest = self.store.latest_clustering()
         stale = (
@@ -216,6 +223,7 @@ class MastrPipeline:
         return version
 
     def write_capacity(self, version: str, snapshot_id: int, export_date: date) -> int:
+        """@relation(SWR-MAI-033, scope=function)"""
         events: dict[tuple[str, int], list[tuple[date, float]]] = defaultdict(list)
         for tech, cluster_no, day, kw in self.store.capacity_events(
             version, snapshot_id, self.config.cluster_grid.res
@@ -231,6 +239,7 @@ class MastrPipeline:
     # --- Gesamtablauf ----------------------------------------------------------------------
 
     def is_due(self, day: date) -> bool:
+        """@relation(SWR-MAI-003, scope=function)"""
         return not self.store.has_snapshot_between(*quarter_bounds(day))
 
     def run(
@@ -241,6 +250,7 @@ class MastrPipeline:
         new_clustering: bool = False,
         keep_local: bool = False,
     ) -> SnapshotResult:
+        """@relation(SWR-MAI-003, SWR-MAI-031, scope=function)"""
         if local_zip is not None:
             manifest, path = self.acquire_local(local_zip), local_zip
         else:

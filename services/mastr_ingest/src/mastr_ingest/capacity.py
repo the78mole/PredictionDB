@@ -4,6 +4,8 @@ Jede Einheit erzeugt Ereignisse ``(Tag, ±Leistung)``: plus bei Inbetriebnahme u
 minus bei endgültiger oder vorübergehender Stilllegung (wirksam ab dem Stilllegungstag). Die
 kumulierte Summe ergibt den Bestand je Tag. Ereignisse vor dem Betrachtungsbeginn zählen
 zum Anfangsbestand, solche nach dem Stichtag des Exports werden ignoriert.
+
+@relation(SWA-MAI-CAPACITY, scope=file)
 """
 
 from __future__ import annotations
@@ -18,7 +20,10 @@ from numpy.typing import NDArray
 def daily_capacity(
     events: Iterable[tuple[date, float]], start: date, end: date
 ) -> NDArray[np.float64]:
-    """Bestand für jeden Tag in ``[start, end]`` (Länge ``(end - start).days + 1``)."""
+    """Bestand für jeden Tag in ``[start, end]`` (Länge ``(end - start).days + 1``).
+
+    @relation(SWR-MAI-033, scope=function)
+    """
     if end < start:
         raise ValueError("end liegt vor start")
     n = (end - start).days + 1
