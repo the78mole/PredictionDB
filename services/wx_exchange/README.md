@@ -204,7 +204,8 @@ heute 00:00 bis Ende D+7 aus, bettet die Frames als Abfrage `queryType: snapshot
 das Ganze über `POST /api/snapshots` mit `external: true` auf snapshots.raintank.io hoch
 (Ablauf `PDB_SNAPSHOT_EXPIRES`, Standard 2 Tage). Der Snapshot bleibt interaktiv (Tooltips, Zoom,
 Legende), hat aber jedes Mal eine neue Adresse. Deshalb biegt der Dienst danach einen Kurzlink um:
-`PDB_SHORTLINK_KIND=shortio` (Short.io, `PDB_SHORTIO_LINK_ID`) oder `shlink` (`PDB_SHLINK_URL`,
+`PDB_SHORTLINK_KIND=shortio` (Short.io, `PDB_SHORTIO_DOMAIN` und
+`PDB_SHORTIO_PATH`, Standard `strom`; fehlt der Link, legt der Dienst ihn an) oder `shlink` (`PDB_SHLINK_URL`,
 `PDB_SHLINK_CODE`), Schlüssel in `PDB_SHORTLINK_API_KEY`. Ohne Kurzlink wird nur hochgeladen.
 
 Gestern/Heute/Morgen bleiben draußen: Ein Snapshot hat einen festen Zeitraum, und dann ignoriert

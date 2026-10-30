@@ -474,7 +474,12 @@ def _shortlink(client: httpx.Client) -> snapshot.Shortlink | None:
     kind = os.environ.get("PDB_SHORTLINK_KIND", "")
     key = os.environ.get("PDB_SHORTLINK_API_KEY", "")
     if kind == "shortio":
-        return snapshot.ShortIo(client, key, os.environ["PDB_SHORTIO_LINK_ID"])
+        return snapshot.ShortIo(
+            client,
+            key,
+            os.environ["PDB_SHORTIO_DOMAIN"],
+            os.environ.get("PDB_SHORTIO_PATH", "strom"),
+        )
     if kind == "shlink":
         return snapshot.Shlink(
             client, os.environ["PDB_SHLINK_URL"], key, os.environ["PDB_SHLINK_CODE"]

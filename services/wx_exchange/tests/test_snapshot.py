@@ -48,37 +48,62 @@ class FakeGrafana(snapshot.Grafana):
         return {
             "templating": {"list": [{"name": "challenger", "datasource": ds, "query": "SELECT"}]},
             "panels": [
-                {"id": 69, "datasource": ds, "title": "Woche · Challenger ${challenger:text}",
-                 "targets": [{"refId": "B", "rawSql": "WHERE v = '${challenger}'"}]},
+                {
+                    "id": 69,
+                    "datasource": ds,
+                    "title": "Woche · Challenger ${challenger:text}",
+                    "targets": [{"refId": "B", "rawSql": "WHERE v = '${challenger}'"}],
+                },
                 {"id": 59, "datasource": ds, "title": "Heute", "targets": []},
             ],
         }
 
     def dashboard_v2(self, uid: str) -> dict[str, Any]:
         def el(title: str) -> dict[str, Any]:
-            return {"kind": "Panel", "spec": {"title": title, "data": {"kind": "QueryGroup", "spec": {
-                "queries": [], "queryOptions": {"timeFrom": "now/d", "maxDataPoints": 500}}}}}
+            return {
+                "kind": "Panel",
+                "spec": {
+                    "title": title,
+                    "data": {
+                        "kind": "QueryGroup",
+                        "spec": {
+                            "queries": [],
+                            "queryOptions": {"timeFrom": "now/d", "maxDataPoints": 500},
+                        },
+                    },
+                },
+            }
 
         def item(name: str) -> dict[str, Any]:
             return {"kind": "GridLayoutItem", "spec": {"element": {"name": name}}}
 
         return {
             "title": "Prognose aktuell",
-            "elements": {"panel-69": el("Woche · Challenger ${challenger:text}"),
-                         "panel-59": el("Heute")},
-            "layout": {"kind": "GridLayout", "spec": {"items": [item("panel-69"), item("panel-59")]}},
+            "elements": {
+                "panel-69": el("Woche · Challenger ${challenger:text}"),
+                "panel-59": el("Heute"),
+            },
+            "layout": {
+                "kind": "GridLayout",
+                "spec": {"items": [item("panel-69"), item("panel-59")]},
+            },
             "variables": [{"kind": "QueryVariable"}],
             "links": [{"title": "intern"}],
             "timeSettings": {"from": "now/d", "to": "now+7d/d", "autoRefresh": "5m"},
         }
 
-    def query(self, targets: list[dict[str, Any]], start: datetime, end: datetime) -> dict[str, Any]:
+    def query(
+        self, targets: list[dict[str, Any]], start: datetime, end: datetime
+    ) -> dict[str, Any]:
         self.queries.extend(targets)
         t = targets[0]
         if t["refId"] == "V":
             return {"V": {"frames": [_frame("__value", "__text")]}}
-        return {t["refId"]: {"frames": [{"schema": {"fields": [{"name": "Time"}]},
-                                         "data": {"values": [[1]]}}]}}
+        return {
+            t["refId"]: {
+                "frames": [{"schema": {"fields": [{"name": "Time"}]}, "data": {"values": [[1]]}}]
+            }
+        }
 
 
 def test_build_snapshot_embeds_frames_in_v2() -> None:
@@ -124,14 +149,34 @@ def test_shortio_request() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request)
+        if request.url.path == "/links/expand":
+            return httpx.Response(200, json={"idString": "lnk_1"})
         return httpx.Response(200, json={})
 
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
-        snapshot.ShortIo(client, "sk_x", "lnk_1").point_to("https://example.org/s")
+        snapshot.ShortIo(client, "sk_x", "go.example.org", "strom").point_to("https://e/s")
         snapshot.Shlink(client, "https://s.example.org/", "k", "strom").point_to("https://e/s")
-    assert seen[0].url == "https://api.short.io/links/lnk_1"
-    assert seen[0].headers["authorization"] == "sk_x"
-    assert b'"originalURL"' in seen[0].content
-    assert seen[1].method == "PATCH"
-    assert seen[1].url == "https://s.example.org/rest/v3/short-urls/strom"
-    assert seen[1].headers["x-api-key"] == "k"
+    assert seen[0].url.params["domain"] == "go.example.org"
+    assert seen[0].url.params["path"] == "strom"
+    assert seen[1].url == "https://api.short.io/links/lnk_1"
+    assert seen[1].headers["authorization"] == "sk_x"
+    assert b'"originalURL"' in seen[1].content
+    assert seen[2].method == "PATCH"
+    assert seen[2].url == "https://s.example.org/rest/v3/short-urls/strom"
+    assert seen[2].headers["x-api-key"] == "k"
+
+
+def test_shortio_creates_missing_link() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if request.url.path == "/links/expand":
+            return httpx.Response(404, json={})
+        return httpx.Response(200, json={"idString": "lnk_2"})
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        snapshot.ShortIo(client, "sk_x", "go.example.org", "strom").point_to("https://e/s")
+    assert [r.method for r in seen] == ["GET", "POST"]
+    assert seen[1].url == "https://api.short.io/links"
+    assert b'"path":"strom"' in seen[1].content.replace(b" ", b"")

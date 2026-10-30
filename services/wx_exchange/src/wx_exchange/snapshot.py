@@ -100,8 +100,15 @@ def _variable_values(
         if var["name"] != "challenger":
             continue
         res = grafana.query(
-            [{"refId": "V", "datasource": var["datasource"], "rawSql": var["query"],
-              "rawQuery": True, "format": "table"}],
+            [
+                {
+                    "refId": "V",
+                    "datasource": var["datasource"],
+                    "rawSql": var["query"],
+                    "rawQuery": True,
+                    "format": "table",
+                }
+            ],
             start,
             end,
         )
@@ -116,8 +123,11 @@ def _variable_values(
 
 
 def _frames(
-    grafana: Grafana, panel: dict[str, Any], values: dict[str, tuple[str, str]],
-    start: datetime, end: datetime,
+    grafana: Grafana,
+    panel: dict[str, Any],
+    values: dict[str, tuple[str, str]],
+    start: datetime,
+    end: datetime,
 ) -> list[dict[str, Any]]:
     targets = [
         {"datasource": panel.get("datasource"), **t, "rawSql": interpolate(t["rawSql"], values)}
@@ -158,33 +168,34 @@ def build_snapshot(grafana: Grafana, now: datetime) -> dict[str, Any]:
         panel["title"] = interpolate(panel.get("title", ""), values)
         if panel.get("data"):
             data = panel["data"]["spec"]
-            data["queries"] = [{
-                "kind": "PanelQuery",
-                "spec": {
-                    "hidden": False,
-                    "refId": "A",
-                    "query": {
-                        "kind": "DataQuery",
-                        "group": "grafana",
-                        "version": "v0",
-                        "datasource": {"name": "grafana"},
-                        "spec": {
-                            "queryType": "snapshot",
-                            "snapshot": _frames(grafana, sources[name], values, start, end),
+            data["queries"] = [
+                {
+                    "kind": "PanelQuery",
+                    "spec": {
+                        "hidden": False,
+                        "refId": "A",
+                        "query": {
+                            "kind": "DataQuery",
+                            "group": "grafana",
+                            "version": "v0",
+                            "datasource": {"name": "grafana"},
+                            "spec": {
+                                "queryType": "snapshot",
+                                "snapshot": _frames(grafana, sources[name], values, start, end),
+                            },
                         },
                     },
-                },
-            }]
+                }
+            ]
             data["queryOptions"] = {
-                k: v for k, v in data.get("queryOptions", {}).items()
+                k: v
+                for k, v in data.get("queryOptions", {}).items()
                 if k not in ("timeFrom", "timeShift", "hideTimeOverride")
             }
         elements[name] = el
     spec["elements"] = elements
     items = spec["layout"]["spec"]["items"]
-    spec["layout"]["spec"]["items"] = [
-        i for i in items if i["spec"]["element"]["name"] in elements
-    ]
+    spec["layout"]["spec"]["items"] = [i for i in items if i["spec"]["element"]["name"] in elements]
     stamp = now.astimezone(TZ)
     spec.update(
         title=f"Strompreis- und Lastprognose DE-LU · Stand {stamp:%d.%m.%Y %H:%M}",
@@ -214,19 +225,31 @@ class Shortlink(Protocol):
 
 @dataclass
 class ShortIo:
-    """Short.io: Ziel eines vorhandenen Links ändern (``POST /links/{id}``)."""
+    """Short.io: Link ``domain/path`` umbiegen, beim ersten Mal anlegen.
+
+    Die Link-ID kommt aus ``GET /links/expand``; fehlt der Link (404), legt ``POST /links`` ihn an.
+    """
 
     client: httpx.Client
     api_key: str
-    link_id: str
+    domain: str
+    path: str
 
     def point_to(self, url: str) -> None:
-        r = self.client.post(
-            f"https://api.short.io/links/{self.link_id}",
-            headers={"authorization": self.api_key},
-            json={"originalURL": url},
+        api = "https://api.short.io/links"
+        headers = {"authorization": self.api_key}
+        r = self.client.get(
+            f"{api}/expand", headers=headers, params={"domain": self.domain, "path": self.path}
         )
+        if r.status_code == 404:
+            body = {"domain": self.domain, "path": self.path, "originalURL": url}
+            self.client.post(api, headers=headers, json=body).raise_for_status()
+            return
         r.raise_for_status()
+        link_id = r.json()["idString"]
+        self.client.post(
+            f"{api}/{link_id}", headers=headers, json={"originalURL": url}
+        ).raise_for_status()
 
 
 @dataclass
