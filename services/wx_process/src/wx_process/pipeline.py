@@ -179,44 +179,6 @@ class WxPipeline:
         log.info("bronze.pruned", cutoff=cutoff.isoformat(), dry_run=dry_run, **counts)
         return counts
 
-    def evict_silver(
-        self,
-        keep_days: float,
-        *,
-        now: datetime | None = None,
-        dry_run: bool = False,
-        pause: float = 0.0,
-    ) -> dict[str, int]:
-        """Lokales Silber älter als ``keep_days`` löschen, das auf GHCR liegt und Gold hat.
-
-        Nur Läufe mit ``origin = ghcr`` (aus GHCR importiert, dort also abrufbar) und Gold in der
-        aktuellen Clusterung und Feature-Version; sie stehen danach als ``evicted`` im Bestand,
-        der Import holt sie nicht erneut. Silber aus eigenem Bronze bleibt.
-        """
-        assert self.store is not None, "evict-silver braucht die Datenbank"
-        now = now or datetime.now(UTC)
-        version = (
-            self.regions.version
-            if self.regions is not None
-            else self.store.latest_clustering(self.config.weight_grid)
-        )
-        counts = {"runs": 0, "objects": 0}
-        if version is None:
-            return counts
-        runs = self.store.evictable_silver(
-            self.source_id, now - timedelta(days=keep_days), version, FEATURES_VERSION
-        )
-        for run in runs:
-            counts["runs"] += 1
-            if dry_run:
-                continue
-            counts["objects"] += self.silver.delete(self.source.model, self.source.resolution, run)
-            self.store.mark_silver(self.source_id, [run], "evicted", "ghcr")
-            if pause:
-                time.sleep(pause)
-        log.info("silver.evicted", keep_days=keep_days, dry_run=dry_run, **counts)
-        return counts
-
     # --- Silber ------------------------------------------------------------------------------
 
     def silver_current(self, run: datetime, manifest: dict[str, Any]) -> bool:

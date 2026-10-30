@@ -34,7 +34,7 @@ CHUNK_LOCK_TIMEOUT = "5s"
 #: Ein gesperrter Chunk wird frühestens nach so vielen Sekunden erneut versucht
 BUSY_RETRY_S = 600.0
 
-SilverStatus = Literal["loading", "present", "evicted"]
+SilverStatus = Literal["loading", "present"]
 SilverOrigin = Literal["bronze", "ghcr"]
 BronzeStatus = Literal["loading", "present", "deleted"]
 
@@ -423,24 +423,6 @@ class Store:
                 {"s": source_id},
             ).all()
         return {r[0]: str(r[1]) for r in rows}
-
-    def evictable_silver(
-        self, source_id: int, before: datetime, version: str, features_version: str
-    ) -> list[datetime]:
-        """Aus GHCR importiertes Silber vor ``before``, dessen Gold in dieser Version vorliegt."""
-        with self.engine.connect() as c:
-            rows = c.execute(
-                text("""
-                SELECT s.run_time FROM meta.silver_run s
-                JOIN meta.nwp_feature_run f
-                  ON f.source_id = s.source_id AND f.run_time = s.run_time
-                 AND f.clustering_version = :v AND f.features_version = :fv
-                WHERE s.source_id = :s AND s.status = 'present' AND s.origin = 'ghcr'
-                  AND s.run_time < :b
-                ORDER BY s.run_time"""),
-                {"s": source_id, "b": before, "v": version, "fv": features_version},
-            ).all()
-        return [r[0] for r in rows]
 
     def mark_silver(
         self,

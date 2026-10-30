@@ -157,9 +157,8 @@ class Importer:
             name = f"{run:%Y%m%d%H}"
             if layer.silver_version != SILVER_VERSION:
                 result.runs[name] = "other_version"
-            elif not force and known.get(run) in ("present", "evicted"):
-                # Bestand schon gemeldet: kein GET je Lauf (≈ 5 000 Layer, ≈ 70 ms je GET);
-                # ``evicted`` ist lokal gelöscht, Gold gerechnet, und bleibt auf GHCR
+            elif not force and known.get(run) == "present":
+                # Bestand schon gemeldet: kein GET je Lauf (≈ 5 000 Layer, ≈ 70 ms je GET)
                 result.runs[name] = "present"
             elif not force and self.present(run):
                 result.runs[name] = "present"

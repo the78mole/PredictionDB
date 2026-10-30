@@ -106,10 +106,6 @@ def test_store_and_month_bars(engine: Engine) -> None:
     store.clear_silver_loading(sid)
     assert april("'12'") == (round(500 / 30, 1), round(100 / 30, 1))
 
-    # lokal gelöschtes Silber (liegt auf GHCR) zählt weiter als fertig
-    store.mark_silver(sid, _runs(12)[:5], "evicted", "ghcr")
-    assert april("'12'") == (round(500 / 30, 1), round(100 / 30, 1))
-
 
 def test_gold_month_bars(engine: Engine) -> None:
     """Gold: grün mit aktueller Clusterung und Feature-Version, gelb mit Silber ohne Gold."""
@@ -155,10 +151,6 @@ def test_gold_month_bars(engine: Engine) -> None:
         rows = {r[0]: r[1:] for r in c.execute(text(_panel_sql("'0'", 47))).all()}
     gfs = tuple(float(v) for v in rows["2021-04"][:2])
     assert gfs == (round(1000 / 30, 1), round(1000 / 30, 1))
-
-    # lokal löschbar: aus GHCR importiert und Gold in aktueller Clusterung und Feature-Version
-    assert store.evictable_silver(sid, future, CLUSTERING, "it_fv") == runs[:10]
-    assert store.evictable_silver(sid, runs[5], CLUSTERING, "it_fv") == runs[:5]
 
 
 def test_bronze_month_bars(engine: Engine) -> None:
