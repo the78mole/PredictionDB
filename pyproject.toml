@@ -15,6 +15,7 @@ dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
     "ruff>=0.8",
+    "strictdoc>=0.30.4",
     "types-PyYAML",
 ]
 
@@ -61,7 +62,7 @@ exclude = ["^\\.venv/", "^build/", "^docs/analysen/"]
 [[tool.mypy.overrides]]
 module = [
     "obstore.*", "eccodes.*", "gribapi.*", "lxml.*", "matplotlib.*", "lightgbm.*", "holidays.*",
-    "pandas.*", "pyarrow.*", "scipy.*", "openpyxl.*",
+    "pandas.*", "pyarrow.*", "scipy.*", "openpyxl.*", "strictdoc.*",
 ]
 ignore_missing_imports = true
 

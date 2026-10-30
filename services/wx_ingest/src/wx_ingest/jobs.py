@@ -4,6 +4,8 @@ Beides speist die Backfill-Tabellen im Status-Dashboard.
 
 Die Datenbank ist für den Download nicht nötig: Ist sie nicht erreichbar, wird nur gewarnt
 und ohne Protokoll weitergeladen.
+
+@relation(SWA-WXI-JOBLOG, scope=file)
 """
 
 from __future__ import annotations
@@ -30,6 +32,7 @@ class JobLog:
         self.mode = "backfill"
 
     def _run(self, sql: str, params: dict[str, object]) -> object | None:
+        """@relation(SWR-WXI-032, scope=function)"""
         if self.engine is None:
             return None
         try:
@@ -52,7 +55,10 @@ class JobLog:
         runs: list[datetime],
         mode: str = "backfill",
     ) -> None:
-        """Legt den Job und seine Läufe in Warteschlangen-Reihenfolge an."""
+        """Legt den Job und seine Läufe in Warteschlangen-Reihenfolge an.
+
+        @relation(SWR-WXI-032, scope=function)
+        """
         self.mode = mode
         host = socket.gethostname()
         # Verwaist sind Jobs ohne Lebenszeichen und Jobs desselben Dienstes (Quelle und Modus)
@@ -177,7 +183,10 @@ class JobLog:
         )
 
     def live_window(self, start: datetime, end: datetime, runs: list[datetime]) -> None:
-        """Live-Modus: gleitendes Fenster nachführen, neue Läufe hinten einreihen."""
+        """Live-Modus: gleitendes Fenster nachführen, neue Läufe hinten einreihen.
+
+        @relation(SWR-WXI-032, scope=function)
+        """
         if self.job_id is None:
             return
         self._run(

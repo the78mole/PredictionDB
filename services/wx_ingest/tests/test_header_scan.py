@@ -40,6 +40,7 @@ async def test_run_from_headers(
     bronze: Bronze, monkeypatch: pytest.MonkeyPatch, window: int
 ) -> None:
     # kleines Fenster: Datei wird in Abschnitte geteilt, die Suche trifft mitten in Nachrichten
+    """@relation(SWR-WXI-016, scope=function)"""
     monkeypatch.setattr(gfs, "SCAN_WINDOW", window)
     host = FakeGfsHost("gdex.test", STEPS, index=False)
     async with make_client(host) as client:
@@ -58,6 +59,7 @@ async def test_run_from_headers(
 
 
 async def test_size_from_head_when_range_total_unknown(bronze: Bronze) -> None:
+    """@relation(SWR-WXI-016, scope=function)"""
     host = FakeGfsHost("gdex.test", STEPS, index=False, unknown_size=True)
     async with make_client(host) as client:
         result = await ingestor(bronze, client).ingest_run(RUN, [3])
@@ -67,6 +69,7 @@ async def test_size_from_head_when_range_total_unknown(bronze: Bronze) -> None:
 
 
 async def test_missing_file_is_unavailable(bronze: Bronze) -> None:
+    """@relation(SWR-WXI-010, SWR-WXI-016, scope=function)"""
     host = FakeGfsHost("gdex.test", {0}, index=False)
     async with make_client(host) as client:
         result = await ingestor(bronze, client).ingest_run(RUN, [0, 3])
@@ -76,6 +79,7 @@ async def test_missing_file_is_unavailable(bronze: Bronze) -> None:
 async def test_false_boundary_falls_back_to_whole_file(
     bronze: Bronze, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """@relation(SWR-WXI-016, scope=function)"""
     monkeypatch.setattr(gfs, "SCAN_WINDOW", 4096)
     # Fehltreffer: angeblicher Anfang wenige Bytes hinter dem echten
     monkeypatch.setattr(gfs, "find_boundary", lambda chunk, left: 10)
@@ -88,6 +92,7 @@ async def test_false_boundary_falls_back_to_whole_file(
 
 
 def test_header_scan_needs_path() -> None:
+    """@relation(SWR-WXI-001, scope=function)"""
     with pytest.raises(ValueError, match="path"):
         make_config(endpoints=[GDEX])
 
@@ -99,6 +104,7 @@ async def _fetch(ep: gfs.Endpoint, step: int) -> gfs.StepData:
 
 async def test_template_finds_chosen_messages(monkeypatch: pytest.MonkeyPatch) -> None:
     # Zweiter Lauf desselben Schritts: nur Sprünge zu den gewählten Nachrichten statt aller Köpfe
+    """@relation(SWR-WXI-016, scope=function)"""
     monkeypatch.setattr(gfs, "SCAN_WINDOW", 4096)
     host = FakeGfsHost("gdex.test", STEPS, index=False)
     async with make_client(host) as client:
@@ -116,6 +122,7 @@ async def test_template_finds_chosen_messages(monkeypatch: pytest.MonkeyPatch) -
 
 
 async def test_template_mismatch_rebuilds_inventory() -> None:
+    """@relation(SWR-WXI-016, scope=function)"""
     host = FakeGfsHost("gdex.test", STEPS, index=False)
     async with make_client(host) as client:
         ep = ingestor(Bronze(MemoryStore()), client).endpoints[0]
@@ -132,6 +139,7 @@ async def test_template_mismatch_rebuilds_inventory() -> None:
 @pytest.mark.parametrize("factor", [0.5, 1.6])
 async def test_template_with_other_lengths(monkeypatch: pytest.MonkeyPatch, factor: float) -> None:
     # Längen weichen ab: die Schätzung liegt daneben, weitere Sprünge finden die Nachricht
+    """@relation(SWR-WXI-016, scope=function)"""
     monkeypatch.setattr(gfs, "SCAN_WINDOW", 1024)
     monkeypatch.setattr(gfs, "_MAX_LEAD", 0)
     host = FakeGfsHost("gdex.test", STEPS, index=False)
@@ -153,6 +161,7 @@ async def test_template_with_other_lengths(monkeypatch: pytest.MonkeyPatch, fact
 async def test_template_skips_ambiguous_keys(monkeypatch: pytest.MonkeyPatch) -> None:
     # Gewählte und benachbarte Nachrichten ohne eindeutigen Schlüssel: Sprung überspringt sie
     # oder läuft vom letzten bekannten Anfang
+    """@relation(SWR-WXI-016, scope=function)"""
     monkeypatch.setattr(gfs, "SCAN_WINDOW", 1024)
     monkeypatch.setattr(gfs, "_MAX_LEAD", 0)
     index = gfs._Template.index
@@ -173,6 +182,7 @@ async def test_template_skips_ambiguous_keys(monkeypatch: pytest.MonkeyPatch) ->
 
 async def test_template_overlapping_groups_once(monkeypatch: pytest.MonkeyPatch) -> None:
     # Jede gewählte Nachricht als eigene Gruppe mit Vorlauf: Gruppen überlappen sich
+    """@relation(SWR-WXI-016, scope=function)"""
     monkeypatch.setattr(gfs, "_MAX_LEAD", 10)
     monkeypatch.setattr(gfs, "_groups", lambda indices: [(i, i) for i in indices])
     host = FakeGfsHost("gdex.test", STEPS, index=False)
@@ -189,6 +199,7 @@ async def test_second_template_variant_found_without_full_scan(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Nach einem Modell-Update passt die neueste Vorlage nicht, eine ältere Variante schon
+    """@relation(SWR-WXI-016, scope=function)"""
     scans: list[str] = []
     scan = gfs.Endpoint.scan
 
@@ -212,6 +223,7 @@ async def test_second_template_variant_found_without_full_scan(
 
 
 async def test_parallel_runs_share_one_full_scan(monkeypatch: pytest.MonkeyPatch) -> None:
+    """@relation(SWR-WXI-016, scope=function)"""
     scans: list[str] = []
     scan = gfs.Endpoint.scan
 
@@ -232,6 +244,7 @@ async def test_templates_travel_between_jobs(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     # Ein Lauf baut die Vorlagen, die Datei aus der Konfiguration lässt andere sofort springen
+    """@relation(SWR-WXI-016, scope=function)"""
     scans: list[str] = []
     scan = gfs.Endpoint.scan
 
@@ -258,6 +271,7 @@ async def test_templates_travel_between_jobs(
 
 
 async def test_template_timeout_skips_step(monkeypatch: pytest.MonkeyPatch) -> None:
+    """@relation(SWR-WXI-016, scope=function)"""
     scan = gfs.Endpoint.scan
 
     async def flaky(self: gfs.Endpoint, url: str) -> tuple[str, list[IdxEntry]]:
@@ -273,6 +287,7 @@ async def test_template_timeout_skips_step(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 async def test_template_retries_failed_step_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """@relation(SWR-WXI-016, scope=function)"""
     scan = gfs.Endpoint.scan
     calls: list[str] = []
 
@@ -296,6 +311,7 @@ def scan_endpoint() -> EndpointConfig:
 async def test_complete_inventory_like_noaa_idx() -> None:
     # Vollständige .idx aus den Köpfen: dieselben Zeilen wie die .idx des S3-Spiegels
     # (dort CLMR, wgrib2 schreibt CLWMR), Bezugsdatum aus Sektion 1
+    """@relation(SWR-WXI-016, scope=function)"""
     aws = FakeGfsHost("aws.test", {3})
     host = FakeGfsHost("gdex.test", {3}, index=False)
     async with make_client(host) as client:
@@ -312,6 +328,7 @@ async def test_complete_inventory_like_noaa_idx() -> None:
 
 
 async def test_complete_inventory_missing_file() -> None:
+    """@relation(SWR-WXI-016, scope=function)"""
     host = FakeGfsHost("gdex.test", {0}, index=False)
     async with make_client(host) as client:
         ep = gfs.Endpoint(scan_endpoint(), client)

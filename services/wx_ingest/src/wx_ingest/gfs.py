@@ -26,6 +26,8 @@ Zwei Mechaniken (``docs/ARCHITEKTUR.md`` 4.1):
   Vorlage nicht (andere Modellversion), entsteht ein neues vollständiges Inventar.
   Liegen vollständige ``.idx`` vor (OCI-Artefakt ``gfs-0p25-gdex-idx``,
   :meth:`Endpoint.import_idx`), entfällt das Lesen der Köpfe; geladen wird wie bei ``idx_range``.
+
+@relation(SWA-WXI-ENDPOINT, scope=file)
 """
 
 from __future__ import annotations
@@ -211,6 +213,7 @@ class Endpoint:
         return self.config.name
 
     async def get(self, url: str, **kwargs: Any) -> httpx.Response:
+        """@relation(SWR-WXI-011, SWR-WXI-012, scope=function)"""
         retrying = AsyncRetrying(
             retry=retry_if_exception(
                 lambda e: isinstance(e, (httpx.TransportError, _RetryableStatus))
@@ -245,6 +248,7 @@ class Endpoint:
     async def _fetch_idx_range(
         self, product: str, run: datetime, step: int, specs: list[MessageSpec], bbox: BBox
     ) -> StepData:
+        """@relation(SWR-WXI-014, scope=function)"""
         url = f"{self.config.url.rstrip('/')}/{gfs_dir(run)}/{gfs_file(product, run, step)}"
         idx_resp = await self.get(url + ".idx")
         if idx_resp.status_code in (403, 404):
@@ -275,6 +279,8 @@ class Endpoint:
         )
 
     async def _load_ranges(self, url: str, ranges: list[ByteRange]) -> bytes:
+        """@relation(SWR-WXI-014, scope=function)"""
+
         async def load(r: ByteRange) -> bytes:
             resp = await self.get(url, headers={"Range": r.header})
             if resp.status_code == 404:
@@ -388,6 +394,8 @@ class Endpoint:
 
         Liefert die Einträge der gewählten Nachrichten (mit Nachbarn aus den abgelaufenen
         Köpfen). Passt die Vorlage nicht, folgt :class:`_TemplateMiss`.
+
+        @relation(SWR-WXI-016, scope=function)
         """
         first = await self._range(url, 0, HEAD_BYTES - 1)
         url = str(first.url)
@@ -613,6 +621,7 @@ class Endpoint:
     async def _fetch_header_scan(
         self, run: datetime, step: int, specs: list[MessageSpec], bbox: BBox
     ) -> StepData:
+        """@relation(SWR-WXI-016, scope=function)"""
         url = self._scan_url(run, step)
         path = self._scan_path(run, step)
         try:
@@ -674,7 +683,10 @@ class Endpoint:
     async def _fetch_whole_scanned(
         self, url: str, specs: list[MessageSpec], bbox: BBox
     ) -> tuple[list[IdxEntry], list[IdxEntry], bytes]:
-        """Ganze Datei laden und die Köpfe im Speicher lesen (ohne Fehltreffer)."""
+        """Ganze Datei laden und die Köpfe im Speicher lesen (ohne Fehltreffer).
+
+        @relation(SWR-WXI-016, scope=function)
+        """
         async with _FULL_DOWNLOAD:
             resp = await self.get(url)
             if resp.status_code in (403, 404):
@@ -704,6 +716,7 @@ class Endpoint:
     async def _fetch_realigned(
         self, url: str, entries: list[IdxEntry], chosen: list[IdxEntry], bbox: BBox
     ) -> bytes:
+        """@relation(SWR-WXI-015, scope=function)"""
         async with _FULL_DOWNLOAD:
             resp = await self.get(url)
             if resp.status_code != 200:
@@ -718,6 +731,7 @@ class Endpoint:
     async def _fetch_nomads(
         self, product: str, run: datetime, step: int, specs: list[MessageSpec], bbox: BBox
     ) -> StepData:
+        """@relation(SWR-WXI-013, scope=function)"""
         params = nomads_params(product, run, step, specs, bbox)
         resp = await self.get(self.config.url, params=params)
         body = resp.content
@@ -738,6 +752,7 @@ class Endpoint:
 def nomads_params(
     product: str, run: datetime, step: int, specs: list[MessageSpec], bbox: BBox
 ) -> dict[str, str]:
+    """@relation(SWR-WXI-013, scope=function)"""
     params = {"dir": f"/{gfs_dir(run)}", "file": gfs_file(product, run, step)}
     for s in specs:
         params[f"var_{s.var}"] = "on"
@@ -753,6 +768,7 @@ def nomads_params(
 
 
 def _crop_checked(raw: bytes, bbox: BBox, expected: int) -> bytes:
+    """@relation(SWR-WXI-014, scope=function)"""
     try:
         n = sum(1 for _ in iter_messages(raw))
     except GribError as exc:
@@ -785,6 +801,8 @@ def _realign(data: bytes, entries: list[IdxEntry], chosen: list[IdxEntry], bbox:
 
     Das gilt nur, wenn die Datei genau so viele Nachrichten hat wie die ``.idx`` Offsets;
     zusätzlich muss der Prognosezeitraum jeder gewählten Nachricht zur Zeile passen.
+
+    @relation(SWR-WXI-015, scope=function)
     """
     messages = _message_bounds(data)
     offsets = sorted({e.offset for e in entries})

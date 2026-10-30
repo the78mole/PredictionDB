@@ -1,0 +1,494 @@
+[DOCUMENT]
+TITLE: Systemarchitektur (SYSA)
+PREFIX: SYSA-
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @architektur
+
+[TEXT]
+STATEMENT: >>>
+Architekturbeschreibung des Systems nach ISO/IEC/IEEE 15288 (Architecture Definition) und 42010.
+Sie zerlegt PredictionDB in Systemelemente, nennt die externen Systeme und die Schnittstellen
+dazwischen und ordnet jedem Element die Systemanforderungen zu, die es erfüllt (``Parent``).
+
+Die Beschreibung bleibt bewusst knapp. Diagramme, Alternativen und Begründungen stehen in
+docs/ARCHITEKTUR.md, auf das ``QUELLE`` verweist. Die Softwareelemente sind in der
+Softwarearchitektur (SWA) je Dienst weiter zerlegt.
+<<<
+
+[[SECTION]]
+TITLE: Systemelemente
+
+[ELEMENT]
+UID: SYSA-VM
+ART: Systemelement
+STATUS: Umgesetzt
+TITLE: Betriebs-VM
+STATEMENT: >>>
+VM auf Proxmox VE mit Docker Compose. Sie trägt alle Dienste des Stacks, die Datenplatte für
+Garage und PostgreSQL und den systemd-Timer für das automatische Ausrollen.
+<<<
+ORT: compose.yaml, deploy/systemd/, scripts/vm-update.sh
+QUELLE: ARCHITEKTUR.md 8
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-QA-001
+- TYPE: Parent
+  VALUE: SYSR-OPS-002
+
+[ELEMENT]
+UID: SYSA-GARAGE
+ART: Systemelement
+STATUS: Umgesetzt
+TITLE: Objektspeicher Garage
+STATEMENT: >>>
+Garage als Single Node mit S3-API. Buckets für Bronze und Silber der Wettermodelle, den
+MaStR-Export und Artefakte.
+<<<
+ORT: compose.yaml (garage, garage-init), config/garage.toml
+QUELLE: ARCHITEKTUR.md 5.1, 5.2
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-004
+- TYPE: Parent
+  VALUE: SYSR-WX-006
+- TYPE: Parent
+  VALUE: SYSR-QA-002
+
+[ELEMENT]
+UID: SYSA-POSTGRES
+ART: Systemelement
+STATUS: Umgesetzt
+TITLE: Datenbank PostgreSQL mit TimescaleDB
+STATEMENT: >>>
+Gold-Daten (Features, Energiedaten, Anlagenbestand), Prognosen, Zustand der Läufe und Jobs,
+Modellregister. Schema über Alembic.
+<<<
+ORT: compose.yaml (postgres, migrate), migrations/
+QUELLE: ARCHITEKTUR.md 5.3
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-006
+- TYPE: Parent
+  VALUE: SYSR-EN-002
+- TYPE: Parent
+  VALUE: SYSR-OPS-001
+
+[ELEMENT]
+UID: SYSA-MONITORING
+ART: Systemelement
+STATUS: Umgesetzt
+TITLE: Grafana und Prometheus
+STATEMENT: >>>
+Dashboards für Prognose, Energiedaten, Wetter, Karte und System sowie Alarme per E-Mail.
+Prometheus mit node-exporter und cAdvisor erfasst Ressourcen und Container.
+<<<
+ORT: compose.yaml (grafana, prometheus, node-exporter, cadvisor), config/grafana/, config/prometheus/
+QUELLE: ARCHITEKTUR.md 7.10, 10
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-OPS-003
+- TYPE: Parent
+  VALUE: SYSR-OPS-004
+- TYPE: Parent
+  VALUE: SYSR-OPS-005
+
+[ELEMENT]
+UID: SYSA-APP
+ART: Systemelement
+STATUS: Umgesetzt
+TITLE: PredictionDB-Software
+STATEMENT: >>>
+Die Python-Dienste des uv-Workspace in einem gemeinsamen Image. Sie sind unten als
+Softwareelemente aufgeführt und in SRS und SWA je Dienst beschrieben.
+<<<
+ORT: packages/, services/, docker/Dockerfile
+QUELLE: ARCHITEKTUR.md 6
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-QA-002
+- TYPE: Parent
+  VALUE: SYSR-QA-003
+
+[ELEMENT]
+UID: SYSA-PREDICT
+ART: Systemelement
+STATUS: Umgesetzt
+TITLE: Schlanker Prognose-Stack
+STATEMENT: >>>
+Eigenständiger Container mit Modellpaket für Nutzer der Prognosen, mit eigener Compose-Datei und
+eigener Release-Reihe ``predict/vX.Y.Z``.
+<<<
+ORT: predict/
+QUELLE: predict/README.md; ARCHITEKTUR.md 7.11
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-004
+
+[ELEMENT]
+UID: SYSA-ACTIONS
+ART: Systemelement
+STATUS: Umgesetzt
+TITLE: GitHub Actions
+STATEMENT: >>>
+CI (Lint, Typen, Tests, Compose-Stack, Anforderungen), Image-Bau, Releases mit Analyse-PDFs und
+die Workflows für die Wetterhistorie (GFS, GEFS, ``.idx``, Vorlagen).
+<<<
+ORT: .github/workflows/
+QUELLE: ARCHITEKTUR.md 5.5, 5.6
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-002
+- TYPE: Parent
+  VALUE: SYSR-QA-006
+- TYPE: Parent
+  VALUE: SYSR-OPS-007
+
+[ELEMENT]
+UID: SYSA-GHCR
+ART: Systemelement
+STATUS: Umgesetzt
+TITLE: GitHub Container Registry
+STATEMENT: >>>
+Ablage des App-Images, der Silber-Artefakte, der ``.idx``-Artefakte und der Modell-Releases.
+<<<
+ORT: ghcr.io/the78mole/…
+QUELLE: ARCHITEKTUR.md 5.5, 7.11
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-001
+- TYPE: Parent
+  VALUE: SYSR-PUB-003
+- TYPE: Parent
+  VALUE: SYSR-OPS-002
+
+[ELEMENT]
+UID: SYSA-OPENBAO
+ART: Externes System
+STATUS: Umgesetzt
+TITLE: OpenBao
+STATEMENT: >>>
+Ablage der Geheimnisse. Der Betreiber überträgt sie per Skript in die ``.env`` der VM.
+<<<
+QUELLE: ARCHITEKTUR.md 8.3
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-QA-003
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Softwareelemente
+
+[ELEMENT]
+UID: SYSA-SW-CORE
+ART: Softwareelement
+STATUS: Umgesetzt
+TITLE: core
+STATEMENT: >>>
+Gemeinsame Bibliothek: Konfiguration ``PDB_*``, Logging, S3- und DB-Zugriff, Einrichtung von
+Garage.
+<<<
+ORT: packages/core
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-QA-003
+- TYPE: Parent
+  VALUE: SYSR-OPS-005
+
+[ELEMENT]
+UID: SYSA-SW-GRIBKIT
+ART: Softwareelement
+STATUS: Umgesetzt
+TITLE: gribkit
+STATEMENT: >>>
+GRIB2-Hilfen: ``.idx`` lesen, Byte-Bereiche zusammenfassen, Nachrichtenköpfe lesen, prüfen und
+zuschneiden.
+<<<
+ORT: packages/gribkit
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-002
+- TYPE: Parent
+  VALUE: SYSR-WX-004
+
+[ELEMENT]
+UID: SYSA-SW-WXI
+ART: Softwareelement
+STATUS: Umgesetzt
+TITLE: wx-ingest
+STATEMENT: >>>
+Lädt GFS-Läufe per Partial Download nach Bronze, live und als Backfill.
+<<<
+ORT: services/wx_ingest
+QUELLE: ARCHITEKTUR.md 4, 6.4
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-001
+- TYPE: Parent
+  VALUE: SYSR-WX-002
+- TYPE: Parent
+  VALUE: SYSR-WX-003
+- TYPE: Parent
+  VALUE: SYSR-WX-004
+- TYPE: Parent
+  VALUE: SYSR-WX-005
+- TYPE: Parent
+  VALUE: SYSR-WX-008
+
+[ELEMENT]
+UID: SYSA-SW-WXP
+ART: Softwareelement
+STATUS: Umgesetzt
+TITLE: wx-process
+STATEMENT: >>>
+Bronze nach Silber (Zarr) und Silber nach Gold (Features je Cluster bzw. Gebotszone).
+<<<
+ORT: services/wx_process
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-006
+- TYPE: Parent
+  VALUE: SYSR-WX-008
+
+[ELEMENT]
+UID: SYSA-SW-WXX
+ART: Softwareelement
+STATUS: Umgesetzt
+TITLE: wx-exchange
+STATEMENT: >>>
+Silber und ``.idx`` als ORAS-Artefakte bauen, veröffentlichen, prüfen und importieren; GEFS-Dienst.
+<<<
+ORT: services/wx_exchange
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-001
+- TYPE: Parent
+  VALUE: SYSR-PUB-002
+- TYPE: Parent
+  VALUE: SYSR-WX-007
+
+[ELEMENT]
+UID: SYSA-SW-ENI
+ART: Softwareelement
+STATUS: Umgesetzt
+TITLE: energy-ingest
+STATEMENT: >>>
+Energie-, Markt- und Brennstoffdaten je Quelle abgleichen, prüfen und nachladen.
+<<<
+ORT: services/energy_ingest
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-001
+- TYPE: Parent
+  VALUE: SYSR-EN-002
+- TYPE: Parent
+  VALUE: SYSR-EN-003
+- TYPE: Parent
+  VALUE: SYSR-EN-005
+- TYPE: Parent
+  VALUE: SYSR-EN-006
+
+[ELEMENT]
+UID: SYSA-SW-MAI
+ART: Softwareelement
+STATUS: Umgesetzt
+TITLE: mastr-ingest
+STATEMENT: >>>
+MaStR-Export sichern, Einheiten verorten, Cluster und Gitter-Gewichte bilden, Tagesbestand
+rekonstruieren.
+<<<
+ORT: services/mastr_ingest
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-004
+
+[ELEMENT]
+UID: SYSA-SW-MLT
+ART: Softwareelement
+STATUS: Umgesetzt
+TITLE: ml-train
+STATEMENT: >>>
+Datensätze, Training, Backtest, Modellregister, Modellpakete und laufende Prognosen.
+<<<
+ORT: services/ml_train
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-001
+- TYPE: Parent
+  VALUE: SYSR-PR-002
+- TYPE: Parent
+  VALUE: SYSR-PR-003
+- TYPE: Parent
+  VALUE: SYSR-PR-004
+- TYPE: Parent
+  VALUE: SYSR-TR-001
+- TYPE: Parent
+  VALUE: SYSR-TR-002
+- TYPE: Parent
+  VALUE: SYSR-PUB-003
+
+[ELEMENT]
+UID: SYSA-SW-PRD
+ART: Softwareelement
+STATUS: Umgesetzt
+TITLE: pdb-predict
+STATEMENT: >>>
+Software des schlanken Prognose-Stacks.
+<<<
+ORT: predict/src/pdb_predict
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-004
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Externe Systeme
+
+[ELEMENT]
+UID: SYSA-EXT-NWP
+ART: Externes System
+STATUS: Umgesetzt
+TITLE: Wettermodelle
+STATEMENT: >>>
+NOAA GFS und GEFS über NOMADS, AWS Open Data und Google Cloud; später ECMWF, DWD, GEM.
+<<<
+QUELLE: ARCHITEKTUR.md 3.1
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-001
+- TYPE: Parent
+  VALUE: SYSR-WX-003
+
+[ELEMENT]
+UID: SYSA-EXT-ENERGY
+ART: Externes System
+STATUS: Umgesetzt
+TITLE: Energie- und Marktdaten
+STATEMENT: >>>
+SMARD, Energy-Charts, ENTSO-E, Netztransparenz, Eurostat, GIE AGSI+, EIA STEO.
+<<<
+QUELLE: ARCHITEKTUR.md 3.2; docs/DATENQUELLEN-ZUGANG.md
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-001
+- TYPE: Parent
+  VALUE: SYSR-EN-005
+
+[ELEMENT]
+UID: SYSA-EXT-MASTR
+ART: Externes System
+STATUS: Umgesetzt
+TITLE: Marktstammdatenregister
+STATEMENT: >>>
+Gesamtdatenexport der Bundesnetzagentur.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-004
+
+[ELEMENT]
+UID: SYSA-EXT-MAIL
+ART: Externes System
+STATUS: Umgesetzt
+TITLE: Mailserver
+STATEMENT: >>>
+Versand der Grafana-Alarme.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-OPS-004
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Externe Schnittstellen
+
+[ELEMENT]
+UID: SYSA-IF-GRIB
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: GRIB2 über HTTP
+STATEMENT: >>>
+Wettermodelle → wx-ingest bzw. wx-exchange. NOMADS-Grib-Filter (serverseitiger Zuschnitt) oder
+``.idx`` plus HTTP-Range-Anfragen je Byte-Bereich gegen Objektspeicher. Archive ohne ``.idx``
+werden über die Nachrichtenköpfe inventarisiert.
+<<<
+QUELLE: ARCHITEKTUR.md 4.1
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-002
+
+[ELEMENT]
+UID: SYSA-IF-ENERGY
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: REST/JSON der Energiequellen
+STATEMENT: >>>
+Energiequellen → energy-ingest. REST bzw. JSON/CSV über HTTP, je Quelle mit eigenem Zugang
+(ohne Schlüssel, Token oder OAuth-Client).
+<<<
+QUELLE: docs/DATENQUELLEN-ZUGANG.md
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-001
+
+[ELEMENT]
+UID: SYSA-IF-S3
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: S3-API
+STATEMENT: >>>
+Dienste ↔ Garage. Nur S3-API, Endpoint und Schlüssel aus ``PDB_S3_*``.
+<<<
+QUELLE: SPECIFICATION.md 3.1
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-QA-002
+
+[ELEMENT]
+UID: SYSA-IF-PG
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: Postgres-Protokoll
+STATEMENT: >>>
+Dienste und Grafana ↔ PostgreSQL. Verbindung aus ``PDB_DATABASE_URL``.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-QA-002
+
+[ELEMENT]
+UID: SYSA-IF-OCI
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: OCI-Registry (ORAS)
+STATEMENT: >>>
+wx-exchange, ml-train und die VM ↔ GHCR. ORAS-Artefakte mit eigenem ``artifactType``, Layer
+inhaltsadressiert, Annotationen für Stand und Lizenz.
+<<<
+QUELLE: ARCHITEKTUR.md 5.5.3, 7.11.2
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-001
+- TYPE: Parent
+  VALUE: SYSR-PUB-003
+
+[ELEMENT]
+UID: SYSA-IF-ENV
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: Konfiguration über die Umgebung
+STATEMENT: >>>
+Betreiber → alle Dienste. ``.env`` mit Variablen ``PDB_*``, Freischaltungen ``PDB_ALLOW_*`` und
+Quelldefinitionen unter ``config/``.
+<<<
+QUELLE: SPECIFICATION.md 8
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-QA-003
+- TYPE: Parent
+  VALUE: SYSR-EN-006
+
+[[/SECTION]]
