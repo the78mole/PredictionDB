@@ -28,6 +28,7 @@ from wx_ingest.config import GfsConfig
 from wx_process.config import ProcessConfig
 from wx_process.decode import Grid, StepFields, decode_step
 from wx_process.features import FEATURES_VERSION, UNITS, FeatureBuilder, FeatureSeries
+from wx_process.regions import RegionSet
 from wx_process.silver import Dataset, Silver, assemble
 from wx_process.store import Chunk, Store
 from wx_process.variables import SILVER_VERSION
@@ -68,7 +69,9 @@ class WxPipeline:
         self.silver = silver
         self.store = store
         self.builder = FeatureBuilder(config.technologies, config.pv)
+        self.regions = RegionSet.load(config.regions) if config.regions is not None else None
         self._source_id: int | None = None
+        self._region_ids: dict[str, int] | None = None
 
     @property
     def source_id(self) -> int:
@@ -156,13 +159,22 @@ class WxPipeline:
         self, ds: Dataset, version: str, *, replace: bool = True
     ) -> tuple[int, dict[str, Any]]:
         assert self.store is not None
-        clusters = self.store.cluster_weights(version, self.config.weight_grid)
         valid = ds.valid_times
-        days = [v.date() for v in valid]
-        table = self.store.capacity(version, min(days), max(days))
+        capacity: Callable[[str, int], np.ndarray | None] | None = None
+        if self.regions is not None and version == self.regions.version:
+            # feste Regionen: ohne Bestand, also ohne wind_power/pv_power
+            if self._region_ids is None:
+                self._region_ids = self.store.region_ids(self.regions.codes)
+            clusters = self.regions.clusters(self._region_ids)
+        else:
+            clusters = self.store.cluster_weights(version, self.config.weight_grid)
+            days = [v.date() for v in valid]
+            table = self.store.capacity(version, min(days), max(days))
 
-        def capacity(tech: str, no: int) -> np.ndarray | None:
-            return table.at(tech, no, days)
+            def from_table(tech: str, no: int) -> np.ndarray | None:
+                return table.at(tech, no, days)
+
+            capacity = from_table
 
         series, coverage = self.builder.build(ds, clusters, capacity)
         codes = {s.code for s in series}
@@ -206,6 +218,8 @@ class WxPipeline:
         if manifest is None:
             return RunOutcome(run, "not_ready")
         version = clustering
+        if version is None and self.regions is not None:
+            version = self.regions.version
         if self.store is not None and version is None:
             version = self.store.latest_clustering(self.config.weight_grid)
         if (

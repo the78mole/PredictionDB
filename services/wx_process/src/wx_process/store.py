@@ -85,6 +85,22 @@ class Store:
 
     # --- Cluster und Gewichte ----------------------------------------------------------------
 
+    def region_ids(self, codes: Iterable[str]) -> dict[str, int]:
+        """``meta.region.region_id`` je Code; fehlende Regionen werden angelegt."""
+        out: dict[str, int] = {}
+        with self.engine.begin() as c:
+            for code in codes:
+                out[code] = int(
+                    c.execute(
+                        text("""
+                        INSERT INTO meta.region (code) VALUES (:c)
+                        ON CONFLICT (code) DO UPDATE SET code = EXCLUDED.code
+                        RETURNING region_id"""),
+                        {"c": code},
+                    ).scalar_one()
+                )
+        return out
+
     def latest_clustering(self, grid: str) -> str | None:
         """Jüngste Clusterung, für die Gewichte auf ``grid`` vorliegen."""
         with self.engine.connect() as c:

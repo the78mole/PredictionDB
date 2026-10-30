@@ -38,6 +38,8 @@ class ProcessConfig(BaseModel):
     source_config: Path
     #: ``assets.grid_weight.grid`` für dieses Modellgitter
     weight_grid: str
+    #: feste Regionen statt der Clusterung aus ``assets`` (GFS Europa: Gebotszonen wie GEFS)
+    regions: Path | None = None
     #: ``meta.feature.aggregation`` der Cluster-Features
     aggregation: str = "cluster_cap_weighted"
     #: Rückblick im Dienstbetrieb (``latest``)

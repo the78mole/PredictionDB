@@ -744,9 +744,13 @@ dreistündlich. Es gibt damit drei Datensätze: GFS DE, GFS Europa und GEFS.
   `ghcr.io/the78mole/predictiondb-data/gfs-0p5-silver`.
 - **Historie:** `gfs-history.yml` mit `source: eu` (täglich 07:47 UTC als Lückenfüller), Silber
   wie bei GFS DE (5.5) in eigenem Paket.
-- **Gold:** folgt mit einer Clusterung für das Gitter `gfs_0p5` (Gebotszonen wie GEFS
-  `regions_v2`); bis dahin entsteht nur Silber. Danach Europa-Karte je Gebotszone und
-  Länderauswahl im Wetter-Dashboard (Standard DE).
+- **Gold:** je Region aus derselben Datei wie GEFS (`regions:` in `config/process/gfs_0p5.yaml`,
+  `config/gefs/regions_v2.json.gz`), statt einer Clusterung aus `assets`. Die 50 Zonen der Art
+  `area` bekommen alle Features (Wind, PV, Niederschlag) über ihre Fläche, dazu DE Wind an
+  Land/See und PV nach MaStR; ohne Bestand also ohne `wind_power`/`pv_power`. Regionen unter
+  denselben Codes `gefs:<code>` wie GEFS, Stand in `meta.nwp_feature_run` als
+  `regions_v2`. `wx-process-backfill-eu` (Profil `history`) rechnet die Historie. Offen:
+  Europa-Karte je Gebotszone und Länderauswahl im Wetter-Dashboard (Standard DE).
 
 ---
 

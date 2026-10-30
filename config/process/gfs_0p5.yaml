@@ -1,10 +1,12 @@
 # Verarbeitung GFS 0,5° Verbundnetz: Bronze → Silber (Zarr) → Gold (Features je Gebotszone).
-# Siehe docs/ARCHITEKTUR.md Kap. 5.7. Solange es für das Gitter gfs_0p5 keine Clusterung gibt,
-# entsteht nur Silber.
+# Siehe docs/ARCHITEKTUR.md Kap. 5.7. Gold entsteht je Region aus derselben Regionsdatei wie
+# bei GEFS (50 Gebotszonen bzw. Länder als Fläche, dazu DE Wind an Land/See und PV nach MaStR),
+# ohne Anlagenbestand, also ohne wind_power/pv_power.
 source: gfs_0p5
 # Läufe, Schritte und Bronze-Schlüssel wie beim Ingest
 source_config: config/sources/gfs_0p5.yaml
 weight_grid: gfs_0p5
+regions: config/gefs/regions_v2.json.gz
 aggregation: cluster_cap_weighted
 lookback_hours: 48
 read_concurrency: 8
@@ -13,9 +15,9 @@ silver:
   step_chunk: 48
   zstd_level: 5
 
-# Art der Features je Technologie (wind, pv, hydro, other). Nabenhöhe gilt, wenn das MaStR
-# für das Cluster keine liefert. Leistungskurven sind generisch (kubisch bis Nennleistung)
-# und dienen als Index, nicht als Abbild einzelner Anlagentypen.
+# Art der Features je Technologie der Regionen. ``area`` rechnet alle Features (Wind, PV,
+# Niederschlag) über die ganze Fläche der Zone. Leistungskurven sind generisch (kubisch bis
+# Nennleistung) und dienen als Index, nicht als Abbild einzelner Anlagentypen.
 technologies:
   wind_on:
     kind: wind
@@ -25,10 +27,11 @@ technologies:
     kind: wind
     hub_height_m: 105
     power_curve: {cut_in: 3.5, rated: 13.0, cut_out: 25.0}
-  pv_ground: {kind: pv}
-  pv_roof: {kind: pv}
-  hydro: {kind: hydro}
-  biomass: {kind: other}
+  pv: {kind: pv}
+  area:
+    kind: area
+    hub_height_m: 100
+    power_curve: {cut_in: 3.0, rated: 12.0, cut_out: 25.0}
 
 # PV-Index aus Globalstrahlung und Lufttemperatur (ohne Ausrichtung und Neigung)
 pv:
