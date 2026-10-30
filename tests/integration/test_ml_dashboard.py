@@ -252,6 +252,10 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
             # Preis heute und morgen: dieselbe Abfrage wie gestern
             for other in (pid + 4, pid + 5):
                 assert _sql(panels[other], 1) == _sql(panels[pid + 1], 1)
+            # Last heute und morgen (72/73 Champion, 74/75 Challenger): wie Last gestern
+            for other in (72, 73) if pid == 55 else (74, 75):
+                for ref in (0, 1):
+                    assert _sql(panels[other], ref) == _sql(panels[pid], ref)
             c.execute(text(_sql(panels[pid], 0))).all()
         # Fehler je Vorlauftag im Betrieb (Preis, Last) mit Vorwoche als Vergleich
         for pid in (63, 64):
@@ -296,6 +300,11 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
             if v["name"].startswith("lauf_"):
                 sql = v["query"].replace("${challenger}", versions[1])
                 assert c.execute(text(sql)).scalar_one() != "kein Lauf"
+        # Unter „Quellen“ je Zeile links Champion, rechts Challenger: morgen, heute, gestern
+        grid = sorted((p["gridPos"]["y"], p["gridPos"]["x"], p["id"]) for p in dash["panels"])
+        quellen = next(p["gridPos"] for p in dash["panels"] if p["id"] == 71)
+        unten = [pid for y, _, pid in grid if y >= quellen["y"] + quellen["h"]]
+        assert unten == [73, 75, 60, 62, 72, 74, 59, 61, 55, 57, 56, 58]
         # Challenger im Titel ohne Erstelldatum des Modells, das sonst wie der Lauf aussieht
         for d in (dash, json.loads(PUBLIC.read_text())):
             var = next(v for v in d["templating"]["list"] if v["name"] == "challenger_name")

@@ -1438,8 +1438,8 @@ Analyse-Jobs sind bewusst einfach gehalten: eine YAML-Datei, ein Befehl, ein Ord
 > Grafana bei absolutem Dashboard-Zeitraum, etwa nach Zoomen). Es zeigt Champion und einen
 > wählbaren Challenger: die Woche bis D+7 mit P50 und Band P10–P90, beim Preis je Tag das
 > H0-gewichtete Tagesmittel mit Fehlerbalken (lastgewichtet zuschaltbar, Profil in
-> `meta.slp_h0`), dazu den gestrigen Liefertag (beim Preis auch heute und morgen) mit den
-> Prognosen D+1 bis D+7. Der Ausblick −2 bis +7 Tage, der Fehlerschlauch, die Views
+> `meta.slp_h0`), darunter je Zeile links Champion, rechts Challenger die Liefertage morgen,
+> heute und gestern (je Last und Preis) mit den Prognosen D+1 bis D+7. Der Ausblick −2 bis +7 Tage, der Fehlerschlauch, die Views
 > `fcst.v_outlook`/`fcst.v_yesterday_envelope`, `energy.forecast_vintage`, die
 > Week-Ahead-Lastprognose und `fcst.model_spread` (7.7) sind noch nicht umgesetzt; der Rest
 > dieses Abschnitts beschreibt sie als Plan. Die übrigen Status-Dashboards sind „Wetter“
