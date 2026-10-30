@@ -290,6 +290,12 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
             for ref in (0, 1):
                 assert public[pid]["targets"][ref] == panels[pid]["targets"][ref]
         assert public[67] == panels[67] and public[69] == panels[69]
+        # Erstellzeitpunkt je Modell und Ziel (Titel bzw. Box oben rechts)
+        dash = json.loads(DASHBOARDS[1].read_text())
+        for v in dash["templating"]["list"]:
+            if v["name"].startswith("lauf_"):
+                sql = v["query"].replace("${challenger}", versions[1])
+                assert c.execute(text(sql)).scalar_one() != "kein Lauf"
 
 
 def test_slp_h0(engine: Engine) -> None:

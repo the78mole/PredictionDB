@@ -46,12 +46,22 @@ class FakeGrafana(snapshot.Grafana):
     def dashboard(self, uid: str) -> dict[str, Any]:
         ds = {"type": "grafana-postgresql-datasource", "uid": "pdb-postgres"}
         return {
-            "templating": {"list": [{"name": "challenger", "datasource": ds, "query": "SELECT"}]},
+            "templating": {
+                "list": [
+                    {"type": "query", "name": "challenger", "datasource": ds, "query": "SELECT"},
+                    {
+                        "type": "query",
+                        "name": "lauf_challenger",
+                        "datasource": ds,
+                        "query": "SELECT max WHERE m = '${challenger}'",
+                    },
+                ]
+            },
             "panels": [
                 {
                     "id": 69,
                     "datasource": ds,
-                    "title": "Woche · Challenger ${challenger:text}",
+                    "title": "Woche · Challenger ${challenger:text} · erstellt ${lauf_challenger}",
                     "targets": [{"refId": "B", "rawSql": "WHERE v = '${challenger}'"}],
                 },
                 {"id": 59, "datasource": ds, "title": "Heute", "targets": []},
@@ -80,7 +90,9 @@ class FakeGrafana(snapshot.Grafana):
         return {
             "title": "Prognose aktuell",
             "elements": {
-                "panel-69": el("Woche · Challenger ${challenger:text}"),
+                "panel-69": el(
+                    "Woche · Challenger ${challenger:text} · erstellt ${lauf_challenger}"
+                ),
                 "panel-59": el("Heute"),
             },
             "layout": {
@@ -123,6 +135,10 @@ class FakeGrafana(snapshot.Grafana):
     ) -> dict[str, Any]:
         self.queries.extend(targets)
         t = targets[0]
+        if t["refId"] == "V" and t["rawSql"].startswith("SELECT max"):
+            assert t["rawSql"].endswith("m = 'v-123'")
+            frame = {"schema": {"fields": [{"name": "x"}]}, "data": {"values": [["30.10. 13:00"]]}}
+            return {"V": {"frames": [frame]}}
         if t["refId"] == "V":
             return {"V": {"frames": [_frame("__value", "__text")]}}
         return {
@@ -145,7 +161,7 @@ def test_build_snapshot_embeds_frames_in_v2() -> None:
         " | 28.11.2026 |"
     ]
     panel = spec["elements"]["panel-69"]["spec"]
-    assert panel["title"] == "Woche · Challenger Challenger X"
+    assert panel["title"] == "Woche · Challenger Challenger X · erstellt 30.10. 13:00"
     data = panel["data"]["spec"]
     assert data["queryOptions"] == {"maxDataPoints": 500}
     q = data["queries"][0]["spec"]["query"]

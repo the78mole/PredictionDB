@@ -35,7 +35,7 @@ TZ = ZoneInfo("Europe/Berlin")
 #: Namensanfang aller veröffentlichten Stände (Titel und Name des Snapshots)
 TITLE = "Strompreis- und Lastprognose DE-LU · Stand"
 WOCHENTAG = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
-#: Standardwerte der Dashboard-Variablen im Snapshot (challenger kommt aus seiner Abfrage)
+#: Standardwerte der Dashboard-Variablen im Snapshot (die übrigen kommen aus ihren Abfragen)
 FIXED_VARS = {"tagesmittel_last": "aus"}
 
 
@@ -104,16 +104,20 @@ class Grafana:
 def _variable_values(
     grafana: Grafana, dash: dict[str, Any], start: datetime, end: datetime
 ) -> dict[str, tuple[str, str]]:
+    """Abfrage-Variablen in Listenreihenfolge auflösen (erster Wert, wie beim Laden).
+
+    Spätere Variablen dürfen frühere verwenden (``lauf_*_challenger`` nutzt ``challenger``).
+    """
     values = {k: (v, v) for k, v in FIXED_VARS.items()}
     for var in dash.get("templating", {}).get("list", []):
-        if var["name"] != "challenger":
+        if var.get("type") != "query" or var["name"] in values:
             continue
         res = grafana.query(
             [
                 {
                     "refId": "V",
                     "datasource": var["datasource"],
-                    "rawSql": var["query"],
+                    "rawSql": interpolate(var["query"], values),
                     "rawQuery": True,
                     "format": "table",
                 }
@@ -123,11 +127,13 @@ def _variable_values(
         )
         frames = res["V"].get("frames", [])
         if not frames or not frames[0]["data"]["values"][0]:
-            values["challenger"] = ("", "keiner")
+            values[var["name"]] = ("", "keiner")
             continue
         names = [f["name"] for f in frames[0]["schema"]["fields"]]
         cols = dict(zip(names, frames[0]["data"]["values"], strict=True))
-        values["challenger"] = (str(cols["__value"][0]), str(cols["__text"][0]))
+        first = frames[0]["data"]["values"][0][0]
+        value = cols.get("__value", [first])[0]
+        values[var["name"]] = (str(value), str(cols.get("__text", [value])[0]))
     return values
 
 

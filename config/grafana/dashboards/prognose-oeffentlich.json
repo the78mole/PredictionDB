@@ -55,6 +55,78 @@
         "current": {}
       },
       {
+        "type": "query",
+        "name": "lauf_last_champion",
+        "label": "lauf_last_champion",
+        "hide": 2,
+        "skipUrlSync": true,
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "pdb-postgres"
+        },
+        "query": "-- Erstellzeitpunkt des jüngsten gültigen Laufs (Titel der Wochenpanels)\nSELECT coalesce(to_char(max(issue_time) AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI'),\n                'kein Lauf')\n  FROM fcst.prediction\n WHERE target = 'load_actual' AND quantile = 0.5 AND value <> 'NaN'\n   AND model_version = (SELECT version FROM meta.model_version WHERE role = 'champion'\n                   ORDER BY created DESC LIMIT 1)\n   AND issue_time >= now() - interval '9 days'",
+        "definition": "-- Erstellzeitpunkt des jüngsten gültigen Laufs (Titel der Wochenpanels)\nSELECT coalesce(to_char(max(issue_time) AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI'),\n                'kein Lauf')\n  FROM fcst.prediction\n WHERE target = 'load_actual' AND quantile = 0.5 AND value <> 'NaN'\n   AND model_version = (SELECT version FROM meta.model_version WHERE role = 'champion'\n                   ORDER BY created DESC LIMIT 1)\n   AND issue_time >= now() - interval '9 days'",
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false,
+        "options": [],
+        "current": {}
+      },
+      {
+        "type": "query",
+        "name": "lauf_preis_champion",
+        "label": "lauf_preis_champion",
+        "hide": 2,
+        "skipUrlSync": true,
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "pdb-postgres"
+        },
+        "query": "-- Erstellzeitpunkt des jüngsten gültigen Laufs (Titel der Wochenpanels)\nSELECT coalesce(to_char(max(issue_time) AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI'),\n                'kein Lauf')\n  FROM fcst.prediction\n WHERE target = 'da_price_de_lu' AND quantile = 0.5 AND value <> 'NaN'\n   AND model_version = (SELECT version FROM meta.model_version WHERE role = 'champion'\n                   ORDER BY created DESC LIMIT 1)\n   AND issue_time >= now() - interval '9 days'",
+        "definition": "-- Erstellzeitpunkt des jüngsten gültigen Laufs (Titel der Wochenpanels)\nSELECT coalesce(to_char(max(issue_time) AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI'),\n                'kein Lauf')\n  FROM fcst.prediction\n WHERE target = 'da_price_de_lu' AND quantile = 0.5 AND value <> 'NaN'\n   AND model_version = (SELECT version FROM meta.model_version WHERE role = 'champion'\n                   ORDER BY created DESC LIMIT 1)\n   AND issue_time >= now() - interval '9 days'",
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false,
+        "options": [],
+        "current": {}
+      },
+      {
+        "type": "query",
+        "name": "lauf_last_challenger",
+        "label": "lauf_last_challenger",
+        "hide": 2,
+        "skipUrlSync": true,
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "pdb-postgres"
+        },
+        "query": "-- Erstellzeitpunkt des jüngsten gültigen Laufs (Titel der Wochenpanels)\nSELECT coalesce(to_char(max(issue_time) AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI'),\n                'kein Lauf')\n  FROM fcst.prediction\n WHERE target = 'load_actual' AND quantile = 0.5 AND value <> 'NaN'\n   AND model_version = '${challenger}'\n   AND issue_time >= now() - interval '9 days'",
+        "definition": "-- Erstellzeitpunkt des jüngsten gültigen Laufs (Titel der Wochenpanels)\nSELECT coalesce(to_char(max(issue_time) AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI'),\n                'kein Lauf')\n  FROM fcst.prediction\n WHERE target = 'load_actual' AND quantile = 0.5 AND value <> 'NaN'\n   AND model_version = '${challenger}'\n   AND issue_time >= now() - interval '9 days'",
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false,
+        "options": [],
+        "current": {}
+      },
+      {
+        "type": "query",
+        "name": "lauf_preis_challenger",
+        "label": "lauf_preis_challenger",
+        "hide": 2,
+        "skipUrlSync": true,
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "pdb-postgres"
+        },
+        "query": "-- Erstellzeitpunkt des jüngsten gültigen Laufs (Titel der Wochenpanels)\nSELECT coalesce(to_char(max(issue_time) AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI'),\n                'kein Lauf')\n  FROM fcst.prediction\n WHERE target = 'da_price_de_lu' AND quantile = 0.5 AND value <> 'NaN'\n   AND model_version = '${challenger}'\n   AND issue_time >= now() - interval '9 days'",
+        "definition": "-- Erstellzeitpunkt des jüngsten gültigen Laufs (Titel der Wochenpanels)\nSELECT coalesce(to_char(max(issue_time) AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI'),\n                'kein Lauf')\n  FROM fcst.prediction\n WHERE target = 'da_price_de_lu' AND quantile = 0.5 AND value <> 'NaN'\n   AND model_version = '${challenger}'\n   AND issue_time >= now() - interval '9 days'",
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false,
+        "options": [],
+        "current": {}
+      },
+      {
         "type": "custom",
         "name": "tagesmittel_last",
         "label": "Tagesmittel lastgewichtet",
@@ -85,7 +157,7 @@
   "panels": [
     {
       "type": "timeseries",
-      "title": "Woche: Lastprognose bis D+7 · Champion",
+      "title": "Woche: Lastprognose bis D+7 · Champion · erstellt ${lauf_last_champion}",
       "id": 67,
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -280,7 +352,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Woche: Preisprognose bis D+7 · Champion",
+      "title": "Woche: Preisprognose bis D+7 · Champion · erstellt ${lauf_preis_champion}",
       "id": 68,
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -554,7 +626,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Woche: Lastprognose bis D+7 · Challenger ${challenger:text}",
+      "title": "Woche: Lastprognose bis D+7 · Challenger ${challenger:text} · erstellt ${lauf_last_challenger}",
       "id": 69,
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -749,7 +821,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Woche: Preisprognose bis D+7 · Challenger ${challenger:text}",
+      "title": "Woche: Preisprognose bis D+7 · Challenger ${challenger:text} · erstellt ${lauf_preis_challenger}",
       "id": 70,
       "datasource": {
         "type": "grafana-postgresql-datasource",
