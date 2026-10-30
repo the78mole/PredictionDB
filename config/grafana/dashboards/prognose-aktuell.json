@@ -128,6 +128,24 @@
       },
       {
         "type": "query",
+        "name": "challenger_name",
+        "label": "challenger_name",
+        "hide": 2,
+        "skipUrlSync": true,
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "pdb-postgres"
+        },
+        "query": "-- Name des gewählten Challengers ohne Erstelldatum des Modells (Panel-Titel; das\n-- Datum im Auswahlfeld ist das Training, nicht der Prognoselauf)\nSELECT config || ' ' || variant FROM meta.model_version WHERE version = '${challenger}'",
+        "definition": "-- Name des gewählten Challengers ohne Erstelldatum des Modells (Panel-Titel; das\n-- Datum im Auswahlfeld ist das Training, nicht der Prognoselauf)\nSELECT config || ' ' || variant FROM meta.model_version WHERE version = '${challenger}'",
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false,
+        "options": [],
+        "current": {}
+      },
+      {
+        "type": "query",
         "name": "lauf_last_champion",
         "label": "lauf_last_champion",
         "hide": 2,
@@ -497,7 +515,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Woche: Lastprognose bis D+7 · Challenger ${challenger:text} · erstellt ${lauf_last_challenger}",
+      "title": "Woche: Lastprognose bis D+7 · Challenger ${challenger_name} · erstellt ${lauf_last_challenger}",
       "id": 69,
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -692,7 +710,7 @@
     },
     {
       "type": "volkovlabs-echarts-panel",
-      "title": "Woche: Preisprognose bis D+7 · Challenger ${challenger:text}",
+      "title": "Woche: Preisprognose bis D+7 · Challenger ${challenger_name}",
       "id": 70,
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -1194,7 +1212,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Heute: Preis mit D+1 bis D+7 · Challenger ${challenger:text}",
+      "title": "Heute: Preis mit D+1 bis D+7 · Challenger ${challenger_name}",
       "id": 61,
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -1401,7 +1419,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Morgen: Preis mit D+1 bis D+7 · Challenger ${challenger:text}",
+      "title": "Morgen: Preis mit D+1 bis D+7 · Challenger ${challenger_name}",
       "id": 62,
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -2055,7 +2073,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Gestern: Last mit D+1 bis D+7 · Challenger ${challenger:text}",
+      "title": "Gestern: Last mit D+1 bis D+7 · Challenger ${challenger_name}",
       "id": 57,
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -2295,7 +2313,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Gestern: Preis mit D+1 bis D+7 · Challenger ${challenger:text}",
+      "title": "Gestern: Preis mit D+1 bis D+7 · Challenger ${challenger_name}",
       "id": 58,
       "datasource": {
         "type": "grafana-postgresql-datasource",
