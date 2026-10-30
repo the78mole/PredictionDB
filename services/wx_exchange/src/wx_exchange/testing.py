@@ -1,4 +1,7 @@
-"""Hilfen für Tests: simulierte OCI-Registry (GHCR) für ``httpx.MockTransport``."""
+"""Hilfen für Tests: simulierte OCI-Registry (GHCR) für ``httpx.MockTransport``.
+
+@relation(SWA-WXX-TESTING, scope=file)
+"""
 
 from __future__ import annotations
 

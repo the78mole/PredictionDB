@@ -15,6 +15,8 @@ beziehen sich auf die 6 h vor dem Schritt; in f000 sind sie leer.
 
 Nach GHCR (``predictiondb-data/gefs-0p5-silver``) geht je Monat und Laufzeit ein Manifest mit
 einem Layer je Lauf, wie beim GFS (``wx_exchange.artifact``), nur mit eigenem Layer-Typ.
+
+@relation(SWA-WXX-GEFS, scope=file)
 """
 
 from __future__ import annotations
@@ -116,6 +118,7 @@ class GefsConfig(BaseModel):
 
     @classmethod
     def from_yaml(cls, path: Path) -> GefsConfig:
+        """@relation(SWR-WXX-040, scope=function)"""
         cfg = cls.model_validate(yaml.safe_load(path.read_text()))
         if not cfg.regions.is_absolute():
             # relativ zum Repository (Konfiguration liegt unter config/sources)
@@ -194,7 +197,10 @@ class Regions:
 
 
 def fingerprint(config: GefsConfig, regions: Regions) -> str:
-    """Hash der Eingaben eines Silber-Baus: gleiche Eingaben ergeben denselben Inhalt."""
+    """Hash der Eingaben eines Silber-Baus: gleiche Eingaben ergeben denselben Inhalt.
+
+    @relation(SWR-WXX-043, scope=function)
+    """
     data = {
         "silver_version": SILVER_VERSION,
         "members": config.members,
@@ -221,7 +227,10 @@ class Message:
 
 
 def select(idx_text: str, wanted: dict[str, FieldSpec]) -> list[Message]:
-    """Nachrichten der gewünschten Felder aus einer ``.idx`` (je Feld die erste passende)."""
+    """Nachrichten der gewünschten Felder aus einer ``.idx`` (je Feld die erste passende).
+
+    @relation(SWR-WXX-041, scope=function)
+    """
     lines = [ln.split(":") for ln in idx_text.splitlines() if ln.strip()]
     offsets = [int(p[1]) for p in lines]
     out: list[Message] = []
@@ -235,7 +244,10 @@ def select(idx_text: str, wanted: dict[str, FieldSpec]) -> list[Message]:
 
 
 def ranges(messages: list[Message]) -> list[list[Message]]:
-    """Aneinander grenzende Nachrichten zu einer Anfrage zusammenfassen."""
+    """Aneinander grenzende Nachrichten zu einer Anfrage zusammenfassen.
+
+    @relation(SWR-WXX-041, scope=function)
+    """
     out: list[list[Message]] = []
     for m in messages:
         if out and out[-1][-1].end == m.start:
@@ -282,7 +294,10 @@ async def _get(client: httpx.AsyncClient, url: str, headers: dict[str, str] | No
 async def fetch_fields(
     client: httpx.AsyncClient, config: GefsConfig, run: datetime, member: str, step: int
 ) -> dict[str, bytes]:
-    """GRIB-Nachrichten je Feld eines Mitglied-Schritts (fehlende Felder fehlen im Ergebnis)."""
+    """GRIB-Nachrichten je Feld eines Mitglied-Schritts (fehlende Felder fehlen im Ergebnis).
+
+    @relation(SWR-WXX-041, scope=function)
+    """
     out: dict[str, bytes] = {}
     for product in ("a", "b"):
         wanted = {k: v for k, v in config.fields.items() if v.product == product}
@@ -361,7 +376,10 @@ def decode(messages: dict[str, bytes], bbox: BBox) -> tuple[Cutout | None, dict[
 
 
 class Aggregator:
-    """Kennzahlen je Region aus den Feldern eines Mitglied-Schritts."""
+    """Kennzahlen je Region aus den Feldern eines Mitglied-Schritts.
+
+    @relation(SWR-WXX-042, scope=class)
+    """
 
     def __init__(self, config: GefsConfig, regions: Regions) -> None:
         self.config = config
@@ -482,7 +500,10 @@ class RunSilver:
 
 
 def pack(meta: dict[str, Any], values: F32) -> tuple[bytes, str]:
-    """Reproduzierbarer Tar (gzip ohne Zeitstempel) und Inhalts-Hash."""
+    """Reproduzierbarer Tar (gzip ohne Zeitstempel) und Inhalts-Hash.
+
+    @relation(SWR-WXX-043, scope=function)
+    """
     buf = io.BytesIO()
     np.save(buf, np.ascontiguousarray(values, dtype="<f4"), allow_pickle=False)
     files = {
@@ -554,6 +575,7 @@ class RunBuilder:
         return True
 
     async def build(self, run: datetime) -> RunSilver:
+        """@relation(SWR-WXX-042, scope=function)"""
         members, steps = self.config.members, self.config.steps.list()
         values = np.full(
             (len(members), len(steps), len(self.regions.regions), len(VARIABLES)),
@@ -655,6 +677,7 @@ class GefsMonth:
         return {r for r, layer in self.layers.items() if layer.fingerprint == fp} | self.missing
 
     def manifest(self, source: str) -> dict[str, Any]:
+        """@relation(SWR-WXX-043, scope=function)"""
         return {
             "schemaVersion": 2,
             "mediaType": MANIFEST,
@@ -797,6 +820,7 @@ class GefsPublisher:
         *,
         rebuild: bool = False,
     ) -> MonthResult:
+        """@relation(SWR-WXX-043, scope=function)"""
         a, b = month_bounds(month)
         a, b = max(a, start or a), min(b, end or b)
         t = tag(month, hour)

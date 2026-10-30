@@ -46,6 +46,8 @@ Registry und Repository kommen aus ``WX_EXCHANGE_REGISTRY`` (``ghcr.io``) und
 ``WX_EXCHANGE_REPOSITORY`` (Standard Silber, bei ``idx-*`` das ``.idx``-Artefakt), die
 Anmeldung zum Schreiben aus ``WX_EXCHANGE_USERNAME`` und ``WX_EXCHANGE_TOKEN`` (in Actions
 ``github.actor`` und ``GITHUB_TOKEN``). Lesen geht anonym.
+
+@relation(SWA-WXX-CLI, scope=file)
 """
 
 from __future__ import annotations
@@ -93,6 +95,7 @@ SOURCE_URL = "https://github.com/the78mole/predictiondb"
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """@relation(SWR-WXX-010, SWR-WXX-020, scope=function)"""
     p = argparse.ArgumentParser(prog="wx-exchange", description="Silber-Austausch über GHCR")
     p.add_argument("-v", "--verbose", action="store_true")
     p.add_argument("--registry", default=os.environ.get("WX_EXCHANGE_REGISTRY", "ghcr.io"))
@@ -348,6 +351,8 @@ async def _templates(args: argparse.Namespace, config: GfsConfig) -> int:
     Je Lauf und Schritt: Passt eine vorhandene Vorlage, kostet das wenige Anfragen; sonst
     (fehlender Schritt oder geänderte Nachrichtenfolge nach einem Modell-Update) kommt eine
     weitere Variante hinzu.
+
+    @relation(SWR-WXX-012, scope=function)
     """
     runs = _sample_runs(args.run, args.end)
     async with _archive_client(args, config) as client:
@@ -403,7 +408,10 @@ async def _idx_build(args: argparse.Namespace, config: GfsConfig, registry: Regi
 
 
 def _load_idx(registry: Registry, month: str, hour: int) -> dict[str, bytes]:
-    """``.idx`` des Monats; ohne Layer oder bei Fehlern leer (dann Köpfe lesen wie bisher)."""
+    """``.idx`` des Monats; ohne Layer oder bei Fehlern leer (dann Köpfe lesen wie bisher).
+
+    @relation(SWR-WXX-032, scope=function)
+    """
     try:
         layer, files = idx.load_layer(registry, month, hour)
     except (RegistryError, httpx.HTTPError, OSError, ValueError) as exc:
@@ -428,6 +436,7 @@ async def _publish(
     registry: Registry,
     idx_registry: Registry | None = None,
 ) -> int:
+    """@relation(SWR-WXX-011, scope=function)"""
     process = ProcessConfig.from_yaml(args.process_config or WxProcessSettings().config)
     with tempfile.TemporaryDirectory(prefix="wx-exchange-") as tmp:
         workdir = args.workdir or Path(tmp)
@@ -490,6 +499,7 @@ def _shortlink(client: httpx.Client) -> snapshot.Shortlink | None:
 
 
 def _snapshot_main(args: argparse.Namespace) -> int:
+    """@relation(SWR-WXX-050, scope=function)"""
     with httpx.Client(timeout=httpx.Timeout(120.0, connect=15.0)) as client:
         grafana = snapshot.Grafana(
             os.environ.get("PDB_GRAFANA_URL", "http://grafana:3000"),

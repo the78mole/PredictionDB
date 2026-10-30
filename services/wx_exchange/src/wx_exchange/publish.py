@@ -5,6 +5,8 @@ gelöscht. Hochgeladen wird ein Lauf nur, wenn GHCR ihn noch nicht mit denselben
 (``fingerprint``) führt; mit ``rebuild`` wird neu gebaut und nur hochgeladen, wenn sich der
 Inhalt (``content``) geändert hat. Das Manifest wird nach jedem Lauf geschrieben, ein
 abgebrochener Job verliert also höchstens die Läufe, die gerade in Arbeit waren.
+
+@relation(SWA-WXX-PUBLISH, scope=file)
 """
 
 from __future__ import annotations
@@ -79,6 +81,8 @@ def plan(
     ersten Laufzeit in ``hours`` (jüngste zuerst), dann der nächsten. Mehr Blöcke als ``blocks``
     werden dem letzten zugeschlagen. Mit ``rebuild`` zählen nur endgültig fehlende Läufe als
     erledigt (Neubau aller vorhandenen).
+
+    @relation(SWR-WXX-010, scope=function)
     """
     fp = fingerprint(config)
     existing = set(registry.tags())
@@ -170,6 +174,7 @@ class Publisher:
         *,
         rebuild: bool = False,
     ) -> MonthResult:
+        """@relation(SWR-WXX-011, scope=function)"""
         a, b = month_bounds(month)
         a, b = max(a, start or a), min(b, end or b)
         t = tag(month, hour)

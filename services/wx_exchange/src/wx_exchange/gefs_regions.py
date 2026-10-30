@@ -13,6 +13,8 @@ Version 2 (Version 1 reichte nur von 41 bis 63° N und 5° W bis 25° O, mit wen
   (``<zone>:area``), aus den Grenzen von Natural Earth (gemeinfrei). Zonen innerhalb eines
   Landes sind aus Verwaltungsregionen zusammengesetzt. Freie Anlagenregister der Nachbarn
   ergänzen das in einer späteren Version (``<zone>:wind``, ``<zone>:pv``).
+
+@relation(SWA-WXX-GEFS-REGIONS, scope=file)
 """
 
 from __future__ import annotations
@@ -220,7 +222,10 @@ def inside(lon: F64, lat: F64, rings: list[F64]) -> NDArray[np.bool_]:
 
 
 def area_cells(rings: list[F64], bbox: BBox, res: float, sub: int = 6) -> list[list[float]]:
-    """Zellen ``[lat, lon, anteil]``: Flächenanteil der Zone je Zelle mal cos(Breite)."""
+    """Zellen ``[lat, lon, anteil]``: Flächenanteil der Zone je Zelle mal cos(Breite).
+
+    @relation(SWR-WXX-044, scope=function)
+    """
     lats = np.arange(bbox.north, bbox.south - res / 2, -res)
     lons = np.arange(bbox.west, bbox.east + res / 2, res)
     allx = np.concatenate([r[:, 0] for r in rings])
@@ -244,7 +249,10 @@ def area_cells(rings: list[F64], bbox: BBox, res: float, sub: int = 6) -> list[l
 
 
 def mastr_regions(path: Path) -> tuple[list[dict[str, Any]], str]:
-    """DE-Regionen aus der CSV der VM-Abfrage; zweites Ergebnis: Stand des Exports."""
+    """DE-Regionen aus der CSV der VM-Abfrage; zweites Ergebnis: Stand des Exports.
+
+    @relation(SWR-WXX-044, scope=function)
+    """
     cells: dict[str, dict[tuple[float, float], float]] = defaultdict(lambda: defaultdict(float))
     hub: dict[str, list[float]] = defaultdict(lambda: [0.0, 0.0])
     export = ""
@@ -281,6 +289,7 @@ def mastr_regions(path: Path) -> tuple[list[dict[str, Any]], str]:
 def build(
     mastr_csv: Path, natural_earth: Path, bbox: BBox, *, res: float = 0.5, version: str = "v1"
 ) -> dict[str, Any]:
+    """@relation(SWR-WXX-044, scope=function)"""
     admin0, admin1 = load_natural_earth(natural_earth)
     regions, export = mastr_regions(mastr_csv)
     for zone in ZONES:

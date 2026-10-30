@@ -10,6 +10,8 @@ Mit ``ledger`` (``wx_process.store.Store``) meldet der Import den lokalen Bestan
 ``meta.silver_run`` für das Status-Dashboard: Zu Beginn eines Durchgangs werden alle Läufe,
 die er holen wird, ``loading``, jeder geholte wird ``present``, fehlgeschlagene fallen wieder
 heraus. Vorhandenes Silber ohne Eintrag wird nachgetragen.
+
+@relation(SWA-WXX-IMPORTER, scope=file)
 """
 
 from __future__ import annotations
@@ -103,6 +105,7 @@ class Importer:
         return self._source_id
 
     def present(self, run: datetime) -> bool:
+        """@relation(SWR-WXX-020, scope=function)"""
         attrs = self.silver.attrs(self.model, self.resolution, run)
         return attrs is not None and attrs.get("silver_version") == SILVER_VERSION
 
@@ -144,6 +147,7 @@ class Importer:
         force: bool = False,
         workers: int = 4,
     ) -> ImportResult:
+        """@relation(SWR-WXX-020, SWR-WXX-021, scope=function)"""
         result = ImportResult()
         known = self.ledger.silver_runs(self.source_id) if self.ledger is not None else {}
         todo: list[tuple[str, Layer]] = []
@@ -211,6 +215,8 @@ class Importer:
 
         Für die ersten ``details`` abweichenden Läufe wird der Layer geladen und Datei für
         Datei verglichen, damit sichtbar wird, welche Variablen oder Attribute abweichen.
+
+        @relation(SWR-WXX-022, scope=function)
         """
         result = VerifyResult()
         for _, layer in self.layers(start, end, hours):
