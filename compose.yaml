@@ -120,7 +120,8 @@ services:
   # Rechnet alle 10 min die vollständigen Läufe der letzten 48 h, die noch fehlen.
   wx-process:
     <<: *app
-    command: ["wx-process", "gfs", "latest", "--watch", "600"]
+    # Bronze älter als GFS_BRONZE_DAYS (Standard 92) wird gelöscht, sobald Silber vorliegt
+    command: ["wx-process", "gfs", "latest", "--watch", "600", "--bronze-days", "${GFS_BRONZE_DAYS:-92}"]
     depends_on:
       garage-init: {condition: service_completed_successfully}
       migrate: {condition: service_completed_successfully}
@@ -128,7 +129,8 @@ services:
   # GFS-Historie aus dem AWS-Archiv (nur bei Bedarf: docker compose --profile backfill up -d).
   # Ab GFS v16 (2021-03-22 12Z) bis vor das 30-h-Fenster von ingest-gfs, jüngste Läufe zuerst;
   # ein Neustart setzt dort fort, wo er stand. Läufe, deren Silber schon vorliegt (z. B. von
-  # wx-import aus GHCR), werden übersprungen; GFS_BACKFILL_BRONZE=true lädt auch für sie Bronze.
+  # wx-import aus GHCR), werden übersprungen; GFS_BACKFILL_BRONZE=true lädt auch für sie Bronze
+  # (wx-process löscht es nach GFS_BRONZE_DAYS wieder, sobald Silber vorliegt).
   # Läufe per GFS_BACKFILL_RUNS wählbar (Standard 0,12), danach z. B. 6,18 nachziehen.
   # Tempo: GFS_BACKFILL_PARALLEL Läufe gleichzeitig, GFS_BACKFILL_CONCURRENCY Anfragen je
   # Archiv-Endpunkt für alle Läufe zusammen (Engpass ist die Latenz zum Archiv, nicht die CPU).
@@ -208,7 +210,7 @@ services:
   # gfs_0p5; bis dahin bleibt es beim Silber (Ergebnis silver_only).
   wx-process-eu:
     <<: *app
-    command: ["wx-process", "--config", "config/process/gfs_0p5.yaml", "gfs", "latest", "--watch", "600"]
+    command: ["wx-process", "--config", "config/process/gfs_0p5.yaml", "gfs", "latest", "--watch", "600", "--bronze-days", "${GFS_BRONZE_DAYS:-92}"]
     depends_on:
       garage-init: {condition: service_completed_successfully}
       migrate: {condition: service_completed_successfully}

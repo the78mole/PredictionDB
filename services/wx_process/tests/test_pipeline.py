@@ -90,6 +90,9 @@ class FakeStore:
         for r in runs:
             self.silver[r] = (status, origin)
 
+    def silver_runs(self, source_id: int) -> dict[datetime, str]:
+        return {r: st for r, (st, _) in self.silver.items()}
+
     def has_features(self, source_id: int, run: datetime) -> bool:
         return any(r == run for r, _ in self.done)
 
@@ -305,3 +308,25 @@ def test_repo_config_gfs_0p5_covers_all_region_technologies() -> None:
     regions = RegionSet.load(cfg.regions)
     assert regions.version == "regions_v2"
     assert {r.technology for r in regions.regions} <= set(cfg.technologies)
+
+
+def test_prune_bronze_only_with_silver(setup) -> None:  # type: ignore[no-untyped-def]
+    pipeline, bronze, _ = setup
+    other = RUN + timedelta(hours=6)
+    fill_bronze(bronze, STEPS)
+    fill_bronze(bronze, STEPS, run=other)
+    pipeline.process(RUN)  # Silber nur für RUN
+    assert pipeline.bronze_runs(RUN - timedelta(days=1), other + timedelta(hours=1)) == [RUN, other]
+
+    now = RUN + timedelta(days=100)
+    dry = pipeline.prune_bronze(92, start=RUN - timedelta(days=1), now=now, dry_run=True)
+    assert dry == {"runs": 1, "objects": 0, "kept_no_silver": 1}
+    # noch jung genug: nichts zu tun
+    young = pipeline.prune_bronze(92, start=RUN - timedelta(days=1), now=RUN + timedelta(days=10))
+    assert young["runs"] == 0
+
+    counts = pipeline.prune_bronze(92, start=RUN - timedelta(days=1), now=now)
+    assert counts["runs"] == 1 and counts["objects"] > 0
+    assert pipeline.bronze_runs(RUN - timedelta(days=1), now) == [other]
+    # Silber bleibt lesbar, der Lauf gilt weiter als gerechnet
+    assert pipeline.process(RUN).status == "skipped"
