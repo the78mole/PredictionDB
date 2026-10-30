@@ -218,6 +218,27 @@ def test_repository_config_loads() -> None:
         assert (r.lon >= cfg.bbox.west).all() and (r.lon <= cfg.bbox.east).all()
 
 
+async def test_build_keeps_default_executor_free_for_dns(tmp_path: Path) -> None:
+    """Bronze-PUTs laufen nicht im Pool, über den asyncio DNS auflöst."""
+    cfg = make_config(tmp_path)
+    regions = Regions.load(cfg.regions)
+    archive = FakeArchive(cfg, [RUN])
+    threads: set[str] = set()
+
+    class RecordingBronze(gefs.BronzeSink):
+        def put(self, run: datetime, member: str, step: int, messages: dict[str, bytes]) -> int:
+            threads.add(threading.current_thread().name)
+            return 0
+
+        def complete(self, run: datetime, stats: dict[str, Any]) -> None:
+            threads.add(threading.current_thread().name)
+
+    async with client(archive) as c:
+        await RunBuilder(cfg, regions, c, bronze=RecordingBronze()).build(RUN)
+
+    assert threads and all(t.startswith("gefs-work") for t in threads)
+
+
 async def test_build_run_aggregates_per_region_and_member(tmp_path: Path) -> None:
     cfg = make_config(tmp_path)
     regions = Regions.load(cfg.regions)

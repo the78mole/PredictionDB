@@ -27,6 +27,7 @@ import json
 import tarfile
 from collections import Counter
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -242,6 +243,17 @@ def ranges(messages: list[Message]) -> list[list[Message]]:
         else:
             out.append([m])
     return out
+
+
+# Eigener Pool für die blockierende Arbeit beim Aufbau (Garage-PUT, Dekodieren, Packen). Der
+# Standard-Pool von asyncio löst auch die DNS-Namen der neuen Verbindungen auf; ist er mit
+# langsamen PUTs belegt (Garage unter Last 17 s und mehr), laufen alle Verbindungen zu AWS in
+# den ConnectTimeout (VM, 2026-10-30: 639 gefs_file_failed in 2 h).
+_WORK = ThreadPoolExecutor(max_workers=32, thread_name_prefix="gefs-work")
+
+
+async def _work(fn: Callable[..., Any], *args: Any) -> Any:
+    return await asyncio.get_running_loop().run_in_executor(_WORK, fn, *args)
 
 
 class Missing(Exception):
@@ -555,12 +567,10 @@ class RunBuilder:
                 async with self.sem:
                     msgs = await fetch_fields(self.client, self.config, run, members[m], steps[s])
                 if self.bronze is not None and msgs:
-                    counts["bytes"] += await asyncio.to_thread(
-                        self.bronze.put, run, members[m], steps[s], msgs
-                    )
-                cutout, f = await asyncio.to_thread(decode, msgs, self.config.bbox)
+                    counts["bytes"] += await _work(self.bronze.put, run, members[m], steps[s], msgs)
+                cutout, f = await _work(decode, msgs, self.config.bbox)
                 if cutout is not None:
-                    values[m, s] = await asyncio.to_thread(self.aggregate, cutout, f)
+                    values[m, s] = await _work(self.aggregate, cutout, f)
                 counts["ok"] += 1
             except Missing:
                 counts["missing"] += 1
@@ -577,7 +587,7 @@ class RunBuilder:
         await asyncio.gather(*(one(m, s) for m in range(len(members)) for s in range(len(steps))))
         if self.bronze is not None and counts["ok"]:
             stats = {"files": counts["ok"], "missing": counts["missing"], "bytes": counts["bytes"]}
-            await asyncio.to_thread(self.bronze.complete, run, stats)
+            await _work(self.bronze.complete, run, stats)
         return RunSilver(
             run,
             values,
@@ -815,9 +825,9 @@ class GefsPublisher:
                     data, content = b"", ""
                     if status == "uploaded":
                         meta = silver.meta(self.fp, self.regions.version)
-                        data, content = await asyncio.to_thread(pack, meta, silver.values)
+                        data, content = await _work(pack, meta, silver.values)
                         if self.on_packed is not None:
-                            await asyncio.to_thread(self.on_packed, run, silver, data, content)
+                            await _work(self.on_packed, run, silver, data, content)
                 except Exception as exc:
                     log.exception("gefs_run_failed", run=key, error=str(exc))
                     status, data, content = "failed", b"", ""
