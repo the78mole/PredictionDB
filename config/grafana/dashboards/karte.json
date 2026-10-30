@@ -19,6 +19,18 @@
   "links": [
     {
       "type": "link",
+      "title": "Prognose aktuell",
+      "url": "/d/pdb-prognose-aktuell/predictiondb-prognose-aktuell",
+      "icon": "dashboard",
+      "tooltip": "Woche bis D+7 mit Bändern und Tagesmitteln, Gestern, Heute und Morgen",
+      "targetBlank": false,
+      "includeVars": false,
+      "keepTime": false,
+      "asDropdown": false,
+      "tags": []
+    },
+    {
+      "type": "link",
       "title": "Prognose und Energiedaten",
       "url": "/d/pdb-prognose-energie/predictiondb-prognose-und-energiedaten",
       "icon": "dashboard",

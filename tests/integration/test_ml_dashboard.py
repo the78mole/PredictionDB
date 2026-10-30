@@ -27,7 +27,10 @@ pytestmark = [
 ]
 
 ROOT = Path(__file__).parents[2]
-DASHBOARD = ROOT / "config/grafana/dashboards/prognose-energiedaten.json"
+DASHBOARDS = [
+    ROOT / "config/grafana/dashboards/prognose-energiedaten.json",
+    ROOT / "config/grafana/dashboards/prognose-aktuell.json",
+]
 CONFIG = "it_ml_dash"
 TARGETS = {"load_actual": 50_000.0, "da_price_de_lu": 80.0}
 
@@ -189,7 +192,7 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
             (v, t, 1.0 + i) for i, v in enumerate(versions) for t in TARGETS
         }
 
-        panels = {p["id"]: p for p in json.loads(DASHBOARD.read_text())["panels"]}
+        panels = {p["id"]: p for f in DASHBOARDS for p in json.loads(f.read_text())["panels"]}
         rows = {pid: c.execute(text(_sql(panels[pid]))).mappings().all() for pid in range(35, 44)}
         assert rows[35][0]["Champion"].startswith("kalender · ")
         mv = [r for r in rows[38] if r["Version"] in versions]
@@ -272,3 +275,28 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
                 if ref == 1:
                     assert got and {r["metric"] for r in got} == {"P50"}
                     assert len({r["time"] for r in got}) == len(got)
+        # Tagesmittel H0 (und lastgewichtet) in den Preis-Panels
+        for pid, version in ((68, versions[0]), (70, versions[1])):
+            sql = _sql(panels[pid], 2).replace("${challenger}", version)
+            c.execute(text(sql.replace("${tagesmittel_last}", "an"))).all()
+
+
+def test_slp_h0(engine: Engine) -> None:
+    with engine.connect() as c:
+        assert c.execute(text("SELECT count(*) FROM meta.slp_h0")).scalar_one() == 216
+        ostern = c.execute(text("SELECT meta.ostersonntag(2026)")).scalar_one()
+        assert ostern.isoformat() == "2026-04-05"
+        typ = {
+            d: c.execute(text("SELECT meta.slp_tagtyp(CAST(:d AS date))"), {"d": d}).scalar_one()
+            for d in ("2026-04-03", "2026-05-14", "2026-10-30", "2026-10-31", "2026-12-24")
+        }
+        assert typ == {
+            "2026-04-03": "FT",  # Karfreitag
+            "2026-05-14": "FT",  # Christi Himmelfahrt
+            "2026-10-30": "WT",
+            "2026-10-31": "SA",
+            "2026-12-24": "SA",
+        }
+        # Winter-Werktag 18 Uhr Ortszeit
+        w = c.execute(text("SELECT meta.slp_h0_gewicht(TIMESTAMP '2026-11-02 18:00')")).scalar_one()
+        assert w == pytest.approx(0.66476)
