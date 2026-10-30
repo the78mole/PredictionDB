@@ -296,6 +296,13 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
             if v["name"].startswith("lauf_"):
                 sql = v["query"].replace("${challenger}", versions[1])
                 assert c.execute(text(sql)).scalar_one() != "kein Lauf"
+        # Challenger im Titel ohne Erstelldatum des Modells, das sonst wie der Lauf aussieht
+        for d in (dash, json.loads(PUBLIC.read_text())):
+            var = next(v for v in d["templating"]["list"] if v["name"] == "challenger_name")
+            sql = var["query"].replace("${challenger}", versions[1])
+            assert c.execute(text(sql)).scalar_one() == f"{CONFIG} wetter"
+            titles = [p["title"] for p in d["panels"] if "Challenger" in p.get("title", "")]
+            assert titles and all("${challenger_name}" in t for t in titles)
 
 
 def test_slp_h0(engine: Engine) -> None:
