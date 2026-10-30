@@ -315,11 +315,7 @@ services:
     depends_on:
       migrate: {condition: service_completed_successfully}
 
-<<<<<<< HEAD
   # Öffentlicher Snapshot der Wochenprognose (Dashboard „Prognose öffentlich“) auf
-=======
-  # Öffentlicher Snapshot der Wochenprognose (Dashboard „Prognose aktuell“) auf
->>>>>>> origin/main
   # snapshots.raintank.io, täglich um PDB_SNAPSHOT_AT; danach zeigt der Kurzlink
   # (PDB_SHORTLINK_KIND = shortio oder shlink) auf den neuen Snapshot. Nur mit Profil public.
   grafana-snapshot:
@@ -329,11 +325,7 @@ services:
       - wx-exchange
       - snapshot
       - --at=${PDB_SNAPSHOT_AT:-14:30}
-<<<<<<< HEAD
       - --expires=${PDB_SNAPSHOT_EXPIRES:-2592000}
-=======
-      - --expires=${PDB_SNAPSHOT_EXPIRES:-172800}
->>>>>>> origin/main
     environment:
       <<: *app-env
       PDB_GRAFANA_URL: http://grafana:3000
