@@ -154,6 +154,7 @@ def _fill(engine: Engine, versions: list[str], now: pd.Timestamp) -> None:
 
 def _sql(panel: dict, ref: int = 0) -> str:  # type: ignore[type-arg]
     sql = str(panel["targets"][ref]["rawSql"])
+    sql = sql.replace("$__timeFrom()", "(now() - interval '30 days')")
     return re.sub(
         r"\$__timeFilter\(([^)]+)\)", r"\1 BETWEEN now() - interval '30 days' AND now()", sql
     )
@@ -258,3 +259,16 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
                 # ÜNB-Prognose nur bei D+1, auf denselben Stunden wie die Modelle
                 uenb = {r["Vorlauf"]: r["MAE"] for r in got if r["Verfahren"].startswith("ÜNB")}
                 assert uenb == {"D+1": pytest.approx(2.0)}
+        # Woche bis D+7 mit Band: je Stunde der jüngste Lauf, _fill schreibt nur P50
+        for pid, version in (
+            (67, versions[0]),
+            (68, versions[0]),
+            (69, versions[1]),
+            (70, versions[1]),
+        ):
+            for ref in (0, 1):
+                sql = _sql(panels[pid], ref).replace("${challenger}", version)
+                got = c.execute(text(sql)).mappings().all()
+                if ref == 1:
+                    assert got and {r["metric"] for r in got} == {"P50"}
+                    assert len({r["time"] for r in got}) == len(got)
