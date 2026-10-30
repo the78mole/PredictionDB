@@ -35,6 +35,9 @@ Beispiele::
     # VM: aktueller Monat live (Bronze 6 Monate, Silber nach GHCR), Historie importieren, Gold
     wx-exchange gefs vm --history-start 2021-03-22T12 --watch 1800
 
+    # VM: täglich um 14:30 öffentlichen Grafana-Snapshot der Wochenprognose, Kurzlink umbiegen
+    wx-exchange snapshot --at 14:30
+
     # Regionen und Gewichte neu bauen (MaStR-CSV von der VM, Natural Earth wird geladen)
     wx-exchange gefs regions --mastr de_capacity_0p5.csv --version v2 \
         --out config/gefs/regions_v2.json.gz
@@ -65,7 +68,7 @@ from predictiondb_core.db import create_db_engine
 from predictiondb_core.log import configure_logging, get_logger
 from predictiondb_core.s3 import s3_store
 from predictiondb_core.settings import get_settings
-from wx_exchange import gefs, gefs_regions, gefs_vm, idx
+from wx_exchange import gefs, gefs_regions, gefs_vm, idx, snapshot
 from wx_exchange.importer import Importer
 from wx_exchange.oci import Registry, RegistryError
 from wx_exchange.publish import Publisher, plan
@@ -96,6 +99,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--repository", default=os.environ.get("WX_EXCHANGE_REPOSITORY"))
     sub = p.add_subparsers(dest="model", required=True)
     _gefs_parser(sub)
+    _snapshot_parser(sub)
     gfs = sub.add_parser("gfs", help="NOAA GFS 0,25°")
     gfs.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     gfs.add_argument("--process-config", type=Path, help="Standard: PDB_WX_PROCESS_CONFIG")
@@ -227,6 +231,8 @@ def main(argv: list[str] | None = None) -> int:
     configure_logging("DEBUG" if args.verbose else settings.log_level, settings.log_json)
     if args.model == "gefs":
         return _gefs_main(args)
+    if args.model == "snapshot":
+        return _snapshot_main(args)
     config = GfsConfig.from_yaml(args.config)
     timeout = httpx.Timeout(120.0, connect=15.0)
 
@@ -448,6 +454,63 @@ async def _publish(
         print(f"{len(out['failed'])} Läufe fehlgeschlagen", file=sys.stderr)
         return 1
     return 0
+
+
+# --- Grafana-Snapshot ------------------------------------------------------------------------
+
+
+def _snapshot_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    sp = sub.add_parser(
+        "snapshot", help="öffentlicher Grafana-Snapshot der Wochenprognose, Kurzlink umbiegen"
+    )
+    sp.add_argument("--at", default="14:30", help="täglich um HH:MM Ortszeit (Standard 14:30)")
+    sp.add_argument("--once", action="store_true", help="sofort einmal, dann beenden")
+    sp.add_argument(
+        "--expires", type=int, default=2 * 86400, metavar="SEK", help="Ablauf (Standard 2 Tage)"
+    )
+
+
+def _shortlink(client: httpx.Client) -> snapshot.Shortlink | None:
+    kind = os.environ.get("PDB_SHORTLINK_KIND", "")
+    key = os.environ.get("PDB_SHORTLINK_API_KEY", "")
+    if kind == "shortio":
+        return snapshot.ShortIo(
+            client,
+            key,
+            os.environ["PDB_SHORTIO_DOMAIN"],
+            os.environ.get("PDB_SHORTIO_PATH", "strom"),
+        )
+    if kind == "shlink":
+        return snapshot.Shlink(
+            client, os.environ["PDB_SHLINK_URL"], key, os.environ["PDB_SHLINK_CODE"]
+        )
+    if kind:
+        raise SystemExit(f"PDB_SHORTLINK_KIND={kind!r} unbekannt (shortio, shlink oder leer)")
+    return None
+
+
+def _snapshot_main(args: argparse.Namespace) -> int:
+    with httpx.Client(timeout=httpx.Timeout(120.0, connect=15.0)) as client:
+        grafana = snapshot.Grafana(
+            os.environ.get("PDB_GRAFANA_URL", "http://grafana:3000"),
+            client,
+            os.environ.get("PDB_GRAFANA_USER", "admin"),
+            os.environ.get("PDB_GRAFANA_PASSWORD", ""),
+        )
+        shortlink = _shortlink(client)
+        while True:
+            if not args.once:
+                run = snapshot.next_run(datetime.now(UTC), args.at)
+                log.info("snapshot_next", at=run.isoformat())
+                snapshot.sleep_until(run)
+            try:
+                print(json.dumps(snapshot.publish(grafana, shortlink, args.expires)), flush=True)
+            except (httpx.HTTPError, RuntimeError) as exc:
+                if args.once:
+                    raise
+                log.warning("snapshot_failed", error=str(exc))
+            if args.once:
+                return 0
 
 
 # --- GEFS ------------------------------------------------------------------------------------

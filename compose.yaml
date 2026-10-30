@@ -315,6 +315,24 @@ services:
     depends_on:
       migrate: {condition: service_completed_successfully}
 
+  # Öffentlicher Snapshot der Wochenprognose (Dashboard „Prognose aktuell“) auf
+  # snapshots.raintank.io, täglich um PDB_SNAPSHOT_AT; danach zeigt der Kurzlink
+  # (PDB_SHORTLINK_KIND = shortio oder shlink) auf den neuen Snapshot. Nur mit Profil public.
+  grafana-snapshot:
+    <<: *app
+    profiles: [public]
+    command:
+      - wx-exchange
+      - snapshot
+      - --at=${PDB_SNAPSHOT_AT:-14:30}
+      - --expires=${PDB_SNAPSHOT_EXPIRES:-172800}
+    environment:
+      <<: *app-env
+      PDB_GRAFANA_URL: http://grafana:3000
+      PDB_GRAFANA_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+    depends_on:
+      grafana: {condition: service_started}
+
   # Status-Dashboards (config/grafana). Liest über die Rolle grafana_reader (Migration 0004).
   # Port wird erst im Override veröffentlicht (VM: Proxy-Netz, lokal: localhost).
   grafana:
