@@ -25,6 +25,7 @@ import os
 import sys
 import time
 from collections.abc import Iterable, Iterator
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -58,6 +59,8 @@ GROUPS = (
     Group("gefs", "gefs_0p5", "gefs/0p5"),
 )
 OTHER = "sonstige"
+#: Teil für hochgerechnetes Silber noch nicht gelisteter Monate
+SILVER_ESTIMATE = "Silber (hochgerechnet)"
 
 _BY_SOURCE = (
     "SELECT s.code, count(*) AS n FROM {t} r JOIN meta.source s USING (source_id) GROUP BY 1"
@@ -113,8 +116,8 @@ class Usage:
 
     def _due_months(
         self, bucket: str, group: Group, months: list[tuple[date, str]], max_age: timedelta
-    ) -> list[tuple[date, str]]:
-        """Monate, die neu gelistet werden müssen, älteste Messung zuerst."""
+    ) -> list[tuple[date, str, datetime | None]]:
+        """Monate, die neu gelistet werden müssen, mit ihrer letzten Messung."""
         today = datetime.now(UTC).date().replace(day=1)
         recent = {today, (today - timedelta(days=1)).replace(day=1)}
         layer_table = "meta.silver_run" if bucket == self.settings.buckets.silver else None
@@ -147,7 +150,7 @@ class Usage:
                     if r.mon not in changed or r.last_change > changed[r.mon]:
                         changed[r.mon] = r.last_change
         now = datetime.now(UTC)
-        due: list[tuple[datetime, date, str]] = []
+        due: list[tuple[date, str, datetime | None]] = []
         for month, prefix in months:
             last = scanned.get(month)
             if (
@@ -156,15 +159,24 @@ class Usage:
                 or now - last > max_age
                 or (month in changed and changed[month] > last)
             ):
-                due.append((last or datetime.min.replace(tzinfo=UTC), month, prefix))
-        return [(m, p) for _, m, p in sorted(due)]
+                due.append((month, prefix, last))
+        return due
 
-    def scan_s3(self, budget_s: float, max_age: timedelta) -> int:
-        """Listet fällige Monate, bis das Zeitbudget aufgebraucht ist; gibt die Anzahl zurück."""
+    def scan_s3(self, budget_s: float, max_age: timedelta, parallel: int = 4) -> int:
+        """Listet fällige Monate, bis das Zeitbudget aufgebraucht ist; gibt die Anzahl zurück.
+
+        Über alle Buckets und Gruppen gemeinsam: nie gemessene Monate zuerst, Silber vor
+        Bronze, dann die älteste Messung. So kommt jede Gruppe bei der ersten Vollmessung
+        früh dran, und laufend geänderte Bronze-Monate (Löschen nach Frist) halten Silber
+        nicht auf. ``parallel`` Monate werden gleichzeitig gelistet.
+        """
         deadline = time.monotonic() + budget_s
-        n = 0
-        for bucket in (self.settings.buckets.bronze, self.settings.buckets.silver):
-            store = s3_store(bucket, self.settings)
+        never = datetime.min.replace(tzinfo=UTC)
+        tasks: list[tuple[int, int, datetime, int, str, Group, date, str]] = []
+        stores: dict[str, ObjectStore] = {}
+        rank = {self.settings.buckets.silver: 0, self.settings.buckets.bronze: 1}
+        for bucket in (self.settings.buckets.silver, self.settings.buckets.bronze):
+            store = stores[bucket] = s3_store(bucket, self.settings)
             for group in GROUPS:
                 months = month_prefixes(store, group.prefix)
                 with self.engine.begin() as c:
@@ -174,40 +186,71 @@ class Usage:
                                  WHERE bucket = :b AND grp = :g AND NOT (month = ANY(:m))"""),
                         {"b": bucket, "g": group.name, "m": [m for m, _ in months]},
                     )
-                for month, prefix in self._due_months(bucket, group, months, max_age):
-                    if time.monotonic() > deadline:
-                        log.info("storage.s3.budget", bucket=bucket, group=group.name)
-                        self.pending = True
-                        return n
-                    t0 = time.monotonic()
-                    size, objects = list_size(store, prefix)
-                    with self.engine.begin() as c:
-                        c.execute(
-                            text("""
-                            INSERT INTO meta.storage_s3_month
-                                   (bucket, grp, month, prefix, bytes, objects, scanned_at)
-                            VALUES (:b, :g, :m, :p, :s, :n, now())
-                            ON CONFLICT (bucket, grp, month) DO UPDATE
-                               SET prefix = EXCLUDED.prefix, bytes = EXCLUDED.bytes,
-                                   objects = EXCLUDED.objects, scanned_at = now()"""),
-                            {
-                                "b": bucket,
-                                "g": group.name,
-                                "m": month,
-                                "p": prefix,
-                                "s": size,
-                                "n": objects,
-                            },
+                    scanned = {
+                        r.month
+                        for r in c.execute(
+                            text("""SELECT month FROM meta.storage_s3_month
+                                     WHERE bucket = :b AND grp = :g"""),
+                            {"b": bucket, "g": group.name},
                         )
-                    log.info(
-                        "storage.s3.month",
-                        bucket=bucket,
-                        prefix=prefix,
-                        bytes=size,
-                        objects=objects,
-                        seconds=round(time.monotonic() - t0, 1),
+                    }
+                due = self._due_months(bucket, group, months, max_age)
+                # jüngste Monate zuerst; i verzahnt die Gruppen bei der ersten Vollmessung
+                for i, (month, prefix, last) in enumerate(reversed(due)):
+                    first = 0 if month not in scanned else 1
+                    tasks.append(
+                        (first, rank[bucket], last or never, i, bucket, group, month, prefix)
                     )
-                    n += 1
+        tasks.sort(key=lambda t: t[:4])
+
+        def work(bucket: str, group: Group, month: date, prefix: str) -> None:
+            t0 = time.monotonic()
+            size, objects = list_size(stores[bucket], prefix)
+            with self.engine.begin() as c:
+                c.execute(
+                    text("""
+                    INSERT INTO meta.storage_s3_month
+                           (bucket, grp, month, prefix, bytes, objects, scanned_at)
+                    VALUES (:b, :g, :m, :p, :s, :n, now())
+                    ON CONFLICT (bucket, grp, month) DO UPDATE
+                       SET prefix = EXCLUDED.prefix, bytes = EXCLUDED.bytes,
+                           objects = EXCLUDED.objects, scanned_at = now()"""),
+                    {
+                        "b": bucket,
+                        "g": group.name,
+                        "m": month,
+                        "p": prefix,
+                        "s": size,
+                        "n": objects,
+                    },
+                )
+            log.info(
+                "storage.s3.month",
+                bucket=bucket,
+                prefix=prefix,
+                bytes=size,
+                objects=objects,
+                seconds=round(time.monotonic() - t0, 1),
+            )
+
+        n = 0
+        queue = iter(tasks)
+        with ThreadPoolExecutor(max_workers=max(parallel, 1)) as pool:
+            running: set[Future[None]] = set()
+            for task in queue:
+                if time.monotonic() > deadline:
+                    self.pending = True
+                    log.info("storage.s3.budget", open=len(tasks) - n - len(running))
+                    break
+                running.add(pool.submit(work, *task[4:]))
+                if len(running) >= max(parallel, 1):
+                    done, running = wait(running, return_when=FIRST_COMPLETED)
+                    for f in done:
+                        f.result()
+                        n += 1
+            for f in running:
+                f.result()
+                n += 1
         return n
 
     # --- Messung -------------------------------------------------------------------------------
@@ -242,12 +285,41 @@ class Usage:
             }
         for (bucket, grp), (size, objects) in per.items():
             yield "s3", layer.get(bucket, bucket), grp, size, objects
+        # Silber noch nicht gelisteter Monate hochrechnen: mittlere Größe je Lauf der schon
+        # gelisteten Monate der Gruppe mal Läufe laut meta.silver_run
+        estimated = dict(self.silver_estimate())
+        for grp, size in estimated.items():
+            yield "s3", SILVER_ESTIMATE, grp, size, 0
         for bucket, (size, objects) in totals.items():
             known = [v for (b, _), v in per.items() if b == bucket]
             rest_b = size - sum(v[0] for v in known)
+            if bucket == self.settings.buckets.silver:
+                rest_b -= sum(estimated.values())
             rest_n = objects - sum(v[1] for v in known)
             if rest_b > 0 or rest_n > 0:
                 yield "s3", layer.get(bucket, bucket), OTHER, max(rest_b, 0), max(rest_n, 0)
+
+    def silver_estimate(self) -> Iterator[tuple[str, int]]:
+        """(Gruppe, Bytes) für Silber in Monaten, die noch nicht gelistet sind."""
+        with self.engine.connect() as c:
+            for group in GROUPS:
+                r = c.execute(
+                    text("""
+                    WITH runs AS (
+                      SELECT date_trunc('month', r.run_time AT TIME ZONE 'UTC')::date AS month,
+                             count(*) AS n
+                        FROM meta.silver_run r JOIN meta.source s USING (source_id)
+                       WHERE s.code = :q AND r.status = 'present' GROUP BY 1),
+                    m AS (SELECT month, bytes FROM meta.storage_s3_month
+                           WHERE bucket = :b AND grp = :g)
+                    SELECT sum(m.bytes) AS b_known,
+                           sum(runs.n) FILTER (WHERE m.month IS NOT NULL) AS n_known,
+                           sum(runs.n) FILTER (WHERE m.month IS NULL) AS n_open
+                      FROM runs LEFT JOIN m USING (month)"""),
+                    {"q": group.source, "b": self.settings.buckets.silver, "g": group.name},
+                ).one()
+                if r.n_known and r.n_open and r.b_known:
+                    yield group.name, int(r.b_known) * int(r.n_open) // int(r.n_known)
 
     def postgres_rows(self, budget_s: float) -> Iterator[tuple[str, str, str, int, int]]:
         """Gold und Metatabellen je Gruppe, Rest der Datenbank als ``sonstige``."""
@@ -394,10 +466,11 @@ def measure(
     meta_dir: Path | None,
     budget_s: float,
     max_age: timedelta,
+    parallel: int = 4,
 ) -> None:
     t0 = time.monotonic()
     usage.pending = False
-    scanned = usage.scan_s3(budget_s, max_age)
+    scanned = usage.scan_s3(budget_s, max_age, parallel)
     totals = usage.bucket_totals(client)
     rows = [
         *usage.s3_rows(totals),
@@ -422,6 +495,9 @@ def main(argv: list[str] | None = None) -> int:
         type=float,
         default=300.0,
         help="Sekunden fürs Listing (Garage) und Zählen (Postgres) je Durchgang (Standard 300)",
+    )
+    parser.add_argument(
+        "--parallel", type=int, default=4, help="Monate gleichzeitig listen (Standard 4)"
     )
     parser.add_argument(
         "--catch-up",
@@ -457,7 +533,7 @@ def main(argv: list[str] | None = None) -> int:
     max_age = timedelta(days=args.max_age_days)
     while True:
         try:
-            measure(usage, client, args.garage_meta_dir, args.budget, max_age)
+            measure(usage, client, args.garage_meta_dir, args.budget, max_age, args.parallel)
         except Exception:
             if not args.watch:
                 raise

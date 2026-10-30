@@ -1728,7 +1728,7 @@
         "x": 0,
         "y": 57
       },
-      "description": "Belegung je Wettergruppe aus der jüngsten Messung von storage-usage (stündlich, meta.storage_usage). GFS DE = Quelle gfs_0p25 (Präfix gfs/0p25), GFS Europa = gfs_0p5 (gfs/0p5), GEFS = gefs_0p5 (gefs/0p5).\n\nGarage Bronze/Silber: Summe der Objektgrößen in wx-bronze bzw. wx-silver unter dem Präfix der Gruppe (logische Größe vor der zstd-Kompression von Garage; auf der Platte ist es etwas weniger). Gelistet wird je Monatspräfix, und nur Monate, in denen sich laut meta.silver_run, meta.bronze_run bzw. meta.backfill_run etwas geändert hat, der laufende und vorige Monat sowie spätestens nach 7 Tagen; die erste Vollmessung verteilt sich daher auf mehrere Stunden.\n\nPostgres Gold: feat.nwp_value über die Merkmale der Quelle, je Chunk anteilig verteilt (komprimiert nach gespeicherten Spaltengrößen, unkomprimiert nach Zeilen), inklusive Indizes. Postgres Metadaten: meta.nwp_run, grib_message, nwp_feature_run, silver_run und bronze_run anteilig nach Zeilen je Quelle.\n\nSonstiges: was keiner Gruppe gehört, also andere Buckets (MaStR-Exporte, MLflow), übrige Tabellen (Energiedaten, MaStR-Anlagen, Prognosen) und die Garage-Metadaten (LMDB samt Snapshots, gemessen als belegter Platz des Volumes garage-meta). Die Garage-Metadaten wachsen mit der Zahl der Objekte, vor allem der Silber-Zarr-Stores.",
+      "description": "Belegung je Wettergruppe aus der jüngsten Messung von storage-usage (stündlich, meta.storage_usage). GFS DE = Quelle gfs_0p25 (Präfix gfs/0p25), GFS Europa = gfs_0p5 (gfs/0p5), GEFS = gefs_0p5 (gefs/0p5).\n\nGarage Bronze/Silber: Summe der Objektgrößen in wx-bronze bzw. wx-silver unter dem Präfix der Gruppe (logische Größe vor der zstd-Kompression von Garage; auf der Platte ist es etwas weniger). Gelistet wird je Monatspräfix, und nur Monate, in denen sich laut meta.silver_run, meta.bronze_run bzw. meta.backfill_run etwas geändert hat, der laufende und vorige Monat sowie spätestens nach 7 Tagen; die erste Vollmessung verteilt sich daher auf mehrere Stunden. Bis dahin ist Silber in noch nicht gelisteten Monaten hochgerechnet (heller Balken „Garage Silber (hochgerechnet)“): mittlere Größe je Lauf aus den schon gelisteten Monaten der Gruppe mal Zahl der Läufe laut meta.silver_run.\n\nPostgres Gold: feat.nwp_value über die Merkmale der Quelle, je Chunk anteilig verteilt (komprimiert nach gespeicherten Spaltengrößen, unkomprimiert nach Zeilen), inklusive Indizes. Postgres Metadaten: meta.nwp_run, grib_message, nwp_feature_run, silver_run und bronze_run anteilig nach Zeilen je Quelle.\n\nSonstiges: was keiner Gruppe gehört, also andere Buckets (MaStR-Exporte, MLflow), übrige Tabellen (Energiedaten, MaStR-Anlagen, Prognosen) und die Garage-Metadaten (LMDB samt Snapshots, gemessen als belegter Platz des Volumes garage-meta). Die Garage-Metadaten wachsen mit der Zahl der Objekte, vor allem der Silber-Zarr-Stores.",
       "targets": [
         {
           "refId": "A",
@@ -1739,7 +1739,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "-- Jüngste Messung von pdb-storage-usage (Dienst storage-usage, stündlich). Grafana listet\n-- selbst nichts in Garage. Beschriftung je Gruppe mit der Summe, weil das Balkendiagramm\n-- keine Gesamtzeile im Tooltip kennt.\nWITH u AS (\n  SELECT * FROM meta.storage_usage\n   WHERE measured_at = (SELECT max(measured_at) FROM meta.storage_usage)),\ng AS (\n  SELECT grp, CASE grp WHEN 'gfs-de' THEN 'GFS DE' WHEN 'gfs-eu' THEN 'GFS Europa' WHEN 'gefs' THEN 'GEFS' ELSE 'Sonstiges' END AS name, CASE grp WHEN 'gfs-de' THEN 1 WHEN 'gfs-eu' THEN 2 WHEN 'gefs' THEN 3 ELSE 4 END AS o, sum(bytes) AS total FROM u GROUP BY grp)\nSELECT g.name || ' (' || pg_size_pretty(g.total) || ')' AS \"Gruppe\",\n       sum(u.bytes) FILTER (WHERE store = 's3' AND part = 'Bronze') AS \"Garage Bronze\",\n       sum(u.bytes) FILTER (WHERE store = 's3' AND part = 'Silber') AS \"Garage Silber\",\n       sum(u.bytes) FILTER (WHERE store = 'postgres' AND part = 'Gold') AS \"Postgres Gold\",\n       sum(u.bytes) FILTER (WHERE store = 'postgres' AND part = 'Metadaten') AS \"Postgres Metadaten\",\n       sum(u.bytes) FILTER (WHERE store = 'postgres' AND part = 'übrige Tabellen') AS \"Postgres übrige Tabellen\",\n       sum(u.bytes) FILTER (WHERE store = 's3' AND part NOT IN ('Bronze', 'Silber')) AS \"Garage andere Buckets\",\n       sum(u.bytes) FILTER (WHERE store = 'garage') AS \"Garage-Metadaten (LMDB)\"\n  FROM g JOIN u USING (grp)\n GROUP BY g.name, g.total, g.o\n ORDER BY g.o"
+          "rawSql": "-- Jüngste Messung von pdb-storage-usage (Dienst storage-usage, stündlich). Grafana listet\n-- selbst nichts in Garage. Beschriftung je Gruppe mit der Summe, weil das Balkendiagramm\n-- keine Gesamtzeile im Tooltip kennt.\nWITH u AS (\n  SELECT * FROM meta.storage_usage\n   WHERE measured_at = (SELECT max(measured_at) FROM meta.storage_usage)),\ng AS (\n  SELECT grp, CASE grp WHEN 'gfs-de' THEN 'GFS DE' WHEN 'gfs-eu' THEN 'GFS Europa' WHEN 'gefs' THEN 'GEFS' ELSE 'Sonstiges' END AS name, CASE grp WHEN 'gfs-de' THEN 1 WHEN 'gfs-eu' THEN 2 WHEN 'gefs' THEN 3 ELSE 4 END AS o, sum(bytes) AS total FROM u GROUP BY grp)\nSELECT g.name || ' (' || pg_size_pretty(g.total) || ')' AS \"Gruppe\",\n       sum(u.bytes) FILTER (WHERE store = 's3' AND part = 'Bronze') AS \"Garage Bronze\",\n       sum(u.bytes) FILTER (WHERE store = 's3' AND part = 'Silber') AS \"Garage Silber\",\n       sum(u.bytes) FILTER (WHERE store = 's3' AND part = 'Silber (hochgerechnet)') AS \"Garage Silber (hochgerechnet)\",\n       sum(u.bytes) FILTER (WHERE store = 'postgres' AND part = 'Gold') AS \"Postgres Gold\",\n       sum(u.bytes) FILTER (WHERE store = 'postgres' AND part = 'Metadaten') AS \"Postgres Metadaten\",\n       sum(u.bytes) FILTER (WHERE store = 'postgres' AND part = 'übrige Tabellen') AS \"Postgres übrige Tabellen\",\n       sum(u.bytes) FILTER (WHERE store = 's3' AND part NOT IN ('Bronze', 'Silber', 'Silber (hochgerechnet)')) AS \"Garage andere Buckets\",\n       sum(u.bytes) FILTER (WHERE store = 'garage') AS \"Garage-Metadaten (LMDB)\"\n  FROM g JOIN u USING (grp)\n GROUP BY g.name, g.total, g.o\n ORDER BY g.o"
         }
       ],
       "options": {
@@ -1813,6 +1813,25 @@
                   "mode": "fixed",
                   "fixedColor": "#B8B8B8"
                 }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Garage Silber (hochgerechnet)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#DCDCDC"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 40
               }
             ]
           },
