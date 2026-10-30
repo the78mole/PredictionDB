@@ -1428,13 +1428,18 @@ Analyse-Jobs sind bewusst einfach gehalten: eine YAML-Datei, ein Befehl, ein Ord
 
 ### 7.10 Prognose-Dashboard (Last und Preis DE-LU)
 
-> **Stand der Umsetzung:** Ein eigenes `prognose.json` gibt es nicht. Die Prognose steht im
-> Dashboard „Prognose und Energiedaten“ (`prognose-energiedaten.json`), Bereich
+> **Stand der Umsetzung:** Ein eigenes `prognose.json` gibt es nicht. Die Modellübersicht steht
+> im Dashboard „Prognose und Energiedaten“ (`prognose-energiedaten.json`), Bereich
 > „Prognosemodelle“: Champion und Registry-Verlauf, Modellversionen mit Backtest-Kennzahlen,
-> laufende Trainings, Prognosefehler D+1 im Betrieb (aus der Sicht `fcst.prediction_error`),
+> laufende Trainings, Prognosefehler D+1 im Betrieb (aus der Sicht `fcst.prediction_error`) und
 > Last und Preis der eigenen Modelle gegen ÜNB-Prognose bzw. Day-Ahead-Preis (Lauf vom Vortag
-> 10 Uhr) sowie der gestrige Liefertag (beim Preis auch heute und morgen) mit den Prognosen
-> D+1 bis D+7 für Champion und einen wählbaren Challenger. Der Ausblick −2 bis +7 Tage, der Fehlerschlauch, die Views
+> 10 Uhr). Das Dashboard „Prognose aktuell“ (`prognose-aktuell.json`) hat einen festen
+> Zeitraum heute 00:00 bis Ende D+7 ohne Zeitauswahl (Panel-Zeitüberschreibungen ignoriert
+> Grafana bei absolutem Dashboard-Zeitraum, etwa nach Zoomen). Es zeigt Champion und einen
+> wählbaren Challenger: die Woche bis D+7 mit P50 und Band P10–P90, beim Preis je Tag das
+> H0-gewichtete Tagesmittel mit Fehlerbalken (lastgewichtet zuschaltbar, Profil in
+> `meta.slp_h0`), dazu den gestrigen Liefertag (beim Preis auch heute und morgen) mit den
+> Prognosen D+1 bis D+7. Der Ausblick −2 bis +7 Tage, der Fehlerschlauch, die Views
 > `fcst.v_outlook`/`fcst.v_yesterday_envelope`, `energy.forecast_vintage`, die
 > Week-Ahead-Lastprognose und `fcst.model_spread` (7.7) sind noch nicht umgesetzt; der Rest
 > dieses Abschnitts beschreibt sie als Plan. Die übrigen Status-Dashboards sind „Wetter“

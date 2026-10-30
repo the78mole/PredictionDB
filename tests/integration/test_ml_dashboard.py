@@ -27,7 +27,10 @@ pytestmark = [
 ]
 
 ROOT = Path(__file__).parents[2]
-DASHBOARD = ROOT / "config/grafana/dashboards/prognose-energiedaten.json"
+DASHBOARDS = [
+    ROOT / "config/grafana/dashboards/prognose-energiedaten.json",
+    ROOT / "config/grafana/dashboards/prognose-aktuell.json",
+]
 CONFIG = "it_ml_dash"
 TARGETS = {"load_actual": 50_000.0, "da_price_de_lu": 80.0}
 
@@ -189,7 +192,7 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
             (v, t, 1.0 + i) for i, v in enumerate(versions) for t in TARGETS
         }
 
-        panels = {p["id"]: p for p in json.loads(DASHBOARD.read_text())["panels"]}
+        panels = {p["id"]: p for f in DASHBOARDS for p in json.loads(f.read_text())["panels"]}
         rows = {pid: c.execute(text(_sql(panels[pid]))).mappings().all() for pid in range(35, 44)}
         assert rows[35][0]["Champion"].startswith("kalender · ")
         mv = [r for r in rows[38] if r["Version"] in versions]
