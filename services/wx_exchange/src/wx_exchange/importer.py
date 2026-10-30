@@ -36,7 +36,7 @@ from wx_exchange.artifact import (
     read_files,
     unpack,
 )
-from wx_exchange.oci import Registry, RegistryError, digest
+from wx_exchange.oci import Registry, digest
 from wx_process.silver import Silver
 from wx_process.store import Store
 from wx_process.variables import SILVER_VERSION
@@ -189,7 +189,7 @@ class Importer:
                 # mehrere Sekunden, neue Läufe haben nichts zu löschen
                 self._clear(prefix)
             unpack(data, self.store, prefix)
-        except (RegistryError, ValueError, OSError) as exc:
+        except Exception as exc:  # ein Lauf (z. B. Garage-Timeout) darf den Import nicht beenden
             log.warning("import_failed", run=name, error=str(exc))
             if self.ledger is not None:
                 self.ledger.clear_silver_loading(self.source_id, [run])
