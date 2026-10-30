@@ -17,6 +17,7 @@ dependencies = [
 
 [project.scripts]
 pdb-garage-init = "predictiondb_core.garage_init:main"
+pdb-storage-usage = "predictiondb_core.storage_usage:main"
 
 [build-system]
 requires = ["hatchling"]

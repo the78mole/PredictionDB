@@ -1703,6 +1703,392 @@
     },
     {
       "type": "row",
+      "title": "Speicherbelegung je Gruppe (Garage und Postgres)",
+      "id": 79,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 56
+      },
+      "panels": []
+    },
+    {
+      "type": "barchart",
+      "title": "Speicherbelegung je Gruppe (Garage und Postgres)",
+      "id": 80,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 57
+      },
+      "description": "Belegung je Wettergruppe aus der jüngsten Messung von storage-usage (stündlich, meta.storage_usage). GFS DE = Quelle gfs_0p25 (Präfix gfs/0p25), GFS Europa = gfs_0p5 (gfs/0p5), GEFS = gefs_0p5 (gefs/0p5).\n\nGarage Bronze/Silber: Summe der Objektgrößen in wx-bronze bzw. wx-silver unter dem Präfix der Gruppe (logische Größe vor der zstd-Kompression von Garage; auf der Platte ist es etwas weniger). Gelistet wird je Monatspräfix, und nur Monate, in denen sich laut meta.silver_run, meta.bronze_run bzw. meta.backfill_run etwas geändert hat, der laufende und vorige Monat sowie spätestens nach 7 Tagen; die erste Vollmessung verteilt sich daher auf mehrere Stunden.\n\nPostgres Gold: feat.nwp_value über die Merkmale der Quelle, je Chunk anteilig verteilt (komprimiert nach gespeicherten Spaltengrößen, unkomprimiert nach Zeilen), inklusive Indizes. Postgres Metadaten: meta.nwp_run, grib_message, nwp_feature_run, silver_run und bronze_run anteilig nach Zeilen je Quelle.\n\nSonstiges: was keiner Gruppe gehört, also andere Buckets (MaStR-Exporte, MLflow), übrige Tabellen (Energiedaten, MaStR-Anlagen, Prognosen) und die Garage-Metadaten (LMDB samt Snapshots, gemessen als belegter Platz des Volumes garage-meta). Die Garage-Metadaten wachsen mit der Zahl der Objekte, vor allem der Silber-Zarr-Stores.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "-- Jüngste Messung von pdb-storage-usage (Dienst storage-usage, stündlich). Grafana listet\n-- selbst nichts in Garage. Beschriftung je Gruppe mit der Summe, weil das Balkendiagramm\n-- keine Gesamtzeile im Tooltip kennt.\nWITH u AS (\n  SELECT * FROM meta.storage_usage\n   WHERE measured_at = (SELECT max(measured_at) FROM meta.storage_usage)),\ng AS (\n  SELECT grp, CASE grp WHEN 'gfs-de' THEN 'GFS DE' WHEN 'gfs-eu' THEN 'GFS Europa' WHEN 'gefs' THEN 'GEFS' ELSE 'Sonstiges' END AS name, CASE grp WHEN 'gfs-de' THEN 1 WHEN 'gfs-eu' THEN 2 WHEN 'gefs' THEN 3 ELSE 4 END AS o, sum(bytes) AS total FROM u GROUP BY grp)\nSELECT g.name || ' (' || pg_size_pretty(g.total) || ')' AS \"Gruppe\",\n       sum(u.bytes) FILTER (WHERE store = 's3' AND part = 'Bronze') AS \"Garage Bronze\",\n       sum(u.bytes) FILTER (WHERE store = 's3' AND part = 'Silber') AS \"Garage Silber\",\n       sum(u.bytes) FILTER (WHERE store = 'postgres' AND part = 'Gold') AS \"Postgres Gold\",\n       sum(u.bytes) FILTER (WHERE store = 'postgres' AND part = 'Metadaten') AS \"Postgres Metadaten\",\n       sum(u.bytes) FILTER (WHERE store = 'postgres' AND part = 'übrige Tabellen') AS \"Postgres übrige Tabellen\",\n       sum(u.bytes) FILTER (WHERE store = 's3' AND part NOT IN ('Bronze', 'Silber')) AS \"Garage andere Buckets\",\n       sum(u.bytes) FILTER (WHERE store = 'garage') AS \"Garage-Metadaten (LMDB)\"\n  FROM g JOIN u USING (grp)\n GROUP BY g.name, g.total, g.o\n ORDER BY g.o"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "stacking": "normal",
+        "showValue": "never",
+        "groupWidth": 0.7,
+        "barWidth": 0.9,
+        "barRadius": 0,
+        "xField": "Gruppe",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0,
+        "fullHighlight": false,
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "min": 0,
+          "decimals": 1,
+          "color": {
+            "mode": "fixed"
+          },
+          "custom": {
+            "fillOpacity": 85,
+            "lineWidth": 0,
+            "gradientMode": "none",
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Garage Bronze"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8F5A3C"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Garage Silber"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#B8B8B8"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Postgres Gold"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#E0B400"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Postgres Metadaten"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#5794F2"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Postgres übrige Tabellen"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#1F60C4"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Garage andere Buckets"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#73BF69"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Garage-Metadaten (LMDB)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#F2495C"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "table",
+      "title": "Speicherbelegung: Einzelwerte",
+      "id": 81,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 57
+      },
+      "description": "Die Werte hinter dem Balkendiagramm links. „Objekte bzw. Zeilen“: Garage-Objekte, bei Gold die Zeilen in feat.nwp_value. „Monate gelistet“ und „älteste Monatsmessung“ zeigen, wie weit der Zwischenspeicher meta.storage_s3_month ist; Monate ohne Messung fehlen noch in der Summe der Gruppe und stehen bis dahin unter Sonstiges (Rest aus der Bucket-Summe der Garage-Admin-API).",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "-- Einzelwerte der jüngsten Messung, dazu der Stand des Garage-Zwischenspeichers je Bucket und\n-- Gruppe (gemessene Monate, älteste Messung)\nWITH u AS (\n  SELECT * FROM meta.storage_usage\n   WHERE measured_at = (SELECT max(measured_at) FROM meta.storage_usage)),\nm AS (\n  SELECT CASE bucket WHEN 'wx-bronze' THEN 'Bronze' WHEN 'wx-silver' THEN 'Silber' ELSE bucket END AS part,\n         grp, count(*) AS monate, min(scanned_at) AS aeltester\n    FROM meta.storage_s3_month GROUP BY 1, 2)\nSELECT CASE u.grp WHEN 'gfs-de' THEN 'GFS DE' WHEN 'gfs-eu' THEN 'GFS Europa' WHEN 'gefs' THEN 'GEFS' ELSE 'Sonstiges' END AS \"Gruppe\",\n       CASE u.store WHEN 's3' THEN 'Garage' WHEN 'garage' THEN 'Garage' ELSE 'Postgres' END AS \"Speicher\",\n       u.part AS \"Teil\",\n       u.bytes AS \"Größe\",\n       nullif(u.objects, 0) AS \"Objekte bzw. Zeilen\",\n       m.monate AS \"Monate gelistet\",\n       m.aeltester AS \"älteste Monatsmessung\",\n       u.measured_at AS \"Messung\"\n  FROM u LEFT JOIN m ON u.store = 's3' AND m.part = u.part AND m.grp = u.grp\n ORDER BY CASE u.grp WHEN 'gfs-de' THEN 1 WHEN 'gfs-eu' THEN 2 WHEN 'gefs' THEN 3 ELSE 4 END, u.bytes DESC"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": true,
+          "reducer": [
+            "sum"
+          ],
+          "fields": [
+            "Größe"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Größe"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Objekte bzw. Zeilen"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "älteste Monatsmessung"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeFromNow"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Messung"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeFromNow"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Speicherbelegung im Verlauf (je Gruppe und Teil)",
+      "id": 82,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 66
+      },
+      "description": "Gestapelter Verlauf aller Messungen von storage-usage. Solange die erste Vollmessung von Garage läuft, wandert Platz von „Sonstiges“ in die Gruppen.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "-- Verlauf je Gruppe und Teil aus allen Messungen im Zeitbereich; Sonstiges als eine Reihe\nSELECT measured_at AS time,\n       CASE WHEN grp IN ('gfs-de', 'gfs-eu', 'gefs')\n            THEN CASE grp WHEN 'gfs-de' THEN 'GFS DE' WHEN 'gfs-eu' THEN 'GFS Europa' ELSE 'GEFS' END\n                 || CASE store WHEN 's3' THEN ' Garage ' ELSE ' Postgres ' END || part\n            ELSE 'Sonstiges' END AS metric,\n       sum(bytes) AS value\n  FROM meta.storage_usage\n WHERE $__timeFilter(measured_at)\n GROUP BY 1, 2\n ORDER BY 1, 2"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT measured_at AS time, 'Gesamt' AS metric, sum(bytes) AS value\n  FROM meta.storage_usage\n WHERE $__timeFilter(measured_at)\n GROUP BY 1\n ORDER BY 1"
+        }
+      ],
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "min": 0,
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 30,
+            "lineWidth": 1,
+            "insertNulls": 7200000
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Gesamt"
+            },
+            "properties": [
+              {
+                "id": "custom.stacking",
+                "value": {
+                  "mode": "none",
+                  "group": "gesamt"
+                }
+              },
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "viz": true,
+                  "legend": true,
+                  "tooltip": false
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "row",
       "title": "Rechenlast der Wetter-Dienste",
       "id": 53,
       "collapsed": false,
@@ -1710,7 +2096,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 56
+        "y": 75
       },
       "panels": []
     },
@@ -1726,7 +2112,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 57
+        "y": 76
       },
       "targets": [
         {
