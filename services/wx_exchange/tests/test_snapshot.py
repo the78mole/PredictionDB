@@ -92,6 +92,32 @@ class FakeGrafana(snapshot.Grafana):
             "timeSettings": {"from": "now/d", "to": "now+7d/d", "autoRefresh": "5m"},
         }
 
+    def snapshots(self) -> list[dict[str, Any]]:
+        stand = "Strompreis- und Lastprognose DE-LU · Stand"
+        return [
+            {
+                "name": f"{stand} 29.10.2026 14:30",
+                "external": True,
+                "externalUrl": "https://snapshots.raintank.io/dashboard/snapshot/alt",
+                "created": "2026-10-29T13:30:00Z",
+                "expires": "2026-11-28T13:30:00Z",
+            },
+            {
+                "name": f"{stand} 01.10.2026 14:30",
+                "external": True,
+                "externalUrl": "https://snapshots.raintank.io/dashboard/snapshot/abgelaufen",
+                "created": "2026-09-30T12:30:00Z",
+                "expires": "2026-10-30T12:30:00Z",
+            },
+            {
+                "name": "Etwas anderes",
+                "external": True,
+                "externalUrl": "https://x",
+                "created": "2026-10-29T10:00:00Z",
+                "expires": "2026-11-28T10:00:00Z",
+            },
+        ]
+
     def query(
         self, targets: list[dict[str, Any]], start: datetime, end: datetime
     ) -> dict[str, Any]:
@@ -109,8 +135,15 @@ class FakeGrafana(snapshot.Grafana):
 def test_build_snapshot_embeds_frames_in_v2() -> None:
     g = FakeGrafana()
     spec = snapshot.build_snapshot(g, datetime(2026, 10, 30, 13, 30, tzinfo=UTC))
-    assert list(spec["elements"]) == ["panel-69"]
-    assert [i["spec"]["element"]["name"] for i in spec["layout"]["spec"]["items"]] == ["panel-69"]
+    assert list(spec["elements"]) == ["panel-69", "panel-staende"]
+    names = [i["spec"]["element"]["name"] for i in spec["layout"]["spec"]["items"]]
+    assert names == ["panel-69", "panel-staende"]
+    # frühere Stände: nur eigene, nicht abgelaufene, mit Link und Ablaufdatum
+    staende = spec["elements"]["panel-staende"]["spec"]["vizConfig"]["spec"]["options"]
+    assert staende["content"].splitlines()[2:] == [
+        "| [Do 29.10.2026 14:30](https://snapshots.raintank.io/dashboard/snapshot/alt)"
+        " | 28.11.2026 |"
+    ]
     panel = spec["elements"]["panel-69"]["spec"]
     assert panel["title"] == "Woche · Challenger Challenger X"
     data = panel["data"]["spec"]
