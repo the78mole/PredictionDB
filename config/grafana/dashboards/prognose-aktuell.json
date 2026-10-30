@@ -1094,6 +1094,21 @@
       }
     },
     {
+      "type": "text",
+      "title": "Quellen",
+      "id": 71,
+      "gridPos": {
+        "h": 5,
+        "w": 24,
+        "x": 0,
+        "y": 40
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**Prognose:** eigene Modelle von [PredictionDB](https://github.com/the78mole/PredictionDB) (Champion und ein Challenger), Median P50 mit Band P10–P90. Tagesmittel gewichtet mit dem BDEW-Standardlastprofil H0 (Werte über [demandlib](https://github.com/oemof/demandlib), MIT).\n\n**Daten:** Day-Ahead-Preis DE-LU und Netzlast: Bundesnetzagentur | [SMARD.de](https://www.smard.de) (CC BY 4.0), [Energy-Charts](https://www.energy-charts.info) (Fraunhofer ISE, CC BY 4.0), ENTSO-E Transparency Platform. Wetter: NOAA/NCEP GFS und GEFS (gemeinfrei). Anlagenbestand: Marktstammdatenregister (DL-DE BY 2.0). Keine Gewähr."
+      }
+    },
+    {
       "type": "timeseries",
       "title": "Heute: Preis mit D+1 bis D+7 · Champion",
       "id": 59,
@@ -1105,7 +1120,7 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 40
+        "y": 45
       },
       "targets": [
         {
@@ -1312,7 +1327,7 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 40
+        "y": 45
       },
       "targets": [
         {
@@ -1519,7 +1534,7 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 50
+        "y": 55
       },
       "targets": [
         {
@@ -1726,7 +1741,7 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 50
+        "y": 55
       },
       "targets": [
         {
@@ -1933,7 +1948,7 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 60
+        "y": 65
       },
       "targets": [
         {
@@ -2173,7 +2188,7 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 60
+        "y": 65
       },
       "targets": [
         {
@@ -2380,7 +2395,7 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 70
+        "y": 75
       },
       "targets": [
         {
@@ -2620,7 +2635,7 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 70
+        "y": 75
       },
       "targets": [
         {

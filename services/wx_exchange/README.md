@@ -194,3 +194,19 @@ uv run pytest services/wx_exchange   # offline, mit simulierter Registry und GFS
 
 - Signatur der Manifeste mit `cosign` (5.5.3).
 - `wx-publish` für den laufenden Betrieb der VM (neue Läufe nach GHCR), Bronze-Artefakt.
+
+## Öffentlicher Grafana-Snapshot (`wx-exchange snapshot`)
+
+Dienst `grafana-snapshot` (Compose-Profil `public`): täglich um `PDB_SNAPSHOT_AT` (Standard
+14:30 Ortszeit, nach Day-Ahead-Auktion und Prognoselauf) holt er das Dashboard „Prognose
+aktuell“ im Schema v2 aus der eigenen Grafana, führt die Abfragen der Wochenpanels (67–70) für
+heute 00:00 bis Ende D+7 aus, bettet die Frames als Abfrage `queryType: snapshot` ein und lädt
+das Ganze über `POST /api/snapshots` mit `external: true` auf snapshots.raintank.io hoch
+(Ablauf `PDB_SNAPSHOT_EXPIRES`, Standard 2 Tage). Der Snapshot bleibt interaktiv (Tooltips, Zoom,
+Legende), hat aber jedes Mal eine neue Adresse. Deshalb biegt der Dienst danach einen Kurzlink um:
+`PDB_SHORTLINK_KIND=shortio` (Short.io, `PDB_SHORTIO_LINK_ID`) oder `shlink` (`PDB_SHLINK_URL`,
+`PDB_SHLINK_CODE`), Schlüssel in `PDB_SHORTLINK_API_KEY`. Ohne Kurzlink wird nur hochgeladen.
+
+Gestern/Heute/Morgen bleiben draußen: Ein Snapshot hat einen festen Zeitraum, und dann ignoriert
+Grafana relative Panel-Zeiträume. Einmalig von Hand: `docker compose --profile public run --rm
+grafana-snapshot wx-exchange snapshot --once`.
