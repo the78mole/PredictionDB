@@ -189,7 +189,21 @@ def predict_model(
                     }
                 )
             )
-    return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
+    if not rows:
+        return pd.DataFrame()
+    out = pd.concat(rows, ignore_index=True)
+    # NaN nie schreiben: ein Lauf ohne gültige Werte gilt als fehlend und wird nachgeholt
+    bad = out["value"].isna()
+    if bad.any():
+        log.error(
+            "predict.nan",
+            version=version,
+            issue=str(issue),
+            targets=sorted(out.loc[bad, "target"].unique()),
+            rows=int(bad.sum()),
+        )
+        out = out[~bad].reset_index(drop=True)
+    return out
 
 
 def predict_versions(
