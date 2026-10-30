@@ -1,0 +1,539 @@
+[DOCUMENT]
+TITLE: Softwareanforderungen energy-ingest (SRS)
+PREFIX: SWR-ENI-
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @anforderung
+
+[TEXT]
+STATEMENT: >>>
+Softwareanforderungen nach ISO/IEC/IEEE 29148 an das Softwareelement SYSA-SW-ENI
+(``services/energy_ingest``). Der Dienst lädt Markt- und Netzdaten für die Gebotszone DE-LU
+sowie Brennstoffpreise, Gasspeicher und Energiestatistiken aus mehreren Quellen nach
+``energy.*`` und protokolliert den Abrufstand in ``meta.*``. Einheiten sind MW bzw. EUR/MWh.
+<<<
+
+[[SECTION]]
+TITLE: Steuerung und Konfiguration
+
+[REQUIREMENT]
+UID: SWR-ENI-001
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Inspektion, Demonstration
+TITLE: Befehle
+STATEMENT: >>>
+Der Dienst muss die Befehle ``sources`` (aktive Quellen mit Rang und Lizenzart), ``sync``,
+``revise``, ``backfill START ENDE`` und ``check`` bereitstellen. ``sync`` und ``revise`` müssen
+mit ``--watch SEKUNDEN`` dauerhaft laufen; ``sync --watch`` prüft nach jedem Zyklus die Quellen
+gegeneinander und lädt anschließend Historie nach, sofern nicht ``--no-backfill`` gesetzt ist.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-002
+- TYPE: Parent
+  VALUE: SYSR-OPS-001
+
+[REQUIREMENT]
+UID: SWR-ENI-002
+ART: Randbedingung
+STATUS: Umgesetzt
+NACHWEIS: Inspektion
+TITLE: Einstellungen
+STATEMENT: >>>
+Einstellungen müssen aus Umgebungsvariablen mit Präfix ``PDB_ENERGY_`` bzw. der ``.env``
+kommen, Zugangsdaten aus ``PDB_ENTSOE_TOKEN``, ``PDB_NETZTRANSPARENZ_CLIENT_ID``,
+``PDB_NETZTRANSPARENZ_CLIENT_SECRET``, ``PDB_EIA_API_KEY`` und ``PDB_GIE_API_KEY``. Geheimnisse
+dürfen nicht im Protokoll erscheinen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-QA-003
+
+[REQUIREMENT]
+UID: SWR-ENI-003
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Unfreie Quellen nur mit Freigabe
+STATEMENT: >>>
+Quellen, deren Nutzungsbedingungen die Weitergabe einschränken (ENTSO-E, Netztransparenz,
+Thomson-Reuters-Reihen der EIA, THE), dürfen nur laufen, wenn ``PDB_ALLOW_ENTSO_E``,
+``PDB_ALLOW_NETZTRANSPARENZ``, ``PDB_ALLOW_EIA_REUTERS`` bzw. ``PDB_ALLOW_THE`` gesetzt ist
+(Vorgabe ``false``). Der Freigabestand muss nach ``meta.source.enabled`` geschrieben werden.
+Von Energy-Charts dürfen nur Reihen unter freier Lizenz geladen werden. Freie Quellen laufen
+ohne Schalter.
+<<<
+QUELLE: ARCHITEKTUR.md 7.11.1
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-006
+- TYPE: Parent
+  VALUE: SYSR-QA-004
+
+[REQUIREMENT]
+UID: SWR-ENI-004
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Quellen ohne Zugangsdaten
+STATEMENT: >>>
+Fehlen die Zugangsdaten einer Quelle, muss der Dienst sie mit einer Warnung überspringen und
+mit den übrigen Quellen weiterlaufen. Die EIA-Quelle muss ohne Schlüssel auf die Bulk-Dateien
+ausweichen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-002
+- TYPE: Parent
+  VALUE: SYSR-OPS-001
+
+[REQUIREMENT]
+UID: SWR-ENI-005
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Day-Ahead-Preis zuerst
+STATEMENT: >>>
+Im Abgleich müssen die Day-Ahead-Preise aller Quellen vor den übrigen Datensätzen geladen
+werden und die langsamen ENTSO-E-Abrufe am Ende des Zyklus stehen, damit der Preis des Folgetags
+kurz nach der Auktion vorliegt.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-001
+- TYPE: Parent
+  VALUE: SYSR-PR-002
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Abgleich, Revision und Backfill
+
+[REQUIREMENT]
+UID: SWR-ENI-010
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Laufender Abgleich
+STATEMENT: >>>
+``sync`` muss je aktiver Quelle und Datensatz das Fenster von ``PDB_ENERGY_LOOKBACK_DAYS``
+(3) Tagen zurück bis ``PDB_ENERGY_HORIZON_DAYS`` (2) Tage voraus abfragen und schreiben; im
+Betrieb alle 15 Minuten. Ein Fehler in einem Datensatz darf die übrigen nicht aufhalten.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-002
+- TYPE: Parent
+  VALUE: SYSR-OPS-001
+
+[REQUIREMENT]
+UID: SWR-ENI-011
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Rückblick je Datensatz
+STATEMENT: >>>
+Eine Quelle muss für einzelne Datensätze einen längeren Rückblick angeben können (z. B.
+Monatsmarktwerte, die erst nach Periodenende erscheinen); der Abgleich muss ihn zum Fenster
+hinzunehmen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-002
+
+[REQUIREMENT]
+UID: SWR-ENI-012
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Korrekturen der Quellen übernehmen
+STATEMENT: >>>
+``revise`` muss die letzten ``PDB_ENERGY_REVISION_DAYS`` (30) Tage vor dem Abgleichfenster
+erneut abfragen; Werte, die die Quelle entfernt hat, müssen geleert werden. Mit ``due_only``
+muss es Datensätze überspringen, die innerhalb von ``PDB_ENERGY_REVISION_INTERVAL_HOURS`` schon
+vollständig erneut abgefragt wurden (Stand in ``meta.energy_revise``), damit ein Neustart dort
+fortsetzt. Der laufende Abgleich darf nichts leeren.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-002
+- TYPE: Parent
+  VALUE: SYSR-OPS-001
+
+[REQUIREMENT]
+UID: SWR-ENI-013
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Backfill in festen Blöcken
+STATEMENT: >>>
+``backfill`` muss einen Zeitraum in Blöcke auf einem festen Raster (Blockgröße je Quelle)
+teilen und jeden erfolgreichen Block in ``meta.energy_fetch`` vermerken. Ein Block gilt erst
+als erledigt, wenn er älter als ``PDB_ENERGY_FINAL_AFTER_DAYS`` (7) ist; fehlgeschlagene Blöcke
+dürfen nicht vermerkt werden. ``--force`` lädt auch erledigte Blöcke.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-002
+- TYPE: Parent
+  VALUE: SYSR-OPS-001
+
+[REQUIREMENT]
+UID: SWR-ENI-014
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Historie im Dauerbetrieb nachladen
+STATEMENT: >>>
+Nach jedem Abgleich muss der Dienst bis zu ``PDB_ENERGY_BACKFILL_CHUNKS_PER_CYCLE`` offene
+Blöcke zwischen ``PDB_ENERGY_BACKFILL_FROM`` (2015-01-01) und dem Abgleichfenster laden, neueste
+zuerst und reihum je Quelle, und vor dem nächsten Zyklus aufhören.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-002
+- TYPE: Parent
+  VALUE: SYSR-OPS-001
+
+[REQUIREMENT]
+UID: SWR-ENI-015
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Quellen gegeneinander prüfen
+STATEMENT: >>>
+``check`` muss für Reihen mit mehreren Quellen die Stundenmittel der letzten Tage vergleichen
+und Abweichungen über ``PDB_ENERGY_CHECK_REL_THRESHOLD`` (5 %) melden.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-002
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Datenmodell und Ablage
+
+[REQUIREMENT]
+UID: SWR-ENI-020
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Ablage je Reihe und Quelle
+STATEMENT: >>>
+Jeder Wert muss je Reihe, Quelle und Zeitpunkt in ``energy.*`` gespeichert werden; erneutes
+Schreiben überschreibt (Upsert). Zeitpunkte liegen auf dem Raster der Reihe, Leistungen in MW,
+Preise in EUR/MWh ohne Umskalierung.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-001
+- TYPE: Parent
+  VALUE: SYSR-EN-002
+- TYPE: Parent
+  VALUE: SYSR-OPS-001
+
+[REQUIREMENT]
+UID: SWR-ENI-021
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Veröffentlichungszeitpunkt
+STATEMENT: >>>
+Jeder Wert muss ``published`` tragen: den früheren Zeitpunkt aus Abruf und regulärem
+Veröffentlichungstermin der Quelle (z. B. Day-Ahead-Preis am Vortag 13 Uhr Ortszeit, Monatswerte
+nach Periodenende). Beim Überschreiben muss der früheste ``published`` erhalten bleiben.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-003
+- TYPE: Parent
+  VALUE: SYSR-PR-003
+
+[REQUIREMENT]
+UID: SWR-ENI-022
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Korrekturen protokollieren
+STATEMENT: >>>
+Ändert sich ein gespeicherter Wert beim Überschreiben, muss alter und neuer Wert protokolliert
+werden (``energy.value_revision``); unveränderte Werte nicht.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-002
+
+[REQUIREMENT]
+UID: SWR-ENI-023
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Beste freigegebene Quelle
+STATEMENT: >>>
+Jede Quelle muss einen Rang führen. ``energy.value_best`` muss je Reihe und Zeitpunkt den Wert
+der bestplatzierten freigegebenen Quelle liefern; nicht freigegebene Quellen bleiben außen vor.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-002
+- TYPE: Parent
+  VALUE: SYSR-EN-006
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Fehler und Formatprüfung
+
+[REQUIREMENT]
+UID: SWR-ENI-030
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Formatänderungen erkennen
+STATEMENT: >>>
+Jede Quelle muss ihre Antworten auf das erwartete Format prüfen und Abweichungen (fehlende
+Felder, geänderte Einheiten, Fehlertexte statt Daten, falsche Ausgabe) als Formatfehler melden.
+Der Dienst muss je Datensatz den Status (u. a. ``format``) in ``meta.energy_status`` schreiben,
+damit Grafana alarmiert; der betroffene Block wird nicht als erledigt vermerkt.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-OPS-004
+- TYPE: Parent
+  VALUE: SYSR-OPS-005
+
+[REQUIREMENT]
+UID: SWR-ENI-031
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Quellfehler
+STATEMENT: >>>
+Fehler der Quelle (abgelehnter Schlüssel, Fehlerantwort, fehlende Ausgabe) müssen als
+Quellfehler gemeldet werden, ohne Schlüssel im Text.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-OPS-004
+- TYPE: Parent
+  VALUE: SYSR-QA-003
+
+[REQUIREMENT]
+UID: SWR-ENI-032
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: HTTP-Wiederholung und Drosselung
+STATEMENT: >>>
+HTTP-Abrufe müssen bei Netzfehlern, 429 und 5xx wiederholt werden und dabei ``Retry-After``
+(Sekunden oder Datum) mit Obergrenze beachten. Anfragen an denselben Host müssen gedrosselt
+werden.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-OPS-001
+- TYPE: Parent
+  VALUE: SYSR-QA-001
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Quellen
+
+[REQUIREMENT]
+UID: SWR-ENI-040
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: SMARD
+STATEMENT: >>>
+Der Dienst muss Preise, Last, Erzeugung und Prognosen aus der Chart-API von SMARD laden,
+Viertelstunde mit Rückfall auf Stundenwerte.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-001
+
+[REQUIREMENT]
+UID: SWR-ENI-041
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Energy-Charts
+STATEMENT: >>>
+Der Dienst muss Day-Ahead-Preise (DE-LU und Nachbarzonen), öffentliche Erzeugung je Träger,
+Prognosen und grenzüberschreitende Flüsse aus ``api.energy-charts.info`` laden; nur Reihen
+unter freier Lizenz.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-001
+- TYPE: Parent
+  VALUE: SYSR-EN-006
+
+[REQUIREMENT]
+UID: SWR-ENI-042
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: ENTSO-E
+STATEMENT: >>>
+Der Dienst muss Dokumente der ENTSO-E Transparency Platform (Token) auswerten, bei mehreren
+Auflösungen die feinste nehmen und Last-Prognosen der Nachbarländer als eigene Quelle
+``entsoe_last`` führen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-001
+
+[REQUIREMENT]
+UID: SWR-ENI-043
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Netztransparenz
+STATEMENT: >>>
+Der Dienst muss Monats- und Jahresmarktwerte von Netztransparenz.de laden (OAuth2 Client
+Credentials); das Zugriffstoken muss wiederverwendet und bei 401 erneuert werden.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-001
+
+[REQUIREMENT]
+UID: SWR-ENI-044
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Marktwerte selbst rechnen
+STATEMENT: >>>
+Ohne Freigabe von Netztransparenz muss der Dienst Monats- und Jahresmarktwerte nach Anlage 1
+EEG aus freien Daten selbst rechnen (``pdb_marktwert``). Geschrieben werden nur abgeschlossene
+Perioden nach Ortszeit mit mindestens 98 % der Stunden.
+<<<
+QUELLE: EEG 2023 Anlage 1
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-001
+- TYPE: Parent
+  VALUE: SYSR-EN-006
+
+[REQUIREMENT]
+UID: SWR-ENI-045
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: EIA-Spotpreise
+STATEMENT: >>>
+Der Dienst muss Spotpreise für Öl, Ölprodukte und Henry Hub über die EIA-API (seitenweise)
+oder ohne Schlüssel aus den Bulk-Dateien laden; Thomson-Reuters-Reihen nur als unfreie Quelle
+``eia_reuters``.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-005
+- TYPE: Parent
+  VALUE: SYSR-EN-006
+
+[REQUIREMENT]
+UID: SWR-ENI-046
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: EIA STEO
+STATEMENT: >>>
+Der Dienst muss je Ausgabe des Short-Term Energy Outlook die Monatsprognosen für Brent und
+Henry Hub laden; eine noch nicht erschienene aktuelle Ausgabe wird übersprungen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-005
+
+[REQUIREMENT]
+UID: SWR-ENI-047
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: EZB-Wechselkurs
+STATEMENT: >>>
+Der Dienst muss den täglichen Referenzkurs US-Dollar je Euro der EZB laden.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-005
+
+[REQUIREMENT]
+UID: SWR-ENI-048
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Weltbank Pink Sheet
+STATEMENT: >>>
+Der Dienst muss Monatsmittel für Öl, Kohle, Erdgas und LNG aus der Weltbank-Tabelle laden und
+die Datei je Lauf nur einmal herunterladen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-005
+
+[REQUIREMENT]
+UID: SWR-ENI-049
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: EU Weekly Oil Bulletin
+STATEMENT: >>>
+Der Dienst muss die Endkundenpreise für Deutschland aus dem Weekly Oil Bulletin laden.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-005
+
+[REQUIREMENT]
+UID: SWR-ENI-050
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: THE-Gaspreise
+STATEMENT: >>>
+Der Dienst muss Tagespreise am VTP von Trading Hub Europe je Gastag laden (unfreie Quelle).
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-005
+- TYPE: Parent
+  VALUE: SYSR-EN-006
+
+[REQUIREMENT]
+UID: SWR-ENI-051
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Gasspeicher und LNG (GIE)
+STATEMENT: >>>
+Der Dienst muss Füllstände je Gastag aus AGSI+ und LNG-Terminaldaten aus ALSI seitenweise
+laden (Schlüssel ``PDB_GIE_API_KEY``), Deutschland und EU.
+<<<
+QUELLE: ARCHITEKTUR.md 3
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-005
+
+[REQUIREMENT]
+UID: SWR-ENI-052
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Eurostat
+STATEMENT: >>>
+Der Dienst muss Monatsstatistiken zu Erdgas, Öl und Steinkohle (Bestand, Bilanz, Einfuhr nach
+Herkunft, Einfuhrpreis Rohöl) von Eurostat laden.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-005
+
+[[/SECTION]]
+

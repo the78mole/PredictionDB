@@ -32,6 +32,8 @@ Datensätze:
   Inlandslieferung die Einfuhr. Kohle nach Herkunft gibt es nur jährlich.
 
 Zeitstempel 00:00 Ortszeit, als UTC.
+
+@relation(SWA-ENI-SRC-EUROSTAT, scope=file)
 """
 
 from __future__ import annotations
@@ -181,6 +183,8 @@ def parse_json(body: Any, table: Table) -> dict[tuple[str, str], list[tuple[date
     """JSON-stat-Antwort -> Punkte je (Geo, Eurostat-Code der Schlüsseldimension).
 
     Werte in der Einheit der Reihe (Eurostat-Wert geteilt durch ``table.scale``).
+
+    @relation(SWR-ENI-052, SWR-ENI-030, scope=function)
     """
     try:
         ids: list[str] = body["id"]
@@ -216,6 +220,8 @@ def parse_json(body: Any, table: Table) -> dict[tuple[str, str], list[tuple[date
 
 
 class Eurostat:
+    """@relation(SWR-ENI-052, scope=class)"""
+
     code = "eurostat"
     license = "CC BY 4.0, Eurostat"
     priority = 10

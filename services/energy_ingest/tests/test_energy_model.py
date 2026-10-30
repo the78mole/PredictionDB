@@ -12,6 +12,7 @@ from energy_ingest.model import (
 
 def test_price_published_day_before_13_local() -> None:
     # Liefertag 2026-10-20 (MESZ): Auktion am 19.10. um 13:00 MESZ = 11:00 UTC
+    """@relation(SWR-ENI-021, scope=function)"""
     ts = datetime(2026, 10, 20, 8, 0, tzinfo=UTC)
     assert estimate_published(Kind.PRICE_DA, ts, QUARTER_HOUR) == datetime(
         2026, 10, 19, 11, 0, tzinfo=UTC
@@ -22,6 +23,7 @@ def test_price_published_day_before_13_local() -> None:
 
 
 def test_forecasts_and_actuals() -> None:
+    """@relation(SWR-ENI-021, scope=function)"""
     ts = datetime(2026, 1, 15, 12, 0, tzinfo=UTC)  # Winterzeit
     assert estimate_published(Kind.LOAD_DA_FORECAST, ts, QUARTER_HOUR) == datetime(
         2026, 1, 14, 9, 0, tzinfo=UTC
@@ -33,6 +35,7 @@ def test_forecasts_and_actuals() -> None:
 
 
 def test_published_at_prefers_earlier_fetch() -> None:
+    """@relation(SWR-ENI-021, scope=function)"""
     ts = datetime(2026, 1, 15, 12, 0, tzinfo=UTC)
     early = ts + timedelta(minutes=20)
     assert published_at(Kind.ACTUAL, ts, QUARTER_HOUR, early) == early
@@ -41,5 +44,6 @@ def test_published_at_prefers_earlier_fetch() -> None:
 
 
 def test_floor_to() -> None:
+    """@relation(SWR-ENI-020, scope=function)"""
     ts = datetime(2026, 1, 15, 12, 7, tzinfo=UTC)
     assert floor_to(ts, QUARTER_HOUR) == datetime(2026, 1, 15, 12, 0, tzinfo=UTC)

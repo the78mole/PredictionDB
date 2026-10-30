@@ -14,6 +14,8 @@ Antworten sind XML-Dokumente (``Publication_MarketDocument`` bzw. ``GL_MarketDoc
 mit ``TimeSeries/Period/Point``. Bei Kurventyp A03 fehlen Punkte, deren Wert sich nicht
 ändert; sie werden mit dem vorigen Wert aufgefüllt. Liegen keine Daten vor, kommt ein
 ``Acknowledgement_MarketDocument`` mit Grund 999.
+
+@relation(SWA-ENI-SRC-ENTSOE, scope=file)
 """
 
 from __future__ import annotations
@@ -167,6 +169,7 @@ class TimeSeries:
 
 
 def parse_document(xml: bytes) -> list[TimeSeries]:
+    """@relation(SWR-ENI-042, SWR-ENI-030, scope=function)"""
     root = ET.fromstring(xml)
     if _local(root.tag) == "Acknowledgement_MarketDocument":
         code = _text(root, "Reason", "code")
@@ -180,7 +183,10 @@ def parse_document(xml: bytes) -> list[TimeSeries]:
 def merge(
     series_list: list[TimeSeries], start: datetime, end: datetime
 ) -> tuple[timedelta, list[tuple[datetime, float]]] | None:
-    """Fasst Perioden zusammen; bei mehreren Auflösungen gewinnt die feinste."""
+    """Fasst Perioden zusammen; bei mehreren Auflösungen gewinnt die feinste.
+
+    @relation(SWR-ENI-042, scope=function)
+    """
     by_res: dict[timedelta, dict[datetime, float]] = {}
     for ts in series_list:
         for res, pts in ts.periods():
@@ -199,6 +205,8 @@ FREE_DATASETS = ["load_forecast", *(f"load_forecast_{z}" for z in LOAD_FORECAST_
 
 
 class Entsoe:
+    """@relation(SWR-ENI-042, scope=class)"""
+
     code = "entsoe"
     license = "ENTSO-E Transparency Platform, Nutzungsbedingungen von ENTSO-E"
     priority = 20
@@ -259,7 +267,10 @@ class Entsoe:
 
 class EntsoeLast(Entsoe):
     """Freier Teil von ENTSO-E: Day-Ahead-Lastprognosen (6.1.b) für DE und die Nachbarzonen,
-    CC BY 4.0."""
+    CC BY 4.0.
+
+    @relation(SWR-ENI-042, scope=class)
+    """
 
     code = "entsoe_last"
     license = "CC BY 4.0, ENTSO-E Transparency Platform (List of Data available for free re-use)"

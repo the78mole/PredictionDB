@@ -39,11 +39,13 @@ def _edit(raw: bytes, sheet: str, row: int, col: int, value: object) -> bytes:
 
 
 def test_issue_name() -> None:
+    """@relation(SWR-ENI-046, scope=function)"""
     assert issue_name(2026, 10) == "oct26"
     assert issue_name(2015, 1) == "jan15"
 
 
 def test_parse_october_2026() -> None:
+    """@relation(SWR-ENI-046, scope=function)"""
     out = {d.code: d for d in parse_xlsx(_bytes("steo_oct26_base.xlsx"), 2026, 10)}
     # Tabelle bis Dezember 2027: Vorlauf 0 (Oktober 2026) bis 14
     assert sorted(out) == sorted(
@@ -62,6 +64,7 @@ def test_parse_october_2026() -> None:
 
 
 def test_parse_january_2015_without_last_historical_month() -> None:
+    """@relation(SWR-ENI-046, scope=function)"""
     out = {d.code: d for d in parse_xlsx(_bytes("steo_jan15_base.xlsx"), 2015, 1)}
     # Januar-Ausgabe reicht bis Dezember des Folgejahrs: Vorlauf 0 bis 23
     assert len(out) == 48
@@ -71,6 +74,7 @@ def test_parse_january_2015_without_last_historical_month() -> None:
 
 
 def test_wrong_issue_month_is_format_error() -> None:
+    """@relation(SWR-ENI-046, SWR-ENI-030, scope=function)"""
     with pytest.raises(FormatError, match="Ausgabemonat"):
         parse_xlsx(_bytes("steo_oct26_base.xlsx"), 2026, 9)
 
@@ -85,12 +89,14 @@ def test_wrong_issue_month_is_format_error() -> None:
     ],
 )
 def test_format_changes(row: int, col: int, value: str, match: str) -> None:
+    """@relation(SWR-ENI-046, SWR-ENI-030, scope=function)"""
     raw = _edit(_bytes("steo_oct26_base.xlsx"), "2tab", row, col, value)
     with pytest.raises(FormatError, match=match):
         parse_xlsx(raw, 2026, 10)
 
 
 def test_not_an_xlsx() -> None:
+    """@relation(SWR-ENI-046, SWR-ENI-030, scope=function)"""
     with pytest.raises(FormatError):
         parse_xlsx(b"<html>Fehler</html>", 2026, 10)
 
@@ -109,6 +115,7 @@ def _source(make_http: MakeHttp, calls: list[str]) -> EiaSteo:
 
 
 def test_fetch_skips_unpublished_current_issue(make_http: MakeHttp) -> None:
+    """@relation(SWR-ENI-046, scope=function)"""
     calls: list[str] = []
     src = _source(make_http, calls)
     now = NOV_3  # Novemberausgabe noch nicht erschienen
@@ -124,6 +131,7 @@ def test_fetch_skips_unpublished_current_issue(make_http: MakeHttp) -> None:
 
 
 def test_fetch_missing_old_issue_is_error(make_http: MakeHttp) -> None:
+    """@relation(SWR-ENI-046, SWR-ENI-031, scope=function)"""
     src = _source(make_http, [])
     with pytest.raises(SourceError, match="sep26"):
         src.fetch(
@@ -132,6 +140,7 @@ def test_fetch_missing_old_issue_is_error(make_http: MakeHttp) -> None:
 
 
 def test_fetch_window_uses_issue_months(make_http: MakeHttp) -> None:
+    """@relation(SWR-ENI-046, scope=function)"""
     calls: list[str] = []
     src = _source(make_http, calls)
     # Fenster mitten im Monat: nur Ausgaben, deren Monatsbeginn im Fenster liegt
@@ -142,12 +151,14 @@ def test_fetch_window_uses_issue_months(make_http: MakeHttp) -> None:
 
 
 def test_published_estimate() -> None:
+    """@relation(SWR-ENI-021, scope=function)"""
     ts = _month(2026, 10)
     assert estimate_published(Kind.OUTLOOK_MONTHLY, ts, MONTH) == ts + timedelta(days=14)
     assert series("steo_brent_h23").unit == "USD/bbl"
 
 
 def test_steo_is_free_and_active_by_default() -> None:
+    """@relation(SWR-ENI-003, scope=function)"""
     assert "eia_steo" in ALL_SOURCES
     assert EnergySettings().allowed("eia_steo")
     assert EiaSteo.free

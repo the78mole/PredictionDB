@@ -12,6 +12,8 @@ Beispiele::
     energy-ingest check --days 14                      # Quellen gegeneinander prüfen
     energy-ingest --source worldbank backfill 1960-01-01 2026-10-01   # Brennstoffe ab 1960
     energy-ingest --source gie_agsi backfill 2011-01-01 2015-01-01    # Gasspeicher ab 2011
+
+@relation(SWA-ENI-CLI, scope=file)
 """
 
 from __future__ import annotations
@@ -63,6 +65,7 @@ def parse_time(text: str) -> datetime:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """@relation(SWR-ENI-001, scope=function)"""
     p = argparse.ArgumentParser(
         prog="energy-ingest", description="Preis-, Last- und Erzeugungsdaten nach TimescaleDB"
     )
@@ -106,6 +109,7 @@ def build_parser() -> argparse.ArgumentParser:
 def build_sources(
     codes: list[str], settings: EnergySettings, http: Http, engine: Engine
 ) -> list[Source]:
+    """@relation(SWR-ENI-003, SWR-ENI-004, scope=function)"""
     sources: list[Source] = []
     eia_key = settings.eia_api_key.get_secret_value()
     eia_bulk = EiaBulk(http)  # gemeinsam für eia und eia_reuters, falls ohne Schlüssel
@@ -181,6 +185,7 @@ def _summary(results: list[DatasetResult]) -> dict[str, int]:
 
 
 def run(args: argparse.Namespace, settings: EnergySettings) -> int:
+    """@relation(SWR-ENI-001, SWR-ENI-003, SWR-ENI-014, scope=function)"""
     timeout = httpx.Timeout(settings.http_timeout_s, connect=15.0)
     headers = {
         "User-Agent": "PredictionDB energy-ingest (+https://github.com/the78mole/PredictionDB)"

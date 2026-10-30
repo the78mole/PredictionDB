@@ -2,6 +2,8 @@
 
 Jede Quelle bietet mehrere Datensätze (z. B. ``price``, ``generation``) an. Ein Datensatz
 wird für ein Zeitfenster ``[start, end)`` abgerufen und liefert eine oder mehrere Reihen.
+
+@relation(SWA-ENI-SOURCE, scope=file)
 """
 
 from __future__ import annotations
@@ -15,17 +17,24 @@ from energy_ingest.model import BERLIN, SeriesData
 
 
 class SourceError(RuntimeError):
-    """Quelle hat geantwortet, aber nicht verwertbar (z. B. Fehlermeldung statt Daten)."""
+    """Quelle hat geantwortet, aber nicht verwertbar (z. B. Fehlermeldung statt Daten).
+
+    @relation(SWR-ENI-031, scope=class)
+    """
 
 
 class FormatError(SourceError):
     """Aufbau der Antwort weicht vom erwarteten ab (Spalten, Blätter, Einheiten).
 
     Der Abruf schreibt dann nichts und meldet ``status = 'format'``; Grafana alarmiert.
+
+    @relation(SWR-ENI-030, scope=class)
     """
 
 
 class SourceMeta(Protocol):
+    """@relation(SWR-ENI-023, scope=class)"""
+
     code: str  # meta.source.code
     license: str
     priority: int  # kleiner = bevorzugt in energy.value_best
@@ -57,7 +66,10 @@ def day_start(d: date) -> datetime:
 
 class Cached[T]:
     """Ergebnis eines teuren Abrufs (ganze Datei) für ``ttl`` im Speicher halten, damit der
-    15-min-Abgleich und Backfill-Blöcke dieselbe Datei nicht wiederholt laden."""
+    15-min-Abgleich und Backfill-Blöcke dieselbe Datei nicht wiederholt laden.
+
+    @relation(SWR-ENI-048, scope=class)
+    """
 
     def __init__(self, load: Callable[[], T], ttl: timedelta) -> None:
         self.load = load

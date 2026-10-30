@@ -5,6 +5,8 @@ die Redundanz erhalten und ``energy.value_best`` wählt je Zeitpunkt die bevorzu
 Fehler einer Quelle oder eines Datensatzes werden protokolliert und halten die übrigen
 nicht auf. Der Ausgang jedes Abrufs landet in ``meta.energy_status``; Grafana alarmiert bei
 Formatabweichungen und anhaltenden Fehlern.
+
+@relation(SWA-ENI-INGESTOR, scope=file)
 """
 
 from __future__ import annotations
@@ -88,7 +90,10 @@ class DatasetResult:
 
 
 def chunks(size: timedelta, start: datetime, end: datetime) -> list[tuple[datetime, datetime]]:
-    """Blöcke des festen Rasters ab ``ANCHOR``, die ``[start, end)`` überdecken."""
+    """Blöcke des festen Rasters ab ``ANCHOR``, die ``[start, end)`` überdecken.
+
+    @relation(SWR-ENI-013, scope=function)
+    """
     k = (start - ANCHOR) // size
     out = []
     t = ANCHOR + k * size
@@ -99,13 +104,17 @@ def chunks(size: timedelta, start: datetime, end: datetime) -> list[tuple[dateti
 
 
 def day_window(now: datetime, back: int, ahead: int) -> tuple[datetime, datetime]:
+    """@relation(SWR-ENI-010, scope=function)"""
     day = now.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     return day - timedelta(days=back), day + timedelta(days=ahead)
 
 
 def sync_lookback(source: Source, dataset: str) -> timedelta:
     """Zusätzlicher Rückblick im Abgleich für Datensätze, die erst lange nach der Periode
-    erscheinen (z. B. Monatsmarktwerte); Quellen geben ihn optional in ``sync_lookback`` an."""
+    erscheinen (z. B. Monatsmarktwerte); Quellen geben ihn optional in ``sync_lookback`` an.
+
+    @relation(SWR-ENI-011, scope=function)
+    """
     extra: dict[str, timedelta] = getattr(source, "sync_lookback", {})
     return extra.get(dataset, timedelta(0))
 
@@ -126,6 +135,7 @@ class EnergyIngestor:
         *,
         prune: bool = False,
     ) -> DatasetResult:
+        """@relation(SWR-ENI-010, SWR-ENI-013, scope=function)"""
         try:
             batch = source.fetch(dataset, start, end)
             n = self.store.write(self.store.source_id(source), batch, now, prune=prune)
@@ -156,6 +166,7 @@ class EnergyIngestor:
         return res
 
     def _record(self, source: Source, res: DatasetResult) -> None:
+        """@relation(SWR-ENI-030, scope=function)"""
         try:
             self.store.record_status(
                 self.store.source_id(source), res.dataset, res.status, res.n_values, res.error
@@ -164,7 +175,10 @@ class EnergyIngestor:
             log.warning("energy.status_failed", source=source.code, error=str(exc))
 
     def sync(self, now: datetime | None = None) -> list[DatasetResult]:
-        """Laufender Abgleich des Fensters um heute (Ist-Werte, Preise, Folgetag-Prognosen)."""
+        """Laufender Abgleich des Fensters um heute (Ist-Werte, Preise, Folgetag-Prognosen).
+
+        @relation(SWR-ENI-005, SWR-ENI-010, scope=function)
+        """
         now = now or datetime.now(UTC)
         start, end = day_window(now, self.settings.lookback_days, self.settings.horizon_days)
         # Day-Ahead-Preise aller Quellen zuerst: Ein Zyklus dauert auf der VM über eine halbe
@@ -183,7 +197,10 @@ class EnergyIngestor:
 
         ``due_only`` überspringt Datensätze, die innerhalb von ``revision_interval_hours``
         schon vollständig erneut abgefragt wurden (``meta.energy_revise``); so setzt ein
-        Neustart dort fort, wo der vorige Lauf aufgehört hat."""
+        Neustart dort fort, wo der vorige Lauf aufgehört hat.
+
+        @relation(SWR-ENI-012, scope=function)
+        """
         now = now or datetime.now(UTC)
         interval = timedelta(hours=self.settings.revision_interval_hours)
         sync_start, _ = day_window(now, self.settings.lookback_days, 0)
@@ -260,7 +277,10 @@ class EnergyIngestor:
     ) -> list[DatasetResult]:
         """Lädt fehlende Blöcke in ``[start, end)``. Mit ``deadline`` (``time.monotonic()``)
         endet der Lauf nach dem Block, in dem die Frist abläuft; mindestens ein Block wird
-        immer geladen, damit die Historie auch bei langsamen Quellen vorankommt."""
+        immer geladen, damit die Historie auch bei langsamen Quellen vorankommt.
+
+        @relation(SWR-ENI-013, scope=function)
+        """
         now = now or datetime.now(UTC)
         final = now - timedelta(days=self.settings.final_after_days)
         todo = self.pending(
@@ -297,7 +317,10 @@ class EnergyIngestor:
 
         ``deadline`` ist das Ende des Abgleich-Intervalls: Der Backfill darf den nächsten
         Abgleich nicht verzögern, sonst kommen z. B. die Day-Ahead-Preise erst eine Stunde
-        nach der Auktion an (2026-10-26: 48 Blöcke à ~35 s hielten den Zyklus über 60 min)."""
+        nach der Auktion an (2026-10-26: 48 Blöcke à ~35 s hielten den Zyklus über 60 min).
+
+        @relation(SWR-ENI-014, scope=function)
+        """
         now = now or datetime.now(UTC)
         return self.backfill(
             self.settings.backfill_from,
@@ -309,7 +332,10 @@ class EnergyIngestor:
         )
 
     def check(self, now: datetime | None = None, days: int = 7) -> list[Deviation]:
-        """Plausibilitätsabgleich zwischen den Quellen (Kapitel 3.3)."""
+        """Plausibilitätsabgleich zwischen den Quellen (Kapitel 3.3).
+
+        @relation(SWR-ENI-015, scope=function)
+        """
         now = now or datetime.now(UTC)
         end = now.astimezone(UTC).replace(minute=0, second=0, microsecond=0)
         devs = self.store.compare(end - timedelta(days=days), end)
