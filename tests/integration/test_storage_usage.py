@@ -1,9 +1,9 @@
 """Speicherbelegung je Wettergruppe (``pdb-storage-usage``) und die Panels im Wetter-Dashboard.
 
 Läuft nur mit ``PDB_INTEGRATION=1`` nach ``garage-init`` und ``migrate``. Legt Objekte unter den
-Gruppenpräfixen in wx-silver/wx-bronze und Gold-Zeilen in einem eigenen Chunk (2019) an, misst,
-prüft Zwischenspeicher, erneutes Listing nach einer Änderung in ``meta.silver_run`` und die
-Abfragen der Panels 80 bis 82; die Testdaten werden wieder entfernt.
+Gruppenpräfixen in wx-silver/wx-bronze, die passenden Bestandsmeldungen und Gold-Zeilen in einem
+eigenen Chunk (2019) an, misst, prüft Zwischenspeicher, erneutes Listing nach einer Änderung in
+``meta.silver_run`` und die Abfragen der Panels 80 bis 82; die Testdaten werden wieder entfernt.
 """
 
 import json
@@ -60,6 +60,7 @@ def engine() -> Iterator[Engine]:
         c.execute(text("DELETE FROM meta.feature WHERE code = :c"), {"c": CODE})
         c.execute(text("DELETE FROM meta.region WHERE code = :c"), {"c": CODE})
         c.execute(text("DELETE FROM meta.silver_run WHERE run_time = :r"), {"r": RUN})
+        c.execute(text("DELETE FROM meta.bronze_run WHERE run_time = :r"), {"r": RUN})
         for t in ("meta.storage_usage", "meta.storage_s3_month", "meta.storage_pg_chunk"):
             c.execute(text(f"DELETE FROM {t}"))
 
@@ -86,6 +87,23 @@ def _gold(engine: Engine) -> None:
                             VALUES (:f, :g, :r, :v, 1)"""),
                     {"f": fid, "g": region, "r": GOLD_START, "v": GOLD_START + timedelta(hours=h)},
                 )
+
+
+def _runs(engine: Engine) -> None:
+    """Bestandsmeldungen, aus denen ``pdb-storage-usage`` die zu listenden Monate ableitet."""
+    with engine.begin() as c:
+        for source in ("gfs_0p25", "gfs_0p5"):
+            c.execute(
+                text("""INSERT INTO meta.silver_run (source_id, run_time, status, origin)
+                        SELECT source_id, :r, 'loading', 'bronze' FROM meta.source
+                         WHERE code = :s"""),
+                {"r": RUN, "s": source},
+            )
+        c.execute(
+            text("""INSERT INTO meta.bronze_run (source_id, run_time, status)
+                    SELECT source_id, :r, 'present' FROM meta.source WHERE code = 'gefs_0p5'"""),
+            {"r": RUN},
+        )
 
 
 def _client() -> httpx.Client:
@@ -116,6 +134,7 @@ def _panel_sql(panel_id: int, ref: str = "A") -> str:
 
 def test_measure_groups_and_panels(engine: Engine, tmp_path: Path) -> None:
     _gold(engine)
+    _runs(engine)
     (tmp_path / "db.lmdb").mkdir()
     (tmp_path / "db.lmdb" / "data.mdb").write_bytes(b"\0" * 8192)
     usage = Usage(engine, Settings())
@@ -155,9 +174,10 @@ def test_measure_groups_and_panels(engine: Engine, tmp_path: Path) -> None:
         assert _months(engine)[("wx-silver", "gfs-de")][2] == before
         with engine.begin() as c:
             c.execute(
-                text("""INSERT INTO meta.silver_run (source_id, run_time, status, origin)
-                        SELECT source_id, :r, 'present', 'bronze' FROM meta.source
-                         WHERE code = 'gfs_0p25'"""),
+                text("""UPDATE meta.silver_run SET status = 'present', updated_at = now()
+                         WHERE run_time = :r
+                           AND source_id = (SELECT source_id FROM meta.source
+                                             WHERE code = 'gfs_0p25')"""),
                 {"r": RUN},
             )
         measure(usage, client, tmp_path, 120, timedelta(days=7))
