@@ -3,6 +3,8 @@
 Ohne ``.idx`` (``index=False``) liegt die Datei wie im NCAR-Archiv GDEX d084001; die
 Nachrichten tragen die zu ``LAYOUT`` passenden GRIB2-Schlüssel, damit das Kopf-Inventar
 dieselben Zeilen liefert.
+
+@relation(SWA-WXI-TESTING, scope=file)
 """
 
 from __future__ import annotations

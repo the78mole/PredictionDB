@@ -25,6 +25,7 @@ Monorepo als [uv](https://docs.astral.sh/uv/)-Workspace (Kapitel 6.1 der Archite
 | `packages/core` | `predictiondb_core`: Konfiguration (`PDB_*`), Logging, S3- und DB-Zugriff, Garage-Init |
 | `packages/gribkit` | GRIB2-Hilfen: `.idx`-Parser, Range-Merging, Zuschnitt |
 | `services/*` | Dienste je mit eigener `pyproject.toml` und README: `wx_ingest`, `wx_process`, `wx_exchange`, `energy_ingest`, `mastr_ingest`, `ml_train` |
+| `reqs/` | Anforderungen als StrictDoc-Projekt (StRS, SyRS, Systemarchitektur, SRS und SWA je Dienst), Verweise aus Code und Tests per `@relation` ([README](reqs/README.md)) |
 | `migrations/` | Alembic-Migrationen (SQL inkl. TimescaleDB-Befehle) |
 | `compose.yaml` | Stack für die VM: TimescaleDB, Garage (Single Node), Ingest (GFS, Energie, MaStR), `wx-process`, Grafana mit Prometheus; Profile `backfill`, `history` (GFS-Historie) und `ml` (Training, Inferenz), Übersicht in Kapitel 8.2 der Architektur |
 | `docker/Dockerfile` | ein Image für alle Python-Dienste |

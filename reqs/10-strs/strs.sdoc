@@ -1,0 +1,329 @@
+[DOCUMENT]
+TITLE: Stakeholder-Anforderungen (StRS)
+PREFIX: STK-
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @anforderung
+
+[TEXT]
+STATEMENT: >>>
+Stakeholder Requirements Specification nach ISO/IEC/IEEE 29148. Sie beschreibt, was die
+Beteiligten von PredictionDB erwarten, ohne festzulegen, wie das System es leistet. Der erste
+Abschnitt enthält Auftrag und Leitprinzipien (Business Requirements, BRS), danach folgen die
+Bedürfnisse der Nutzergruppen und die Randbedingungen.
+
+Beteiligte:
+
+- **Betreiber und Entwickler** (Projektinhaber): betreibt den Stack auf eigener Hardware,
+  entwickelt Modelle und Analysen.
+- **Nutzer der Prognosen**: lesen Prognosen in Dashboards, über Dateien oder HTTP, betreiben den
+  schlanken Prognose-Stack selbst oder steuern eigene Anlagen danach.
+- **Betreiber weiterer Instanzen**: setzen PredictionDB selbst auf und tauschen Daten über GHCR aus.
+- **Datenanbieter**: stellen die freien Quellen bereit und erwarten die Einhaltung ihrer
+  Lizenzen und Nutzungsgrenzen.
+
+Verbindlichkeit: „muss“ ist verbindlich, „soll“ ist erwünscht. ``STATUS`` gibt den
+Umsetzungsstand an. Alle Einträge wurden 2026-10-30 nachträglich aus SPECIFICATION.md,
+docs/ARCHITEKTUR.md und den Entscheidungen im Projekt erhoben.
+<<<
+
+[[SECTION]]
+TITLE: Auftrag und Leitprinzipien (BRS)
+
+[REQUIREMENT]
+UID: STK-001
+ART: Funktional
+STATUS: Teilweise
+TITLE: Day-Ahead-Preis DE-LU prognostizieren
+STATEMENT: >>>
+Der Betreiber muss den Day-Ahead-Preis der Gebotszone DE-LU in Viertelstundenauflösung für die
+kommenden Tage vorhersagen können, mit einer Angabe der Unsicherheit.
+<<<
+QUELLE: SPECIFICATION.md 1; ARCHITEKTUR.md 7.1
+
+[REQUIREMENT]
+UID: STK-002
+ART: Funktional
+STATUS: Teilweise
+TITLE: Netzlast Deutschland prognostizieren
+STATEMENT: >>>
+Der Betreiber muss die Netzlast in Deutschland in Viertelstundenauflösung bis zu 16 Tage im
+Voraus vorhersagen können.
+<<<
+QUELLE: SPECIFICATION.md 1; ARCHITEKTUR.md 7.1
+
+[REQUIREMENT]
+UID: STK-003
+ART: Randbedingung
+STATUS: Teilweise
+TITLE: Modelle und Daten frei veröffentlichen
+STATEMENT: >>>
+Trainierte Modelle und die dafür aufbereiteten Daten müssen öffentlich und frei veröffentlicht
+werden können.
+<<<
+RATIONALE: >>>
+Leitprinzip des Projekts (Entscheidung 2026-10-24). Daraus folgen STK-004 und STK-034.
+<<<
+QUELLE: Projektentscheidung 2026-10-24; ARCHITEKTUR.md 7.11
+
+[REQUIREMENT]
+UID: STK-004
+ART: Randbedingung
+STATUS: Umgesetzt
+TITLE: Alle notwendigen freien Daten nutzen, keine unfreien
+STATEMENT: >>>
+In Training und veröffentlichte Daten dürfen nur frei nutzbare Quellen eingehen. Alle für das Ziel
+notwendigen frei verfügbaren Quellen sollen einbezogen werden, mehrere je Datenart, wo es sie
+gibt. Quellen ohne Lizenz, die nicht-kommerzielle Nutzung ausdrücklich erlauben, gelten als frei.
+<<<
+RATIONALE: >>>
+Vom Ziel her denken: Die Prognosegüte hängt an der Datenbreite, die Veröffentlichung an der
+Lizenz.
+<<<
+QUELLE: Projektentscheidungen 2026-10-23 und 2026-10-24; ARCHITEKTUR.md 3
+
+[REQUIREMENT]
+UID: STK-005
+ART: Randbedingung
+STATUS: Umgesetzt
+TITLE: Vollautomatische Datenbeschaffung
+STATEMENT: >>>
+Regelmäßige Eingangsdaten müssen vollautomatisch über maschinenlesbare Schnittstellen beschafft
+werden. Manuelle Eintragungen, gepflegte CSV-Dateien und das Auslesen von PDFs oder Webseiten sind
+für regelmäßige Daten ausgeschlossen. Für einmalige Analysen dürfen Werte von Hand mit
+Quellenangabe übernommen werden.
+<<<
+QUELLE: Projektentscheidungen 2026-10-22 und 2026-10-25
+
+[REQUIREMENT]
+UID: STK-006
+ART: Randbedingung
+STATUS: Umgesetzt
+TITLE: Günstiger Eigenbetrieb, später Cloud
+STATEMENT: >>>
+Das System muss auf eigener Hardware des Betreibers mit geringen laufenden Kosten betrieben werden
+können und soll später ohne Umbau in eine Cloud umziehen können.
+<<<
+QUELLE: ARCHITEKTUR.md 1.1, 9
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Bedürfnisse
+
+[REQUIREMENT]
+UID: STK-010
+ART: Funktional
+STATUS: Teilweise
+TITLE: Erzeugung aus Wind, PV und Laufwasser
+STATEMENT: >>>
+Der Betreiber muss die Einspeisung aus Wind, PV und Laufwasser in Deutschland vorhersagen können,
+weil sie Last und Preis wesentlich bestimmt.
+<<<
+QUELLE: SPECIFICATION.md 1
+
+[REQUIREMENT]
+UID: STK-011
+ART: Funktional
+STATUS: Geplant
+TITLE: Prognose eigener Anlagen
+STATEMENT: >>>
+Ein Nutzer muss eigene PV-, Wind- und Wasserkraftanlagen beschreiben und dafür Erzeugungsprognosen
+abrufen können, auch ohne eigene Messwerte. Mit Messwerten soll die Prognose daran kalibriert
+werden.
+<<<
+QUELLE: ARCHITEKTUR.md 7.6
+
+[REQUIREMENT]
+UID: STK-012
+ART: Funktional
+STATUS: Vorgemerkt
+TITLE: Wärme, Kälte und Wärmepumpen
+STATEMENT: >>>
+Ein Nutzer soll Wärme- und Kältebedarf von Gebäuden und Netzen, den Strombedarf von Wärmepumpen
+und deren optimalen Betrieb vorhersagen können.
+<<<
+QUELLE: ARCHITEKTUR.md 7.8
+
+[REQUIREMENT]
+UID: STK-013
+ART: Funktional
+STATUS: Umgesetzt
+TITLE: Prognosen selbst betreiben
+STATEMENT: >>>
+Ein Nutzer der Prognosen muss ein veröffentlichtes Modell ohne den vollständigen Stack selbst
+betreiben können, mit Eingängen direkt aus freien Quellen.
+<<<
+QUELLE: predict/README.md; ARCHITEKTUR.md 7.11
+
+[REQUIREMENT]
+UID: STK-014
+ART: Qualität
+STATUS: Teilweise
+TITLE: Prognosegüte nachvollziehbar
+STATEMENT: >>>
+Betreiber und Nutzer müssen die Güte jeder Prognose nachvollziehen können: im Vergleich zu den
+Istwerten, zwischen Modellversionen und je Vorlauf.
+<<<
+QUELLE: docs/BACKTEST.md; ARCHITEKTUR.md 7.10
+
+[REQUIREMENT]
+UID: STK-015
+ART: Funktional
+STATUS: Teilweise
+TITLE: Ausreichende Wetterhistorie für das Training
+STATEMENT: >>>
+Für das Training muss eine Wetterhistorie aus denselben Modellen vorliegen, die im Betrieb genutzt
+werden. Wöchentliches automatisches Neutraining und die Veröffentlichung von Modellen setzen
+mindestens drei Jahre GFS-Historie voraus.
+<<<
+QUELLE: Projektentscheidungen 2026-10-24 und 2026-10-29
+
+[REQUIREMENT]
+UID: STK-016
+ART: Funktional
+STATUS: Umgesetzt
+TITLE: Datenaustausch zwischen Instanzen
+STATEMENT: >>>
+Betreiber weiterer Instanzen sollen aufbereitete Wetterdaten übernehmen können, statt die
+Historie selbst bei den Quellen zu laden.
+<<<
+QUELLE: ARCHITEKTUR.md 5.5
+
+[REQUIREMENT]
+UID: STK-017
+ART: Qualität
+STATUS: Teilweise
+TITLE: Betrieb ohne tägliche Handarbeit
+STATEMENT: >>>
+Der Betrieb muss ohne tägliche Eingriffe laufen. Störungen, veraltete Daten und knapper Speicher
+müssen den Betreiber von selbst erreichen.
+<<<
+QUELLE: ARCHITEKTUR.md 10
+
+[REQUIREMENT]
+UID: STK-018
+ART: Funktional
+STATUS: Umgesetzt
+TITLE: Reproduzierbare Analysen
+STATEMENT: >>>
+Analysen, auf die sich Entscheidungen stützen, müssen mit ihren Eingangsdaten und ihrem Code
+nachvollziehbar und wiederholbar sein.
+<<<
+QUELLE: ARCHITEKTUR.md 7.9
+
+[REQUIREMENT]
+UID: STK-019
+ART: Funktional
+STATUS: Umgesetzt
+TITLE: Einrichtung neuer Instanzen
+STATEMENT: >>>
+Betreiber weiterer Instanzen müssen erfahren können, welche Zugänge, Schlüssel und Lizenzen jede
+Quelle verlangt.
+<<<
+QUELLE: docs/DATENQUELLEN-ZUGANG.md
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Randbedingungen
+
+[REQUIREMENT]
+UID: STK-030
+ART: Randbedingung
+STATUS: Umgesetzt
+TITLE: Python mit uv
+STATEMENT: >>>
+Die Software muss in Python geschrieben und mit uv verwaltet werden.
+<<<
+QUELLE: ARCHITEKTUR.md 1.1
+
+[REQUIREMENT]
+UID: STK-031
+ART: Randbedingung
+STATUS: Umgesetzt
+TITLE: Docker Compose auf Proxmox VE
+STATEMENT: >>>
+Der Stack muss als Docker-Compose-Projekt in einer VM auf Proxmox VE laufen.
+<<<
+QUELLE: ARCHITEKTUR.md 1.1, 8
+
+[REQUIREMENT]
+UID: STK-032
+ART: Randbedingung
+STATUS: Umgesetzt
+TITLE: Garage und PostgreSQL
+STATEMENT: >>>
+Objektspeicher ist Garage (Single Node, S3-API), Datenbank ist PostgreSQL mit TimescaleDB.
+<<<
+QUELLE: ARCHITEKTUR.md 5.2, 5.3
+
+[REQUIREMENT]
+UID: STK-033
+ART: Randbedingung
+STATUS: Umgesetzt
+TITLE: Lizenz des Codes
+STATEMENT: >>>
+Der Code steht unter der Business Source License 1.1 mit Additional Use Grant für interne Nutzung
+und eigene Energieanlagen. Change Date nach vier Jahren, Change License AGPL-3.0-or-later.
+<<<
+QUELLE: LICENSE
+
+[REQUIREMENT]
+UID: STK-034
+ART: Randbedingung
+STATUS: Umgesetzt
+TITLE: Unfreie Quellen nur ausdrücklich
+STATEMENT: >>>
+Eine unfreie Quelle darf nur genutzt werden, wenn der Betreiber sie ausdrücklich freischaltet. Ohne
+Freischaltung bleibt sie aus. Unfreie Daten dürfen nicht in veröffentlichte Modelle oder Daten
+gelangen.
+<<<
+QUELLE: Projektentscheidungen 2026-10-24 und 2026-10-25; docs/STEUER-UI.md
+
+[REQUIREMENT]
+UID: STK-035
+ART: Randbedingung
+STATUS: Teilweise
+TITLE: Lizenzpflichten der Quellen
+STATEMENT: >>>
+Namensnennung und sonstige Pflichten aus den Lizenzen der Quellen müssen überall erfüllt werden,
+wo Daten oder daraus abgeleitete Ergebnisse gezeigt oder weitergegeben werden.
+<<<
+QUELLE: ARCHITEKTUR.md 10
+
+[REQUIREMENT]
+UID: STK-036
+ART: Randbedingung
+STATUS: Geplant
+TITLE: Datenschutz eigener Anlagen
+STATEMENT: >>>
+Standort und Messwerte eigener Anlagen sind personenbezogen. Sie dürfen nur lokal verarbeitet,
+nicht mit dem MaStR verknüpft und müssen vollständig gelöscht werden können.
+<<<
+QUELLE: SPECIFICATION.md 7
+
+[REQUIREMENT]
+UID: STK-037
+ART: Randbedingung
+STATUS: Umgesetzt
+TITLE: Konfiguration über die Umgebung
+STATEMENT: >>>
+Das System muss vollständig über Umgebungsvariablen konfigurierbar sein und ohne grafische
+Oberfläche laufen. Eine optionale Oberfläche darf Einstellungen der Umgebung nur weiter
+einschränken, nicht erweitern.
+<<<
+QUELLE: docs/STEUER-UI.md
+
+[REQUIREMENT]
+UID: STK-038
+ART: Randbedingung
+STATUS: Umgesetzt
+TITLE: Rücksicht auf Quellen und Bandbreite
+STATEMENT: >>>
+Nutzungsgrenzen der Datenanbieter müssen eingehalten werden. Die Netzanbindung der VM ist
+gedrosselt, die Datenbeschaffung muss damit auskommen.
+<<<
+QUELLE: ARCHITEKTUR.md 4; Betriebsentscheidung 2026-10-26
+
+[[/SECTION]]

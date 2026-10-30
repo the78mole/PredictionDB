@@ -9,6 +9,7 @@ RUN = datetime(2021, 3, 22, 12, tzinfo=UTC)
 
 
 def test_without_database_is_silent() -> None:
+    """@relation(SWR-WXI-032, scope=function)"""
     jobs = JobLog(None)
     jobs.start("gfs_0p25", RUN, RUN, [0, 12], True, [RUN])
     jobs.progress(RunResult(RUN, [StepResult(0, "stored", "aws", 10)], complete=True))
@@ -17,6 +18,7 @@ def test_without_database_is_silent() -> None:
 
 
 def test_unreachable_database_disables_log() -> None:
+    """@relation(SWR-WXI-032, scope=function)"""
     engine = create_engine(
         "postgresql+psycopg://x:y@127.0.0.1:9/none", connect_args={"connect_timeout": 1}
     )
@@ -27,6 +29,7 @@ def test_unreachable_database_disables_log() -> None:
 
 def test_statements_without_rows(tmp_path) -> None:  # type: ignore[no-untyped-def]
     # UPDATE liefert keine Zeilen; das darf das Protokoll nicht abschalten
+    """@relation(SWR-WXI-032, scope=function)"""
     engine = create_engine(f"sqlite:///{tmp_path / 'db.sqlite'}")
     jobs = JobLog(engine)
     assert jobs._run("CREATE TABLE t (x int)", {}) is None

@@ -1,0 +1,725 @@
+[DOCUMENT]
+TITLE: Systemanforderungen (SyRS)
+PREFIX: SYSR-
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @anforderung
+
+[TEXT]
+STATEMENT: >>>
+System Requirements Specification nach ISO/IEC/IEEE 29148. „System“ ist PredictionDB mit allem,
+was zum Betrieb gehört: der Stack auf der VM, Garage, PostgreSQL, Grafana, die Workflows in GitHub
+Actions und die Ablage in GHCR. Externe Quellen sind Umgebung. Wie das System gegliedert ist,
+steht in der Systemarchitektur (SYSA), die Begründungen in docs/ARCHITEKTUR.md.
+
+Jede Systemanforderung leitet sich aus mindestens einer Stakeholder-Anforderung ab (``Parent``)
+und nennt die vorgesehene Nachweisart. Systemtests gegen diese Ebene gibt es bisher kaum; der
+Nachweis läuft heute über Integrationstests, Backtests, Dashboards und Inspektion.
+<<<
+
+[[SECTION]]
+TITLE: Wetterdaten
+
+[REQUIREMENT]
+UID: SYSR-WX-001
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test, Demonstration
+TITLE: GFS-Läufe laufend laden
+STATEMENT: >>>
+Das System muss jeden GFS-0,25°-Lauf (00, 06, 12, 18Z, 384 h) für den Ausschnitt 44–58° N,
+0–20° E laden. Ein veröffentlichter Prognoseschritt muss spätestens 10 min nach seiner
+Veröffentlichung erkannt und geladen werden.
+<<<
+QUELLE: SPECIFICATION.md 6.1; ARCHITEKTUR.md 3.1, 4
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-001
+- TYPE: Parent
+  VALUE: STK-002
+- TYPE: Parent
+  VALUE: STK-010
+
+[REQUIREMENT]
+UID: SYSR-WX-002
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Test, Analyse
+TITLE: Nur benötigte Daten übertragen
+STATEMENT: >>>
+Das System muss nur die konfigurierten Variablen und den Ausschnitt übertragen, über
+serverseitige Filter oder Byte-Bereiche, und die Nutzungsgrenzen jedes Endpunkts einhalten.
+<<<
+QUELLE: ARCHITEKTUR.md 4.1
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-038
+- TYPE: Parent
+  VALUE: STK-006
+
+[REQUIREMENT]
+UID: SYSR-WX-003
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Redundante Wetterendpunkte
+STATEMENT: >>>
+Fällt ein Endpunkt aus oder fehlt dort ein Schritt, muss das System den nächsten Endpunkt in der
+konfigurierten Rangfolge versuchen.
+<<<
+QUELLE: SPECIFICATION.md 6.1; ARCHITEKTUR.md 3.3
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-004
+- TYPE: Parent
+  VALUE: STK-017
+
+[REQUIREMENT]
+UID: SYSR-WX-004
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Original unverändert und geprüft ablegen
+STATEMENT: >>>
+Das System muss jeden geladenen Schritt verlustfrei als GRIB2 (Bronze) ablegen, mit Herkunft,
+Prüfsumme und fehlenden Variablen. Ein Lauf gilt erst als vollständig, wenn alle Schritte liegen.
+<<<
+QUELLE: SPECIFICATION.md 3.1, 6.1; ARCHITEKTUR.md 4.2, 5.1
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-018
+- TYPE: Parent
+  VALUE: STK-015
+
+[REQUIREMENT]
+UID: SYSR-WX-005
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Historie nachladen
+STATEMENT: >>>
+Das System muss vergangene GFS-Läufe ab 2021-03-22 12Z (GFS v16) aus Archiv-Endpunkten
+nachladen können. Ein abgebrochener Backfill muss mit demselben Aufruf fortgesetzt werden können.
+<<<
+QUELLE: services/wx_ingest/README.md; Projektentscheidung 2026-10-29
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-015
+
+[REQUIREMENT]
+UID: SYSR-WX-006
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Wetter platzsparend aufbereiten
+STATEMENT: >>>
+Das System muss jeden vollständigen Lauf in ein kompaktes Gitterformat (Silber) überführen und
+daraus Wetter-Features je Gebietscluster (Gold) berechnen. Wetterwerte dürfen nicht zeilenweise
+je Gitterpunkt in der Datenbank liegen.
+<<<
+QUELLE: SPECIFICATION.md 7; ARCHITEKTUR.md 5.1, 5.4
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-006
+- TYPE: Parent
+  VALUE: STK-010
+
+[REQUIREMENT]
+UID: SYSR-WX-007
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Demonstration
+TITLE: Ensemble für längere Horizonte
+STATEMENT: >>>
+Das System muss das GEFS-Ensemble bis D+16 laden und je Region und Mitglied aufbereiten, damit
+mehrtägige Prognosen eine Streuung erhalten.
+<<<
+QUELLE: ARCHITEKTUR.md 5.6
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-001
+- TYPE: Parent
+  VALUE: STK-002
+
+[REQUIREMENT]
+UID: SYSR-WX-008
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Demonstration
+TITLE: Wetter für das Verbundnetz
+STATEMENT: >>>
+Das System muss GFS 0,5° für Europa laden und je Gebotszone aufbereiten, damit Einflüsse der
+Nachbarländer in die Prognose eingehen.
+<<<
+QUELLE: ARCHITEKTUR.md 5.7
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-001
+- TYPE: Parent
+  VALUE: STK-004
+
+[REQUIREMENT]
+UID: SYSR-WX-009
+ART: Funktional
+STATUS: Geplant
+TITLE: Weitere Wettermodelle
+STATEMENT: >>>
+Das System soll weitere freie Wettermodelle (ECMWF IFS/AIFS Open Data, DWD ICON, GEM) einbinden.
+<<<
+QUELLE: SPECIFICATION.md 4; ARCHITEKTUR.md 3.1
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-004
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Energie-, Markt- und Anlagendaten
+
+[REQUIREMENT]
+UID: SYSR-EN-001
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test, Demonstration
+TITLE: Energie- und Marktdaten abgleichen
+STATEMENT: >>>
+Das System muss Preise, Last, Erzeugung je Träger und Prognosen der Netzbetreiber für DE-LU
+mindestens alle 15 min abgleichen, rückwirkend korrigierte Werte übernehmen und die Historie
+schrittweise nachladen.
+<<<
+QUELLE: SPECIFICATION.md 5, 6.2
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-001
+- TYPE: Parent
+  VALUE: STK-002
+- TYPE: Parent
+  VALUE: STK-005
+
+[REQUIREMENT]
+UID: SYSR-EN-002
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Mehrere Quellen je Reihe mit Rangfolge
+STATEMENT: >>>
+Das System muss je Reihe alle freigegebenen Quellen getrennt speichern, gegeneinander prüfen und
+für das Lernen die Quelle mit dem kleinsten Rang verwenden. SMARD hat Rang 1.
+<<<
+QUELLE: SPECIFICATION.md 6.2; Projektentscheidung SMARD Rang 1
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-004
+
+[REQUIREMENT]
+UID: SYSR-EN-003
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Veröffentlichungszeitpunkt je Wert
+STATEMENT: >>>
+Jeder Energiewert muss den Zeitpunkt tragen, ab dem er bekannt war. Training und Backtest dürfen
+nur Werte verwenden, die zum Prognosezeitpunkt bekannt waren.
+<<<
+QUELLE: SPECIFICATION.md 2, 6.2
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-014
+
+[REQUIREMENT]
+UID: SYSR-EN-004
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Anlagenbestand aus dem MaStR
+STATEMENT: >>>
+Das System muss den MaStR-Gesamtexport quartalsweise sichern, die installierte Leistung je
+Gebietscluster und Tag rekonstruieren und Cluster versioniert höchstens jährlich neu bilden.
+<<<
+QUELLE: SPECIFICATION.md 6.2; ARCHITEKTUR.md 7.5
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-010
+
+[REQUIREMENT]
+UID: SYSR-EN-005
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Brennstoff- und Speicherdaten
+STATEMENT: >>>
+Das System muss freie Reihen zu Brennstoffpreisen, Gasspeichern und Energieprognosen (Eurostat,
+GIE AGSI+, EIA STEO) einbeziehen, soweit sie das Preisniveau erklären.
+<<<
+QUELLE: ARCHITEKTUR.md 7.11.1; docs/analysen/preisniveau-schaetzung
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-001
+- TYPE: Parent
+  VALUE: STK-004
+
+[REQUIREMENT]
+UID: SYSR-EN-006
+ART: Randbedingung
+STATUS: Umgesetzt
+NACHWEIS: Test, Inspektion
+TITLE: Freigabe unfreier Quellen
+STATEMENT: >>>
+Jede Quelle muss als frei oder unfrei geführt werden. Unfreie Quellen laufen nur, wenn die
+zugehörige Variable ``PDB_ALLOW_*`` gesetzt ist, Vorgabe ist aus. Daten unfreier Quellen dürfen
+nicht in Modelle oder Daten eingehen, die veröffentlicht werden.
+<<<
+QUELLE: ARCHITEKTUR.md 7.11.1
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-034
+- TYPE: Parent
+  VALUE: STK-003
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Prognose und Training
+
+[REQUIREMENT]
+UID: SYSR-PR-001
+ART: Funktional
+STATUS: Teilweise
+NACHWEIS: Test, Demonstration
+TITLE: Last und Preis als Quantile
+STATEMENT: >>>
+Das System muss Netzlast DE und Day-Ahead-Preis DE-LU in 15-min-Auflösung als Quantile
+prognostizieren, den Preis mindestens für D+1 und als Szenario bis D+14.
+<<<
+QUELLE: SPECIFICATION.md 1, 6.3; ARCHITEKTUR.md 7.1, 7.3
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-001
+- TYPE: Parent
+  VALUE: STK-002
+
+[REQUIREMENT]
+UID: SYSR-PR-002
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Demonstration
+TITLE: Prognose nach jedem neuen Lauf
+STATEMENT: >>>
+Das System muss nach jedem neuen vollständigen Wetterlauf mit allen aktiven Modellversionen eine
+Prognose erstellen und ablegen. Neu registrierte Modelle müssen sofort rückwirkend Prognosen für
+den Vergleich erhalten.
+<<<
+QUELLE: compose.yaml (ml-predict); ARCHITEKTUR.md 7.4
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-001
+- TYPE: Parent
+  VALUE: STK-014
+
+[REQUIREMENT]
+UID: SYSR-PR-003
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Kein Vorgriff auf Zukunftswissen
+STATEMENT: >>>
+In eine Prognose dürfen nur Wetterläufe und Messwerte eingehen, die zum Ausgabezeitpunkt
+verfügbar waren (``run_time`` + Verzug ≤ ``issue_time``).
+<<<
+QUELLE: SPECIFICATION.md 6.3; ARCHITEKTUR.md 7.4
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-014
+
+[REQUIREMENT]
+UID: SYSR-PR-004
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test, Analyse
+TITLE: Backtest und Gütemaße
+STATEMENT: >>>
+Das System muss jedes Modell rollierend zurückrechnen und Gütemaße je Ziel, Quantil und Vorlauf
+ausgeben.
+<<<
+QUELLE: docs/BACKTEST.md
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-014
+
+[REQUIREMENT]
+UID: SYSR-TR-001
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Demonstration
+TITLE: Training als portabler Job
+STATEMENT: >>>
+Training muss als Container-Job auf CPU, lokaler oder gemieteter GPU laufen können. Ein Job darf
+nur einen Trainings-Snapshot brauchen, keinen Zugang ins Heimnetz.
+<<<
+QUELLE: SPECIFICATION.md 6.5; ARCHITEKTUR.md 7.7
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-006
+
+[REQUIREMENT]
+UID: SYSR-TR-002
+ART: Funktional
+STATUS: Teilweise
+NACHWEIS: Demonstration
+TITLE: Champion und Challenger
+STATEMENT: >>>
+Ein neues Modell darf das Produktionsmodell erst nach einem Vergleich (Champion/Challenger)
+ersetzen. Mehrere Modellversionen laufen parallel, ihre Streuung wird als Unsicherheitsmaß
+gespeichert.
+<<<
+QUELLE: SPECIFICATION.md 6.3, 6.5; docs/PROGNOSEMODELLE.md
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-014
+
+[REQUIREMENT]
+UID: SYSR-TR-003
+ART: Funktional
+STATUS: Geplant
+TITLE: Wöchentliches Neutraining
+STATEMENT: >>>
+Das System soll das Produktionsmodell wöchentlich automatisch nachtrainieren, sobald mindestens
+drei Jahre GFS-Historie vorliegen. Vorher wird es nicht eingerichtet.
+<<<
+QUELLE: Projektentscheidung 2026-10-24
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-015
+
+[REQUIREMENT]
+UID: SYSR-PR-005
+ART: Funktional
+STATUS: Geplant
+TITLE: API für eigene Anlagen
+STATEMENT: >>>
+Das System muss eine HTTP-API bieten, über die Nutzer eigene PV-, Wind- und Wasserkraftanlagen
+anlegen, Messwerte und Abschaltregeln hochladen, kalibrieren und Prognosen mit Quantilen abrufen.
+<<<
+QUELLE: SPECIFICATION.md 6.4; ARCHITEKTUR.md 7.6
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-011
+- TYPE: Parent
+  VALUE: STK-036
+
+[REQUIREMENT]
+UID: SYSR-PR-006
+ART: Funktional
+STATUS: Vorgemerkt
+TITLE: Wärme, Kälte und Wärmepumpen
+STATEMENT: >>>
+Das System soll Wärme- und Kältebedarf, den Strombedarf von Wärmepumpen und deren optimalen
+Betrieb für Folgetag, 24 h und 96 h vorhersagen. Die nötigen Wettervariablen werden bereits
+gesammelt.
+<<<
+QUELLE: SPECIFICATION.md 6.6; ARCHITEKTUR.md 7.8
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-012
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Veröffentlichung und Austausch
+
+[REQUIREMENT]
+UID: SYSR-PUB-001
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Demonstration
+TITLE: Silber über GHCR austauschen
+STATEMENT: >>>
+Das System muss Silber als ORAS-Artefakte in GHCR veröffentlichen und daraus importieren können.
+Der Import muss den Inhalt über Hashes prüfen.
+<<<
+QUELLE: ARCHITEKTUR.md 5.5
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-016
+- TYPE: Parent
+  VALUE: STK-003
+
+[REQUIREMENT]
+UID: SYSR-PUB-002
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test, Demonstration
+TITLE: Wetterhistorie in GitHub Actions bauen
+STATEMENT: >>>
+Die Silber-Historie für GFS und GEFS muss in GitHub-Actions-Runnern gebaut werden können, ohne
+die Bandbreite der VM zu belasten.
+<<<
+QUELLE: ARCHITEKTUR.md 5.5, 5.6
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-015
+- TYPE: Parent
+  VALUE: STK-038
+
+[REQUIREMENT]
+UID: SYSR-PUB-003
+ART: Funktional
+STATUS: Teilweise
+NACHWEIS: Inspektion
+TITLE: Modelle mit Modellkarte veröffentlichen
+STATEMENT: >>>
+Das System muss trainierte Modelle als versionierte Artefakte mit Modellkarte veröffentlichen.
+Die Modellkarte nennt alle Quellen mit Lizenz und Quellenvermerk. Mit dem Modell wird keine
+Datenreihe ausgeliefert, die nicht frei weitergegeben werden darf.
+<<<
+QUELLE: ARCHITEKTUR.md 7.11
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-003
+- TYPE: Parent
+  VALUE: STK-035
+
+[REQUIREMENT]
+UID: SYSR-PUB-004
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test, Demonstration
+TITLE: Schlanker Prognose-Stack
+STATEMENT: >>>
+Es muss einen eigenständigen Prognose-Stack geben, der ein Modellpaket lädt, die Eingänge direkt
+bei freien Quellen abruft und Prognosen als Dateien und über HTTP ausgibt.
+<<<
+QUELLE: predict/README.md
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-013
+
+[REQUIREMENT]
+UID: SYSR-PUB-005
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Inspektion
+TITLE: Zugangsdoku je Quelle
+STATEMENT: >>>
+Für jede Quelle muss dokumentiert sein, welche Zugänge, Schlüssel und Lizenzen sie verlangt und
+welche Variable sie freischaltet.
+<<<
+QUELLE: docs/DATENQUELLEN-ZUGANG.md
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-019
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Betrieb
+
+[REQUIREMENT]
+UID: SYSR-OPS-001
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Wiederanlauf und Idempotenz
+STATEMENT: >>>
+Jeder Dienst muss nach einem Abbruch ohne Eingriff weiterlaufen und bereits erledigte Arbeit nicht
+erneut ausführen. Der Zustand liegt in der Datenbank bzw. in Manifesten, nicht im Prozess.
+<<<
+QUELLE: SPECIFICATION.md 7
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-017
+
+[REQUIREMENT]
+UID: SYSR-OPS-002
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Demonstration
+TITLE: Automatisches Ausrollen
+STATEMENT: >>>
+Nach jeder grünen CI auf ``main`` muss die VM den neuen Stand selbst ausrollen. Schlägt ein
+Schritt fehl, bleibt der alte Stand in Betrieb.
+<<<
+QUELLE: README.md (Auto-Update)
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-017
+
+[REQUIREMENT]
+UID: SYSR-OPS-003
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Demonstration
+TITLE: Dashboards
+STATEMENT: >>>
+Das System muss Prognosen mit Istwerten und Vortagesvergleich, den Datenbestand je Stufe und
+Monat sowie den Zustand von Diensten und Ressourcen in Dashboards zeigen.
+<<<
+QUELLE: ARCHITEKTUR.md 7.10, 10
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-014
+- TYPE: Parent
+  VALUE: STK-017
+
+[REQUIREMENT]
+UID: SYSR-OPS-004
+ART: Funktional
+STATUS: Teilweise
+NACHWEIS: Demonstration
+TITLE: Alarme per E-Mail
+STATEMENT: >>>
+Das System muss den Betreiber per E-Mail alarmieren, wenn sich das Format einer Quelle ändert,
+ein Abruf seit 24 h scheitert, eine Reihe veraltet, kein vollständiger GFS-Lauf seit 12 h
+vorliegt oder ein Datenträger zu 90 % belegt ist.
+<<<
+QUELLE: ARCHITEKTUR.md 10
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-017
+
+[REQUIREMENT]
+UID: SYSR-OPS-005
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Inspektion
+TITLE: Strukturierte Protokolle und Metriken
+STATEMENT: >>>
+Alle Dienste müssen strukturierte JSON-Protokolle schreiben. Ressourcen und Container müssen als
+Metriken erfasst werden.
+<<<
+QUELLE: SPECIFICATION.md 7; compose.yaml (prometheus, node-exporter, cadvisor)
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-017
+
+[REQUIREMENT]
+UID: SYSR-OPS-006
+ART: Funktional
+STATUS: Geplant
+TITLE: Sicherung
+STATEMENT: >>>
+Datenbank und nicht wiederbeschaffbare Objekte müssen regelmäßig gesichert werden.
+<<<
+QUELLE: SPECIFICATION.md 3.1 (Bucket backups)
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-017
+
+[REQUIREMENT]
+UID: SYSR-OPS-007
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Inspektion
+TITLE: Analyse-Jobs
+STATEMENT: >>>
+Analysen müssen als Job mit Konfiguration, Code und Ergebnisordner im Repo liegen, mit Commit und
+Image protokolliert werden und als PDF am Release hängen.
+<<<
+QUELLE: ARCHITEKTUR.md 7.9
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-018
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Qualität und Randbedingungen
+
+[REQUIREMENT]
+UID: SYSR-QA-001
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Analyse
+TITLE: Ressourcenrahmen der VM
+STATEMENT: >>>
+Der Stack muss in einer VM mit 6–8 vCPU, 24–32 GB RAM und 500 GB Datenplatte laufen. Wetter
+soll in der Größenordnung von 15 GB je Jahr und Modell belegen.
+<<<
+QUELLE: SPECIFICATION.md 7; ARCHITEKTUR.md 5.4, 8.1
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-006
+- TYPE: Parent
+  VALUE: STK-031
+
+[REQUIREMENT]
+UID: SYSR-QA-002
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Inspektion
+TITLE: Portabilität in die Cloud
+STATEMENT: >>>
+Das System darf nur S3-API, Postgres-Protokoll und Konfiguration über die Umgebung voraussetzen,
+damit ein Umzug in die Cloud reine Konfiguration ist.
+<<<
+QUELLE: SPECIFICATION.md 7; ARCHITEKTUR.md 9
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-006
+- TYPE: Parent
+  VALUE: STK-032
+
+[REQUIREMENT]
+UID: SYSR-QA-003
+ART: Randbedingung
+STATUS: Umgesetzt
+NACHWEIS: Inspektion
+TITLE: Konfiguration und Geheimnisse
+STATEMENT: >>>
+Die Konfiguration muss über Variablen mit Präfix ``PDB_`` in der ``.env`` erfolgen. Geheimnisse
+(Passwörter, Token) kommen aus OpenBao in die ``.env``; Hosts, URLs und Adressen sind normale
+Werte.
+<<<
+QUELLE: ARCHITEKTUR.md 8.3; Projektentscheidung 2026-10-24
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-037
+
+[REQUIREMENT]
+UID: SYSR-QA-004
+ART: Randbedingung
+STATUS: Teilweise
+NACHWEIS: Inspektion
+TITLE: Quellenvermerke
+STATEMENT: >>>
+Jede Quelle muss ihre Lizenz in ``meta.source`` führen. Dashboards, API-Antworten und
+veröffentlichte Artefakte müssen die geforderten Quellenvermerke tragen.
+<<<
+QUELLE: SPECIFICATION.md 7; ARCHITEKTUR.md 10
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-035
+
+[REQUIREMENT]
+UID: SYSR-QA-005
+ART: Randbedingung
+STATUS: Geplant
+NACHWEIS: Test
+TITLE: Datenschutz eigener Anlagen
+STATEMENT: >>>
+Standort und Messwerte eigener Anlagen dürfen das System nicht verlassen, nicht mit dem MaStR
+verknüpft werden und müssen mit der Anlage vollständig gelöscht werden.
+<<<
+QUELLE: SPECIFICATION.md 7
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-036
+
+[REQUIREMENT]
+UID: SYSR-QA-006
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Inspektion
+TITLE: Prüfungen vor dem Zusammenführen
+STATEMENT: >>>
+Jede Änderung muss vor dem Zusammenführen Lint, Typprüfung, Unit-Tests, Integrationstests gegen
+den Compose-Stack und die Prüfung der Anforderungen bestehen.
+<<<
+QUELLE: .github/workflows/ci.yml
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-030
+- TYPE: Parent
+  VALUE: STK-017
+
+[[/SECTION]]

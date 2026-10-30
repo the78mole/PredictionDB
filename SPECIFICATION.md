@@ -7,7 +7,11 @@
 Diese Spezifikation fasst zusammen, **was** PredictionDB leisten soll und was davon heute umgesetzt
 ist. Das **Wie** mit Begründungen, Alternativen und Diagrammen steht in
 [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md); Kapitelverweise („A 7.6“) beziehen sich darauf. Bei
-Widersprüchen gilt ARCHITEKTUR.md. Version 0.1 (MariaDB, Gitterwerte als Zeilen, Celery) ist
+Widersprüchen gilt ARCHITEKTUR.md.
+
+Die Anforderungen werden seit 2026-10-30 mit IDs und Rückverfolgbarkeit bis in Code und Tests
+unter [reqs/](reqs/README.md) geführt. Die Abschnitte 6 und 7 gehen dort in StRS und SyRS auf und
+werden hier nicht mehr fortgeschrieben. Version 0.1 (MariaDB, Gitterwerte als Zeilen, Celery) ist
 überholt und steht in der Git-Historie.
 
 ---

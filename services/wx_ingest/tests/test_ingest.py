@@ -22,6 +22,7 @@ def ingestor(bronze: Bronze, client: httpx.AsyncClient, **kw: Any) -> GfsIngesto
 
 
 async def test_full_run_stored_and_cropped(bronze: Bronze) -> None:
+    """@relation(SWR-WXI-014, SWR-WXI-020, SWR-WXI-021, scope=function)"""
     aws = FakeGfsHost("aws.test", ALL_STEPS)
     async with make_client(aws) as client:
         result = await ingestor(bronze, client).ingest_run(RUN)
@@ -61,6 +62,7 @@ async def test_full_run_stored_and_cropped(bronze: Bronze) -> None:
 
 
 async def test_second_run_is_idempotent(bronze: Bronze) -> None:
+    """@relation(SWR-WXI-022, scope=function)"""
     aws = FakeGfsHost("aws.test", ALL_STEPS)
     async with make_client(aws) as client:
         ing = ingestor(bronze, client)
@@ -72,6 +74,7 @@ async def test_second_run_is_idempotent(bronze: Bronze) -> None:
 
 
 async def test_changed_message_list_reloads(bronze: Bronze) -> None:
+    """@relation(SWR-WXI-022, scope=function)"""
     aws = FakeGfsHost("aws.test", ALL_STEPS)
     async with make_client(aws) as client:
         await ingestor(bronze, client).ingest_run(RUN)
@@ -82,6 +85,7 @@ async def test_changed_message_list_reloads(bronze: Bronze) -> None:
 
 
 async def test_partial_publication_stops_and_resumes(bronze: Bronze) -> None:
+    """@relation(SWR-WXI-003, scope=function)"""
     aws = FakeGfsHost("aws.test", {0, 1, 2})
     async with make_client(aws) as client:
         result = await ingestor(bronze, client).ingest_run(RUN)
@@ -100,6 +104,7 @@ async def test_partial_publication_stops_and_resumes(bronze: Bronze) -> None:
 
 
 async def test_fallback_when_range_not_honoured(bronze: Bronze) -> None:
+    """@relation(SWR-WXI-010, SWR-WXI-014, scope=function)"""
     aws = FakeGfsHost("aws.test", ALL_STEPS, honour_range=False)
     gcs = FakeGfsHost("gcs.test", ALL_STEPS)
     async with make_client(aws, gcs) as client:
@@ -108,6 +113,7 @@ async def test_fallback_when_range_not_honoured(bronze: Bronze) -> None:
 
 
 async def test_stale_idx_realigned_from_whole_file(bronze: Bronze) -> None:
+    """@relation(SWR-WXI-015, scope=function)"""
     aws = FakeGfsHost("aws.test", ALL_STEPS, stale_idx=True)
     gcs = FakeGfsHost("gcs.test", set())
     async with make_client(aws, gcs) as client:
@@ -123,6 +129,7 @@ async def test_stale_idx_realigned_from_whole_file(bronze: Bronze) -> None:
 
 
 async def test_fallback_when_primary_lacks_step(bronze: Bronze) -> None:
+    """@relation(SWR-WXI-010, scope=function)"""
     aws = FakeGfsHost("aws.test", set())
     gcs = FakeGfsHost("gcs.test", ALL_STEPS)
     async with make_client(aws, gcs) as client:
@@ -131,6 +138,7 @@ async def test_fallback_when_primary_lacks_step(bronze: Bronze) -> None:
 
 
 async def test_server_errors_are_retried_then_failed(bronze: Bronze) -> None:
+    """@relation(SWR-WXI-011, scope=function)"""
     aws = FakeGfsHost("aws.test", ALL_STEPS, fail_status=503)
     gcs = FakeGfsHost("gcs.test", set())
     async with make_client(aws, gcs) as client:
@@ -141,6 +149,8 @@ async def test_server_errors_are_retried_then_failed(bronze: Bronze) -> None:
 
 
 async def test_truncated_transfer_is_rejected(bronze: Bronze) -> None:
+    """@relation(SWR-WXI-014, scope=function)"""
+
     class Truncating(FakeGfsHost):
         def handle(self, request: httpx.Request) -> httpx.Response:
             resp = super().handle(request)
@@ -157,6 +167,7 @@ async def test_truncated_transfer_is_rejected(bronze: Bronze) -> None:
 
 
 async def test_backfill_uses_archive_endpoints_only(bronze: Bronze) -> None:
+    """@relation(SWR-WXI-030, scope=function)"""
     cfg = {
         "runs": [6],
         "endpoints": [
@@ -171,6 +182,7 @@ async def test_backfill_uses_archive_endpoints_only(bronze: Bronze) -> None:
 
 
 async def test_backfill_selects_runs_newest_first(bronze: Bronze) -> None:
+    """@relation(SWR-WXI-030, scope=function)"""
     aws = FakeGfsHost("aws.test", ALL_STEPS)
     async with make_client(aws) as client:
         ing = ingestor(bronze, client, archive_only=True)
@@ -185,6 +197,7 @@ async def test_backfill_selects_runs_newest_first(bronze: Bronze) -> None:
 
 
 async def test_backfill_parallel_runs_and_resume(bronze: Bronze) -> None:
+    """@relation(SWR-WXI-012, SWR-WXI-030, scope=function)"""
     aws = FakeGfsHost("aws.test", ALL_STEPS)
     async with make_client(aws) as client:
         ing = ingestor(bronze, client, archive_only=True)
@@ -198,6 +211,7 @@ async def test_backfill_parallel_runs_and_resume(bronze: Bronze) -> None:
 
 
 async def test_backfill_skips_runs_with_silver(bronze: Bronze) -> None:
+    """@relation(SWR-WXI-031, scope=function)"""
     aws = FakeGfsHost("aws.test", ALL_STEPS)
 
     async def has_silver(run: datetime) -> bool:
@@ -212,6 +226,7 @@ async def test_backfill_skips_runs_with_silver(bronze: Bronze) -> None:
 
 
 async def test_silver_marker() -> None:
+    """@relation(SWR-WXI-031, scope=function)"""
     import json
 
     import obstore
@@ -229,6 +244,7 @@ async def test_silver_marker() -> None:
 
 
 async def test_nomads_filter(bronze: Bronze) -> None:
+    """@relation(SWR-WXI-013, scope=function)"""
     from gribkit.testing import make_global_message
 
     msg, _, _ = make_global_message()
@@ -282,11 +298,13 @@ async def test_nomads_filter(bronze: Bronze) -> None:
 
 
 def test_nomads_params_negative_lon() -> None:
+    """@relation(SWR-WXI-013, scope=function)"""
     p = nomads_params("pgrb2.0p25", RUN, 42, [], BBox(60, 40, -10.5, 30))
     assert p["leftlon"] == "-10.5" and p["file"] == "gfs.t06z.pgrb2.0p25.f042"
 
 
 async def test_manifest_is_json(bronze: Bronze) -> None:
+    """@relation(SWR-WXI-020, scope=function)"""
     aws = FakeGfsHost("aws.test", {0})
     async with make_client(aws) as client:
         await ingestor(bronze, client).ingest_run(RUN, [0])
@@ -299,6 +317,7 @@ async def test_manifest_is_json(bronze: Bronze) -> None:
 
 
 async def test_backfill_reports_each_run(bronze: Bronze) -> None:
+    """@relation(SWR-WXI-032, scope=function)"""
     aws = FakeGfsHost("aws.test", ALL_STEPS)
     seen: list[RunResult] = []
 

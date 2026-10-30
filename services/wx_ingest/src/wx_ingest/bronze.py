@@ -10,6 +10,8 @@ Das Manifest wird erst nach der GRIB-Datei geschrieben. Ein Schritt gilt nur
 als gespeichert, wenn sein Manifest existiert; ein abgebrochener Upload wird
 beim nächsten Zyklus also neu geladen. Bis die Tabelle ``meta.grib_message``
 existiert, sind die Manifeste die Zustandsführung.
+
+@relation(SWA-WXI-BRONZE, scope=file)
 """
 
 from __future__ import annotations
@@ -81,6 +83,7 @@ class Bronze:
     async def put_step(
         self, run: datetime, step: int, grib: bytes, manifest: StepManifest
     ) -> StepManifest:
+        """@relation(SWR-WXI-020, scope=function)"""
         manifest.sha256 = hashlib.sha256(grib).hexdigest()
         manifest.size = len(grib)
         await obstore.put_async(self.store, self.step_key(run, step), grib)
@@ -92,6 +95,7 @@ class Bronze:
         return manifest
 
     async def put_run(self, run: datetime, summary: dict[str, Any]) -> None:
+        """@relation(SWR-WXI-021, scope=function)"""
         await obstore.put_async(
             self.store, self.run_key(run), json.dumps(summary, indent=1).encode()
         )
@@ -113,6 +117,7 @@ class SilverMarker:
         return f"{self.model}/{self.resolution}/{run:%Y/%m/%d/%H}.zarr/zarr.json"
 
     async def complete(self, run: datetime) -> bool:
+        """@relation(SWR-WXI-031, scope=function)"""
         try:
             result = await obstore.get_async(self.store, self.key(run))
         except FileNotFoundError:

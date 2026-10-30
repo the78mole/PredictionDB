@@ -2,6 +2,8 @@
 
 Ablauf nach ``docs/ARCHITEKTUR.md`` 6.4. Idempotent: Schritte mit passendem
 Manifest werden übersprungen, ein Neustart lädt nur Fehlendes nach.
+
+@relation(SWA-WXI-INGESTOR, scope=file)
 """
 
 from __future__ import annotations
@@ -89,6 +91,7 @@ class GfsIngestor:
         return m is not None and sorted(m.specs) == self.labels and m.bbox == self._bbox_dict()
 
     async def ingest_step(self, run: datetime, step: int) -> StepResult:
+        """@relation(SWR-WXI-010, SWR-WXI-022, scope=function)"""
         if self._manifest_current(await self.bronze.step_manifest(run, step)):
             return StepResult(step, "skipped")
 
@@ -148,6 +151,8 @@ class GfsIngestor:
         werden nach dem ersten noch nicht veröffentlichten Schritt keine weiteren
         angefragt; sie bleiben ``pending`` und kommen im nächsten Zyklus dran.
         ``on_step`` wird nach jedem bearbeiteten Schritt aufgerufen (Fortschrittsprotokoll).
+
+        @relation(SWR-WXI-003, SWR-WXI-022, scope=function)
         """
         run = run.astimezone(UTC)
         all_steps = self.config.step_list()
@@ -196,6 +201,7 @@ class GfsIngestor:
         return result
 
     async def _finish_run(self, run: datetime, steps: list[StepResult]) -> None:
+        """@relation(SWR-WXI-021, scope=function)"""
         manifests = await asyncio.gather(*(self.bronze.step_manifest(run, s.step) for s in steps))
         await self.bronze.put_run(
             run,
@@ -223,6 +229,8 @@ class GfsIngestor:
         """Live-Modus: alle konfigurierten Läufe im Rückblickfenster, älteste zuerst.
 
         Die Rückmeldungen entsprechen denen von :meth:`backfill` (Fortschrittsprotokoll).
+
+        @relation(SWR-WXI-002, scope=function)
         """
         now = now or datetime.now(UTC)
         results = []
@@ -243,6 +251,7 @@ class GfsIngestor:
         hours: Iterable[int] | None = None,
         newest_first: bool = False,
     ) -> list[datetime]:
+        """@relation(SWR-WXI-030, scope=function)"""
         runs = self.config.runs_between(start, end, hours)
         return runs[::-1] if newest_first else runs
 
@@ -267,6 +276,8 @@ class GfsIngestor:
         ``on_start`` (Lauf, Schrittzahl), ``on_step`` und ``on_run`` melden Beginn, jeden
         Schritt und das Ende eines Laufs (Fortschrittsprotokoll). Läufe, für die ``skip_run``
         wahr liefert (z. B. Silber schon aus GHCR importiert), werden nicht geladen.
+
+        @relation(SWR-WXI-030, SWR-WXI-031, scope=function)
         """
         runs = self.backfill_runs(start, end, hours=hours, newest_first=newest_first)
         sem = asyncio.Semaphore(max(1, parallel_runs))

@@ -18,6 +18,7 @@ REPO = Path(__file__).resolve().parents[3]
 @pytest.mark.network
 @pytest.mark.parametrize("endpoint", ["aws", "nomads"])
 async def test_one_step(bronze: Bronze, endpoint: str) -> None:
+    """@relation(SWR-WXI-013, SWR-WXI-014, scope=function)"""
     import eccodes as ec
 
     cfg = GfsConfig.from_yaml(REPO / "config/sources/gfs_0p25.yaml")
