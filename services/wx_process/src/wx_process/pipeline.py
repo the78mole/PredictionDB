@@ -157,7 +157,7 @@ class WxPipeline:
             if self.store is not None
             else None
         )
-        counts = {"runs": 0, "objects": 0, "kept_no_silver": 0}
+        counts = {"runs": 0, "objects": 0, "kept_no_silver": 0, "failed": 0}
         for run in runs:
             if present is not None:
                 has_silver = run in present
@@ -167,17 +167,39 @@ class WxPipeline:
             if not has_silver:
                 counts["kept_no_silver"] += 1
                 continue
-            counts["runs"] += 1
             if dry_run:
+                counts["runs"] += 1
                 continue
-            for batch in obstore.list(self.bronze_store, prefix=self.layout.run_prefix(run) + "/"):
-                paths = [m["path"] for m in batch]
-                obstore.delete(self.bronze_store, paths)
-                counts["objects"] += len(paths)
+            try:
+                counts["objects"] += self._delete_bronze_run(run)
+                counts["runs"] += 1
+            except Exception as exc:  # ein Lauf (z. B. Garage-Timeout) darf nicht alles beenden
+                log.warning("bronze.prune_failed", run=f"{run:%Y%m%d%H}", error=str(exc))
+                counts["failed"] += 1
             if pause:
                 time.sleep(pause)
         log.info("bronze.pruned", cutoff=cutoff.isoformat(), dry_run=dry_run, **counts)
         return counts
+
+    def _delete_bronze_run(self, run: datetime, batch: int = 100, attempts: int = 4) -> int:
+        """Bronze eines Laufs in kleinen Paketen löschen; ein Paket wird bis zu ``attempts``-mal
+        versucht (Garage unter Last: Sammel-DELETE mit 419 Objekten lief in 30 s Timeout)."""
+        paths = [
+            m["path"]
+            for b in obstore.list(self.bronze_store, prefix=self.layout.run_prefix(run) + "/")
+            for m in b
+        ]
+        for i in range(0, len(paths), batch):
+            part = paths[i : i + batch]
+            for attempt in range(attempts):
+                try:
+                    obstore.delete(self.bronze_store, part)
+                    break
+                except Exception:
+                    if attempt == attempts - 1:
+                        raise
+                    time.sleep(2.0 * 2**attempt)
+        return len(paths)
 
     # --- Silber ------------------------------------------------------------------------------
 

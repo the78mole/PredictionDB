@@ -341,7 +341,7 @@ def test_prune_bronze_only_with_silver(setup) -> None:  # type: ignore[no-untype
 
     now = RUN + timedelta(days=100)
     dry = pipeline.prune_bronze(92, start=RUN - timedelta(days=1), now=now, dry_run=True)
-    assert dry == {"runs": 1, "objects": 0, "kept_no_silver": 1}
+    assert dry == {"runs": 1, "objects": 0, "kept_no_silver": 1, "failed": 0}
     # noch jung genug: nichts zu tun
     young = pipeline.prune_bronze(92, start=RUN - timedelta(days=1), now=RUN + timedelta(days=10))
     assert young["runs"] == 0
@@ -351,3 +351,31 @@ def test_prune_bronze_only_with_silver(setup) -> None:  # type: ignore[no-untype
     assert pipeline.bronze_runs(RUN - timedelta(days=1), now) == [other]
     # Silber bleibt lesbar, der Lauf gilt weiter als gerechnet
     assert pipeline.process(RUN).status == "skipped"
+
+
+def test_prune_bronze_retries_and_skips_failing_run(setup, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Ein langsames Sammel-DELETE wird wiederholt; scheitert ein Lauf ganz, geht es weiter."""
+    pipeline, bronze, _ = setup
+    other = RUN + timedelta(hours=6)
+    fill_bronze(bronze, STEPS)
+    fill_bronze(bronze, STEPS, run=other)
+    pipeline.process(RUN)
+    pipeline.process(other)
+    real = obstore.delete
+    calls = {"n": 0}
+
+    def flaky(store, paths):  # type: ignore[no-untyped-def]
+        calls["n"] += 1
+        names = [paths] if isinstance(paths, str) else list(paths)
+        if any("/06/" in p for p in names):
+            raise RuntimeError("timeout")  # RUN (06Z) scheitert immer
+        if calls["n"] % 2:
+            raise RuntimeError("timeout")  # sonst jedes erste Paket einmal
+        return real(store, paths)
+
+    monkeypatch.setattr("wx_process.pipeline.obstore.delete", flaky)
+    monkeypatch.setattr("wx_process.pipeline.time.sleep", lambda s: None)
+    counts = pipeline.prune_bronze(92, start=RUN - timedelta(days=1), now=RUN + timedelta(days=100))
+    assert counts["runs"] == 1 and counts["failed"] == 1 and counts["objects"] > 0
+    left = pipeline.bronze_runs(RUN - timedelta(days=1), RUN + timedelta(days=100))
+    assert left == [RUN]
