@@ -466,7 +466,11 @@ def _snapshot_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -
     sp.add_argument("--at", default="14:30", help="täglich um HH:MM Ortszeit (Standard 14:30)")
     sp.add_argument("--once", action="store_true", help="sofort einmal, dann beenden")
     sp.add_argument(
+<<<<<<< HEAD
         "--expires", type=int, default=30 * 86400, metavar="SEK", help="Ablauf (Standard 30 Tage)"
+=======
+        "--expires", type=int, default=2 * 86400, metavar="SEK", help="Ablauf (Standard 2 Tage)"
+>>>>>>> origin/main
     )
 
 
@@ -478,7 +482,11 @@ def _shortlink(client: httpx.Client) -> snapshot.Shortlink | None:
             client,
             key,
             os.environ["PDB_SHORTIO_DOMAIN"],
+<<<<<<< HEAD
             os.environ.get("PDB_SHORTIO_PATH", "predb"),
+=======
+            os.environ.get("PDB_SHORTIO_PATH", "strom"),
+>>>>>>> origin/main
         )
     if kind == "shlink":
         return snapshot.Shlink(

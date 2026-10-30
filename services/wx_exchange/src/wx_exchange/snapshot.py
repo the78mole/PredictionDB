@@ -1,5 +1,6 @@
 """Öffentlicher Grafana-Snapshot der Wochenprognose mit festem Kurzlink.
 
+<<<<<<< HEAD
 Ablauf je Durchgang: Dashboard „Prognose öffentlich“ aus der eigenen Grafana holen (nur
 Standard-Panels, raintank kennt keine Zusatz-Plugins), die Abfragen der Wochenpanels für heute
 00:00 bis Ende D+7 (Europe/Berlin) über ``/api/ds/query`` ausführen und einbetten, mit
@@ -8,6 +9,14 @@ weiter) und das Ziel eines Kurzlinks auf die neue Snapshot-Adresse umbiegen. Ein
 ein interaktives Standbild (Tooltips, Zoom, Legende), aktualisiert sich aber nicht; jeder hat
 eine neue Adresse, daher der Kurzlink. Jeder Snapshot listet die früheren, noch nicht
 abgelaufenen Stände mit Link, damit man Prognosen später mit dem Eingetretenen vergleichen kann.
+=======
+Ablauf je Durchgang: Dashboard „Prognose aktuell“ aus der eigenen Grafana holen, die Abfragen
+der Wochenpanels für heute 00:00 bis Ende D+7 (Europe/Berlin) über ``/api/ds/query``
+ausführen und als ``snapshotData`` einbetten, mit ``external: true`` als Snapshot hochladen
+(Grafana reicht ihn an ``snapshots.raintank.io`` weiter) und das Ziel eines Kurzlinks auf die
+neue Snapshot-Adresse umbiegen. Ein Snapshot ist ein interaktives Standbild (Tooltips, Zoom,
+Legende), aktualisiert sich aber nicht; jeder hat eine neue Adresse, daher der Kurzlink.
+>>>>>>> origin/main
 
 Panels mit eigener Zeitüberschreibung (Gestern, Heute, Morgen) bleiben draußen: Ein Snapshot
 hat einen absoluten Zeitraum, und dann ignoriert Grafana relative Panel-Zeiträume.
@@ -28,6 +37,7 @@ from predictiondb_core.log import get_logger
 
 log = get_logger(__name__)
 
+<<<<<<< HEAD
 DASHBOARD_UID = "pdb-prognose-oeffentlich"
 #: Wochenpanels (Last und Preis, Champion und Challenger) und das Quellen-Panel
 PANELS = (67, 68, 69, 70, 71)
@@ -35,6 +45,12 @@ TZ = ZoneInfo("Europe/Berlin")
 #: Namensanfang aller veröffentlichten Stände (Titel und Name des Snapshots)
 TITLE = "Strompreis- und Lastprognose DE-LU · Stand"
 WOCHENTAG = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
+=======
+DASHBOARD_UID = "pdb-prognose-aktuell"
+#: Wochenpanels (Last und Preis, Champion und Challenger) und das Quellen-Panel
+PANELS = (67, 68, 69, 70, 71)
+TZ = ZoneInfo("Europe/Berlin")
+>>>>>>> origin/main
 #: Standardwerte der Dashboard-Variablen im Snapshot (challenger kommt aus seiner Abfrage)
 FIXED_VARS = {"tagesmittel_last": "aus"}
 
@@ -92,10 +108,13 @@ class Grafana:
         }
         return dict(self._req("POST", "/api/ds/query", json=body)["results"])
 
+<<<<<<< HEAD
     def snapshots(self) -> list[dict[str, Any]]:
         """Snapshots dieser Grafana, auch die extern hochgeladenen (mit ``externalUrl``)."""
         return list(self._req("GET", "/api/dashboard/snapshots", params={"limit": 1000}))
 
+=======
+>>>>>>> origin/main
     def snapshot(self, dashboard: dict[str, Any], name: str, expires: int) -> dict[str, Any]:
         body = {"dashboard": dashboard, "name": name, "expires": expires, "external": True}
         return dict(self._req("POST", "/api/snapshots", json=body))
@@ -156,6 +175,7 @@ def _frames(
     return frames
 
 
+<<<<<<< HEAD
 def _parse(t: str) -> datetime:
     return datetime.fromisoformat(t.replace("Z", "+00:00"))
 
@@ -209,6 +229,10 @@ def _history_element(content: str) -> dict[str, Any]:
 
 def build_snapshot(grafana: Grafana, now: datetime) -> dict[str, Any]:
     """Dashboard „Prognose öffentlich“ (Schema v2) mit eingebetteten Daten der Wochenpanels.
+=======
+def build_snapshot(grafana: Grafana, now: datetime) -> dict[str, Any]:
+    """Dashboard „Prognose aktuell“ (Schema v2) mit eingebetteten Daten der Wochenpanels.
+>>>>>>> origin/main
 
     Grafana 13 lädt Snapshots im alten Schema mit ``snapshotData`` nicht mehr; die Oberfläche
     schickt das Schema v2, in dem jedes Panel eine Abfrage ``queryType: snapshot`` der
@@ -255,6 +279,7 @@ def build_snapshot(grafana: Grafana, now: datetime) -> dict[str, Any]:
         elements[name] = el
     spec["elements"] = elements
     items = spec["layout"]["spec"]["items"]
+<<<<<<< HEAD
     items = [i for i in items if i["spec"]["element"]["name"] in elements]
     content = history(grafana, now)
     elements["panel-staende"] = _history_element(content)
@@ -275,6 +300,12 @@ def build_snapshot(grafana: Grafana, now: datetime) -> dict[str, Any]:
     stamp = now.astimezone(TZ)
     spec.update(
         title=f"{TITLE} {stamp:%d.%m.%Y %H:%M}",
+=======
+    spec["layout"]["spec"]["items"] = [i for i in items if i["spec"]["element"]["name"] in elements]
+    stamp = now.astimezone(TZ)
+    spec.update(
+        title=f"Strompreis- und Lastprognose DE-LU · Stand {stamp:%d.%m.%Y %H:%M}",
+>>>>>>> origin/main
         links=[],
         variables=[],
         editable=False,
