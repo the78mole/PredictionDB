@@ -569,6 +569,32 @@ async def test_vm_cycle_gold_without_pause_while_backlog(tmp_path: Path) -> None
     assert rounds == 4 and result.gold["written"] == 48 and "more" not in result.gold
 
 
+async def test_vm_cycle_works_off_gold_backlog_when_live_is_idle(tmp_path: Path) -> None:
+    """Live und Import sofort fertig: der Rückstand an Gold läuft trotzdem im selben Durchgang."""
+    cfg = make_config(tmp_path)
+    archive = FakeArchive(cfg, [])
+    now = datetime(2099, 2, 2, 12, tzinfo=UTC)
+    async with client(archive) as c:
+        vm = vm_for(tmp_path, archive, FakeRegistry(), c, now)
+        rounds = 0
+
+        def gold(limit: int | None = None, before: datetime | None = None) -> Counter[str]:
+            nonlocal rounds
+            rounds += 1
+            return Counter(written=limit or 1, more=int(rounds < 5))
+
+        async def live() -> list[dict[str, Any]]:
+            return []
+
+        vm.import_history = lambda limit=None: Counter()  # type: ignore[method-assign]
+        vm.process_gold = gold  # type: ignore[method-assign]
+        vm.live = live  # type: ignore[method-assign]
+        result = await asyncio.wait_for(
+            vm.cycle(gold_limit=12, history_every=3600, gold_every=3600), timeout=5
+        )
+    assert rounds == 5 and result.gold["written"] == 60
+
+
 async def test_vm_cycle_imports_history_while_live_runs(tmp_path: Path) -> None:
     """Der erste Aufbau des laufenden Monats dauert Stunden, die Historie soll nicht warten."""
     cfg = make_config(tmp_path)
