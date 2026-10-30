@@ -10,6 +10,8 @@ Je Lauf ein Store statt eines wachsenden Stores je Modell: Neuberechnung und Auf
 bleiben auf einen Lauf beschränkt, parallele Läufe kommen sich nicht in die Quere. Das Layout
 folgt der CF-Konvention, ``xarray.open_zarr`` liest es direkt (``valid_time = run + step``).
 Ein Store gilt erst als vollständig, wenn das Attribut ``complete`` gesetzt ist.
+
+@relation(SWA-WXP-SILVER, scope=file)
 """
 
 from __future__ import annotations
@@ -63,7 +65,10 @@ def assemble(
     decoded: dict[int, tuple[Grid, StepFields]],
     attrs: dict[str, Any] | None = None,
 ) -> Dataset:
-    """Setzt dekodierte Schritte zu einem Datensatz zusammen (Intervallwerte siehe decode)."""
+    """Setzt dekodierte Schritte zu einem Datensatz zusammen (Intervallwerte siehe decode).
+
+    @relation(SWR-WXP-012, scope=function)
+    """
     if not decoded:
         raise ValueError("keine Schritte")
     steps = sorted(decoded)
@@ -110,6 +115,7 @@ def assemble(
 
 
 def encode(values: Array, name: str) -> NDArray[np.int16]:
+    """@relation(SWR-WXP-020, scope=function)"""
     var = BY_NAME[name]
     q = np.round((np.clip(values, var.lo, var.hi) - var.offset) / var.scale)
     out = np.where(np.isnan(values), FILL, q).astype(np.int16)
@@ -117,6 +123,7 @@ def encode(values: Array, name: str) -> NDArray[np.int16]:
 
 
 def decode(values: NDArray[np.int16], name: str) -> Array:
+    """@relation(SWR-WXP-020, scope=function)"""
     var = BY_NAME[name]
     out = (values.astype(np.float32) * np.float32(var.scale) + np.float32(var.offset)).astype(
         np.float32
@@ -145,6 +152,7 @@ class Silver:
         return attrs if attrs.get("complete") else None
 
     def write(self, ds: Dataset) -> str:
+        """@relation(SWR-WXP-020, scope=function)"""
         key = self.key(ds.model, ds.resolution, ds.run)
         group = zarr.open_group(
             self.store,
@@ -200,6 +208,7 @@ class Silver:
         return key
 
     def read(self, model: str, resolution: str, run: datetime) -> Dataset:
+        """@relation(SWR-WXP-020, scope=function)"""
         group = zarr.open_group(self.store, path=self.key(model, resolution, run), mode="r")
         attrs = dict(group.attrs)
         if not attrs.get("complete"):

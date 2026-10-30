@@ -10,6 +10,8 @@ Gespeichert wird als Int16 mit ``scale_factor``/``add_offset`` (CF-Konvention, w
 ``docs/ARCHITEKTUR.md`` 5.1). Mittel und Summen der Quelle beziehen sich bei GFS auf Eimer, die
 alle 6 h neu beginnen (``36-42 hour ave``); in Silber stehen stattdessen Werte für das Intervall
 seit dem vorigen Schritt (siehe :mod:`wx_process.decode`).
+
+@relation(SWA-WXP-VARIABLES, scope=file)
 """
 
 from __future__ import annotations
@@ -26,6 +28,8 @@ GribKey = tuple[int, int, int, int, int, str]
 
 @dataclass(frozen=True, slots=True)
 class Variable:
+    """@relation(SWR-WXP-010, SWR-WXP-020, scope=class)"""
+
     name: str
     units: str
     long_name: str

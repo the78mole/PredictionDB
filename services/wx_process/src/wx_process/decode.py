@@ -9,6 +9,8 @@ in der Quelle auf ``[start, schritt]`` mit einem Start, der alle 6 h springt (GF
 - Sonst wird mit der Nachricht desselben Starts aus dem vorherigen Schritt zurückgerechnet:
   Mittel ``(m₂·(t₂-a) - m₁·(t₁-a)) / (t₂-t₁)``, Summe ``s₂ - s₁``.
 - Ohne passendes Paar (Analyse-Schritt f000, Lücke) bleibt der Wert leer (NaN).
+
+@relation(SWA-WXP-DECODE, scope=file)
 """
 
 from __future__ import annotations
@@ -90,7 +92,10 @@ def _grid(h: int) -> Grid:
 
 
 def decode_step(grib: bytes, step: int) -> tuple[Grid, StepFields]:
-    """Alle bekannten Nachrichten eines Schritts; unbekannte werden übersprungen."""
+    """Alle bekannten Nachrichten eines Schritts; unbekannte werden übersprungen.
+
+    @relation(SWR-WXP-010, scope=function)
+    """
     import eccodes as ec
 
     fields_ = StepFields(step)
@@ -132,7 +137,10 @@ def decode_step(grib: bytes, step: int) -> tuple[Grid, StepFields]:
 def interval_values(
     steps: list[int], by_step: Mapping[int, StepFields], name: str, kind: str
 ) -> list[Array | None]:
-    """Werte je Schritt für das Intervall seit dem vorherigen Schritt (``None`` = unbekannt)."""
+    """Werte je Schritt für das Intervall seit dem vorherigen Schritt (``None`` = unbekannt).
+
+    @relation(SWR-WXP-011, scope=function)
+    """
     out: list[Array | None] = []
     for i, s in enumerate(steps):
         cur = by_step[s].stats.get(name, {})

@@ -4,6 +4,8 @@ Die Nachrichten tragen dieselben numerischen Schlüssel wie echte GFS-Dateien, M
 Summen liegen wie bei GFS in Eimern, die alle 6 h neu beginnen (Summen zusätzlich ab 0 h).
 ``hourly`` liefert den wahren Wert je Stunde ``(h-1, h]``, daraus entstehen die Eimer; ein Test
 kann so prüfen, ob die Rückrechnung in Silber wieder die Stundenwerte ergibt.
+
+@relation(SWA-WXP-TESTING, scope=file)
 """
 
 from __future__ import annotations

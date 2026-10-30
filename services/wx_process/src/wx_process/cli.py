@@ -10,6 +10,8 @@ Beispiele::
     wx-process gfs run 2026102012 --silver-only    # nur Silber, ohne Datenbank
     wx-process gfs prune-bronze --keep-days 92     # Bronze älter als 92 Tage löschen (mit Silber)
     wx-process gfs latest --watch 600 --bronze-days 92   # dazu laufend aufräumen
+
+@relation(SWA-WXP-CLI, scope=file)
 """
 
 from __future__ import annotations
@@ -35,6 +37,7 @@ log = get_logger(__name__)
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """@relation(SWR-WXP-002, SWR-WXP-022, SWR-WXP-024, SWR-WXP-040, scope=function)"""
     p = argparse.ArgumentParser(
         prog="wx-process", description="Bronze → Silber (Zarr) → Features je Anlagen-Cluster"
     )
@@ -91,6 +94,7 @@ def _print(results: list[RunOutcome], indent: int | None = 1) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """@relation(SWR-WXP-002, scope=function)"""
     args = build_parser().parse_args(argv)
     settings = get_settings()
     configure_logging("DEBUG" if args.verbose else settings.log_level, settings.log_json)

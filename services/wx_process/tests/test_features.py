@@ -33,6 +33,7 @@ def _cluster(tech: str, cells: list[tuple[float, float, float]], hub: float | No
 
 
 def test_cell_index_and_coverage() -> None:
+    """@relation(SWR-WXP-030, scope=function)"""
     ds = _ds(t2m=280.0)
     idx, ok = cell_index(
         ds, np.array([58.0, 44.0, 50.0, 60.0, 50.5]), np.array([0, 20, 10, 5, 360.0])
@@ -44,6 +45,7 @@ def test_cell_index_and_coverage() -> None:
 
 
 def test_weighted_mean_and_coverage() -> None:
+    """@relation(SWR-WXP-030, scope=function)"""
     field = np.zeros((len(LAT), len(LON)), np.float32)
     field[LAT.tolist().index(54.0), 9] = 10 + 273.15
     field[LAT.tolist().index(48.0), 11] = 20 + 273.15
@@ -58,6 +60,7 @@ def test_weighted_mean_and_coverage() -> None:
 
 
 def test_unknown_technology_skipped() -> None:
+    """@relation(SWR-WXP-030, scope=function)"""
     series, coverage = FeatureBuilder({}).build(
         _ds(t2m=280.0), [_cluster("wind_on", [(50, 10, 1)])]
     )
@@ -65,6 +68,7 @@ def test_unknown_technology_skipped() -> None:
 
 
 def test_power_curve() -> None:
+    """@relation(SWR-WXP-031, scope=function)"""
     pc = PowerCurve(cut_in=3, rated=12, cut_out=25)
     v = np.array([0, 2.9, 3, 7.5, 12, 20, 25, 30, np.nan])
     cf = pc(v)
@@ -74,6 +78,7 @@ def test_power_curve() -> None:
 
 
 def test_shear_exponent() -> None:
+    """@relation(SWR-WXP-031, scope=function)"""
     a = shear_exponent(np.array([5.0, 0.1, 5.0, 5.0]), np.array([5 * 10**0.2, 3.0, 4.0, 5e3]))
     assert a[0] == pytest.approx(0.2) and a[1] == pytest.approx(1 / 7)
     assert a[2] == 0 and a[3] == 0.6
@@ -81,6 +86,7 @@ def test_shear_exponent() -> None:
 
 def test_wind_features_with_capacity() -> None:
     # 10 m: 3/4 → 5 m/s, 100 m: 6/8 → 10 m/s ⇒ Exponent log10(2), Nabenhöhe 150 m
+    """@relation(SWR-WXP-031, SWR-WXP-034, scope=function)"""
     ds = _ds(u10=3.0, v10=4.0, u100=6.0, v100=8.0, gust=11.0, t2m=283.15)
     tech = TechnologyFeatures(kind="wind", power_curve=PowerCurve(cut_in=3, rated=13, cut_out=25))
     b = FeatureBuilder({"wind_on": tech})
@@ -100,6 +106,7 @@ def test_wind_features_with_capacity() -> None:
 
 
 def test_wind_default_hub_height() -> None:
+    """@relation(SWR-WXP-031, scope=function)"""
     ds = _ds(u10=3.0, v10=4.0, u100=6.0, v100=8.0)
     b = FeatureBuilder({"wind_off": TechnologyFeatures(kind="wind", hub_height_m=100)})
     series, _ = b.build(ds, [_cluster("wind_off", [(54, 6, 1.0)])])
@@ -109,6 +116,7 @@ def test_wind_default_hub_height() -> None:
 
 
 def test_pv_features() -> None:
+    """@relation(SWR-WXP-032, scope=function)"""
     ghi = np.zeros((3, len(LAT), len(LON)), np.float32)
     ghi[0] = np.nan  # f000 ohne Strahlung
     ghi[1] = 800.0
@@ -127,6 +135,7 @@ def test_pv_features() -> None:
 
 
 def test_hydro_features() -> None:
+    """@relation(SWR-WXP-033, scope=function)"""
     b = FeatureBuilder({"hydro": TechnologyFeatures(kind="hydro")})
     series, _ = b.build(
         _ds(tp=0.5, t2m=273.15, csnow_mean=0.25), [_cluster("hydro", [(47, 11, 1)])]
@@ -136,6 +145,7 @@ def test_hydro_features() -> None:
 
 
 def test_capacity_table_forward_fill() -> None:
+    """@relation(SWR-WXP-034, scope=function)"""
     t = CapacityTable(
         [("wind_on", 0, date(2099, 1, 1), 10.0), ("wind_on", 0, date(2099, 1, 3), 12.0)]
     )
@@ -146,6 +156,7 @@ def test_capacity_table_forward_fill() -> None:
 
 
 def test_repo_config_matches_mastr() -> None:
+    """@relation(SWR-WXP-001, scope=function)"""
     from mastr_ingest.config import MastrConfig
 
     config = ProcessConfig.from_yaml("config/process/gfs_0p25.yaml")

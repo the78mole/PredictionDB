@@ -7,6 +7,8 @@ alle Schritte gespeichert sind) oder ohne Bronze ein vollständiges Silber der a
 Silber wird nur neu gebaut, wenn es fehlt, die Kodierung sich geändert hat oder Bronze neuer
 ist; danach entstehen die Features aus den quantisierten Silber-Werten, sodass eine spätere
 Neuberechnung aus Silber dasselbe ergibt.
+
+@relation(SWA-WXP-PIPELINE, scope=file)
 """
 
 from __future__ import annotations
@@ -100,6 +102,7 @@ class WxPipeline:
         return data
 
     def decode_run(self, run: datetime) -> tuple[dict[int, tuple[Grid, StepFields]], list[int]]:
+        """@relation(SWR-WXP-012, scope=function)"""
         steps = self.source.step_list()
         with ThreadPoolExecutor(self.config.read_concurrency) as pool:
             blobs = list(pool.map(lambda s: self._get(self.layout.step_key(run, s)), steps))
@@ -143,6 +146,8 @@ class WxPipeline:
         Silber zählt laut ``meta.silver_run`` (ohne Datenbank: vollständiger Zarr-Store). Läufe
         ohne Silber bleiben stehen, denn aus ihnen entsteht es noch. ``pause`` Sekunden zwischen
         zwei Läufen schonen Garage, das jedes gelöschte Objekt im Hintergrund nacharbeitet.
+
+        @relation(SWR-WXP-024, scope=function)
         """
         now = now or datetime.now(UTC)
         cutoff = now - timedelta(days=keep_days)
@@ -177,6 +182,7 @@ class WxPipeline:
     # --- Silber ------------------------------------------------------------------------------
 
     def silver_current(self, run: datetime, manifest: dict[str, Any]) -> bool:
+        """@relation(SWR-WXP-021, scope=function)"""
         attrs = self.silver.attrs(self.source.model, self.source.resolution, run)
         return (
             attrs is not None
@@ -200,7 +206,10 @@ class WxPipeline:
         return ds
 
     def imported_silver(self, run: datetime) -> dict[str, Any] | None:
-        """Ersatz für das Bronze-Laufmanifest, wenn nur Silber vorliegt (Import aus GHCR)."""
+        """Ersatz für das Bronze-Laufmanifest, wenn nur Silber vorliegt (Import aus GHCR).
+
+        @relation(SWR-WXP-003, scope=function)
+        """
         attrs = self.silver.attrs(self.source.model, self.source.resolution, run)
         if attrs is None or attrs.get("silver_version") != SILVER_VERSION:
             return None
@@ -215,6 +224,7 @@ class WxPipeline:
         self, run: datetime, manifest: dict[str, Any], *, force: bool = False
     ) -> tuple[Dataset, bool]:
         # Importiertes Silber hat kein Bronze, aus dem es neu gebaut werden könnte
+        """@relation(SWR-WXP-021, scope=function)"""
         if manifest.get("imported") or (not force and self.silver_current(run, manifest)):
             return self.silver.read(self.source.model, self.source.resolution, run), False
         return self.build_silver(run, manifest), True
@@ -276,7 +286,10 @@ class WxPipeline:
         clustering: str | None = None,
         prepare: Callable[[datetime, datetime], None] | None = None,
     ) -> RunOutcome:
-        """Rechnet einen Lauf; ``prepare(run, valid_until)`` läuft direkt vor dem Schreiben."""
+        """Rechnet einen Lauf; ``prepare(run, valid_until)`` läuft direkt vor dem Schreiben.
+
+        @relation(SWR-WXP-003, SWR-WXP-022, scope=function)
+        """
         run = run.astimezone(UTC)
         manifest = self.run_manifest(run)
         if manifest is None:
@@ -324,6 +337,7 @@ class WxPipeline:
         return RunOutcome(run, "processed", silver, version, n, stats["coverage_min"])
 
     def _safe(self, run: datetime, **kwargs: Any) -> RunOutcome:
+        """@relation(SWR-WXP-004, scope=function)"""
         try:
             return self.process(run, **kwargs)
         except Exception as exc:
@@ -331,7 +345,10 @@ class WxPipeline:
             return RunOutcome(run, "failed", error=f"{type(exc).__name__}: {exc}")
 
     def latest(self, now: datetime | None = None) -> list[RunOutcome]:
-        """Dienstbetrieb: alle Läufe im Rückblickfenster, älteste zuerst."""
+        """Dienstbetrieb: alle Läufe im Rückblickfenster, älteste zuerst.
+
+        @relation(SWR-WXP-002, scope=function)
+        """
         now = now or datetime.now(UTC)
         start = now - timedelta(hours=self.config.lookback_hours)
         return [self._safe(r) for r in self.source.runs_between(start, now)]
@@ -351,6 +368,8 @@ class WxPipeline:
 
         ``decompress`` entpackt komprimierte Ziel-Chunks vor dem ersten Schreiben und packt sie
         wieder, sobald kein folgender Lauf mehr hineinschreibt (siehe ``Store.decompress_values``).
+
+        @relation(SWR-WXP-040, SWR-WXP-041, scope=function)
         """
         hours = list(hours) if hours is not None else None
         runs = self.source.runs_between(start, end, hours)
@@ -378,6 +397,8 @@ class _Unpacked:
     """Vom Backfill entpackte Chunks; gepackt wird, sobald der nächste Lauf sie nicht mehr trifft.
 
     Läuft der Dienst vorher in einen Neustart, packt die Kompressions-Policy sie später.
+
+    @relation(SWR-WXP-041, scope=class)
     """
 
     def __init__(self, store: Store) -> None:

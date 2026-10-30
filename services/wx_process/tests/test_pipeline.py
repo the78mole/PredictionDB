@@ -125,12 +125,14 @@ def setup():  # type: ignore[no-untyped-def]
 
 
 def test_not_ready_without_run_manifest(setup) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-WXP-003, scope=function)"""
     pipeline, bronze, _ = setup
     fill_bronze(bronze, STEPS, complete=False)
     assert pipeline.process(RUN).status == "not_ready"
 
 
 def test_process_writes_features_and_skips_afterwards(setup) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-WXP-003, SWR-WXP-021, scope=function)"""
     pipeline, bronze, store = setup
     fill_bronze(bronze, STEPS)
     r = pipeline.process(RUN)
@@ -162,7 +164,10 @@ def test_process_writes_features_and_skips_afterwards(setup) -> None:  # type: i
 
 
 def test_fixed_regions_instead_of_clustering(tmp_path: Path) -> None:
-    """GFS Europa: Gold je Region aus der Regionsdatei, auch ohne Clusterung in ``assets``."""
+    """GFS Europa: Gold je Region aus der Regionsdatei, auch ohne Clusterung in ``assets``.
+
+    @relation(SWR-WXP-035, scope=function)
+    """
     regions = {
         "version": "vT",
         "regions": [
@@ -207,6 +212,7 @@ def test_fixed_regions_instead_of_clustering(tmp_path: Path) -> None:
 
 
 def test_force_rebuilds_silver(setup) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-WXP-021, scope=function)"""
     pipeline, bronze, _ = setup
     fill_bronze(bronze, STEPS)
     pipeline.process(RUN)
@@ -215,6 +221,7 @@ def test_force_rebuilds_silver(setup) -> None:  # type: ignore[no-untyped-def]
 
 
 def test_silver_only_without_clustering(setup) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-WXP-022, scope=function)"""
     pipeline, bronze, store = setup
     fill_bronze(bronze, STEPS)
     store.version = None
@@ -224,6 +231,7 @@ def test_silver_only_without_clustering(setup) -> None:  # type: ignore[no-untyp
 
 
 def test_missing_step_is_tolerated(setup) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-WXP-012, scope=function)"""
     pipeline, bronze, _ = setup
     fill_bronze(bronze, [0, 1, 3, 6])
     assert pipeline.process(RUN).status == "processed"
@@ -232,6 +240,7 @@ def test_missing_step_is_tolerated(setup) -> None:  # type: ignore[no-untyped-de
 
 
 def test_latest_and_failures(setup) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-WXP-002, SWR-WXP-004, scope=function)"""
     pipeline, bronze, _ = setup
     fill_bronze(bronze, STEPS)
     obstore.put(bronze, pipeline.layout.run_key(RUN + timedelta(hours=6)), b"{}")
@@ -243,6 +252,7 @@ def test_latest_and_failures(setup) -> None:  # type: ignore[no-untyped-def]
 
 
 def test_backfill_run_selection(setup) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-WXP-040, scope=function)"""
     pipeline, bronze, _ = setup
     fill_bronze(bronze, STEPS)
     out = pipeline.backfill(RUN - timedelta(hours=12), RUN, hours=[6, 0], newest_first=True)
@@ -253,7 +263,10 @@ def test_backfill_run_selection(setup) -> None:  # type: ignore[no-untyped-def]
 
 
 def test_backfill_follows_run_priority(setup) -> None:  # type: ignore[no-untyped-def]
-    """Erst alle Läufe der ersten Laufzeit, dann die nächste, je Laufzeit jüngste zuerst."""
+    """Erst alle Läufe der ersten Laufzeit, dann die nächste, je Laufzeit jüngste zuerst.
+
+    @relation(SWR-WXP-040, scope=function)
+    """
     pipeline, _, _ = setup
     start = RUN - timedelta(hours=24)
     out = pipeline.backfill(start, RUN, hours=[12, 0, 6], newest_first=True)
@@ -266,7 +279,10 @@ def test_backfill_follows_run_priority(setup) -> None:  # type: ignore[no-untype
 
 
 def test_backfill_decompresses_until_no_run_writes_into_chunk(setup) -> None:  # type: ignore[no-untyped-def]
-    """Ein Chunk wird vor dem ersten Schreiben entpackt und erst danach wieder gepackt."""
+    """Ein Chunk wird vor dem ersten Schreiben entpackt und erst danach wieder gepackt.
+
+    @relation(SWR-WXP-041, scope=function)
+    """
     pipeline, bronze, store = setup
     fill_bronze(bronze, STEPS)
     day = timedelta(days=1)
@@ -285,7 +301,10 @@ def test_backfill_decompresses_until_no_run_writes_into_chunk(setup) -> None:  #
 
 
 def test_imported_silver_without_bronze(setup) -> None:  # type: ignore[no-untyped-def]
-    """Silber aus GHCR ohne Bronze: nur Gold rechnen, Silber nie überschreiben (auch mit force)."""
+    """Silber aus GHCR ohne Bronze: nur Gold rechnen, Silber nie überschreiben (auch mit force).
+
+    @relation(SWR-WXP-003, scope=function)
+    """
     pipeline, _, store = setup
     other = MemoryStore()
     fill_bronze(other, STEPS)
@@ -301,6 +320,7 @@ def test_imported_silver_without_bronze(setup) -> None:  # type: ignore[no-untyp
 
 
 def test_repo_config_gfs_0p5_covers_all_region_technologies() -> None:
+    """@relation(SWR-WXP-001, SWR-WXP-035, scope=function)"""
     from wx_process.regions import RegionSet
 
     cfg = ProcessConfig.from_yaml("config/process/gfs_0p5.yaml")
@@ -311,6 +331,7 @@ def test_repo_config_gfs_0p5_covers_all_region_technologies() -> None:
 
 
 def test_prune_bronze_only_with_silver(setup) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-WXP-024, scope=function)"""
     pipeline, bronze, _ = setup
     other = RUN + timedelta(hours=6)
     fill_bronze(bronze, STEPS)

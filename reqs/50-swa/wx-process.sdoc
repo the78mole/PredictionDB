@@ -1,0 +1,246 @@
+[DOCUMENT]
+TITLE: Softwarearchitektur wx-process (SWA)
+PREFIX: SWA-WXP-
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @architektur
+
+[TEXT]
+STATEMENT: >>>
+Softwarearchitektur nach ISO/IEC/IEEE 12207 für das Softwareelement SYSA-SW-WXP. Jede Komponente
+entspricht einem Modul unter ``services/wx_process/src/wx_process``.
+
+Abhängigkeiten: ``predictiondb_core``, ``gribkit`` und die Quellendefinition aus ``wx_ingest``.
+Abnehmer von Silber sind wx-exchange und Analysen, von Gold ml-train und Grafana.
+<<<
+
+[[SECTION]]
+TITLE: Komponenten
+
+[ELEMENT]
+UID: SWA-WXP-CLI
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Kommandozeile
+STATEMENT: >>>
+Befehle ``gfs latest``, ``gfs run``, ``gfs backfill`` und ``gfs prune-bronze``, Wiederholung mit ``--watch``.
+<<<
+ORT: services/wx_process/src/wx_process/cli.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXP-002
+- TYPE: Parent
+  VALUE: SWR-WXP-022
+- TYPE: Parent
+  VALUE: SWR-WXP-024
+- TYPE: Parent
+  VALUE: SWR-WXP-040
+
+[ELEMENT]
+UID: SWA-WXP-CONFIG
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Konfiguration
+STATEMENT: >>>
+Einstellungen ``PDB_WX_PROCESS_*`` und Modelle der Prozess-YAML.
+<<<
+ORT: services/wx_process/src/wx_process/config.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXP-001
+
+[ELEMENT]
+UID: SWA-WXP-VARIABLES
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Variablentabelle
+STATEMENT: >>>
+Silber-Variablen mit GRIB2-Schlüsseln, Einheit, Auflösung und Wertebereich.
+<<<
+ORT: services/wx_process/src/wx_process/variables.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXP-010
+- TYPE: Parent
+  VALUE: SWR-WXP-020
+
+[ELEMENT]
+UID: SWA-WXP-DECODE
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Dekodierung
+STATEMENT: >>>
+GRIB2-Schritte dekodieren, Gitter prüfen, Eimer zu Intervallwerten zurückrechnen.
+<<<
+ORT: services/wx_process/src/wx_process/decode.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXP-010
+- TYPE: Parent
+  VALUE: SWR-WXP-011
+- TYPE: Parent
+  VALUE: SWR-WXP-012
+
+[ELEMENT]
+UID: SWA-WXP-SILVER
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Silber
+STATEMENT: >>>
+Zusammensetzen, Kodieren, Schreiben und Lesen der Zarr-Stores.
+<<<
+ORT: services/wx_process/src/wx_process/silver.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXP-020
+- TYPE: Parent
+  VALUE: SWR-WXP-012
+
+[ELEMENT]
+UID: SWA-WXP-FEATURES
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Feature-Berechnung
+STATEMENT: >>>
+Gewichtete Features je Cluster, Wind- und PV-Modelle.
+<<<
+ORT: services/wx_process/src/wx_process/features.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXP-030
+- TYPE: Parent
+  VALUE: SWR-WXP-031
+- TYPE: Parent
+  VALUE: SWR-WXP-032
+- TYPE: Parent
+  VALUE: SWR-WXP-033
+- TYPE: Parent
+  VALUE: SWR-WXP-034
+
+[ELEMENT]
+UID: SWA-WXP-REGIONS
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Feste Regionen
+STATEMENT: >>>
+Regionsdatei lesen und als Gewichtslisten bereitstellen.
+<<<
+ORT: services/wx_process/src/wx_process/regions.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXP-035
+
+[ELEMENT]
+UID: SWA-WXP-PIPELINE
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Ablauf je Lauf
+STATEMENT: >>>
+Fälligkeit, Silber bauen oder wiederverwenden, Features schreiben, Live, Backfill, Aufräumen.
+<<<
+ORT: services/wx_process/src/wx_process/pipeline.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXP-002
+- TYPE: Parent
+  VALUE: SWR-WXP-003
+- TYPE: Parent
+  VALUE: SWR-WXP-004
+- TYPE: Parent
+  VALUE: SWR-WXP-021
+- TYPE: Parent
+  VALUE: SWR-WXP-022
+- TYPE: Parent
+  VALUE: SWR-WXP-024
+- TYPE: Parent
+  VALUE: SWR-WXP-040
+- TYPE: Parent
+  VALUE: SWR-WXP-041
+
+[ELEMENT]
+UID: SWA-WXP-STORE
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Datenbankzugriff
+STATEMENT: >>>
+Gewichte, Bestand, Feature-Register lesen; Werte per COPY schreiben; Verarbeitungsstand, Bestand und Chunks verwalten.
+<<<
+ORT: services/wx_process/src/wx_process/store.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXP-023
+- TYPE: Parent
+  VALUE: SWR-WXP-034
+- TYPE: Parent
+  VALUE: SWR-WXP-036
+- TYPE: Parent
+  VALUE: SWR-WXP-041
+
+[ELEMENT]
+UID: SWA-WXP-TESTING
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Testhilfen
+STATEMENT: >>>
+Synthetische GFS-Schritte mit bekannten Stundenwerten in Bronze.
+<<<
+ORT: services/wx_process/src/wx_process/testing.py
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Schnittstellen
+
+[ELEMENT]
+UID: SWA-WXP-IF-SILVER
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: Silber-Layout
+STATEMENT: >>>
+wx-process → wx-exchange, Analysen. Bucket ``PDB_BUCKET_SILVER``, ein Zarr-v3-Store je Lauf mit Attributen zu Lauf, Herkunft und ``SILVER_VERSION``.
+<<<
+QUELLE: ARCHITEKTUR.md 5.1, 5.5
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXP-020
+
+[ELEMENT]
+UID: SWA-WXP-IF-GOLD
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: Gold-Tabellen
+STATEMENT: >>>
+wx-process → ml-train, Grafana. ``feat.nwp_value``, ``meta.feature``, ``meta.region``, ``meta.nwp_feature_run``, ``meta.nwp_run``, ``meta.silver_run``.
+<<<
+QUELLE: ARCHITEKTUR.md 5.3
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXP-023
+- TYPE: Parent
+  VALUE: SWR-WXP-036
+
+[ELEMENT]
+UID: SWA-WXP-IF-NOTIFY
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: Ereignis features_ready
+STATEMENT: >>>
+wx-process → ml-train. ``NOTIFY features_ready`` mit Lauf und Quelle nach jedem gerechneten Lauf.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXP-036
+
+[ELEMENT]
+UID: SWA-WXP-IF-CONFIG
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: Prozess-Konfiguration
+STATEMENT: >>>
+Betreiber → wx-process. YAML unter ``config/process/``.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXP-001
+
+[[/SECTION]]
