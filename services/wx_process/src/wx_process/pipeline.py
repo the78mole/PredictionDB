@@ -12,6 +12,7 @@ Neuberechnung aus Silber dasselbe ergibt.
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -34,6 +35,9 @@ from wx_process.store import Chunk, Store
 from wx_process.variables import SILVER_VERSION
 
 log = get_logger(__name__)
+
+#: frühester möglicher Bronze-Lauf (GFS v15 im AWS-Archiv ab 2021); Startpunkt des Aufräumens
+BRONZE_SINCE = datetime(2021, 1, 1, tzinfo=UTC)
 
 Status = Literal["processed", "skipped", "not_ready", "silver_only", "failed"]
 
@@ -107,6 +111,68 @@ class WxPipeline:
             else:
                 decoded[step] = decode_step(blob, step)
         return decoded, missing
+
+    def bronze_runs(self, start: datetime, end: datetime) -> list[datetime]:
+        """Läufe mit Bronze von ``start`` bis vor ``end``, ein Listing je Tag."""
+        out = []
+        day = start.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        while day < end:
+            prefix = f"{self.layout.model}/{self.layout.resolution}/{day:%Y/%m/%d}/"
+            for p in obstore.list_with_delimiter(self.bronze_store, prefix=prefix)[
+                "common_prefixes"
+            ]:
+                hour = p.rstrip("/").rsplit("/", 1)[-1]
+                if hour.isdigit():
+                    run = day.replace(hour=int(hour))
+                    if start <= run < end:
+                        out.append(run)
+            day += timedelta(days=1)
+        return out
+
+    def prune_bronze(
+        self,
+        keep_days: float,
+        *,
+        start: datetime | None = None,
+        now: datetime | None = None,
+        dry_run: bool = False,
+        pause: float = 0.0,
+    ) -> dict[str, int]:
+        """Bronze älter als ``keep_days`` löschen, wenn das Silber des Laufs vorliegt.
+
+        Silber zählt laut ``meta.silver_run`` (ohne Datenbank: vollständiger Zarr-Store). Läufe
+        ohne Silber bleiben stehen, denn aus ihnen entsteht es noch. ``pause`` Sekunden zwischen
+        zwei Läufen schonen Garage, das jedes gelöschte Objekt im Hintergrund nacharbeitet.
+        """
+        now = now or datetime.now(UTC)
+        cutoff = now - timedelta(days=keep_days)
+        runs = self.bronze_runs(start or BRONZE_SINCE, cutoff)
+        present = (
+            {r for r, st in self.store.silver_runs(self.source_id).items() if st == "present"}
+            if self.store is not None
+            else None
+        )
+        counts = {"runs": 0, "objects": 0, "kept_no_silver": 0}
+        for run in runs:
+            if present is not None:
+                has_silver = run in present
+            else:
+                attrs = self.silver.attrs(self.source.model, self.source.resolution, run)
+                has_silver = attrs is not None
+            if not has_silver:
+                counts["kept_no_silver"] += 1
+                continue
+            counts["runs"] += 1
+            if dry_run:
+                continue
+            for batch in obstore.list(self.bronze_store, prefix=self.layout.run_prefix(run) + "/"):
+                paths = [m["path"] for m in batch]
+                obstore.delete(self.bronze_store, paths)
+                counts["objects"] += len(paths)
+            if pause:
+                time.sleep(pause)
+        log.info("bronze.pruned", cutoff=cutoff.isoformat(), dry_run=dry_run, **counts)
+        return counts
 
     # --- Silber ------------------------------------------------------------------------------
 
