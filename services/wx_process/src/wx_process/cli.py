@@ -10,6 +10,7 @@ Beispiele::
     wx-process gfs run 2026102012 --silver-only    # nur Silber, ohne Datenbank
     wx-process gfs prune-bronze --keep-days 92     # Bronze älter als 92 Tage löschen (mit Silber)
     wx-process gfs latest --watch 600 --bronze-days 92   # dazu laufend aufräumen
+    wx-process gfs evict-silver --keep-days 92 --dry-run # GHCR-Silber mit Gold lokal löschen
 """
 
 from __future__ import annotations
@@ -53,6 +54,15 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         metavar="TAGE",
         help="je Durchgang Bronze älter als TAGE löschen, sofern Silber vorliegt (letzte Woche)",
+    )
+
+    evict = cmd.add_parser(
+        "evict-silver", help="aus GHCR importiertes Silber mit Gold lokal löschen (bleibt auf GHCR)"
+    )
+    evict.add_argument("--keep-days", type=float, default=92, metavar="TAGE")
+    evict.add_argument("--dry-run", action="store_true", help="nur zählen")
+    evict.add_argument(
+        "--pause", type=float, default=0.2, metavar="SEK", help="Pause je Lauf (Garage schonen)"
     )
 
     prune = cmd.add_parser("prune-bronze", help="altes Bronze löschen, sofern Silber vorliegt")
@@ -124,6 +134,10 @@ def main(argv: list[str] | None = None) -> int:
                 break
             _print([r for r in results if r.status not in ("skipped", "not_ready")], None)
             time.sleep(args.watch)
+    elif args.cmd == "evict-silver":
+        counts = pipeline.evict_silver(args.keep_days, dry_run=args.dry_run, pause=args.pause)
+        print(json.dumps(counts), flush=True)
+        return 0
     elif args.cmd == "prune-bronze":
         counts = pipeline.prune_bronze(
             args.keep_days, start=args.since, dry_run=args.dry_run, pause=args.pause

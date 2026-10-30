@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import numpy as np
+import obstore
 import zarr
 from numpy.typing import NDArray
 from obstore.store import ObjectStore
@@ -128,12 +129,25 @@ def decode(values: NDArray[np.int16], name: str) -> Array:
 class Silver:
     def __init__(self, store: ObjectStore, *, step_chunk: int = 48, zstd_level: int = 5) -> None:
         self.store = ZarrObjectStore(store, read_only=False)
+        self.objects = store
         self.step_chunk = step_chunk
         self.zstd_level = zstd_level
 
     @staticmethod
     def key(model: str, resolution: str, run: datetime) -> str:
         return f"{model}/{resolution}/{run:%Y/%m/%d/%H}.zarr"
+
+    def delete(self, model: str, resolution: str, run: datetime) -> int:
+        """Store eines Laufs löschen, Wurzel-``zarr.json`` zuletzt; Anzahl gelöschter Objekte."""
+        key = self.key(model, resolution, run)
+        paths = [m["path"] for batch in obstore.list(self.objects, prefix=key + "/") for m in batch]
+        root = f"{key}/zarr.json"
+        rest = [p for p in paths if p != root]
+        for i in range(0, len(rest), 1000):
+            obstore.delete(self.objects, rest[i : i + 1000])
+        if root in paths:
+            obstore.delete(self.objects, root)
+        return len(paths)
 
     def attrs(self, model: str, resolution: str, run: datetime) -> dict[str, Any] | None:
         """Attribute eines vollständigen Stores, sonst ``None``."""

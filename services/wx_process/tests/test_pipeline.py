@@ -90,6 +90,16 @@ class FakeStore:
         for r in runs:
             self.silver[r] = (status, origin)
 
+    def evictable_silver(self, source_id, before, version, fv) -> list[datetime]:  # type: ignore[no-untyped-def]
+        return sorted(
+            r
+            for r, (st, origin) in self.silver.items()
+            if st == "present"
+            and origin == "ghcr"
+            and r < before
+            and self.processed(3, r, version, fv)
+        )
+
     def silver_runs(self, source_id: int) -> dict[datetime, str]:
         return {r: st for r, (st, _) in self.silver.items()}
 
@@ -330,3 +340,25 @@ def test_prune_bronze_only_with_silver(setup) -> None:  # type: ignore[no-untype
     assert pipeline.bronze_runs(RUN - timedelta(days=1), now) == [other]
     # Silber bleibt lesbar, der Lauf gilt weiter als gerechnet
     assert pipeline.process(RUN).status == "skipped"
+
+
+def test_evict_silver_only_ghcr_with_gold(setup) -> None:  # type: ignore[no-untyped-def]
+    pipeline, bronze, store = setup
+    other = RUN + timedelta(hours=6)
+    fill_bronze(bronze, STEPS)
+    fill_bronze(bronze, STEPS, run=other)
+    pipeline.process(RUN)
+    pipeline.process(other)
+    # RUN gilt als aus GHCR importiert, other stammt aus eigenem Bronze
+    store.silver[RUN] = ("present", "ghcr")
+    now = RUN + timedelta(days=100)
+    assert pipeline.evict_silver(92, now=now, dry_run=True) == {"runs": 1, "objects": 0}
+    assert pipeline.evict_silver(92, now=RUN + timedelta(days=10))["runs"] == 0
+
+    counts = pipeline.evict_silver(92, now=now)
+    assert counts["runs"] == 1 and counts["objects"] > 0
+    assert store.silver[RUN] == ("evicted", "ghcr")
+    assert pipeline.silver.attrs("gfs", "0p25", RUN) is None
+    assert pipeline.silver.attrs("gfs", "0p25", other) is not None
+    # ein zweiter Durchgang findet nichts mehr
+    assert pipeline.evict_silver(92, now=now)["runs"] == 0
