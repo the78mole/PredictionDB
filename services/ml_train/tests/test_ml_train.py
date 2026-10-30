@@ -24,7 +24,7 @@ from ml_train.jobs import JobLog
 from ml_train.models import TwoStageModel
 from ml_train.predict import by_issue, compare_issue, due_issues, needs_weather, next_wake
 from ml_train.registry import Registry, compare
-from ml_train.snapshot import load_snapshot
+from ml_train.snapshot import Snapshot, load_snapshot
 from ml_train.testing import synthetic_snapshot
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -91,6 +91,49 @@ def test_lags_only_use_known_values(snap, cfg) -> None:  # type: ignore[no-untyp
         lagged = frame.X[f"lag_{code}_week"].to_numpy()
         direct = fb.energy[code].reindex(week_src).to_numpy()
         np.testing.assert_allclose(lagged[known.to_numpy()], direct[known.to_numpy()], rtol=1e-5)
+
+
+def test_price_known_until_capped_at_present_data(snap, cfg) -> None:  # type: ignore[no-untyped-def]
+    # Lauf 14 Uhr Ortszeit: per Uhrzeitregel gilt der Preis für morgen (12.5.) schon als
+    # bekannt, abgerufen ist er aber noch nicht. Dann zählt der 11.5. als letzter voller Tag.
+    cut = pd.Timestamp("2023-05-11 22:00", tz="UTC")  # 12.5. 00:00 Ortszeit
+    e = snap.energy
+    late = (e["code"] == "da_price_de_lu") & (e["ts"] >= cut)
+    partial = Snapshot(e[~late], snap.weather, snap.capacity, snap.manifest)
+    issue = pd.Timestamp("2023-05-11 12:00", tz="UTC")
+    fb = FeatureBuilder(partial, cfg)
+    frame = fb.build_at([issue])
+    mean = frame.X["lag_da_price_de_lu_mean_day"]
+    assert mean.notna().all()
+    assert mean.iloc[0] == pytest.approx(
+        fb.daily_mean["da_price_de_lu"][pd.Timestamp("2023-05-11")]
+    )
+    # mit vollständigen Daten gilt weiter die Uhrzeitregel (Training unverändert)
+    full = FeatureBuilder(snap, cfg).build_at([issue]).X["lag_da_price_de_lu_mean_day"]
+    assert full.iloc[0] == pytest.approx(
+        FeatureBuilder(snap, cfg).daily_mean["da_price_de_lu"][pd.Timestamp("2023-05-12")]
+    )
+
+
+def test_predict_drops_nan_rows(snap, cfg) -> None:  # type: ignore[no-untyped-def]
+    from types import SimpleNamespace
+
+    from ml_train.predict import predict_model
+
+    frame = FeatureBuilder(snap, cfg).build_at([pd.Timestamp("2023-05-11 12:00", tz="UTC")])
+    n = len(frame.X)
+    vals = np.arange(n, dtype=float)
+    model = SimpleNamespace(
+        lead_days=sorted(frame.meta["lead_day"].unique()),
+        variant=SimpleNamespace(requires_weather=False),
+        features=lambda: [],
+        predict=lambda f: {
+            "load_actual": pd.DataFrame({"q50": vals}),
+            "da_price_de_lu": pd.DataFrame({"q50": np.full(n, np.nan)}),
+        },
+    )
+    out = predict_model(frame, model, "v", pd.Timestamp("2023-05-11 12:00", tz="UTC"))  # type: ignore[arg-type]
+    assert set(out["target"]) == {"load_actual"} and len(out) == n
 
 
 def test_same_local_time_across_dst() -> None:

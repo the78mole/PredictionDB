@@ -197,6 +197,8 @@ class FeatureBuilder:
         self.daily_mean = self.energy.groupby(self.local_day).mean()
         self._hours: dict[date, pd.DatetimeIndex] = {}
         self._gk_hours: dict[str, pd.DataFrame] = {}
+        # Erste Stunde nach dem letzten vorhandenen Wert je Reihe (Grenze für „bekannt“)
+        self._present_until = {c: self.energy[c].last_valid_index() for c in self.energy.columns}
 
     # --- Wissen zum Ausgabezeitpunkt ---------------------------------------------------------
 
@@ -207,7 +209,14 @@ class FeatureBuilder:
             last_day = local.date() + timedelta(
                 days=1 if local.hour >= self.cfg.issue.price_known_local_hour else 0
             )
-            return local_day_hours(last_day)[-1] + H
+            rule = local_day_hours(last_day)[-1] + H
+            # Im Betrieb kann die Auktion für morgen schon gelaufen, aber noch nicht abgerufen
+            # sein: dann gilt der letzte vorhandene Tag, sonst wäre das Tagesmittel (center der
+            # Preisprognose) leer und die ganze Preisprognose NaN.
+            present = self._present_until.get(code)
+            if present is not None and present + H < rule:
+                return present + H
+            return rule
         return (issue - pd.Timedelta(hours=self.cfg.issue.actual_delay_h) - H).floor("h") + H
 
     # --- Zeilen ------------------------------------------------------------------------------
