@@ -100,6 +100,19 @@ services:
     depends_on:
       postgres: {condition: service_healthy}
 
+  # Speicherbelegung je Wettergruppe (GFS DE, GFS Europa, GEFS) in Garage und Postgres für das
+  # Wetter-Dashboard nach meta.storage_usage. Listet Garage je Monatspräfix nur, wo sich laut
+  # meta.silver_run/bronze_run/backfill_run etwas geändert hat (höchstens 10 min je Durchgang);
+  # die Garage-Metadaten (LMDB) werden nur gelesen.
+  storage-usage:
+    <<: *app
+    command: ["pdb-storage-usage", "--watch", "3600", "--garage-meta-dir", "/garage-meta"]
+    volumes:
+      - garage-meta:/garage-meta:ro
+    depends_on:
+      garage-init: {condition: service_completed_successfully}
+      migrate: {condition: service_completed_successfully}
+
   # GFS 0,25° per Partial Download nach Bronze (services/wx_ingest)
   ingest-gfs:
     <<: *app
