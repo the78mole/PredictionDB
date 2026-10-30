@@ -1,0 +1,376 @@
+[DOCUMENT]
+TITLE: Softwareanforderungen wx-process (SRS)
+PREFIX: SWR-WXP-
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @anforderung
+
+[TEXT]
+STATEMENT: >>>
+Software Requirements Specification nach ISO/IEC/IEEE 29148 für das Softwareelement
+SYSA-SW-WXP (``services/wx_process``): Bronze nach Silber (Zarr) und Silber nach Gold
+(Features je Cluster bzw. Region).
+<<<
+
+[[SECTION]]
+TITLE: Steuerung
+
+[REQUIREMENT]
+UID: SWR-WXP-001
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Prozess-Konfiguration als YAML
+STATEMENT: >>>
+wx-process muss Quellendefinition, Rückblickfenster, Gitter der Gewichte, Silber-Parameter und
+die Features je Technologie (Nabenhöhe, Leistungskurve, PV-Modell) bzw. eine feste Regionsdatei
+aus einer YAML-Datei lesen (``PDB_WX_PROCESS_CONFIG`` oder ``--config``). Läufe, Schritte und
+Bronze-Layout übernimmt es aus derselben Quellendefinition wie wx-ingest.
+<<<
+QUELLE: config/process/
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-006
+- TYPE: Parent
+  VALUE: SYSR-QA-003
+
+[REQUIREMENT]
+UID: SWR-WXP-002
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Live-Modus
+STATEMENT: >>>
+Im Live-Modus muss wx-process alle Läufe im Rückblickfenster, älteste zuerst, prüfen und
+fällige rechnen, mit ``--watch N`` alle N Sekunden erneut.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-006
+- TYPE: Parent
+  VALUE: SYSR-PR-002
+
+[REQUIREMENT]
+UID: SWR-WXP-003
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Fälligkeit eines Laufs
+STATEMENT: >>>
+Ein Lauf muss fällig sein, sobald in Bronze sein ``run.json`` liegt oder ohne Bronze ein
+importiertes Silber der aktuellen ``SILVER_VERSION`` vorliegt. Er gilt als gerechnet, wenn
+``meta.nwp_feature_run`` einen Eintrag für die aktuelle Clusterung und ``FEATURES_VERSION``
+hat. Eine neue Clusterung oder Feature-Version macht ihn erneut fällig.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-006
+- TYPE: Parent
+  VALUE: SYSR-OPS-001
+- TYPE: Parent
+  VALUE: SYSR-PUB-001
+
+[REQUIREMENT]
+UID: SWR-WXP-004
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Fehler je Lauf eingrenzen
+STATEMENT: >>>
+Scheitert ein Lauf, muss wx-process ihn als ``failed`` mit Fehlertext melden und mit dem nächsten
+Lauf fortfahren.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-OPS-001
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Dekodieren
+
+[REQUIREMENT]
+UID: SWR-WXP-010
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Nachrichten über GRIB2-Schlüssel erkennen
+STATEMENT: >>>
+wx-process muss Nachrichten über die numerischen GRIB2-Schlüssel (Disziplin, Kategorie,
+Parameter, Flächentyp, Höhe, ``stepType``) den Silber-Variablen zuordnen, unbekannte Nachrichten
+überspringen und prüfen, dass jede Nachricht zum erwarteten Schritt gehört.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-006
+
+[REQUIREMENT]
+UID: SWR-WXP-011
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Mittel und Summen je Intervall
+STATEMENT: >>>
+Aus Mitteln und Summen, die GFS in Eimern seit einem alle 6 h springenden Start liefert, muss
+wx-process den Wert für das Intervall seit dem vorherigen Schritt zurückrechnen: Strahlung als
+Intervallmittel, Niederschlag als Rate in mm/h. Im Analyse-Schritt f000 und bei einer Lücke ohne
+gemeinsamen Eimer bleiben diese Größen leer.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-006
+
+[REQUIREMENT]
+UID: SWR-WXP-012
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Fehlende Variablen und Schritte
+STATEMENT: >>>
+Fehlt eine Variable in Bronze eines Laufs, muss sie im Silber dieses Laufs fehlen; fehlt sie oder
+ein Schritt nur teilweise, bleiben die betroffenen Schritte leer, ohne dass der Lauf scheitert.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-006
+- TYPE: Parent
+  VALUE: SYSR-WX-005
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Silber
+
+[REQUIREMENT]
+UID: SWR-WXP-020
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Silber-Format
+STATEMENT: >>>
+wx-process muss je Lauf einen Zarr-v3-Store ``<modell>/<auflösung>/JJJJ/MM/TT/HH.zarr`` schreiben:
+je Variable ein Int16-Array ``(step, lat, lon)`` mit ``scale_factor``/``add_offset`` in der
+festen Auflösung der Variable, Blosc/Zstd mit Byte-Shuffle und Chunks über 48 Schritte. Werte
+außerhalb des Wertebereichs werden begrenzt. Ein neuer Store ersetzt den alten vollständig.
+<<<
+QUELLE: ARCHITEKTUR.md 5.1, 5.5.1
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-006
+- TYPE: Parent
+  VALUE: SYSR-QA-001
+
+[REQUIREMENT]
+UID: SWR-WXP-021
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Silber nur bei Bedarf neu bauen
+STATEMENT: >>>
+wx-process muss vorhandenes Silber wiederverwenden und nur neu bauen, wenn es fehlt, das
+Laufmanifest in Bronze neuer ist, sich ``SILVER_VERSION`` geändert hat oder ``--force`` gesetzt ist.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-OPS-001
+- TYPE: Parent
+  VALUE: SYSR-WX-006
+
+[REQUIREMENT]
+UID: SWR-WXP-022
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Nur Silber ohne Datenbank
+STATEMENT: >>>
+Mit ``--silver-only`` bzw. ohne Clusterung muss wx-process Silber bauen, ohne Features zu
+schreiben; mit ``--silver-only`` braucht es keine Datenbank.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-006
+- TYPE: Parent
+  VALUE: SYSR-PUB-002
+
+[REQUIREMENT]
+UID: SWR-WXP-023
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Inspektion
+TITLE: Bestand je Lauf melden
+STATEMENT: >>>
+wx-process muss vorhandenes Silber und Bronze je Lauf in ``meta.silver_run`` mit Herkunft
+(``bronze`` oder ``ghcr``) nachführen, damit das Dashboard den Bestand je Monat zeigt.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-OPS-003
+
+[REQUIREMENT]
+UID: SWR-WXP-024
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Altes Bronze aufräumen
+STATEMENT: >>>
+Mit ``prune-bronze`` bzw. ``--bronze-days`` muss wx-process Bronze-Läufe löschen, die älter als
+die angegebene Zahl Tage sind, aber nur, wenn ihr Silber vorliegt. ``--dry-run`` zählt nur.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-QA-001
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Gold
+
+[REQUIREMENT]
+UID: SWR-WXP-030
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Features je Cluster
+STATEMENT: >>>
+wx-process muss für jedes Cluster aus ``assets.grid_weight`` die Features als gewichtetes Mittel
+über die Gitterzellen rechnen. Nichtlineare Größen werden je Zelle gerechnet und dann gewichtet.
+Liegen Gewichte außerhalb des Gitters, wird über den Rest normiert und die Abdeckung gemeldet.
+Unbekannte Technologien werden übersprungen.
+<<<
+QUELLE: ARCHITEKTUR.md 7.5
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-006
+- TYPE: Parent
+  VALUE: SYSR-EN-004
+
+[REQUIREMENT]
+UID: SWR-WXP-031
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Wind-Features
+STATEMENT: >>>
+Für Wind muss wx-process Windgeschwindigkeit in 10 m, 100 m und Nabenhöhe (Potenzgesetz mit dem
+Exponenten aus 10 m und 100 m, bei Schwachwind 1/7, begrenzt auf 0–0,6), Böen, Temperatur und
+einen Kapazitätsfaktor aus einer generischen Leistungskurve liefern. Die Nabenhöhe ist das
+leistungsgewichtete Mittel des Clusters, sonst der Wert aus der Konfiguration.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-006
+
+[REQUIREMENT]
+UID: SWR-WXP-032
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: PV-Features
+STATEMENT: >>>
+Für PV muss wx-process Globalstrahlung, Temperatur, Bewölkung, Schneeanteil und einen
+Kapazitätsfaktor ``PR · G/1000 · (1 + γ·(T_Zelle − 25 °C))`` mit NOCT-Zelltemperatur liefern.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-006
+
+[REQUIREMENT]
+UID: SWR-WXP-033
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Wasser und sonstige Technologien
+STATEMENT: >>>
+Für Wasserkraft muss wx-process Niederschlag, Temperatur und Schneeanteil liefern, für sonstige
+Technologien die Temperatur.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-006
+
+[REQUIREMENT]
+UID: SWR-WXP-034
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Leistung aus dem Bestand
+STATEMENT: >>>
+``wind_power`` und ``pv_power`` muss wx-process als Kapazitätsfaktor mal installierte Leistung des
+Clusters am Gültigkeitstag aus ``assets.capacity_daily`` rechnen; nach dem letzten Tag gilt der
+letzte Wert, ohne Bestand entfällt das Feature.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-006
+- TYPE: Parent
+  VALUE: SYSR-EN-004
+
+[REQUIREMENT]
+UID: SWR-WXP-035
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Feste Regionen
+STATEMENT: >>>
+Mit einer Regionsdatei muss wx-process statt MaStR-Clustern feste Regionen (Gebotszonen wie bei
+GEFS, Codes ``gefs:<code>``) verwenden.
+<<<
+QUELLE: ARCHITEKTUR.md 5.7
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-008
+
+[REQUIREMENT]
+UID: SWR-WXP-036
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Gold schreiben und melden
+STATEMENT: >>>
+wx-process muss die Werte eines Laufs nach ``feat.nwp_value`` schreiben und dabei vorhandene Werte
+desselben Laufs ersetzen. Danach muss es ``meta.nwp_feature_run`` und ``meta.nwp_run`` (Status
+``processed``) nachführen und ``NOTIFY features_ready`` senden.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-OPS-001
+- TYPE: Parent
+  VALUE: SYSR-PR-002
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Historie
+
+[REQUIREMENT]
+UID: SWR-WXP-040
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Backfill
+STATEMENT: >>>
+Der Backfill muss alle Läufe eines Zeitraums rechnen, wahlweise nur bestimmte Laufzeiten in der
+angegebenen Reihenfolge als Priorität und die jüngsten zuerst.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-005
+
+[REQUIREMENT]
+UID: SWR-WXP-041
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Schreiben in komprimierte Chunks
+STATEMENT: >>>
+Mit ``--decompress`` muss der Backfill komprimierte Ziel-Chunks vor dem Schreiben entpacken und
+wieder packen, sobald kein folgender Lauf mehr hineinschreibt. Auf die Sperre eines Chunks wird
+höchstens 5 s gewartet; ein gesperrter Chunk bleibt, wie er ist.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-005
+- TYPE: Parent
+  VALUE: SYSR-QA-001
+
+[[/SECTION]]
