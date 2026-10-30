@@ -9,7 +9,8 @@ liest; Grafana selbst listet nie Buckets.
   gelistet wird ein Monat nur, wenn er noch nie gemessen wurde, der laufende oder vorige Monat
   ist, sich laut ``meta.silver_run``/``meta.bronze_run``/``meta.backfill_run`` dort seit der
   letzten Messung etwas geändert hat oder die Messung älter als ``--max-age-days`` ist. Ein
-  Zeitbudget je Durchgang verteilt die erste Vollmessung auf mehrere Durchgänge.
+  Zeitbudget je Durchgang verteilt die erste Vollmessung auf mehrere Durchgänge; solange etwas
+  offen ist, folgt der nächste Durchgang schon nach ``--catch-up`` Sekunden.
 - **Postgres:** Gold (``feat.nwp_value``) je Gruppe über die Merkmale (``meta.feature``) der
   Quelle: Größe je Chunk anteilig nach Zeilen je Quelle, die Zählung je Chunk zwischengespeichert
   in ``meta.storage_pg_chunk`` (neu nur bei geänderter Chunkgröße). Dazu die Metatabellen je
@@ -105,6 +106,8 @@ class Usage:
     def __init__(self, engine: Engine, settings: Settings) -> None:
         self.engine = engine
         self.settings = settings
+        #: Nach einem Durchgang: Zeitbudget erschöpft, es sind noch Monate bzw. Chunks offen
+        self.pending = False
 
     # --- Garage je Monat -----------------------------------------------------------------------
 
@@ -174,6 +177,7 @@ class Usage:
                 for month, prefix in self._due_months(bucket, group, months, max_age):
                     if time.monotonic() > deadline:
                         log.info("storage.s3.budget", bucket=bucket, group=group.name)
+                        self.pending = True
                         return n
                     t0 = time.monotonic()
                     size, objects = list_size(store, prefix)
@@ -319,6 +323,7 @@ class Usage:
                     )
             else:
                 # Zeilen unbekannt: nur die Größe verteilen
+                self.pending = True
                 shares = cached[ch.chunk][1] if ch.chunk in cached else fallback
                 shares = {k: [v[0], 0] for k, v in shares.items()}
             total = sum(v[0] for v in shares.values())
@@ -391,6 +396,7 @@ def measure(
     max_age: timedelta,
 ) -> None:
     t0 = time.monotonic()
+    usage.pending = False
     scanned = usage.scan_s3(budget_s, max_age)
     totals = usage.bucket_totals(client)
     rows = [
@@ -403,6 +409,7 @@ def measure(
         "storage.measured",
         months_scanned=scanned,
         rows=len(rows),
+        pending=usage.pending,
         seconds=round(time.monotonic() - t0, 1),
     )
 
@@ -413,8 +420,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--budget",
         type=float,
-        default=600.0,
-        help="Sekunden fürs Listing je Durchgang (Standard 600)",
+        default=300.0,
+        help="Sekunden fürs Listing (Garage) und Zählen (Postgres) je Durchgang (Standard 300)",
+    )
+    parser.add_argument(
+        "--catch-up",
+        type=int,
+        default=60,
+        help="Pause in Sekunden statt --watch, solange noch Monate oder Chunks offen sind",
     )
     parser.add_argument(
         "--max-age-days",
@@ -451,7 +464,9 @@ def main(argv: list[str] | None = None) -> int:
             log.exception("storage.failed")
         if not args.watch:
             return 0
-        time.sleep(args.watch)
+        # Erste Vollmessung (Stunden bei Millionen Objekten) in kurzen Durchgängen, damit das
+        # Dashboard zwischendurch schon Teilstände zeigt; danach im normalen Takt
+        time.sleep(args.catch_up if usage.pending else args.watch)
 
 
 if __name__ == "__main__":

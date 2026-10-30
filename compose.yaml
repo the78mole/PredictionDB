@@ -102,7 +102,8 @@ services:
 
   # Speicherbelegung je Wettergruppe (GFS DE, GFS Europa, GEFS) in Garage und Postgres für das
   # Wetter-Dashboard nach meta.storage_usage. Listet Garage je Monatspräfix nur, wo sich laut
-  # meta.silver_run/bronze_run/backfill_run etwas geändert hat (höchstens 10 min je Durchgang);
+  # meta.silver_run/bronze_run/backfill_run etwas geändert hat (je Durchgang höchstens 5 min, bei
+  # der ersten Vollmessung Durchgänge im Minutentakt, bis alles einmal gelistet ist);
   # die Garage-Metadaten (LMDB) werden nur gelesen.
   storage-usage:
     <<: *app
