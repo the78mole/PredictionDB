@@ -18,6 +18,8 @@ Ablage:
 Gold: je Region, Größe und Schritt Mittel, Streuung, P10 und P90 über die Mitglieder nach
 ``feat.nwp_value`` (Merkmal ``<größe>_<kennzahl>``, Aggregation ``ensemble``, Region
 ``gefs:<code>``), Stand in ``meta.nwp_feature_run`` (Version der Regionen, ``GOLD_VERSION``).
+
+@relation(SWA-WXX-GEFS-VM, scope=file)
 """
 
 from __future__ import annotations
@@ -104,6 +106,7 @@ class GefsBronze(BronzeSink):
         self._lock = threading.Lock()
 
     def put(self, run: datetime, member: str, step: int, messages: dict[str, bytes]) -> int:
+        """@relation(SWR-WXX-045, scope=function)"""
         with self._lock:
             first = run not in self._started
             self._started.add(run)
@@ -233,7 +236,10 @@ def _nan_percentiles(values: F32, qs: dict[str, float]) -> dict[str, F32]:
 
 
 def ensemble_stats(values: F32) -> dict[str, F32]:
-    """Kennzahlen über die Mitglieder (Achse 0); NaN, wo zu wenige Mitglieder gültig sind."""
+    """Kennzahlen über die Mitglieder (Achse 0); NaN, wo zu wenige Mitglieder gültig sind.
+
+    @relation(SWR-WXX-047, scope=function)
+    """
     valid = np.isfinite(values).sum(axis=0)
     with warnings.catch_warnings():
         # Schritte ohne gültiges Mitglied (Mittel und Summen in f000) ergeben NaN
@@ -291,6 +297,7 @@ class GefsGold:
         return {c: self._regions[c] for c in codes}
 
     def process(self, run: datetime) -> int:
+        """@relation(SWR-WXX-047, scope=function)"""
         data = self.local.load(run)
         meta, values = unpack(data)
         stats = ensemble_stats(values)
@@ -427,6 +434,7 @@ class GefsVm:
         self._mark([run], "bronze")
 
     async def live(self) -> list[dict[str, Any]]:
+        """@relation(SWR-WXX-045, scope=function)"""
         now = self.now()
         start = max(self.config.first_run, month_start(now) - timedelta(days=self.catch_up_days))
         publisher = GefsPublisher(
@@ -455,7 +463,10 @@ class GefsVm:
 
     # abgeschlossene Monate: aus GHCR holen
     def import_history(self, limit: int | None = None) -> Counter[str]:
-        """Abgeschlossene Monate aus GHCR holen, höchstens ``limit`` Läufe (danach ``more``)."""
+        """Abgeschlossene Monate aus GHCR holen, höchstens ``limit`` Läufe (danach ``more``).
+
+        @relation(SWR-WXX-046, scope=function)
+        """
         counts: Counter[str] = Counter()
         end = month_start(self.now()) - timedelta(hours=1)
         local = self.local.runs()
@@ -516,6 +527,7 @@ class GefsVm:
     def process_gold(
         self, limit: int | None = None, before: datetime | None = None
     ) -> Counter[str]:
+        """@relation(SWR-WXX-047, scope=function)"""
         counts: Counter[str] = Counter()
         if self.gold is None:
             return counts
@@ -541,7 +553,10 @@ class GefsVm:
         return counts
 
     def clean_bronze(self) -> tuple[int, int]:
-        """Bronze älter als ``bronze_days`` löschen, wenn Silber lokal und in GHCR gleich ist."""
+        """Bronze älter als ``bronze_days`` löschen, wenn Silber lokal und in GHCR gleich ist.
+
+        @relation(SWR-WXX-048, scope=function)
+        """
         cutoff = self.now() - timedelta(days=self.bronze_days)
         deleted = kept = 0
         manifests: dict[str, GefsMonth] = {}
@@ -577,6 +592,8 @@ class GefsVm:
         Daneben rechnet der Durchgang Gold für Läufe mit fertigem Silber, jüngste zuerst, in
         Runden zu höchstens ``gold_limit`` Läufen: bei Rückstand ohne Pause, sonst alle
         ``gold_every`` Sekunden.
+
+        @relation(SWR-WXX-047, scope=function)
         """
         result = CycleResult()
         if not self._bronze_synced:

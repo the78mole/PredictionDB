@@ -3,6 +3,8 @@
 Pfade kommen aus ``PDB_WX_PROCESS_*``; S3-Zugang, Datenbank und Logging aus
 ``predictiondb_core`` (Umgebungsvariablen ``PDB_*``). Läufe, Schritte und Bronze-Layout liest
 der Dienst aus derselben Quellen-YAML wie ``wx-ingest``.
+
+@relation(SWA-WXP-CONFIG, scope=file)
 """
 
 from __future__ import annotations
@@ -52,4 +54,5 @@ class ProcessConfig(BaseModel):
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> ProcessConfig:
+        """@relation(SWR-WXP-001, scope=function)"""
         return cls.model_validate(yaml.safe_load(Path(path).read_text()))

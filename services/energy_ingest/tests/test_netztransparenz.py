@@ -19,6 +19,7 @@ JAN_2025 = datetime(2024, 12, 31, 23, 0, tzinfo=UTC)  # 01.01.2025 00:00 MEZ
 
 
 def test_parse_months() -> None:
+    """@relation(SWR-ENI-043, scope=function)"""
     out = {d.code: d for d in parse_months(MONTHS)}
     assert set(out) == {"mw_base", "mw_wind_onshore", "mw_wind_offshore", "mw_solar"}
     solar = out["mw_solar"]
@@ -32,6 +33,7 @@ def test_parse_months() -> None:
 
 
 def test_parse_years() -> None:
+    """@relation(SWR-ENI-043, scope=function)"""
     out = {d.code: d for d in parse_years(YEARS)}
     assert set(out) == {"jw_base", "jw_wind_onshore", "jw_wind_offshore", "jw_solar"}
     solar = dict(out["jw_solar"].points)
@@ -41,11 +43,13 @@ def test_parse_years() -> None:
 
 
 def test_parse_rejects_error_text() -> None:
+    """@relation(SWR-ENI-043, SWR-ENI-030, scope=function)"""
     with pytest.raises(SourceError):
         parse_years("Es können keine Daten vor dem 31.12.2012 23:00 abgerufen werden.")
 
 
 def test_published_after_period() -> None:
+    """@relation(SWR-ENI-021, scope=function)"""
     assert estimate_published(Kind.MARKET_VALUE_MONTH, JAN_2025, MONTH) == datetime(
         2025, 1, 31, 23, 0, tzinfo=UTC
     ) + timedelta(days=14)
@@ -90,6 +94,7 @@ def source(make_http: Callable[..., Http], api: Api) -> Netztransparenz:
 
 
 def test_fetch_months_window_and_token_reuse(make_http: Callable[..., Http]) -> None:
+    """@relation(SWR-ENI-043, scope=function)"""
     api = Api()
     nt = source(make_http, api)
     # [01.03.2025, 01.05.2025) Ortszeit -> März und April
@@ -103,6 +108,7 @@ def test_fetch_months_window_and_token_reuse(make_http: Callable[..., Http]) -> 
 
 
 def test_fetch_renews_token_on_401(make_http: Callable[..., Http]) -> None:
+    """@relation(SWR-ENI-043, scope=function)"""
     api = Api()
     nt = source(make_http, api)
     nt.fetch("market_value_year", JAN_2025, JAN_2025 + YEAR)
@@ -113,6 +119,7 @@ def test_fetch_renews_token_on_401(make_http: Callable[..., Http]) -> None:
 
 
 def test_fetch_before_first_month_is_empty(make_http: Callable[..., Http]) -> None:
+    """@relation(SWR-ENI-043, scope=function)"""
     api = Api()
     nt = source(make_http, api)
     start = datetime(2010, 1, 1, tzinfo=UTC)

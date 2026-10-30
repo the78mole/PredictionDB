@@ -1,4 +1,7 @@
-"""HTTP-Abruf mit Wiederholung bei Netzfehlern, 429 und 5xx, Drosselung je Host."""
+"""HTTP-Abruf mit Wiederholung bei Netzfehlern, 429 und 5xx, Drosselung je Host.
+
+@relation(SWA-ENI-HTTP, scope=file)
+"""
 
 from __future__ import annotations
 
@@ -42,7 +45,10 @@ def _retryable(exc: BaseException) -> bool:
 
 
 def retry_after(response: httpx.Response) -> float | None:
-    """Wartezeit aus dem Header Retry-After (Sekunden oder HTTP-Datum), sonst ``None``."""
+    """Wartezeit aus dem Header Retry-After (Sekunden oder HTTP-Datum), sonst ``None``.
+
+    @relation(SWR-ENI-032, scope=function)
+    """
     value = response.headers.get("Retry-After", "").strip()
     if not value:
         return None
@@ -63,6 +69,8 @@ class Http:
     Vor jedem Abruf wird der Mindestabstand des Hosts (``pace``) eingehalten. Verlangt der
     Server per Retry-After eine Pause, wartet die Wiederholung mindestens so lange (höchstens
     ``retry_after_max``).
+
+    @relation(SWR-ENI-032, scope=class)
     """
 
     def __init__(

@@ -11,6 +11,8 @@ Die Quelle läuft deshalb nur mit ``PDB_ALLOW_THE=true``.
 Ein Gastag beginnt um 06:00 Ortszeit; dort steht der Wert (als UTC). Positiver
 Ausgleichsenergiepreis ist der Preis, den der Bilanzkreis für Unterdeckung zahlt
 (englisch "negative imbalance price").
+
+@relation(SWA-ENI-SRC-THE, scope=file)
 """
 
 from __future__ import annotations
@@ -38,6 +40,7 @@ def gas_day_start(d: date) -> datetime:
 
 
 def parse_prices(body: bytes) -> list[SeriesData]:
+    """@relation(SWR-ENI-050, SWR-ENI-030, scope=function)"""
     try:
         root = ET.fromstring(body)
     except ET.ParseError as exc:
@@ -62,6 +65,8 @@ def parse_prices(body: bytes) -> list[SeriesData]:
 
 
 class The:
+    """@relation(SWR-ENI-050, scope=class)"""
+
     code = "the"
     license = "Trading Hub Europe, Vervielfältigung nur mit schriftlicher Zustimmung"
     priority = 10

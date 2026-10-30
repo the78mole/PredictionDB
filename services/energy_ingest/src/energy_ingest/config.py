@@ -10,6 +10,8 @@ ausdrücklicher Freigabe ``PDB_ALLOW_ENTSO_E``, ``PDB_ALLOW_NETZTRANSPARENZ``,
 ``PDB_ALLOW_EIA_REUTERS`` bzw. ``PDB_ALLOW_THE`` (Vorgabe ``false``). Energy-Charts steht
 laut API-Dokumentation unter CC BY 4.0 und ist frei. Ohne Freigabe liefern freie Quellen alles
 Nötige; die Marktwerte rechnet dann ``pdb_marktwert`` selbst.
+
+@relation(SWA-ENI-CONFIG, scope=file)
 """
 
 from __future__ import annotations
@@ -62,6 +64,8 @@ def _allow(name: str) -> Any:
 
 
 class EnergySettings(BaseSettings):
+    """@relation(SWR-ENI-002, scope=class)"""
+
     model_config = SettingsConfigDict(
         env_prefix="PDB_ENERGY_", env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
@@ -115,6 +119,9 @@ class EnergySettings(BaseSettings):
     http_timeout_s: float = 60.0
 
     def allowed(self, code: str) -> bool:
-        """Freie Quellen immer, unfreie nur mit ``PDB_ALLOW_*=true``."""
+        """Freie Quellen immer, unfreie nur mit ``PDB_ALLOW_*=true``.
+
+        @relation(SWR-ENI-003, scope=function)
+        """
         field = UNFREE_SOURCES.get(code)
         return field is None or bool(getattr(self, field))

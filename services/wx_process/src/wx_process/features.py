@@ -19,6 +19,8 @@ Features je Art der Technologie (``config/process/*.yaml``):
 
 Größen mit Intervallbezug (Strahlung, Niederschlag, Schneeanteil) gelten für das Intervall
 bis zur Gültigkeitszeit, also die Stunde (bis 120 h) bzw. drei Stunden davor.
+
+@relation(SWA-WXP-FEATURES, scope=file)
 """
 
 from __future__ import annotations
@@ -49,6 +51,7 @@ class PowerCurve(BaseModel):
     cut_out: float = Field(default=25.0, gt=0)
 
     def __call__(self, v: F64) -> F64:
+        """@relation(SWR-WXP-031, scope=function)"""
         cf = (v**3 - self.cut_in**3) / (self.rated**3 - self.cut_in**3)
         cf = np.clip(cf, 0.0, 1.0)
         cf = np.where((v < self.cut_in) | (v >= self.cut_out), 0.0, cf)
@@ -72,6 +75,7 @@ class PvModel(BaseModel):
     noct_c: float = 45.0
 
     def __call__(self, ghi: F64, t_air_c: F64) -> F64:
+        """@relation(SWR-WXP-032, scope=function)"""
         t_cell = t_air_c + ghi * (self.noct_c - 20.0) / 800.0
         cf = self.performance_ratio * ghi / 1000.0 * (1.0 + self.temp_coeff * (t_cell - 25.0))
         return np.where(np.isnan(cf), np.nan, np.clip(cf, 0.0, None))
@@ -119,7 +123,10 @@ LN10 = math.log(10.0)
 
 
 def cell_index(ds: Dataset, lat: F64, lon: F64) -> tuple[NDArray[np.int64], NDArray[np.bool_]]:
-    """Flacher Index der Gitterzelle je Punkt und Maske „liegt auf dem Gitter“."""
+    """Flacher Index der Gitterzelle je Punkt und Maske „liegt auf dem Gitter“.
+
+    @relation(SWR-WXP-030, scope=function)
+    """
     glat, glon = ds.grid.lat, ds.grid.lon
     dlat = abs(glat[1] - glat[0]) if len(glat) > 1 else 1.0
     dlon = abs(glon[1] - glon[0]) if len(glon) > 1 else 1.0
@@ -151,6 +158,8 @@ class FeatureBuilder:
 
         ``capacity_mw(technologie, cluster)`` liefert die installierte Leistung je Schritt
         (MW); ohne sie entfallen ``wind_power`` und ``pv_power``.
+
+        @relation(SWR-WXP-030, scope=function)
         """
         flat = {n: a.reshape(len(ds.steps), -1).astype(np.float64) for n, a in ds.data.items()}
         out: list[FeatureSeries] = []
@@ -191,6 +200,7 @@ class FeatureBuilder:
         mean: Callable[[F64], F64],
         cap: F64 | None,
     ) -> dict[str, F64]:
+        """@relation(SWR-WXP-030, SWR-WXP-031, SWR-WXP-032, SWR-WXP-033, scope=function)"""
         res: dict[str, F64] = {}
         t2m = field("t2m")
         t_c = None if t2m is None else t2m - 273.15
@@ -248,7 +258,10 @@ class FeatureBuilder:
 
 
 def shear_exponent(ws10: F64, ws100: F64) -> F64:
-    """Hellmann-Exponent aus 10 m und 100 m; bei Schwachwind 1/7, begrenzt auf 0 bis 0,6."""
+    """Hellmann-Exponent aus 10 m und 100 m; bei Schwachwind 1/7, begrenzt auf 0 bis 0,6.
+
+    @relation(SWR-WXP-031, scope=function)
+    """
     with np.errstate(divide="ignore", invalid="ignore"):
         alpha = np.log(ws100 / ws10) / LN10
     alpha = np.where((ws10 < 0.5) | (ws100 < 0.5) | ~np.isfinite(alpha), 1 / 7, alpha)

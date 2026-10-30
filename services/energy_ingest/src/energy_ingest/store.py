@@ -4,6 +4,8 @@ Werte gehen per ``COPY`` in eine temporäre Tabelle und von dort per Upsert nach
 ``energy.value``. ``published`` behält beim Überschreiben den frühesten Zeitpunkt, damit
 der Leakage-Schutz nicht durch spätere Abrufe aufgeweicht wird. Jede Änderung eines schon
 gespeicherten Werts wird mit altem und neuem Wert in ``energy.value_revision`` protokolliert.
+
+@relation(SWA-ENI-STORE, scope=file)
 """
 
 from __future__ import annotations
@@ -122,7 +124,10 @@ class EnergyStore:
 
     def set_enabled(self, flags: dict[str, bool]) -> None:
         """Freigabe je Quelle nach ``meta.source.enabled``; ``energy.value_best`` liest nur
-        freigegebene Quellen. Noch unbekannte Quellen werden übergangen."""
+        freigegebene Quellen. Noch unbekannte Quellen werden übergangen.
+
+        @relation(SWR-ENI-003, SWR-ENI-023, scope=function)
+        """
         with self.engine.begin() as conn:
             for code, enabled in flags.items():
                 conn.execute(
@@ -156,7 +161,10 @@ class EnergyStore:
         """Schreibt alle Punkte; gibt die Zahl der gelieferten Werte zurück.
 
         ``prune`` setzt Werte auf NULL, die innerhalb der gelieferten Spanne einer Reihe
-        gespeichert sind, aber nicht mehr geliefert werden (von der Quelle entfernt)."""
+        gespeichert sind, aber nicht mehr geliefert werden (von der Quelle entfernt).
+
+        @relation(SWR-ENI-020, SWR-ENI-021, SWR-ENI-022, scope=function)
+        """
         with self.engine.begin() as conn:
             rows: dict[tuple[int, datetime], tuple[float, datetime]] = {}
             for data in batch:
@@ -196,6 +204,7 @@ class EnergyStore:
         return len(rows)
 
     def _prune(self, conn: Any, source_id: int, n_rows: int) -> None:
+        """@relation(SWR-ENI-012, scope=function)"""
         gone = conn.execute(text(_GONE)).all()
         if not gone:
             return
@@ -217,7 +226,10 @@ class EnergyStore:
 
     def done_chunks(self, source_id: int, dataset: str) -> dict[datetime, datetime]:
         """Blockbeginn -> geladen bis (bei vollständigen Blöcken das Blockende); leere
-        Blöcke werden nach ``EMPTY_RETRY`` erneut versucht."""
+        Blöcke werden nach ``EMPTY_RETRY`` erneut versucht.
+
+        @relation(SWR-ENI-013, scope=function)
+        """
         with self.engine.connect() as conn:
             rows = conn.execute(
                 text("""
@@ -239,7 +251,10 @@ class EnergyStore:
         resume: bool = False,
     ) -> None:
         """Block als bis ``end`` geladen vermerken; ``resume`` zählt die Werte zum bisherigen
-        Stand eines angebrochenen Blocks hinzu."""
+        Stand eines angebrochenen Blocks hinzu.
+
+        @relation(SWR-ENI-013, scope=function)
+        """
         with self.engine.begin() as conn:
             conn.execute(
                 text("""
@@ -263,7 +278,10 @@ class EnergyStore:
             )
 
     def revised_at(self, source_id: int, dataset: str) -> datetime | None:
-        """Zeitpunkt des letzten vollständigen Revisionslaufs (``meta.energy_revise``)."""
+        """Zeitpunkt des letzten vollständigen Revisionslaufs (``meta.energy_revise``).
+
+        @relation(SWR-ENI-012, scope=function)
+        """
         with self.engine.connect() as conn:
             at = conn.execute(
                 text("""SELECT revised_at FROM meta.energy_revise
@@ -273,6 +291,7 @@ class EnergyStore:
         return at
 
     def mark_revised(self, source_id: int, dataset: str, at: datetime) -> None:
+        """@relation(SWR-ENI-012, scope=function)"""
         with self.engine.begin() as conn:
             conn.execute(
                 text("""
@@ -286,7 +305,10 @@ class EnergyStore:
     def record_status(
         self, source_id: int, dataset: str, status: str, n_values: int, error: str | None
     ) -> None:
-        """Letzter Ausgang je Quelle und Datensatz (``meta.energy_status``, für Alarme)."""
+        """Letzter Ausgang je Quelle und Datensatz (``meta.energy_status``, für Alarme).
+
+        @relation(SWR-ENI-030, scope=function)
+        """
         with self.engine.begin() as conn:
             conn.execute(
                 text("""
@@ -303,6 +325,7 @@ class EnergyStore:
             )
 
     def compare(self, start: datetime, end: datetime) -> list[Deviation]:
+        """@relation(SWR-ENI-015, scope=function)"""
         with self.engine.connect() as conn:
             rows = conn.execute(text(_COMPARE), {"start": start, "end": end}).all()
         return [

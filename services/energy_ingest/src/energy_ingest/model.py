@@ -4,6 +4,8 @@ Alle Quellen liefern ``SeriesData`` mit einheitlichen Reihen-Codes (``da_price_d
 ``load_actual``, ``gen_wind_onshore`` …), Zeitstempeln in UTC (Beginn des Intervalls)
 und Leistungen in MW bzw. Preisen in EUR/MWh. Gleiche Codes verschiedener Quellen sind
 damit direkt vergleichbar (Redundanz und Plausibilitätsabgleich, Kapitel 3.3).
+
+@relation(SWA-ENI-MODEL, scope=file)
 """
 
 from __future__ import annotations
@@ -234,6 +236,8 @@ class Kind(StrEnum):
 
 @dataclass(frozen=True)
 class SeriesInfo:
+    """@relation(SWR-ENI-020, scope=class)"""
+
     code: str
     kind: Kind
     unit: str
@@ -457,6 +461,8 @@ def estimate_published(kind: Kind, ts: datetime, resolution: timedelta) -> datet
       Monatsende.
     - Öl- und Kohlebilanz der EU, Kohle je Land (Eurostat): wie oben, aber 150 Tage.
     - STEO-Prognosen (Zeitstempel am Beginn des Ausgabemonats): 14 Tage danach.
+
+    @relation(SWR-ENI-021, scope=function)
     """
     match kind:
         case Kind.PRICE_DA:
@@ -496,10 +502,13 @@ def published_at(kind: Kind, ts: datetime, resolution: timedelta, fetched: datet
 
     Wer einen Wert vor dem regulären Termin abruft, kennt ihn ab dem Abruf; beim Backfill
     liegt der Abruf weit danach, dann gilt der reguläre Termin.
+
+    @relation(SWR-ENI-021, scope=function)
     """
     return min(fetched, estimate_published(kind, ts, resolution))
 
 
 def floor_to(ts: datetime, step: timedelta) -> datetime:
+    """@relation(SWR-ENI-020, scope=function)"""
     epoch = datetime(1970, 1, 1, tzinfo=UTC)
     return epoch + ((ts - epoch) // step) * step

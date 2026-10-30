@@ -19,6 +19,8 @@ Vermerk oder weicht er ab, schreibt die Quelle keine Preise (``FormatError``).
 ``/cbet`` (Handel) und ``/cbpf`` (physikalische Flüsse) liefern je Grenzpartner und als Summe
 den Austausch Deutschlands in GW, positiv als Import; gespeichert wird in MW. Die Antwort hat
 kein ``license_info``, damit gilt laut API-Dokumentation CC BY 4.0.
+
+@relation(SWA-ENI-SRC-EC, scope=file)
 """
 
 from __future__ import annotations
@@ -95,6 +97,8 @@ def _points(
 
 
 class EnergyCharts:
+    """@relation(SWR-ENI-041, SWR-ENI-003, scope=class)"""
+
     code = "energy_charts"
     license = (
         "CC BY 4.0, Energy-Charts.info (Fraunhofer ISE); Preise DE-LU CC BY 4.0, "

@@ -10,6 +10,7 @@ from wx_exchange import snapshot
 
 def test_week_range_spans_dst_change() -> None:
     # 25.10.2026: Ende der Sommerzeit, der Bereich hat dann 8 Tage + 1 Stunde
+    """@relation(SWR-WXX-050, scope=function)"""
     start, end = snapshot.week_range(datetime(2026, 10, 24, 22, 30, tzinfo=UTC))
     assert start.isoformat() == "2026-10-25T00:00:00+02:00"
     assert end.isoformat() == "2026-11-02T00:00:00+01:00"
@@ -18,6 +19,7 @@ def test_week_range_spans_dst_change() -> None:
 
 
 def test_next_run_today_or_tomorrow() -> None:
+    """@relation(SWR-WXX-050, scope=function)"""
     morning = datetime(2026, 10, 30, 9, 0, tzinfo=UTC)  # 10:00 Ortszeit
     assert snapshot.next_run(morning, "14:30").isoformat() == "2026-10-30T14:30:00+01:00"
     evening = datetime(2026, 10, 30, 15, 0, tzinfo=UTC)
@@ -25,6 +27,7 @@ def test_next_run_today_or_tomorrow() -> None:
 
 
 def test_interpolate_value_and_text() -> None:
+    """@relation(SWR-WXX-050, scope=function)"""
     vals = {"challenger": ("v-123", "de_lu_v2 frei 29.10.")}
     sql = "p.model_version = '${challenger}' OR x = $challenger"
     assert snapshot.interpolate(sql, vals) == "p.model_version = 'v-123' OR x = v-123"
@@ -149,6 +152,7 @@ class FakeGrafana(snapshot.Grafana):
 
 
 def test_build_snapshot_embeds_frames_in_v2() -> None:
+    """@relation(SWR-WXX-050, scope=function)"""
     g = FakeGrafana()
     spec = snapshot.build_snapshot(g, datetime(2026, 10, 30, 13, 30, tzinfo=UTC))
     assert list(spec["elements"]) == ["panel-69", "panel-staende"]
@@ -177,6 +181,8 @@ def test_build_snapshot_embeds_frames_in_v2() -> None:
 
 
 def test_publish_points_shortlink_at_snapshot() -> None:
+    """@relation(SWR-WXX-051, scope=function)"""
+
     class G(FakeGrafana):
         def snapshot(self, dashboard: dict[str, Any], name: str, expires: int) -> dict[str, Any]:
             assert expires == 3600
@@ -194,6 +200,7 @@ def test_publish_points_shortlink_at_snapshot() -> None:
 
 
 def test_shortio_request() -> None:
+    """@relation(SWR-WXX-051, scope=function)"""
     seen: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -216,6 +223,7 @@ def test_shortio_request() -> None:
 
 
 def test_shortio_creates_missing_link() -> None:
+    """@relation(SWR-WXX-051, scope=function)"""
     seen: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:

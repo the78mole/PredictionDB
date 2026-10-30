@@ -15,6 +15,7 @@ def _true_mean(name: str, prev: int, step: int) -> np.ndarray:
 
 
 def test_decode_step_fields() -> None:
+    """@relation(SWR-WXP-010, scope=function)"""
     g, f = decode_step(make_step(7, LAT, LON), 7)
     assert g.shape == (15, 21) and g.lat[0] == 58 and g.lon[-1] == 20
     assert {"t2m", "u100", "tcc", "csnow", "prmsl"} <= set(f.instant)
@@ -24,11 +25,13 @@ def test_decode_step_fields() -> None:
 
 
 def test_analysis_step_has_no_statistics() -> None:
+    """@relation(SWR-WXP-011, scope=function)"""
     _, f = decode_step(make_step(0, LAT, LON), 0)
     assert f.stats == {} and "t2m" in f.instant
 
 
 def test_unknown_messages_ignored_and_step_checked() -> None:
+    """@relation(SWR-WXP-010, scope=function)"""
     other = _message((0, 0, 0, 1, 0, "instant"), LAT, LON, np.zeros((15, 21)), 7, 7)  # TMP:surface
     _, f = decode_step(other + make_step(7, LAT, LON), 7)
     assert f.instant["t2m"].shape == (15, 21)
@@ -45,6 +48,7 @@ def test_unknown_messages_ignored_and_step_checked() -> None:
     ],
 )
 def test_bucket_averages_become_interval_values(steps: list[int]) -> None:
+    """@relation(SWR-WXP-011, scope=function)"""
     ds = assemble("gfs", "0p25", RUN, {s: decode_step(make_step(s, LAT, LON), s) for s in steps})
     assert np.isnan(ds.data["dswrf"][0]).all() and np.isnan(ds.data["tp"][0]).all()
     for i in range(1, len(steps)):
@@ -60,6 +64,7 @@ def test_bucket_averages_become_interval_values(steps: list[int]) -> None:
 
 def test_gap_without_common_bucket_stays_empty() -> None:
     # 2 → 8: Eimer 0-2 und 6-8 haben keinen gemeinsamen Start; tp geht über die Summe ab 0
+    """@relation(SWR-WXP-011, scope=function)"""
     steps = [0, 2, 8]
     ds = assemble("gfs", "0p25", RUN, {s: decode_step(make_step(s, LAT, LON), s) for s in steps})
     assert np.isnan(ds.data["dswrf"][2]).all()
@@ -67,12 +72,14 @@ def test_gap_without_common_bucket_stays_empty() -> None:
 
 
 def test_grid_across_greenwich() -> None:
+    """@relation(SWR-WXP-010, scope=function)"""
     lat, lon = grid(west=-5, east=5)
     g, _ = decode_step(make_step(1, lat, lon), 1)
     assert g.lon[0] == -5 and g.lon[-1] == 5 and np.all(np.diff(g.lon) > 0)
 
 
 def test_soil_layers_are_distinct() -> None:
+    """@relation(SWR-WXP-010, scope=function)"""
     _, f = decode_step(make_step(3, LAT, LON), 3)
     assert f.instant["tsoil_0_10"][0, 0] == pytest.approx(283.0 + 0.03 + 0.8, abs=1e-3)
     assert f.instant["tsoil_10_40"][0, 0] == pytest.approx(284.0 + 0.03 + 0.8, abs=1e-3)
@@ -83,6 +90,7 @@ def test_soil_layers_are_distinct() -> None:
 def test_runs_without_new_fields() -> None:
     # Läufe vor der Erweiterung der Quelle: neue Variablen fehlen in Silber,
     # Mischung innerhalb eines Laufs wird mit NaN aufgefüllt
+    """@relation(SWR-WXP-012, scope=function)"""
     old = {"t2m", "dswrf", "tp"}
     ds = assemble(
         "gfs",

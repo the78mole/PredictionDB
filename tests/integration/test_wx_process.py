@@ -123,6 +123,7 @@ def _q(eng: Engine, sql: str, **p: Any) -> list[Any]:
 
 
 def test_features_written(engine: Engine) -> None:
+    """@relation(SWR-WXP-036, scope=function)"""
     regions = _setup(engine)
     config = ProcessConfig.from_yaml("config/process/gfs_0p25.yaml")
     source = GfsConfig.model_validate(source_config([(0, 21, 3)]))
@@ -195,7 +196,10 @@ def test_features_written(engine: Engine) -> None:
 
 
 def test_backfill_into_compressed_chunk(engine: Engine) -> None:
-    """Backfill entpackt den komprimierten Ziel-Chunk, schreibt und packt ihn wieder."""
+    """Backfill entpackt den komprimierten Ziel-Chunk, schreibt und packt ihn wieder.
+
+    @relation(SWR-WXP-041, scope=function)
+    """
     _setup(engine)
     config = ProcessConfig.from_yaml("config/process/gfs_0p25.yaml")
     source = GfsConfig.model_validate(source_config([(0, 21, 3)]))
@@ -238,7 +242,10 @@ def test_backfill_into_compressed_chunk(engine: Engine) -> None:
 
 
 def test_decompress_skips_chunk_locked_by_reader(engine: Engine) -> None:
-    """Liest eine lange Transaktion den Chunk, bleibt er gepackt, statt alle Leser zu stauen."""
+    """Liest eine lange Transaktion den Chunk, bleibt er gepackt, statt alle Leser zu stauen.
+
+    @relation(SWR-WXP-041, scope=function)
+    """
     _setup(engine)
     config = ProcessConfig.from_yaml("config/process/gfs_0p25.yaml")
     source = GfsConfig.model_validate(source_config([(0, 21, 3)]))

@@ -4,6 +4,8 @@ Die Datei ist dieselbe wie bei GEFS (``config/gefs/regions_v2.json.gz``, gebaut 
 ``wx-exchange gefs regions``): je Region Technologie und Zellen ``(lat, lon, Gewicht)`` auf dem
 0,5°-Gitter. Die Regionen landen unter denselben Codes ``gefs:<code>`` in ``meta.region`` wie
 die GEFS-Kennzahlen, damit sich GFS und GEFS je Zone direkt vergleichen lassen.
+
+@relation(SWA-WXP-REGIONS, scope=file)
 """
 
 from __future__ import annotations
@@ -40,6 +42,7 @@ class RegionSet:
 
     @classmethod
     def load(cls, path: Path) -> RegionSet:
+        """@relation(SWR-WXP-035, scope=function)"""
         raw = path.read_bytes()
         data = json.loads(gzip.decompress(raw) if path.suffix == ".gz" else raw)
         regions = []
@@ -62,7 +65,10 @@ class RegionSet:
         return [REGION_PREFIX + r.code for r in self.regions]
 
     def clusters(self, region_ids: Mapping[str, int]) -> list[ClusterWeights]:
-        """Je Region ein „Cluster“; ``region_ids`` bildet ``gefs:<code>`` auf ``region_id`` ab."""
+        """Je Region ein „Cluster“; ``region_ids`` bildet ``gefs:<code>`` auf ``region_id`` ab.
+
+        @relation(SWR-WXP-035, scope=function)
+        """
         return [
             ClusterWeights(
                 r.technology,

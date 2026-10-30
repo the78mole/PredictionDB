@@ -13,6 +13,7 @@ def _client(handler: Callable[[httpx.Request], httpx.Response]) -> httpx.Client:
 
 
 def test_retry_after_seconds_and_date() -> None:
+    """@relation(SWR-ENI-032, scope=function)"""
     assert retry_after(httpx.Response(429, headers={"Retry-After": "7"})) == 7.0
     soon = datetime.now(UTC) + timedelta(seconds=30)
     got = retry_after(httpx.Response(429, headers={"Retry-After": format_datetime(soon)}))
@@ -22,6 +23,7 @@ def test_retry_after_seconds_and_date() -> None:
 
 
 def test_throttle_per_host(monkeypatch: pytest.MonkeyPatch) -> None:
+    """@relation(SWR-ENI-032, scope=function)"""
     clock = [100.0]
     sleeps: list[float] = []
 
@@ -41,6 +43,7 @@ def test_throttle_per_host(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_retry_waits_for_retry_after(monkeypatch: pytest.MonkeyPatch) -> None:
+    """@relation(SWR-ENI-032, scope=function)"""
     sleeps: list[float] = []
     monkeypatch.setattr("tenacity.nap.time.sleep", sleeps.append)
     calls = iter([httpx.Response(429, headers={"Retry-After": "5"}), httpx.Response(200)])
@@ -51,6 +54,7 @@ def test_retry_waits_for_retry_after(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_retry_after_is_capped(monkeypatch: pytest.MonkeyPatch) -> None:
+    """@relation(SWR-ENI-032, scope=function)"""
     sleeps: list[float] = []
     monkeypatch.setattr("tenacity.nap.time.sleep", sleeps.append)
     calls = iter([httpx.Response(429, headers={"Retry-After": "3600"}), httpx.Response(200)])

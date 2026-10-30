@@ -5,6 +5,8 @@ Weiterverwendung ihrer Statistiken mit Quellenangabe, auch kommerziell
 (https://www.ecb.europa.eu/stats/ecb_statistics/governance_and_quality_framework/html/usage_policy.en.html).
 
 Zum Umrechnen der Dollar-Notierungen (EIA, Weltbank) in Euro.
+
+@relation(SWA-ENI-SRC-ECB, scope=file)
 """
 
 from __future__ import annotations
@@ -22,6 +24,7 @@ COLUMNS = {"KEY", "TIME_PERIOD", "OBS_VALUE", "UNIT"}
 
 
 def parse_csv(body: str) -> list[tuple[datetime, float]]:
+    """@relation(SWR-ENI-047, scope=function)"""
     rows = list(csv.DictReader(io.StringIO(body)))
     if not body.strip():
         return []
@@ -37,6 +40,8 @@ def parse_csv(body: str) -> list[tuple[datetime, float]]:
 
 
 class Ecb:
+    """@relation(SWR-ENI-047, scope=class)"""
+
     code = "ecb"
     license = "Europäische Zentralbank, Weiterverwendung mit Quellenangabe"
     priority = 10

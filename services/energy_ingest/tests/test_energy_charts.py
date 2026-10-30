@@ -50,6 +50,7 @@ def handler(req: httpx.Request) -> httpx.Response:
 
 
 def test_price(make_http: Callable[..., Http]) -> None:
+    """@relation(SWR-ENI-041, scope=function)"""
     ec = EnergyCharts(make_http(handler))
     (data,) = ec.fetch("price", T0, T0 + timedelta(hours=1))
     assert data.code == "da_price_de_lu"
@@ -58,6 +59,7 @@ def test_price(make_http: Callable[..., Http]) -> None:
 
 
 def test_neighbour_price(make_http: Callable[..., Http]) -> None:
+    """@relation(SWR-ENI-041, scope=function)"""
     ec = EnergyCharts(make_http(handler))
     assert "price_it_north" in ec.datasets()
     (data,) = ec.fetch("price_it_north", T0, T0 + timedelta(hours=1))
@@ -66,6 +68,8 @@ def test_neighbour_price(make_http: Callable[..., Http]) -> None:
 
 
 def test_price_without_free_license_is_rejected(make_http: Callable[..., Http]) -> None:
+    """@relation(SWR-ENI-041, SWR-ENI-003, scope=function)"""
+
     def restricted(req: httpx.Request) -> httpx.Response:
         body = {"license_info": "private and internal use only", "unix_seconds": STAMPS}
         return httpx.Response(200, json={**body, "price": [1.0, 2.0, 3.0, 4.0]})
@@ -75,6 +79,7 @@ def test_price_without_free_license_is_rejected(make_http: Callable[..., Http]) 
 
 
 def test_public_power_maps_names(make_http: Callable[..., Http]) -> None:
+    """@relation(SWR-ENI-041, scope=function)"""
     ec = EnergyCharts(make_http(handler))
     out = {d.code: d for d in ec.fetch("public_power", T0, T0 + timedelta(minutes=30))}
     assert set(out) == {"gen_wind_onshore", "load_actual"}
@@ -82,6 +87,7 @@ def test_public_power_maps_names(make_http: Callable[..., Http]) -> None:
 
 
 def test_forecast_and_missing(make_http: Callable[..., Http]) -> None:
+    """@relation(SWR-ENI-041, scope=function)"""
     ec = EnergyCharts(make_http(handler))
     (solar,) = ec.fetch("forecast_solar", T0, T0 + timedelta(hours=1))
     assert solar.code == "gen_da_forecast_solar"
@@ -108,6 +114,7 @@ def cross_border(req: httpx.Request) -> httpx.Response:
 
 @pytest.mark.parametrize(("dataset", "prefix"), [("cbet", "xb_trade_"), ("cbpf", "xb_flow_")])
 def test_cross_border(make_http: Callable[..., Http], dataset: str, prefix: str) -> None:
+    """@relation(SWR-ENI-041, scope=function)"""
     ec = EnergyCharts(make_http(cross_border))
     assert dataset in ec.datasets()
     out = {d.code: d for d in ec.fetch(dataset, T0, T0 + timedelta(hours=1))}

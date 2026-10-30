@@ -9,6 +9,8 @@ URL enthält das Jahr). Die Adresse ist deshalb einstellbar (``PDB_ENERGY_WORLDB
 eine veraltete Datei fällt im Grafana-Alarm "Reihe veraltet" auf.
 
 Monatswerte stehen am Monatsbeginn (00:00 Ortszeit, als UTC).
+
+@relation(SWA-ENI-SRC-WB, scope=file)
 """
 
 from __future__ import annotations
@@ -55,6 +57,7 @@ def _value(cell: Any) -> float | None:
 
 
 def parse_xlsx(raw: bytes) -> list[SeriesData]:
+    """@relation(SWR-ENI-048, SWR-ENI-030, scope=function)"""
     try:
         wb = load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
     except Exception as exc:
@@ -91,6 +94,8 @@ def parse_xlsx(raw: bytes) -> list[SeriesData]:
 
 
 class WorldBank:
+    """@relation(SWR-ENI-048, scope=class)"""
+
     code = "worldbank"
     license = "CC BY 4.0, World Bank Commodity Price Data (The Pink Sheet)"
     priority = 10

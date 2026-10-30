@@ -1,0 +1,269 @@
+[DOCUMENT]
+TITLE: Softwarearchitektur wx-exchange (SWA)
+PREFIX: SWA-WXX-
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @architektur
+
+[TEXT]
+STATEMENT: >>>
+Softwarearchitektur nach ISO/IEC/IEEE 12207 für das Softwareelement SYSA-SW-WXX. Jede Komponente
+entspricht einem Modul unter ``services/wx_exchange/src/wx_exchange``.
+
+Abhängigkeiten: ``predictiondb_core``, ``wx_ingest`` (Endpunkte, Quellendefinition, Bronze) und
+``wx_process`` (Silber, Gold). Läuft im GitHub-Actions-Runner (Workflows ``gfs-history``,
+``gefs-history``, ``gfs-idx``, ``gfs-templates``) und auf der VM (``wx-import``, ``wx-gefs``,
+``grafana-snapshot``).
+<<<
+
+[[SECTION]]
+TITLE: Komponenten
+
+[ELEMENT]
+UID: SWA-WXX-CLI
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Kommandozeile
+STATEMENT: >>>
+Befehle ``gfs plan|publish|import|verify|templates|idx-*``, ``gefs plan|publish|regions|vm`` und ``snapshot``.
+<<<
+ORT: services/wx_exchange/src/wx_exchange/cli.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXX-010
+- TYPE: Parent
+  VALUE: SWR-WXX-011
+- TYPE: Parent
+  VALUE: SWR-WXX-012
+- TYPE: Parent
+  VALUE: SWR-WXX-020
+- TYPE: Parent
+  VALUE: SWR-WXX-032
+- TYPE: Parent
+  VALUE: SWR-WXX-050
+
+[ELEMENT]
+UID: SWA-WXX-OCI
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: OCI-Client
+STATEMENT: >>>
+Schlanker Client der Distribution API mit Bearer-Anmeldung und Wiederholung.
+<<<
+ORT: services/wx_exchange/src/wx_exchange/oci.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXX-001
+
+[ELEMENT]
+UID: SWA-WXX-ARTIFACT
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: GFS-Artefakt
+STATEMENT: >>>
+Tags, Fingerabdruck, Inhalts-Hash, Tar, Layer und Monatsmanifest.
+<<<
+ORT: services/wx_exchange/src/wx_exchange/artifact.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXX-002
+- TYPE: Parent
+  VALUE: SWR-WXX-003
+- TYPE: Parent
+  VALUE: SWR-WXX-022
+
+[ELEMENT]
+UID: SWA-WXX-PUBLISH
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Herausgeber
+STATEMENT: >>>
+Plan und Veröffentlichung der GFS-Historie im Runner.
+<<<
+ORT: services/wx_exchange/src/wx_exchange/publish.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXX-010
+- TYPE: Parent
+  VALUE: SWR-WXX-011
+
+[ELEMENT]
+UID: SWA-WXX-IMPORTER
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Importeur
+STATEMENT: >>>
+Silber aus GHCR holen, Bestand melden, eigenes Silber prüfen.
+<<<
+ORT: services/wx_exchange/src/wx_exchange/importer.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXX-020
+- TYPE: Parent
+  VALUE: SWR-WXX-021
+- TYPE: Parent
+  VALUE: SWR-WXX-022
+
+[ELEMENT]
+UID: SWA-WXX-IDX
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Index für GDEX
+STATEMENT: >>>
+Vollständige ``.idx`` bauen, Layer und Manifest, Plan der Lücken.
+<<<
+ORT: services/wx_exchange/src/wx_exchange/idx.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXX-030
+- TYPE: Parent
+  VALUE: SWR-WXX-031
+
+[ELEMENT]
+UID: SWA-WXX-GEFS
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: GEFS im Runner
+STATEMENT: >>>
+Konfiguration, Auswahl und Laden der Felder, Verdichtung je Region, Artefakt.
+<<<
+ORT: services/wx_exchange/src/wx_exchange/gefs.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXX-040
+- TYPE: Parent
+  VALUE: SWR-WXX-041
+- TYPE: Parent
+  VALUE: SWR-WXX-042
+- TYPE: Parent
+  VALUE: SWR-WXX-043
+
+[ELEMENT]
+UID: SWA-WXX-GEFS-REGIONS
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: GEFS-Regionen
+STATEMENT: >>>
+Regionsdatei aus Natural Earth und MaStR-Zellen.
+<<<
+ORT: services/wx_exchange/src/wx_exchange/gefs_regions.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXX-044
+
+[ELEMENT]
+UID: SWA-WXX-GEFS-VM
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: GEFS auf der VM
+STATEMENT: >>>
+Live, Import, Gold und Aufräumen in einem Zyklus.
+<<<
+ORT: services/wx_exchange/src/wx_exchange/gefs_vm.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXX-045
+- TYPE: Parent
+  VALUE: SWR-WXX-046
+- TYPE: Parent
+  VALUE: SWR-WXX-047
+- TYPE: Parent
+  VALUE: SWR-WXX-048
+
+[ELEMENT]
+UID: SWA-WXX-SNAPSHOT
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Grafana-Snapshot
+STATEMENT: >>>
+Dashboard holen, Abfragen einbetten, hochladen, Kurzlink umbiegen.
+<<<
+ORT: services/wx_exchange/src/wx_exchange/snapshot.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXX-050
+- TYPE: Parent
+  VALUE: SWR-WXX-051
+
+[ELEMENT]
+UID: SWA-WXX-TESTING
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Testhilfen
+STATEMENT: >>>
+Simulierte OCI-Registry für ``httpx.MockTransport``.
+<<<
+ORT: services/wx_exchange/src/wx_exchange/testing.py
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Schnittstellen
+
+[ELEMENT]
+UID: SWA-WXX-IF-GFS-ARTIFACT
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: GFS-Silber in GHCR
+STATEMENT: >>>
+Runner/VM ↔ Instanzen. ``predictiondb-data/gfs-0p25-silver`` und ``gfs-0p5-silver``, Tag ``JJJJ-MM-HHz``, Layer ``application/vnd.predictiondb.zarr.v3.tar``.
+<<<
+QUELLE: ARCHITEKTUR.md 5.5
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXX-002
+
+[ELEMENT]
+UID: SWA-WXX-IF-IDX-ARTIFACT
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: GDEX-Index in GHCR
+STATEMENT: >>>
+Runner → Runner. ``predictiondb-data/gfs-0p25-gdex-idx:v1``, ein ``tar.gz``-Layer je Monat und Laufzeit.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXX-030
+
+[ELEMENT]
+UID: SWA-WXX-IF-GEFS-ARTIFACT
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: GEFS-Silber in GHCR und Garage
+STATEMENT: >>>
+Runner/VM ↔ VM. ``predictiondb-data/gefs-0p5-silver:JJJJ-MM-00z``; lokal ``wx-silver/gefs/0p5/JJJJ/MM/TT/HH.tar.gz`` byte-gleich mit dem Layer, Bronze unter ``gefs/0p5/…``.
+<<<
+QUELLE: ARCHITEKTUR.md 5.6
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXX-043
+- TYPE: Parent
+  VALUE: SWR-WXX-045
+
+[ELEMENT]
+UID: SWA-WXX-IF-GEFS-GOLD
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: GEFS-Kennzahlen
+STATEMENT: >>>
+wx-exchange → ml-train, Grafana. ``feat.nwp_value`` mit Merkmal ``<größe>_<kennzahl>``, Aggregation ``ensemble``, Region ``gefs:<code>``.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXX-047
+
+[ELEMENT]
+UID: SWA-WXX-IF-SNAPSHOT
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: Snapshot und Kurzlink
+STATEMENT: >>>
+wx-exchange → snapshots.raintank.io, Short.io bzw. Shlink. Grafana-API der eigenen Instanz für Dashboard und Abfragen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXX-050
+- TYPE: Parent
+  VALUE: SWR-WXX-051
+
+[[/SECTION]]

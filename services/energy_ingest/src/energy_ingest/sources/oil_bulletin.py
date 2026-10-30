@@ -10,6 +10,8 @@ Die Download-Adresse enthält eine Dokument-ID und ist deshalb einstellbar
 die Quelle nichts und meldet ``status = 'format'``.
 
 Werte in EUR je Liter (Datei: EUR je 1000 l), am Stichtag 00:00 Ortszeit (als UTC).
+
+@relation(SWA-ENI-SRC-OB, scope=file)
 """
 
 from __future__ import annotations
@@ -70,6 +72,7 @@ def parse_sheet(rows: list[tuple[object, ...]], prefix: str, suffix: str) -> lis
 
 
 def parse_xlsx(raw: bytes) -> list[SeriesData]:
+    """@relation(SWR-ENI-049, SWR-ENI-030, scope=function)"""
     try:
         wb = load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
     except Exception as exc:
@@ -84,6 +87,8 @@ def parse_xlsx(raw: bytes) -> list[SeriesData]:
 
 
 class OilBulletin:
+    """@relation(SWR-ENI-049, scope=class)"""
+
     code = "oil_bulletin"
     license = "CC BY 4.0, Europäische Kommission, Weekly Oil Bulletin"
     priority = 10

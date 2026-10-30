@@ -4,6 +4,8 @@ Gitterzellen werden wie in ``mastr_ingest.store`` über ganzzahlige Indizes
 ``floor(x / res + 0.5)`` verglichen. Feature-Werte gehen per ``COPY`` nach ``feat.nwp_value``;
 ein Lauf wird vorher für die betroffenen Regionen gelöscht, damit Neuberechnungen
 idempotent sind.
+
+@relation(SWA-WXP-STORE, scope=file)
 """
 
 from __future__ import annotations
@@ -60,6 +62,7 @@ class CapacityTable:
         }
 
     def at(self, technology: str, cluster_no: int, days: list[date]) -> NDArray[np.float64] | None:
+        """@relation(SWR-WXP-034, scope=function)"""
         s = self._series.get((technology, cluster_no))
         if s is None:
             return None
@@ -216,6 +219,8 @@ class Store:
 
         ``replace=False`` lässt das DELETE weg (Lauf hatte noch nie Features); das spart in
         komprimierten Chunks einen Durchgang. Liegen doch Werte vor, wird ersetzt.
+
+        @relation(SWR-WXP-036, scope=function)
         """
         rows = list(rows)
         if not replace:
@@ -270,6 +275,8 @@ class Store:
         Ein COPY in einen komprimierten Chunk entpackt für die Prüfung des Primärschlüssels
         jedes betroffene Segment und lässt den Chunk teilweise komprimiert zurück; ein
         Backfill schreibt deshalb besser in entpackte Chunks und packt sie danach einmal.
+
+        @relation(SWR-WXP-041, scope=function)
         """
         with self.engine.connect() as c:
             rows = c.execute(
@@ -293,7 +300,10 @@ class Store:
         return done
 
     def compress_values(self, chunks: Iterable[Chunk]) -> None:
-        """Packt die Chunks wieder; gesperrte bleiben für die Kompressions-Policy liegen."""
+        """Packt die Chunks wieder; gesperrte bleiben für die Kompressions-Policy liegen.
+
+        @relation(SWR-WXP-041, scope=function)
+        """
         for ch in chunks:
             if self._chunk_op("compress_chunk", ch):
                 log.info("chunk.compressed", chunk=ch.name, start=f"{ch.start:%Y-%m-%d}")
@@ -304,6 +314,8 @@ class Store:
         Wartet die Anweisung auf einen Leser (z. B. ``ml-train snapshot`` in einer langen
         Transaktion), stellen sich alle weiteren Leser des Chunks hinter ihr an. Deshalb nur
         kurz warten und bei Erfolglosigkeit den Chunk vorerst so lassen, wie er ist.
+
+        @relation(SWR-WXP-041, scope=function)
         """
         try:
             with self.engine.begin() as c:
@@ -354,7 +366,10 @@ class Store:
         stats: dict[str, Any],
         bronze: dict[str, Any],
     ) -> None:
-        """Verarbeitungsstand speichern, ``meta.nwp_run`` nachführen, ``features_ready`` melden."""
+        """Verarbeitungsstand speichern, ``meta.nwp_run`` nachführen, ``features_ready`` melden.
+
+        @relation(SWR-WXP-036, scope=function)
+        """
         endpoints: dict[str, int] = bronze.get("endpoints") or {}
         endpoint = max(endpoints, key=lambda k: endpoints[k]) if endpoints else None
         payload = json.dumps(
@@ -434,6 +449,7 @@ class Store:
         status: SilverStatus,
         origin: SilverOrigin,
     ) -> None:
+        """@relation(SWR-WXP-023, scope=function)"""
         params = [{"s": source_id, "r": r, "st": status, "o": origin} for r in runs]
         if not params:
             return
@@ -464,6 +480,7 @@ class Store:
         status: BronzeStatus,
         nbytes: int | None = None,
     ) -> None:
+        """@relation(SWR-WXP-023, scope=function)"""
         params = [{"s": source_id, "r": r, "st": status, "b": nbytes} for r in runs]
         if not params:
             return

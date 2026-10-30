@@ -1,0 +1,418 @@
+[DOCUMENT]
+TITLE: Softwarearchitektur energy-ingest (SWA)
+PREFIX: SWA-ENI-
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @architektur
+
+[TEXT]
+STATEMENT: >>>
+Softwarearchitektur nach ISO/IEC/IEEE 12207 für das Softwareelement SYSA-SW-ENI. Jede Komponente
+entspricht einem Modul unter ``services/energy_ingest/src/energy_ingest`` und nennt die
+Softwareanforderungen, die sie umsetzt (``Parent``). Das Modul selbst verweist mit
+``@relation(SWA-ENI-…, scope=file)`` im Modul-Docstring zurück.
+
+Abhängigkeiten: ``predictiondb_core`` (Einstellungen, Logging, DB). Abnehmer der Gold-Tabellen
+sind ml-train, pdb-predict und Grafana.
+<<<
+
+[[SECTION]]
+TITLE: Komponenten
+
+[ELEMENT]
+UID: SWA-ENI-CLI
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Kommandozeile
+STATEMENT: >>>
+Befehle, Dauerbetrieb mit ``--watch``,
+Aufbau der aktiven Quellen nach Freigabe und Zugangsdaten.
+<<<
+ORT: services/energy_ingest/src/energy_ingest/cli.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-ENI-001
+- TYPE: Parent
+  VALUE: SWR-ENI-003
+- TYPE: Parent
+  VALUE: SWR-ENI-004
+- TYPE: Parent
+  VALUE: SWR-ENI-014
+
+[ELEMENT]
+UID: SWA-ENI-CONFIG
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Einstellungen
+STATEMENT: >>>
+``EnergySettings`` (Präfix
+``PDB_ENERGY_``), Liste und Reihenfolge der Quellen, Freigaben unfreier Quellen.
+<<<
+ORT: services/energy_ingest/src/energy_ingest/config.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-ENI-002
+- TYPE: Parent
+  VALUE: SWR-ENI-003
+- TYPE: Parent
+  VALUE: SWR-ENI-005
+
+[ELEMENT]
+UID: SWA-ENI-HTTP
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: HTTP-Abruf
+STATEMENT: >>>
+Wiederholung bei Netzfehlern, 429 und 5xx,
+``Retry-After``, Drosselung je Host.
+<<<
+ORT: services/energy_ingest/src/energy_ingest/http.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-ENI-032
+
+[ELEMENT]
+UID: SWA-ENI-INGESTOR
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Abgleich, Revision, Backfill
+STATEMENT: >>>
+``EnergyIngestor`` mit
+Fenstern, Blockraster, Reihenfolge, Statusermittlung und Quellenvergleich.
+<<<
+ORT: services/energy_ingest/src/energy_ingest/ingest.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-ENI-005
+- TYPE: Parent
+  VALUE: SWR-ENI-010
+- TYPE: Parent
+  VALUE: SWR-ENI-011
+- TYPE: Parent
+  VALUE: SWR-ENI-012
+- TYPE: Parent
+  VALUE: SWR-ENI-013
+- TYPE: Parent
+  VALUE: SWR-ENI-014
+- TYPE: Parent
+  VALUE: SWR-ENI-015
+- TYPE: Parent
+  VALUE: SWR-ENI-030
+
+[ELEMENT]
+UID: SWA-ENI-MODEL
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Datenmodell
+STATEMENT: >>>
+Reihenkatalog (Art, Einheit, Raster),
+Datenpakete der Quellen, Abschätzung des Veröffentlichungszeitpunkts.
+<<<
+ORT: services/energy_ingest/src/energy_ingest/model.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-ENI-020
+- TYPE: Parent
+  VALUE: SWR-ENI-021
+
+[ELEMENT]
+UID: SWA-ENI-STORE
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Ablage
+STATEMENT: >>>
+Schreiben nach ``energy.*`` mit Upsert, frühestem
+``published``, Korrekturprotokoll und Leeren entfernter Werte; Abruf-, Revisions- und
+Statusprotokoll in ``meta.*``; Freigaben in ``meta.source``.
+<<<
+ORT: services/energy_ingest/src/energy_ingest/store.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-ENI-003
+- TYPE: Parent
+  VALUE: SWR-ENI-012
+- TYPE: Parent
+  VALUE: SWR-ENI-013
+- TYPE: Parent
+  VALUE: SWR-ENI-015
+- TYPE: Parent
+  VALUE: SWR-ENI-020
+- TYPE: Parent
+  VALUE: SWR-ENI-021
+- TYPE: Parent
+  VALUE: SWR-ENI-022
+- TYPE: Parent
+  VALUE: SWR-ENI-023
+- TYPE: Parent
+  VALUE: SWR-ENI-030
+
+[ELEMENT]
+UID: SWA-ENI-SOURCE
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Quellenschnittstelle
+STATEMENT: >>>
+Protokoll ``Source``, Metadaten
+(Lizenz, Rang, frei/unfrei), Fehlerarten ``SourceError`` und ``FormatError``, Zwischenspeicher
+für Downloads.
+<<<
+ORT: services/energy_ingest/src/energy_ingest/sources/__init__.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-ENI-023
+- TYPE: Parent
+  VALUE: SWR-ENI-030
+- TYPE: Parent
+  VALUE: SWR-ENI-031
+
+[ELEMENT]
+UID: SWA-ENI-SRC-SMARD
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Quelle SMARD
+STATEMENT: >>>
+Abruf, Formatprüfung und Umrechnung der Quelle SMARD.
+<<<
+ORT: services/energy_ingest/src/energy_ingest/sources/smard.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-ENI-040
+
+[ELEMENT]
+UID: SWA-ENI-SRC-EC
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Quelle Energy-Charts
+STATEMENT: >>>
+Abruf, Formatprüfung und Umrechnung der Quelle Energy-Charts.
+<<<
+ORT: services/energy_ingest/src/energy_ingest/sources/energy_charts.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-ENI-041
+- TYPE: Parent
+  VALUE: SWR-ENI-003
+
+[ELEMENT]
+UID: SWA-ENI-SRC-ENTSOE
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Quelle ENTSO-E
+STATEMENT: >>>
+Abruf, Formatprüfung und Umrechnung der Quelle ENTSO-E.
+<<<
+ORT: services/energy_ingest/src/energy_ingest/sources/entsoe.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-ENI-042
+
+[ELEMENT]
+UID: SWA-ENI-SRC-NT
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Quelle Netztransparenz
+STATEMENT: >>>
+Abruf, Formatprüfung und Umrechnung der Quelle Netztransparenz.
+<<<
+ORT: services/energy_ingest/src/energy_ingest/sources/netztransparenz.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-ENI-043
+
+[ELEMENT]
+UID: SWA-ENI-SRC-MW
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Quelle Marktwerte nach Anlage 1 EEG
+STATEMENT: >>>
+Abruf, Formatprüfung und Umrechnung der Quelle Marktwerte nach Anlage 1 EEG.
+<<<
+ORT: services/energy_ingest/src/energy_ingest/sources/marktwert.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-ENI-044
+
+[ELEMENT]
+UID: SWA-ENI-SRC-EIA
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Quelle EIA-Spotpreise
+STATEMENT: >>>
+Abruf, Formatprüfung und Umrechnung der Quelle EIA-Spotpreise.
+<<<
+ORT: services/energy_ingest/src/energy_ingest/sources/eia.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-ENI-045
+
+[ELEMENT]
+UID: SWA-ENI-SRC-STEO
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Quelle EIA STEO
+STATEMENT: >>>
+Abruf, Formatprüfung und Umrechnung der Quelle EIA STEO.
+<<<
+ORT: services/energy_ingest/src/energy_ingest/sources/steo.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-ENI-046
+
+[ELEMENT]
+UID: SWA-ENI-SRC-ECB
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Quelle EZB
+STATEMENT: >>>
+Abruf, Formatprüfung und Umrechnung der Quelle EZB.
+<<<
+ORT: services/energy_ingest/src/energy_ingest/sources/ecb.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-ENI-047
+
+[ELEMENT]
+UID: SWA-ENI-SRC-WB
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Quelle Weltbank
+STATEMENT: >>>
+Abruf, Formatprüfung und Umrechnung der Quelle Weltbank.
+<<<
+ORT: services/energy_ingest/src/energy_ingest/sources/worldbank.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-ENI-048
+
+[ELEMENT]
+UID: SWA-ENI-SRC-OB
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Quelle Weekly Oil Bulletin
+STATEMENT: >>>
+Abruf, Formatprüfung und Umrechnung der Quelle Weekly Oil Bulletin.
+<<<
+ORT: services/energy_ingest/src/energy_ingest/sources/oil_bulletin.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-ENI-049
+
+[ELEMENT]
+UID: SWA-ENI-SRC-THE
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Quelle Trading Hub Europe
+STATEMENT: >>>
+Abruf, Formatprüfung und Umrechnung der Quelle Trading Hub Europe.
+<<<
+ORT: services/energy_ingest/src/energy_ingest/sources/the.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-ENI-050
+
+[ELEMENT]
+UID: SWA-ENI-SRC-GIE
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Quelle GIE AGSI+ und ALSI
+STATEMENT: >>>
+Abruf, Formatprüfung und Umrechnung der Quelle GIE AGSI+ und ALSI.
+<<<
+ORT: services/energy_ingest/src/energy_ingest/sources/gie.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-ENI-051
+- TYPE: Parent
+  VALUE: SWR-ENI-031
+
+[ELEMENT]
+UID: SWA-ENI-SRC-EUROSTAT
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Quelle Eurostat
+STATEMENT: >>>
+Abruf, Formatprüfung und Umrechnung der Quelle Eurostat.
+<<<
+ORT: services/energy_ingest/src/energy_ingest/sources/eurostat.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-ENI-052
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Schnittstellen
+
+[ELEMENT]
+UID: SWA-ENI-IF-SOURCE
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: Quellenprotokoll
+STATEMENT: >>>
+Ingestor → Quelle.
+``datasets()``, ``max_chunk(dataset)`` und ``fetch(dataset, start, end)`` liefern
+``SeriesData``; Fehler als ``SourceError`` bzw. ``FormatError``.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-ENI-030
+- TYPE: Parent
+  VALUE: SWR-ENI-031
+
+[ELEMENT]
+UID: SWA-ENI-IF-GOLD
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: Energie-Tabellen
+STATEMENT: >>>
+energy-ingest → ml-train,
+pdb-predict, Grafana. ``energy.series``, ``energy.value`` je Quelle mit ``published``,
+``energy.value_revision``, Sicht
+``energy.value_best``.
+<<<
+QUELLE: ARCHITEKTUR.md 5.3
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-ENI-020
+- TYPE: Parent
+  VALUE: SWR-ENI-021
+- TYPE: Parent
+  VALUE: SWR-ENI-023
+
+[ELEMENT]
+UID: SWA-ENI-IF-META
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: Abruf- und Statusprotokoll
+STATEMENT: >>>
+energy-ingest →
+Grafana. ``meta.energy_fetch``, ``meta.energy_revise``, ``meta.energy_status``,
+``meta.source.enabled``.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-ENI-003
+- TYPE: Parent
+  VALUE: SWR-ENI-012
+- TYPE: Parent
+  VALUE: SWR-ENI-013
+- TYPE: Parent
+  VALUE: SWR-ENI-030
+
+[ELEMENT]
+UID: SWA-ENI-IF-ENV
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: Einstellungen
+STATEMENT: >>>
+Betreiber → energy-ingest.
+``PDB_ENERGY_*``, Zugangsdaten und ``PDB_ALLOW_*`` aus der ``.env``.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-ENI-002
+- TYPE: Parent
+  VALUE: SWR-ENI-003
+
+[[/SECTION]]
+

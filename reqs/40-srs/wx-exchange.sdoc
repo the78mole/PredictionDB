@@ -1,0 +1,412 @@
+[DOCUMENT]
+TITLE: Softwareanforderungen wx-exchange (SRS)
+PREFIX: SWR-WXX-
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @anforderung
+
+[TEXT]
+STATEMENT: >>>
+Software Requirements Specification nach ISO/IEC/IEEE 29148 für das Softwareelement
+SYSA-SW-WXX (``services/wx_exchange``): Silber-Austausch über GHCR für GFS und GEFS, vollständige
+``.idx`` zu GDEX, GEFS-Dienst der VM und der öffentliche Grafana-Snapshot.
+<<<
+
+[[SECTION]]
+TITLE: Registry und Artefakte
+
+[REQUIREMENT]
+UID: SWR-WXX-001
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: OCI-Registry
+STATEMENT: >>>
+wx-exchange muss Tags, Manifeste und Blobs einer OCI-Registry über die Distribution API lesen
+und schreiben, ohne ``oras`` oder Docker. Lesen muss anonym gehen, Schreiben mit
+``WX_EXCHANGE_USERNAME``/``WX_EXCHANGE_TOKEN``. Vorhandene Blobs werden nicht erneut
+hochgeladen, Serverfehler und Verbindungsabbrüche bis zu dreimal wiederholt. Jede Quelle hat ihr
+eigenes Repository.
+<<<
+QUELLE: ARCHITEKTUR.md 5.5.3
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-001
+
+[REQUIREMENT]
+UID: SWR-WXX-002
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: GFS-Silber-Artefakt
+STATEMENT: >>>
+wx-exchange muss je Monat und Laufzeit ein Manifest mit Tag ``JJJJ-MM-HHz`` und je Lauf einen
+Layer (Tar des Zarr-Stores) schreiben. Jeder Layer trägt Lauf, Fingerabdruck der Eingaben,
+Inhalts-Hash, ``SILVER_VERSION`` und Schrittzahl; das Manifest Lizenz, Quellenvermerk und die im
+Archiv fehlenden Läufe.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-001
+- TYPE: Parent
+  VALUE: SYSR-QA-004
+
+[REQUIREMENT]
+UID: SWR-WXX-003
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Reproduzierbare Layer
+STATEMENT: >>>
+Dasselbe Silber muss byte-gleiche Tars ergeben. Der Inhalts-Hash darf den Zeitpunkt des
+Bronze-Abschlusses nicht enthalten, damit ein Neubau ohne inhaltliche Änderung nichts hochlädt.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-001
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: GFS-Historie im Runner
+
+[REQUIREMENT]
+UID: SWR-WXX-010
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Plan nur für Lücken
+STATEMENT: >>>
+``gfs plan`` muss aus den Manifesten in GHCR die Monate und Laufzeiten ermitteln, in denen Läufe
+ohne passenden Fingerabdruck fehlen, in Blöcken von Jahren vom jüngsten Monat rückwärts und mit
+den Laufzeiten in der angegebenen Reihenfolge, und daraus die Matrix für GitHub Actions ausgeben.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-002
+
+[REQUIREMENT]
+UID: SWR-WXX-011
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Monat veröffentlichen
+STATEMENT: >>>
+``gfs publish`` muss in einem Monat und einer Laufzeit die fehlenden Läufe aus dem Archiv laden,
+Bronze und Silber nur im Arbeitsverzeichnis bauen, einen Lauf nur hochladen, wenn er neu ist oder
+sein Inhalts-Hash sich geändert hat, im Archiv fehlende Läufe vermerken und das Manifest nach
+jedem Lauf schreiben. Mit ``--rebuild`` wird jeder Lauf neu gebaut.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-002
+- TYPE: Parent
+  VALUE: SYSR-WX-005
+
+[REQUIREMENT]
+UID: SWR-WXX-012
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Demonstration
+TITLE: Vorlagen für Archive ohne .idx
+STATEMENT: >>>
+``gfs templates`` muss die Kopf-Inventare für ``header_scan`` an je einem Lauf pro Monat prüfen,
+fehlende Schritte und neue Varianten ergänzen und die Vorlagendatei neu schreiben.
+<<<
+QUELLE: Workflow gfs-templates.yml
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-005
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Import und Prüfung auf der VM
+
+[REQUIREMENT]
+UID: SWR-WXX-020
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Silber importieren
+STATEMENT: >>>
+``gfs import`` muss alle Läufe im Zeitraum, die lokal nicht als vollständiges Silber der aktuellen
+``SILVER_VERSION`` vorliegen, aus GHCR nach ``wx-silver`` holen, mehrere parallel und in der
+Reihenfolge der Laufzeiten. Selbst gebautes Silber bleibt unangetastet.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-001
+- TYPE: Parent
+  VALUE: SYSR-WX-005
+
+[REQUIREMENT]
+UID: SWR-WXX-021
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Bestand melden
+STATEMENT: >>>
+Der Import muss zu holende Läufe zu Beginn als ``loading`` und jeden geholten als ``present`` in
+``meta.silver_run`` melden.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-OPS-003
+
+[REQUIREMENT]
+UID: SWR-WXX-022
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Eigenes Silber gegen GHCR prüfen
+STATEMENT: >>>
+``gfs verify`` muss je Lauf das lokal gebaute Silber über den Inhalts-Hash mit GHCR vergleichen
+und ``equal``, ``different`` (mit den abweichenden Dateien), ``imported`` oder ``local_missing``
+melden. Ein Layer wird nur bei Abweichung geladen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-001
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Vollständige .idx zu GDEX
+
+[REQUIREMENT]
+UID: SWR-WXX-030
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Index-Layer bauen
+STATEMENT: >>>
+``gfs idx-build`` muss je GRIB-Datei eines Monats und einer Laufzeit eine vollständige ``.idx``
+im Format von ``wgrib2 -s`` aus den Nachrichtenköpfen bauen und als Layer mit dem Stand
+``complete``, ``failed``, ``absent``, ``broken`` und ``unknown`` ablegen. Fehlgeschlagene Dateien
+werden im selben Job wiederholt, im Archiv kaputte nicht. Die Arbeit lässt sich auf
+mehrere Prozesse verteilen.
+<<<
+QUELLE: Workflow gfs-idx.yml
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-005
+- TYPE: Parent
+  VALUE: SYSR-PUB-002
+
+[REQUIREMENT]
+UID: SWR-WXX-031
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Index-Artefakt fortsetzen
+STATEMENT: >>>
+Ein erneuter Start muss nur Monate ohne vollständigen Layer bearbeiten und schon gebaute ``.idx``
+übernehmen. ``idx-manifest`` muss das Manifest auch schreiben, wenn einzelne Jobs scheitern, und
+dabei Layer ohne Blob auslassen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-005
+
+[REQUIREMENT]
+UID: SWR-WXX-032
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Index statt Köpfe lesen
+STATEMENT: >>>
+Liegt für einen Monat ein Index-Layer vor, muss ``publish`` die gewählten Nachrichten über die
+``.idx`` per Byte-Bereich lesen. Passt eine ``.idx`` nicht zur Datei, fällt es auf Vorlagen und
+Köpfe zurück.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-002
+- TYPE: Parent
+  VALUE: SYSR-WX-005
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: GEFS-Ensemble
+
+[REQUIREMENT]
+UID: SWR-WXX-040
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: GEFS-Konfiguration
+STATEMENT: >>>
+wx-exchange muss Mitglieder, Laufzeiten, Schritte, Felder, Ausschnitt und Archiv-URLs des GEFS aus
+``config/sources/gefs_0p5.yaml`` lesen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-007
+- TYPE: Parent
+  VALUE: SYSR-QA-003
+
+[REQUIREMENT]
+UID: SWR-WXX-041
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: GEFS-Felder per Byte-Bereich
+STATEMENT: >>>
+wx-exchange muss je Mitglied und Schritt aus der ``.idx`` nur die konfigurierten Felder wählen,
+benachbarte Nachrichten zu Byte-Bereichen zusammenfassen und laden.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-007
+- TYPE: Parent
+  VALUE: SYSR-WX-002
+
+[REQUIREMENT]
+UID: SWR-WXX-042
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: GEFS je Region und Mitglied verdichten
+STATEMENT: >>>
+wx-exchange muss jeden GEFS-Lauf je Region, Mitglied, Größe und Schritt mit den Gewichten der
+Regionsdatei verdichten. Blockierende Arbeit darf den Standard-Executor nicht belegen.
+<<<
+QUELLE: ARCHITEKTUR.md 5.6
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-007
+
+[REQUIREMENT]
+UID: SWR-WXX-043
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: GEFS-Artefakt
+STATEMENT: >>>
+``gefs publish`` muss je Monat ein Manifest ``JJJJ-MM-00z`` mit einem reproduzierbaren Layer je Lauf
+schreiben, nur neue oder geänderte Läufe hochladen und fehlende vermerken. Der Fingerabdruck
+ändert sich mit Konfiguration und Regionen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-002
+- TYPE: Parent
+  VALUE: SYSR-WX-007
+
+[REQUIREMENT]
+UID: SWR-WXX-044
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Regionen bauen
+STATEMENT: >>>
+``gefs regions`` muss die Regionen (Gebotszonen aus Natural Earth, Technologie-Gewichte aus
+MaStR-Zellen) auf dem 0,5°-Gitter berechnen und als versionierte Datei schreiben.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-007
+- TYPE: Parent
+  VALUE: SYSR-WX-008
+
+[REQUIREMENT]
+UID: SWR-WXX-045
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: GEFS live auf der VM
+STATEMENT: >>>
+``gefs vm`` muss die Läufe des aktuellen Monats und der letzten Tage des Vormonats bauen, sobald
+der letzte Schritt des letzten Mitglieds im Archiv liegt, die zugeschnittenen Nachrichten in
+``wx-bronze`` und das Silber in ``wx-silver`` und GHCR ablegen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-007
+
+[REQUIREMENT]
+UID: SWR-WXX-046
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: GEFS-Historie importieren
+STATEMENT: >>>
+``gefs vm`` muss abgeschlossene Monate aus GHCR in Portionen importieren, nur Layer mit aktuellem
+Fingerabdruck, und lokal vorhandene Läufe im Bestand nachtragen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-007
+- TYPE: Parent
+  VALUE: SYSR-PUB-001
+
+[REQUIREMENT]
+UID: SWR-WXX-047
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: GEFS-Gold
+STATEMENT: >>>
+``gefs vm`` muss je Lauf Mittel, Streuung, P10 und P90 über die Mitglieder je Region, Größe und
+Schritt nach ``feat.nwp_value`` schreiben (Aggregation ``ensemble``), jüngste Läufe zuerst. Live,
+Import und Gold dürfen sich nicht gegenseitig aufhalten; ein Rückstand wird abgearbeitet.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-007
+- TYPE: Parent
+  VALUE: SYSR-PR-002
+
+[REQUIREMENT]
+UID: SWR-WXX-048
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: GEFS-Bronze aufräumen
+STATEMENT: >>>
+Bronze eines GEFS-Laufs darf ``gefs vm`` erst nach ``--bronze-days`` löschen und nur, wenn das
+Silber lokal und in GHCR denselben Inhalts-Hash hat.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-QA-001
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Öffentlicher Snapshot
+
+[REQUIREMENT]
+UID: SWR-WXX-050
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Wochenprognose als Snapshot
+STATEMENT: >>>
+``snapshot`` muss täglich zur eingestellten Uhrzeit das Dashboard „Prognose öffentlich“ holen, die
+Abfragen der Wochenpanels für heute 00:00 bis Ende D+7 (auch über die Zeitumstellung) ausführen,
+die Ergebnisse einbetten, den Snapshot extern mit Ablaufzeit hochladen und die früheren, noch
+gültigen Stände verlinken.
+<<<
+QUELLE: Projektentscheidung Prognose öffentlich
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-OPS-003
+
+[REQUIREMENT]
+UID: SWR-WXX-051
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Fester Kurzlink
+STATEMENT: >>>
+Nach dem Hochladen muss ``snapshot`` einen Kurzlink (Short.io oder Shlink) auf den neuen Snapshot
+umbiegen und ihn bei Short.io anlegen, wenn er fehlt. Ohne Kurzlink wird nur hochgeladen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-OPS-003
+
+[[/SECTION]]

@@ -53,6 +53,7 @@ def registry(fake: FakeRegistry, *, write: bool = True) -> Registry:
 
 
 def test_tag_roundtrip() -> None:
+    """@relation(SWR-WXX-002, scope=function)"""
     assert tag("2026-10", 6) == "2026-10-06z"
     assert parse_tag("2026-10-06z") == ("2026-10", 6)
     assert parse_tag("latest") is None
@@ -60,12 +61,14 @@ def test_tag_roundtrip() -> None:
 
 
 def test_months_between() -> None:
+    """@relation(SWR-WXX-010, scope=function)"""
     a = datetime(2025, 11, 3, tzinfo=UTC)
     b = datetime(2026, 2, 1, tzinfo=UTC)
     assert months_between(a, b) == ["2025-11", "2025-12", "2026-01", "2026-02"]
 
 
 def test_registry_blob_manifest_and_tags() -> None:
+    """@relation(SWR-WXX-001, scope=function)"""
     fake = FakeRegistry(page_size=2)
     reg = registry(fake)
     d = reg.push_blob(b"hello")
@@ -82,6 +85,7 @@ def test_registry_blob_manifest_and_tags() -> None:
 
 
 def test_push_blob_retries_server_errors() -> None:
+    """@relation(SWR-WXX-001, scope=function)"""
     fake = FakeRegistry(fail_uploads=2)
     d = registry(fake).push_blob(b"hello")
     assert fake.blobs[d] == b"hello" and fake.blob_puts() == 3
@@ -105,6 +109,7 @@ def _silver(run: datetime = RUN, completed: str = "2099-01-02T10:00:00+00:00") -
 
 
 def test_pack_is_reproducible_and_ignores_build_time() -> None:
+    """@relation(SWR-WXX-003, scope=function)"""
     key = Silver.key("gfs", "0p25", RUN)
     a = _silver(completed="2099-01-02T10:00:00+00:00")
     b = _silver(completed="2099-01-03T11:00:00+00:00")
@@ -163,6 +168,7 @@ def _publisher(fake: FakeRegistry, gfs: FakeGfsHost, tmp_path: Path) -> Publishe
 
 @pytest.mark.parametrize("hour", [6])
 async def test_publish_month_uploads_once_and_records_missing(tmp_path: Path, hour: int) -> None:
+    """@relation(SWR-WXX-011, SWR-WXX-002, scope=function)"""
     fake = FakeRegistry()
     gfs = host()
     pub = _publisher(fake, gfs, tmp_path)
@@ -192,6 +198,7 @@ async def test_publish_month_uploads_once_and_records_missing(tmp_path: Path, ho
 
 
 async def test_plan_lists_only_gaps(tmp_path: Path) -> None:
+    """@relation(SWR-WXX-010, scope=function)"""
     fake = FakeRegistry()
     gfs = host()
     pub = _publisher(fake, gfs, tmp_path)
@@ -213,6 +220,7 @@ async def test_plan_lists_only_gaps(tmp_path: Path) -> None:
 
 
 async def test_import_fills_silver_and_skips_present(tmp_path: Path) -> None:
+    """@relation(SWR-WXX-020, scope=function)"""
     fake = FakeRegistry()
     pub = _publisher(fake, host(), tmp_path)
     await pub.publish_month("2026-10", 6, RUN, RUN)
@@ -255,6 +263,7 @@ class FakeLedger:
 
 
 async def test_import_reports_local_silver(tmp_path: Path) -> None:
+    """@relation(SWR-WXX-021, scope=function)"""
     fake = FakeRegistry()
     pub = _publisher(fake, host(), tmp_path)
     await pub.publish_month("2026-10", 6, RUN, RUN)
@@ -275,6 +284,7 @@ async def test_import_reports_local_silver(tmp_path: Path) -> None:
 
 
 async def test_verify_local_build_against_ghcr(tmp_path: Path) -> None:
+    """@relation(SWR-WXX-022, scope=function)"""
     fake = FakeRegistry()
     pub = _publisher(fake, host(), tmp_path)
     await pub.publish_month("2026-10", 6, RUN, RUN)
@@ -315,6 +325,7 @@ async def test_verify_local_build_against_ghcr(tmp_path: Path) -> None:
 
 
 async def test_import_order_follows_run_priority(tmp_path: Path) -> None:
+    """@relation(SWR-WXX-020, scope=function)"""
     fake = FakeRegistry()
     r00 = datetime(2026, 10, 20, 0, tzinfo=UTC)
     pub = _publisher(fake, host(RUN, r00), tmp_path)
@@ -328,6 +339,7 @@ async def test_import_order_follows_run_priority(tmp_path: Path) -> None:
 
 
 async def test_import_several_runs_in_parallel(tmp_path: Path) -> None:
+    """@relation(SWR-WXX-020, scope=function)"""
     fake = FakeRegistry()
     r00 = datetime(2026, 10, 20, 0, tzinfo=UTC)
     pub = _publisher(fake, host(RUN, r00), tmp_path)
@@ -348,7 +360,10 @@ async def test_import_several_runs_in_parallel(tmp_path: Path) -> None:
 
 
 def test_registry_repository_per_source(monkeypatch: pytest.MonkeyPatch) -> None:
-    """GFS Europa nutzt sein eigenes Paket, auch wenn die Umgebung das GFS-DE-Paket vorgibt."""
+    """GFS Europa nutzt sein eigenes Paket, auch wenn die Umgebung das GFS-DE-Paket vorgibt.
+
+    @relation(SWR-WXX-001, scope=function)
+    """
     monkeypatch.setenv("WX_EXCHANGE_REPOSITORY", cli.DEFAULT_REPOSITORY)
     eu = GfsConfig.from_yaml(REPO / "config/sources/gfs_0p5.yaml")
     de = GfsConfig.from_yaml(REPO / "config/sources/gfs_0p25.yaml")

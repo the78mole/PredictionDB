@@ -4,6 +4,8 @@ Kein ``oras``-Binary und kein Docker: Blobs werden monolithisch hochgeladen (ein
 ~13 MB), Manifeste als JSON geschrieben und gelesen. Die Anmeldung folgt dem Bearer-Ablauf der
 Registry: Auf ``401`` holt der Client beim ``realm`` aus ``WWW-Authenticate`` ein Token, mit
 Benutzer und Passwort (``GITHUB_TOKEN``) oder anonym für öffentliche Pakete.
+
+@relation(SWA-WXX-OCI, scope=file)
 """
 
 from __future__ import annotations
@@ -80,6 +82,7 @@ class Registry:
         self._token = body.get("token") or body.get("access_token")
 
     def _request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
+        """@relation(SWR-WXX-001, scope=function)"""
         headers = dict(kwargs.pop("headers", {}))
         for _ in range(2):
             if self._token:
@@ -99,7 +102,10 @@ class Registry:
         return r
 
     def _retry[T](self, fn: Callable[[], T]) -> T:
-        """Wiederholt einen ganzen Vorgang (beim Upload samt neuer Upload-Sitzung)."""
+        """Wiederholt einen ganzen Vorgang (beim Upload samt neuer Upload-Sitzung).
+
+        @relation(SWR-WXX-001, scope=function)
+        """
         for wait in self.retry_waits:
             try:
                 return fn()
@@ -110,6 +116,7 @@ class Registry:
     # --- Lesen -------------------------------------------------------------------------------
 
     def tags(self) -> list[str]:
+        """@relation(SWR-WXX-001, scope=function)"""
         out: list[str] = []
         url: str | None = f"{self.base}/tags/list?n=1000"
         while url:
@@ -159,6 +166,7 @@ class Registry:
     # --- Schreiben ---------------------------------------------------------------------------
 
     def push_blob(self, data: bytes) -> str:
+        """@relation(SWR-WXX-001, scope=function)"""
         return self._retry(lambda: self._push_blob(data))
 
     def _push_blob(self, data: bytes) -> str:
@@ -182,6 +190,7 @@ class Registry:
         return d
 
     def put_manifest(self, tag: str, manifest: dict[str, Any]) -> str:
+        """@relation(SWR-WXX-001, scope=function)"""
         body = json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()
         if manifest.get("config") == EMPTY:
             self.push_blob(b"{}")
