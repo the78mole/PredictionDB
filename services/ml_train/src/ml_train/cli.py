@@ -133,6 +133,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         help="weitere Konfiguration (eigene Registry-Linie), deren aktive Versionen mitlaufen",
     )
+    pr.add_argument(
+        "--fill-new",
+        type=int,
+        default=0,
+        metavar="STUNDEN",
+        help="neue aktive Versionen rechnen die Ausgabezeitpunkte der Vergleichsgrafiken der "
+        "letzten STUNDEN nach (Vergleich im Dashboard ab sofort)",
+    )
 
     bu = cmd.add_parser("bundle", help="Prognosepaket einer Version für den Stack predict/")
     bu.add_argument("version")
@@ -212,6 +220,7 @@ def cmd_backtest(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: Job
         cfg.backtest.train_issue_stride = a.stride
     if a.issue_hour is not None:
         cfg.issue.hour_utc = a.issue_hour
+        cfg.issue.hours_utc = []
     job.step("Snapshot laden")
     snap = load_snapshot(a.snapshot)
     fb = FeatureBuilder(snap, cfg)
@@ -327,6 +336,7 @@ def cmd_predict(cfg: ModelConfig, a: argparse.Namespace) -> int:
         due_issues,
         last_issue,
         live_snapshot,
+        needs_weather,
         next_wake,
         predict_versions,
         write_predictions,
@@ -339,13 +349,18 @@ def cmd_predict(cfg: ModelConfig, a: argparse.Namespace) -> int:
     lines += [(c, Registry(a.registry, c)) for c, _ in map(load_config, a.also_config)]
     # Zuletzt gerechneter Ausgabezeitpunkt je Linie; beim Start aus der Datenbank
     last: dict[str, pd.Timestamp | None] = {}
+    # Versionen, deren Nachrechnen (--fill-new) erledigt ist; beim Start sind alle neu
+    filled: set[str] = set()
     while True:
         now = pd.Timestamp.now(tz="UTC")
         found = False
+        active: dict[str, list[str]] = {}
         for line_cfg, reg in lines:
             try_sync(reg, engine)
             # --version gilt nur für die Hauptkonfiguration
-            versions = (a.version if line_cfg is cfg else None) or reg.active()
+            active[line_cfg.name] = (a.version if line_cfg is cfg else None) or reg.active()
+        for line_cfg, reg in lines:
+            versions = active[line_cfg.name]
             if not versions:
                 log.warning("predict.no_versions", registry=a.registry, config=line_cfg.name)
                 continue
@@ -358,8 +373,9 @@ def cmd_predict(cfg: ModelConfig, a: argparse.Namespace) -> int:
                         last_issue(engine, versions) if a.catch_up and not a.dry_run else None
                     )
                 issues = due_issues(now, last[line_cfg.name], a.catch_up)
+            wx = needs_weather(line_cfg, reg, versions)
             for issue in issues:
-                snap = live_snapshot(engine, line_cfg, issue)
+                snap = live_snapshot(engine, line_cfg, issue, weather=wx)
                 df = predict_versions(snap, line_cfg, reg, versions, issue, Path(DEFAULT_CACHE))
                 if a.dry_run:
                     print(df.to_string(index=False, max_rows=60))
@@ -367,6 +383,10 @@ def cmd_predict(cfg: ModelConfig, a: argparse.Namespace) -> int:
                     n = write_predictions(engine, df)
                     log.info("predict.done", issue=str(issue), versions=versions, rows=n)
                 last[line_cfg.name] = issue
+        if a.fill_new and not a.issue and not a.dry_run:
+            # Nach dem regulären Lauf, damit die aktuelle Prognose nie wartet
+            for line_cfg, reg in lines:
+                fill_new(engine, line_cfg, reg, active[line_cfg.name], filled, now, a.fill_new)
         if not found:
             log.error("predict.no_versions", registry=a.registry)
             return 1
@@ -375,6 +395,43 @@ def cmd_predict(cfg: ModelConfig, a: argparse.Namespace) -> int:
         # Auf dem Raster wecken (volle Stunde plus eine Minute), damit keine Stunde ausfällt
         wake = next_wake(pd.Timestamp.now(tz="UTC"), a.watch)
         time.sleep(max(0.0, (wake - pd.Timestamp.now(tz="UTC")).total_seconds()))
+
+
+def fill_new(
+    engine: Engine,
+    cfg: ModelConfig,
+    reg: Registry,
+    versions: list[str],
+    filled: set[str],
+    now: pd.Timestamp,
+    hours: int,
+) -> None:
+    """Neue Versionen einer Linie rechnen die Ausgabezeitpunkte der Vergleichsgrafiken nach
+    (08 UTC und 10 Uhr Ortszeit), die ihnen im Fenster fehlen."""
+    from ml_train.predict import (
+        by_issue,
+        live_snapshot,
+        missing_compare_issues,
+        needs_weather,
+        predict_versions,
+        write_predictions,
+    )
+
+    new = [v for v in versions if v not in filled]
+    if not new:
+        return
+    cur = now.floor("h")
+    # Die laufende Stunde rechnet der reguläre Lauf
+    since, until = cur - pd.Timedelta(hours=hours), cur - pd.Timedelta(hours=1)
+    plan = by_issue({v: missing_compare_issues(engine, v, since, until) for v in new})
+    if plan:
+        log.info("predict.fill_new", config=cfg.name, versions=new, issues=len(plan))
+    for issue, vs in plan.items():
+        snap = live_snapshot(engine, cfg, issue, weather=needs_weather(cfg, reg, vs))
+        df = predict_versions(snap, cfg, reg, vs, issue, Path(DEFAULT_CACHE))
+        n = write_predictions(engine, df)
+        log.info("predict.filled", issue=str(issue), versions=vs, rows=n)
+    filled.update(new)
 
 
 def cmd_bundle(cfg: ModelConfig, a: argparse.Namespace) -> int:
@@ -401,11 +458,12 @@ def _terminate(signum: int, _: object) -> None:
 
 def run_job(cfg: ModelConfig, sha: str, a: argparse.Namespace) -> int:
     """Snapshot, Backtest oder Training mit Fortschritt in ``meta.ml_job``."""
-    variants = {
-        "snapshot": [],
-        "backtest": a.variant or [v.name for v in cfg.variants],
-        "fit": [a.variant],
-    }[a.cmd]
+    # nur der Eintrag des laufenden Befehls: snapshot hat kein --variant
+    variants: list[str] = []
+    if a.cmd == "backtest":
+        variants = a.variant or [v.name for v in cfg.variants]
+    elif a.cmd == "fit":
+        variants = [a.variant]
     args = {k: v for k, v in vars(a).items() if k not in ("cmd", "verbose") and v is not None}
     job = open_job_log()
     job.start(a.cmd, cfg.name, variants, args)

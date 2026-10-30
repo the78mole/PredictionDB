@@ -37,3 +37,19 @@ repos:
         files: ^docs/analysen/.*\.py$
         pass_filenames: false
         require_serial: true
+      - id: strictdoc
+        name: strictdoc (Anforderungen und @relation-Marker)
+        # Exportiert reqs/ nach build/reqs/html. Bricht bei unbekannten IDs in Relationen
+        # oder @relation-Markern ab.
+        entry: uv run --no-sync strictdoc export reqs --output-dir build/reqs
+        language: system
+        files: ^(reqs/.*|.*\.py)$
+        pass_filenames: false
+        require_serial: true
+      - id: reqs-abdeckung
+        name: Abdeckung der Softwareanforderungen
+        entry: uv run --no-sync python reqs/pruefen.py
+        language: system
+        files: ^(reqs/.*|.*\.py)$
+        pass_filenames: false
+        require_serial: true

@@ -27,7 +27,12 @@ pytestmark = [
 ]
 
 ROOT = Path(__file__).parents[2]
-DASHBOARD = ROOT / "config/grafana/dashboards/status.json"
+DASHBOARDS = [
+    ROOT / "config/grafana/dashboards/prognose-energiedaten.json",
+    ROOT / "config/grafana/dashboards/prognose-aktuell.json",
+]
+#: Vorlage für den öffentlichen Snapshot (Standard-Panels mit denselben IDs wie intern)
+PUBLIC = ROOT / "config/grafana/dashboards/prognose-oeffentlich.json"
 CONFIG = "it_ml_dash"
 TARGETS = {"load_actual": 50_000.0, "da_price_de_lu": 80.0}
 
@@ -121,7 +126,8 @@ def _fill(engine: Engine, versions: list[str], now: pd.Timestamp) -> None:
             ),
             {"c": CONFIG},
         ).scalar_one()
-        for code, base in TARGETS.items():
+        # Day-Ahead-Lastprognose der ÜNB, 2 MW über dem Ist
+        for code, base in {**TARGETS, "load_da_forecast": TARGETS["load_actual"] + 2}.items():
             ser = c.execute(
                 text(
                     "INSERT INTO energy.series (source_id, code, unit, resolution)"
@@ -133,6 +139,8 @@ def _fill(engine: Engine, versions: list[str], now: pd.Timestamp) -> None:
                 text("INSERT INTO energy.value (series_id, ts, value) VALUES (:s, :t, :v)"),
                 [{"s": ser, "t": h.to_pydatetime(), "v": base} for h in hours],
             )
+            if code not in TARGETS:
+                continue
             for i, v in enumerate(versions):
                 c.execute(
                     text("INSERT INTO fcst.prediction VALUES (:m, :c, :i, :t, 0.5, :v)"),
@@ -151,6 +159,7 @@ def _fill(engine: Engine, versions: list[str], now: pd.Timestamp) -> None:
 
 def _sql(panel: dict, ref: int = 0) -> str:  # type: ignore[type-arg]
     sql = str(panel["targets"][ref]["rawSql"])
+    sql = sql.replace("$__timeFrom()", "(now() - interval '30 days')")
     return re.sub(
         r"\$__timeFilter\(([^)]+)\)", r"\1 BETWEEN now() - interval '30 days' AND now()", sql
     )
@@ -185,7 +194,7 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
             (v, t, 1.0 + i) for i, v in enumerate(versions) for t in TARGETS
         }
 
-        panels = {p["id"]: p for p in json.loads(DASHBOARD.read_text())["panels"]}
+        panels = {p["id"]: p for f in DASHBOARDS for p in json.loads(f.read_text())["panels"]}
         rows = {pid: c.execute(text(_sql(panels[pid]))).mappings().all() for pid in range(35, 44)}
         assert rows[35][0]["Champion"].startswith("kalender · ")
         mv = [r for r in rows[38] if r["Version"] in versions]
@@ -196,10 +205,126 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
         assert live and live[0]["Bias"] == pytest.approx(1.0)
         assert any(r["Aktion"] == "Champion" for r in rows[43])
         assert rows[39] and rows[40]
-        for pid in (39, 40):
-            for ref in range(1, len(panels[pid]["targets"])):
+        for pid in (39, 40, 65, 66):
+            for ref in range(len(panels[pid]["targets"])):
                 c.execute(text(_sql(panels[pid], ref))).all()
+        # Absolut- und Prozentwerte getrennt: 39/40 nur MAE/RMSE, 65/66 nur Fehler %
+        assert all(
+            "Fehler %" not in t["rawSql"] for pid in (39, 40) for t in panels[pid]["targets"]
+        )
+        assert all("Fehler %" in t["rawSql"] for pid in (65, 66) for t in panels[pid]["targets"])
         # Relativer Fehler (WAPE): Tages-MAE / mittlerer |Ist|, hier 1 / 80 €/MWh
-        pct = c.execute(text(_sql(panels[40], 2))).mappings().all()
+        pct = c.execute(text(_sql(panels[66]))).mappings().all()
         champ = [r for r in pct if r["metric"].endswith("Champion Fehler %")]
         assert champ and champ[0]["value"] == pytest.approx(100 / 80)
+
+        # Gestern mit allen Vorlauftagen: Lauf 10 Uhr Ortszeit, drei Tage vor dem Liefertag
+        # (vor dem Lauf aus _fill, damit sich die Zeilen nicht überschneiden)
+        local = (now - timedelta(days=5)).tz_convert("Europe/Berlin").normalize()
+        # Wanduhrzeit statt +10 h: am Tag der Zeitumstellung wäre das sonst 9 oder 11 Uhr
+        issue = local.replace(hour=10).tz_convert("UTC")
+        day = pd.date_range(local + pd.DateOffset(days=3), periods=3, freq="h").tz_convert("UTC")
+    # D+1: Lauf 10 Uhr Ortszeit am Vortag der ersten Ist-Stunden aus _fill
+    first = (now - timedelta(days=3)).floor("D") + timedelta(hours=24)
+    d1_issue = (
+        (first - timedelta(hours=2)).tz_convert("Europe/Berlin").normalize().replace(hour=10)
+    ).tz_convert("UTC")
+    d1 = pd.date_range(first, periods=6, freq="h")
+    with engine.begin() as c:
+        for i, v in enumerate(versions):
+            c.execute(
+                text("INSERT INTO fcst.prediction VALUES (:m, 'load_actual', :i, :t, 0.5, :v)"),
+                [{"m": v, "i": issue.to_pydatetime(), "t": t.to_pydatetime(), "v": i} for t in day],
+            )
+        c.execute(
+            text("INSERT INTO fcst.prediction VALUES (:m, 'load_actual', :i, :t, 0.5, :v)"),
+            [
+                {"m": versions[0], "i": d1_issue.to_pydatetime(), "t": t.to_pydatetime(), "v": 1}
+                for t in d1
+            ],
+        )
+    with engine.connect() as c:
+        for pid, version in ((55, versions[0]), (57, versions[1])):
+            sql = _sql(panels[pid], 1).replace("${challenger}", version)
+            got = c.execute(text(sql)).mappings().all()
+            assert "D+3" in {r["metric"] for r in got if r["time"] in set(day)}
+            c.execute(text(_sql(panels[pid + 1], 1).replace("${challenger}", version))).all()
+            # Preis heute und morgen: dieselbe Abfrage wie gestern
+            for other in (pid + 4, pid + 5):
+                assert _sql(panels[other], 1) == _sql(panels[pid + 1], 1)
+            # Last heute und morgen (72/73 Champion, 74/75 Challenger): wie Last gestern
+            for other in (72, 73) if pid == 55 else (74, 75):
+                for ref in (0, 1):
+                    assert _sql(panels[other], ref) == _sql(panels[pid], ref)
+            c.execute(text(_sql(panels[pid], 0))).all()
+        # Fehler je Vorlauftag im Betrieb (Preis, Last) mit Vorwoche als Vergleich
+        for pid in (63, 64):
+            sql = _sql(panels[pid]).replace("${challenger}", versions[1])
+            got = c.execute(text(sql)).mappings().all()
+            assert all({"Vorlauf", "Verfahren", "MAE"} <= set(r) for r in got)
+            if pid == 64:
+                d3 = {r["Verfahren"].split()[0] for r in got if r["Vorlauf"] == "D+3"}
+                assert {"Champion", "Challenger"} <= d3
+                # ÜNB-Prognose nur bei D+1, auf denselben Stunden wie die Modelle
+                uenb = {r["Vorlauf"]: r["MAE"] for r in got if r["Verfahren"].startswith("ÜNB")}
+                assert uenb == {"D+1": pytest.approx(2.0)}
+        # Woche bis D+7 mit Band: je Stunde der jüngste Lauf, _fill schreibt nur P50
+        for pid, version in (
+            (67, versions[0]),
+            (68, versions[0]),
+            (69, versions[1]),
+            (70, versions[1]),
+        ):
+            for ref in (0, 1):
+                sql = _sql(panels[pid], ref).replace("${challenger}", version)
+                got = c.execute(text(sql)).mappings().all()
+                if ref == 1:
+                    assert got and {r["metric"] for r in got} == {"P50"}
+                    assert len({r["time"] for r in got}) == len(got)
+        # Tagesmittel H0 (und lastgewichtet): intern eine Zeile je Tag für das ECharts-Panel,
+        # in der öffentlichen Vorlage Punkte und Fehlerbalken als Zeitreihen
+        public = {p["id"]: p for p in json.loads(PUBLIC.read_text())["panels"]}
+        for pid, version in ((68, versions[0]), (70, versions[1])):
+            sql = _sql(panels[pid], 2).replace("${challenger}", version)
+            got = c.execute(text(sql.replace("${tagesmittel_last}", "an"))).mappings().all()
+            assert all({"h0", "h0_lo", "h0_hi", "lastw", "ist"} <= set(r) for r in got)
+            sql = _sql(public[pid], 2).replace("${challenger}", version)
+            c.execute(text(sql.replace("${tagesmittel_last}", "an"))).all()
+            # Last, Band und Ist-Preis gleich wie intern
+            for ref in (0, 1):
+                assert public[pid]["targets"][ref] == panels[pid]["targets"][ref]
+        assert public[67] == panels[67] and public[69] == panels[69]
+        # Erstellzeitpunkt je Modell und Ziel (Titel bzw. Box oben rechts)
+        dash = json.loads(DASHBOARDS[1].read_text())
+        for v in dash["templating"]["list"]:
+            if v["name"].startswith("lauf_"):
+                sql = v["query"].replace("${challenger}", versions[1])
+                assert c.execute(text(sql)).scalar_one() != "kein Lauf"
+        # Challenger im Titel ohne Erstelldatum des Modells, das sonst wie der Lauf aussieht
+        for d in (dash, json.loads(PUBLIC.read_text())):
+            var = next(v for v in d["templating"]["list"] if v["name"] == "challenger_name")
+            sql = var["query"].replace("${challenger}", versions[1])
+            assert c.execute(text(sql)).scalar_one() == f"{CONFIG} wetter"
+            titles = [p["title"] for p in d["panels"] if "Challenger" in p.get("title", "")]
+            assert titles and all("${challenger_name}" in t for t in titles)
+
+
+def test_slp_h0(engine: Engine) -> None:
+    with engine.connect() as c:
+        assert c.execute(text("SELECT count(*) FROM meta.slp_h0")).scalar_one() == 216
+        ostern = c.execute(text("SELECT meta.ostersonntag(2026)")).scalar_one()
+        assert ostern.isoformat() == "2026-04-05"
+        typ = {
+            d: c.execute(text("SELECT meta.slp_tagtyp(CAST(:d AS date))"), {"d": d}).scalar_one()
+            for d in ("2026-04-03", "2026-05-14", "2026-10-30", "2026-10-31", "2026-12-24")
+        }
+        assert typ == {
+            "2026-04-03": "FT",  # Karfreitag
+            "2026-05-14": "FT",  # Christi Himmelfahrt
+            "2026-10-30": "WT",
+            "2026-10-31": "SA",
+            "2026-12-24": "SA",
+        }
+        # Winter-Werktag 18 Uhr Ortszeit
+        w = c.execute(text("SELECT meta.slp_h0_gewicht(TIMESTAMP '2026-11-02 18:00')")).scalar_one()
+        assert w == pytest.approx(0.66476)

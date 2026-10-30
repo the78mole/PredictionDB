@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -21,9 +22,9 @@ from ml_train.dataset import (
 )
 from ml_train.jobs import JobLog
 from ml_train.models import TwoStageModel
-from ml_train.predict import due_issues, next_wake
+from ml_train.predict import by_issue, compare_issue, due_issues, needs_weather, next_wake
 from ml_train.registry import Registry, compare
-from ml_train.snapshot import load_snapshot
+from ml_train.snapshot import Snapshot, load_snapshot
 from ml_train.testing import synthetic_snapshot
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -92,6 +93,49 @@ def test_lags_only_use_known_values(snap, cfg) -> None:  # type: ignore[no-untyp
         np.testing.assert_allclose(lagged[known.to_numpy()], direct[known.to_numpy()], rtol=1e-5)
 
 
+def test_price_known_until_capped_at_present_data(snap, cfg) -> None:  # type: ignore[no-untyped-def]
+    # Lauf 14 Uhr Ortszeit: per Uhrzeitregel gilt der Preis für morgen (12.5.) schon als
+    # bekannt, abgerufen ist er aber noch nicht. Dann zählt der 11.5. als letzter voller Tag.
+    cut = pd.Timestamp("2023-05-11 22:00", tz="UTC")  # 12.5. 00:00 Ortszeit
+    e = snap.energy
+    late = (e["code"] == "da_price_de_lu") & (e["ts"] >= cut)
+    partial = Snapshot(e[~late], snap.weather, snap.capacity, snap.manifest)
+    issue = pd.Timestamp("2023-05-11 12:00", tz="UTC")
+    fb = FeatureBuilder(partial, cfg)
+    frame = fb.build_at([issue])
+    mean = frame.X["lag_da_price_de_lu_mean_day"]
+    assert mean.notna().all()
+    assert mean.iloc[0] == pytest.approx(
+        fb.daily_mean["da_price_de_lu"][pd.Timestamp("2023-05-11")]
+    )
+    # mit vollständigen Daten gilt weiter die Uhrzeitregel (Training unverändert)
+    full = FeatureBuilder(snap, cfg).build_at([issue]).X["lag_da_price_de_lu_mean_day"]
+    assert full.iloc[0] == pytest.approx(
+        FeatureBuilder(snap, cfg).daily_mean["da_price_de_lu"][pd.Timestamp("2023-05-12")]
+    )
+
+
+def test_predict_drops_nan_rows(snap, cfg) -> None:  # type: ignore[no-untyped-def]
+    from types import SimpleNamespace
+
+    from ml_train.predict import predict_model
+
+    frame = FeatureBuilder(snap, cfg).build_at([pd.Timestamp("2023-05-11 12:00", tz="UTC")])
+    n = len(frame.X)
+    vals = np.arange(n, dtype=float)
+    model = SimpleNamespace(
+        lead_days=sorted(frame.meta["lead_day"].unique()),
+        variant=SimpleNamespace(requires_weather=False),
+        features=lambda: [],
+        predict=lambda f: {
+            "load_actual": pd.DataFrame({"q50": vals}),
+            "da_price_de_lu": pd.DataFrame({"q50": np.full(n, np.nan)}),
+        },
+    )
+    out = predict_model(frame, model, "v", pd.Timestamp("2023-05-11 12:00", tz="UTC"))  # type: ignore[arg-type]
+    assert set(out["target"]) == {"load_actual"} and len(out) == n
+
+
 def test_same_local_time_across_dst() -> None:
     ts = pd.DatetimeIndex(
         ["2026-10-26 04:00", "2026-10-25 01:00", "2026-03-30 01:00"], tz="UTC"
@@ -141,6 +185,10 @@ def cfg_v2() -> ModelConfig:
     c.stage1 = [t for t in c.stage1 if t.code != "gen_wind_offshore"]
     c.series_groups["nachbarn"].codes = ["da_price_at"]
     c.series_groups["brennstoffe"].codes = ["gas_eu_m"]
+    # die Merkmalstests unten prüfen den Stand um 08 UTC; Rotation und Resttag haben eigene Tests
+    c.issue.hours_utc = []
+    c.issue.lead_days = [1, 2, 3, 4, 5, 6, 7]
+    c.calibration.months = 0
     return c
 
 
@@ -409,9 +457,9 @@ def test_dbsync_roles_and_metrics() -> None:
         }
     )
     rows = {r["lead_day"]: r for r in metric_rows("v", bt)}
-    assert set(rows) == {0, 1, 2}
-    assert rows[1]["mae"] == 1.0 and rows[2]["mae"] == 3.0 and rows[0]["mae"] == 2.0
-    assert rows[0]["n"] == 48 and rows[1]["coverage80"] == 1.0
+    assert set(rows) == {-1, 1, 2}
+    assert rows[1]["mae"] == 1.0 and rows[2]["mae"] == 3.0 and rows[-1]["mae"] == 2.0
+    assert rows[-1]["n"] == 48 and rows[1]["coverage80"] == 1.0
 
 
 def test_due_issues_catches_up_missed_hours() -> None:
@@ -435,4 +483,159 @@ def test_next_wake_on_full_hour() -> None:
     )
     assert next_wake(pd.Timestamp("2026-10-26T10:05", tz="UTC"), 3600) == pd.Timestamp(
         "2026-10-26T11:01", tz="UTC"
+    )
+
+
+def test_by_issue_groups_versions_per_issue() -> None:
+    a, b, c = (pd.Timestamp(f"2026-10-26T{h:02d}", tz="UTC") for h in (8, 9, 10))
+    assert by_issue({"neu1": [c, a], "neu2": [a, b], "neu3": []}) == {
+        a: ["neu1", "neu2"],
+        b: ["neu2"],
+        c: ["neu1"],
+    }
+    assert list(by_issue({"neu1": [c, a, b]})) == [a, b, c]
+
+
+def test_compare_issue_matches_dashboard_hours() -> None:
+    assert compare_issue(pd.Timestamp("2026-10-27T08", tz="UTC"))
+    # 10 Uhr Ortszeit: im Winter 09 UTC, im Sommer 08 UTC
+    assert compare_issue(pd.Timestamp("2026-10-27T09", tz="UTC"))
+    assert compare_issue(pd.Timestamp("2026-07-01T08", tz="UTC"))
+    assert not compare_issue(pd.Timestamp("2026-07-01T09", tz="UTC"))
+    assert not compare_issue(pd.Timestamp("2026-10-27T18", tz="UTC"))
+
+
+def test_needs_weather_from_manifest_variant(cfg_v2) -> None:  # type: ignore[no-untyped-def]
+    class Reg:
+        def manifest(self, version: str) -> dict[str, dict[str, str]]:
+            return {"variant": {"name": version}}
+
+    reg: Any = Reg()
+    assert not needs_weather(cfg_v2, reg, ["kalender", "frei"])
+    assert needs_weather(cfg_v2, reg, ["frei", "wetter_frei"])
+    assert needs_weather(cfg_v2, reg, ["gibt_es_nicht"])
+
+
+def test_grenzkosten_only_uses_known_hours(snap, cfg_v2) -> None:  # type: ignore[no-untyped-def]
+    sg = cfg_v2.series_groups["grenzkosten"]
+    assert {"residual_load", "gen_lignite", "gen_gas"} <= set(sg.stored_codes)
+    fb = FeatureBuilder(snap, cfg_v2)
+    frame = fb.build([date(2023, 5, 10)])
+    X = frame.X
+    assert set(frame.groups["grenzkosten"]) >= {"gk_hoch_14d", "gk_braunkohle_56d", "gk_niveau"}
+    # Fenster endet mit der letzten bekannten Ist-Stunde (08 UTC - 2 h), Preise danach zählen
+    # nicht, obwohl der Preis des Liefertags schon feststeht
+    issue = pd.Timestamp("2023-05-10 08:00", tz="UTC")
+    end = issue - pd.Timedelta(hours=2)
+    e = fb.energy.loc[end - pd.Timedelta(days=14) : end - pd.Timedelta(hours=1)]
+    high = e["residual_load"] >= e["residual_load"].quantile(0.75)
+    expected = e.loc[high, "da_price_de_lu"].median()
+    assert X["gk_hoch_14d"].iloc[0] == pytest.approx(expected, rel=1e-5)
+    assert X["gk_niveau"].iloc[0] == pytest.approx(max(expected, sg.floor), rel=1e-5)
+    # ein Liefertag später ändert den Wert erst ab der nächsten Ausgabe
+    shifted = fb.energy.copy()
+    shifted.loc[end:, "da_price_de_lu"] += 1000.0
+    fb.energy = shifted
+    fb._gk_hours.clear()
+    assert fb.build([date(2023, 5, 10)]).X["gk_hoch_14d"].iloc[0] == pytest.approx(expected)
+
+
+def test_scaled_target_trains_and_predicts(snap, cfg_v2, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    cfg_v2.lgbm.n_estimators = 30
+    fb = FeatureBuilder(snap, cfg_v2)
+    frame = fb.build([date(2022, 10, 1) + pd.Timedelta(days=i) for i in range(0, 200, 4)])
+    m = TwoStageModel(cfg_v2, cfg_v2.variant("frei_gk_skaliert")).fit(frame)
+    price = m.stage2["da_price_de_lu"]
+    assert price.scale == "gk_niveau" and "gk_niveau" in m.features()
+    assert m.stage1["load_actual"].scale is None
+    test = fb.build([date(2023, 6, 1)])
+    out = m.predict(test)["da_price_de_lu"]
+    assert out["q50"].notna().all()
+    # Prognose = Zentrum + Baumausgabe x Niveau (Baum lernt die Abweichung relativ zum Niveau)
+    s1 = {c: q.predict(test.X)["q50"].to_numpy() for c, q in m.stage1.items()}
+    X1 = m._with_stage1(test.X, s1)
+    raw = np.sort(
+        np.column_stack([b.predict(X1[price.features]) for b in price.boosters.values()]), axis=1
+    )[:, 1]
+    expected = X1[price.center].to_numpy() + raw * X1["gk_niveau"].to_numpy()
+    assert price.predict(X1)["q50"].to_numpy() == pytest.approx(expected, rel=1e-6)
+    # Ablage und Laden behalten die Bezugsspalte
+    d = price.save(tmp_path)
+    assert type(price).load(d, tmp_path, cfg_v2.lgbm).scale == "gk_niveau"
+
+
+def test_run_job_snapshot_has_no_variant(cfg, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from ml_train import cli
+
+    job = RecordingJob()
+    started: list[Any] = []
+    monkeypatch.setattr(cli, "open_job_log", lambda: job)
+    monkeypatch.setattr(job, "start", lambda *a: started.append(a))
+    monkeypatch.setattr(cli, "cmd_snapshot", lambda cfg, a, job: 0)
+    a = cli.build_parser().parse_args(["snapshot", "--out", "/tmp/x"])
+    assert cli.run_job(cfg, "sha", a) == 0
+    assert started[0][2] == []
+
+
+def test_rotating_issue_hours_and_rest_of_day(snap, cfg_v2) -> None:  # type: ignore[no-untyped-def]
+    cfg_v2.issue.hours_utc = [2, 8, 14, 20]
+    cfg_v2.issue.lead_days = [0, 1, 2]
+    fb = FeatureBuilder(snap, cfg_v2)
+    days = [date(2023, 5, 8) + pd.Timedelta(days=i) for i in range(4)]
+    issues = fb.issues(days)
+    # reihum nach Datum: jede Stunde einmal in vier aufeinanderfolgenden Tagen
+    assert sorted(i.hour for i in issues) == [2, 8, 14, 20]
+    frame = fb.build(days)
+    meta = frame.meta
+    # Vorlauftag 0: nur Stunden ab der Ausgabe bis Mitternacht Ortszeit
+    rest = meta[meta["lead_day"] == 0]
+    assert (rest["ts"] >= rest["issue_time"]).all()
+    late = next(i for i in issues if i.hour == 14)
+    assert len(rest[rest["issue_time"] == late]) == 8  # 16 bis 24 Uhr Ortszeit (Sommerzeit)
+    # Ausgabe 14 UTC (16 Uhr): Preis für D+1 steht fest, ist kein Lernziel und wird übernommen
+    at_late = (meta["issue_time"] == late).to_numpy()
+    d1 = at_late & (meta["lead_day"] == 1).to_numpy()
+    assert frame.y.loc[d1, "da_price_de_lu"].isna().all()
+    assert frame.known is not None
+    assert frame.known.loc[d1, "da_price_de_lu"].notna().all()
+    assert frame.y.loc[d1, "load_actual"].notna().all()
+    assert frame.known.loc[at_late, "load_actual"].isna().all()
+    # Ausgabe 08 UTC (10 Uhr): D+1 noch offen
+    early = (meta["issue_time"].dt.hour == 8).to_numpy() & (meta["lead_day"] == 1).to_numpy()
+    assert frame.y.loc[early, "da_price_de_lu"].notna().all()
+    # Prognose übernimmt bekannte Preise in allen Quantilen
+    cfg_v2.lgbm.n_estimators = 20
+    train = fb.build([date(2022, 9, 1) + pd.Timedelta(days=i) for i in range(0, 200, 3)])
+    m = TwoStageModel(cfg_v2, cfg_v2.variant("kalender")).fit(train)
+    out = m.predict(frame)["da_price_de_lu"]
+    kn = frame.known["da_price_de_lu"].to_numpy()
+    assert np.allclose(out.loc[d1, "q10"], kn[d1]) and np.allclose(out.loc[d1, "q90"], kn[d1])
+
+
+def test_calibration_widens_bands_per_lead_day(snap, cfg, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    cfg.lgbm.n_estimators = 40
+    cfg.calibration.months = 3
+    cfg.calibration.min_rows = 50
+    fb = FeatureBuilder(snap, cfg)
+    frame = fb.build([date(2022, 7, 1) + pd.Timedelta(days=i) for i in range(0, 420, 2)])
+    m = TwoStageModel(cfg, cfg.variant("kalender"))
+    labels: list[str] = []
+    m.fit(frame, progress=labels.append)
+    assert len(labels) == m.fit_steps() and labels[0].startswith("Kalibrierung")
+    sh = m.stage2["da_price_de_lu"].shifts
+    assert set(sh) == set(cfg.issue.lead_days)
+    assert set(sh[1]) == {"q10", "q90"}
+    # Abstand P10-P90 wird nach Kalibrierung nicht schmaler, wenn das Band zu schmal war
+    assert all(np.isfinite(v) for d in sh.values() for v in d.values())
+    # Ablage und Laden behalten die Verschiebungen und die Vorlauftage
+    from ml_train.registry import Registry
+
+    reg = Registry(str(tmp_path), cfg)
+    v = reg.register(m, {"snapshot_id": "synthetic"}, None, "champion")
+    loaded = reg.load(v, tmp_path / "cache")
+    assert loaded.stage2["da_price_de_lu"].shifts == sh
+    assert loaded.lead_days == cfg.issue.lead_days
+    test = fb.build([date(2023, 9, 1)])
+    pd.testing.assert_frame_equal(
+        m.predict(test)["da_price_de_lu"], loaded.predict(test)["da_price_de_lu"]
     )

@@ -12,7 +12,8 @@ Neuberechnung aus Silber dasselbe ergibt.
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
+import time
+from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -28,11 +29,15 @@ from wx_ingest.config import GfsConfig
 from wx_process.config import ProcessConfig
 from wx_process.decode import Grid, StepFields, decode_step
 from wx_process.features import FEATURES_VERSION, UNITS, FeatureBuilder, FeatureSeries
+from wx_process.regions import RegionSet
 from wx_process.silver import Dataset, Silver, assemble
-from wx_process.store import Store
+from wx_process.store import Chunk, Store
 from wx_process.variables import SILVER_VERSION
 
 log = get_logger(__name__)
+
+#: frühester möglicher Bronze-Lauf (GFS v15 im AWS-Archiv ab 2021); Startpunkt des Aufräumens
+BRONZE_SINCE = datetime(2021, 1, 1, tzinfo=UTC)
 
 Status = Literal["processed", "skipped", "not_ready", "silver_only", "failed"]
 
@@ -68,7 +73,9 @@ class WxPipeline:
         self.silver = silver
         self.store = store
         self.builder = FeatureBuilder(config.technologies, config.pv)
+        self.regions = RegionSet.load(config.regions) if config.regions is not None else None
         self._source_id: int | None = None
+        self._region_ids: dict[str, int] | None = None
 
     @property
     def source_id(self) -> int:
@@ -104,6 +111,68 @@ class WxPipeline:
             else:
                 decoded[step] = decode_step(blob, step)
         return decoded, missing
+
+    def bronze_runs(self, start: datetime, end: datetime) -> list[datetime]:
+        """Läufe mit Bronze von ``start`` bis vor ``end``, ein Listing je Tag."""
+        out = []
+        day = start.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        while day < end:
+            prefix = f"{self.layout.model}/{self.layout.resolution}/{day:%Y/%m/%d}/"
+            for p in obstore.list_with_delimiter(self.bronze_store, prefix=prefix)[
+                "common_prefixes"
+            ]:
+                hour = p.rstrip("/").rsplit("/", 1)[-1]
+                if hour.isdigit():
+                    run = day.replace(hour=int(hour))
+                    if start <= run < end:
+                        out.append(run)
+            day += timedelta(days=1)
+        return out
+
+    def prune_bronze(
+        self,
+        keep_days: float,
+        *,
+        start: datetime | None = None,
+        now: datetime | None = None,
+        dry_run: bool = False,
+        pause: float = 0.0,
+    ) -> dict[str, int]:
+        """Bronze älter als ``keep_days`` löschen, wenn das Silber des Laufs vorliegt.
+
+        Silber zählt laut ``meta.silver_run`` (ohne Datenbank: vollständiger Zarr-Store). Läufe
+        ohne Silber bleiben stehen, denn aus ihnen entsteht es noch. ``pause`` Sekunden zwischen
+        zwei Läufen schonen Garage, das jedes gelöschte Objekt im Hintergrund nacharbeitet.
+        """
+        now = now or datetime.now(UTC)
+        cutoff = now - timedelta(days=keep_days)
+        runs = self.bronze_runs(start or BRONZE_SINCE, cutoff)
+        present = (
+            {r for r, st in self.store.silver_runs(self.source_id).items() if st == "present"}
+            if self.store is not None
+            else None
+        )
+        counts = {"runs": 0, "objects": 0, "kept_no_silver": 0}
+        for run in runs:
+            if present is not None:
+                has_silver = run in present
+            else:
+                attrs = self.silver.attrs(self.source.model, self.source.resolution, run)
+                has_silver = attrs is not None
+            if not has_silver:
+                counts["kept_no_silver"] += 1
+                continue
+            counts["runs"] += 1
+            if dry_run:
+                continue
+            for batch in obstore.list(self.bronze_store, prefix=self.layout.run_prefix(run) + "/"):
+                paths = [m["path"] for m in batch]
+                obstore.delete(self.bronze_store, paths)
+                counts["objects"] += len(paths)
+            if pause:
+                time.sleep(pause)
+        log.info("bronze.pruned", cutoff=cutoff.isoformat(), dry_run=dry_run, **counts)
+        return counts
 
     # --- Silber ------------------------------------------------------------------------------
 
@@ -152,15 +221,26 @@ class WxPipeline:
 
     # --- Gold --------------------------------------------------------------------------------
 
-    def write_features(self, ds: Dataset, version: str) -> tuple[int, dict[str, Any]]:
+    def write_features(
+        self, ds: Dataset, version: str, *, replace: bool = True
+    ) -> tuple[int, dict[str, Any]]:
         assert self.store is not None
-        clusters = self.store.cluster_weights(version, self.config.weight_grid)
         valid = ds.valid_times
-        days = [v.date() for v in valid]
-        table = self.store.capacity(version, min(days), max(days))
+        capacity: Callable[[str, int], np.ndarray | None] | None = None
+        if self.regions is not None and version == self.regions.version:
+            # feste Regionen: ohne Bestand, also ohne wind_power/pv_power
+            if self._region_ids is None:
+                self._region_ids = self.store.region_ids(self.regions.codes)
+            clusters = self.regions.clusters(self._region_ids)
+        else:
+            clusters = self.store.cluster_weights(version, self.config.weight_grid)
+            days = [v.date() for v in valid]
+            table = self.store.capacity(version, min(days), max(days))
 
-        def capacity(tech: str, no: int) -> np.ndarray | None:
-            return table.at(tech, no, days)
+            def from_table(tech: str, no: int) -> np.ndarray | None:
+                return table.at(tech, no, days)
+
+            capacity = from_table
 
         series, coverage = self.builder.build(ds, clusters, capacity)
         codes = {s.code for s in series}
@@ -173,6 +253,7 @@ class WxPipeline:
             sorted(fids.values()),
             sorted({c.region_id for c in clusters}),
             _rows(series, fids, valid),
+            replace=replace,
         )
         low = {k: round(v, 4) for k, v in coverage.items() if v < 0.999}
         stats = {
@@ -188,8 +269,14 @@ class WxPipeline:
     # --- Ablauf ------------------------------------------------------------------------------
 
     def process(
-        self, run: datetime, *, force: bool = False, clustering: str | None = None
+        self,
+        run: datetime,
+        *,
+        force: bool = False,
+        clustering: str | None = None,
+        prepare: Callable[[datetime, datetime], None] | None = None,
     ) -> RunOutcome:
+        """Rechnet einen Lauf; ``prepare(run, valid_until)`` läuft direkt vor dem Schreiben."""
         run = run.astimezone(UTC)
         manifest = self.run_manifest(run)
         if manifest is None:
@@ -197,6 +284,8 @@ class WxPipeline:
         if manifest is None:
             return RunOutcome(run, "not_ready")
         version = clustering
+        if version is None and self.regions is not None:
+            version = self.regions.version
         if self.store is not None and version is None:
             version = self.store.latest_clustering(self.config.weight_grid)
         if (
@@ -217,7 +306,10 @@ class WxPipeline:
                 log.warning("features.no_clustering", grid=self.config.weight_grid)
             return RunOutcome(run, "silver_only", silver)
 
-        n, stats = self.write_features(ds, version)
+        if prepare is not None:
+            prepare(run, ds.valid_times[-1])
+        replace = self.store.has_features(self.source_id, run)
+        n, stats = self.write_features(ds, version, replace=replace)
         key = self.silver.key(ds.model, ds.resolution, ds.run)
         self.store.mark_processed(
             self.source_id, run, version, FEATURES_VERSION, key, n, stats, manifest
@@ -253,11 +345,65 @@ class WxPipeline:
         clustering: str | None = None,
         hours: Iterable[int] | None = None,
         newest_first: bool = False,
+        decompress: bool = False,
     ) -> list[RunOutcome]:
+        """Rechnet alle Läufe im Zeitraum.
+
+        ``decompress`` entpackt komprimierte Ziel-Chunks vor dem ersten Schreiben und packt sie
+        wieder, sobald kein folgender Lauf mehr hineinschreibt (siehe ``Store.decompress_values``).
+        """
+        hours = list(hours) if hours is not None else None
         runs = self.source.runs_between(start, end, hours)
         if newest_first:
             runs.reverse()
-        return [self._safe(r, force=force, clustering=clustering) for r in runs]
+        # Laufzeiten in der Reihenfolge von ``hours`` (z. B. erst alle 00Z, dann 12Z, 06Z, 18Z)
+        priority = {h: i for i, h in enumerate(hours or [])}
+        runs.sort(key=lambda r: priority.get(r.hour, 0))
+        if not decompress or self.store is None:
+            return [self._safe(r, force=force, clustering=clustering) for r in runs]
+        unpacked = _Unpacked(self.store)
+        out = []
+        try:
+            for i, run in enumerate(runs):
+                out.append(
+                    self._safe(run, force=force, clustering=clustering, prepare=unpacked.prepare)
+                )
+                unpacked.release(runs[i + 1] if i + 1 < len(runs) else None)
+        finally:
+            unpacked.release(None)
+        return out
+
+
+class _Unpacked:
+    """Vom Backfill entpackte Chunks; gepackt wird, sobald der nächste Lauf sie nicht mehr trifft.
+
+    Läuft der Dienst vorher in einen Neustart, packt die Kompressions-Policy sie später.
+    """
+
+    def __init__(self, store: Store) -> None:
+        self.store = store
+        self.chunks: dict[str, Chunk] = {}
+        self.lead = timedelta(0)
+
+    def prepare(self, run: datetime, valid_until: datetime) -> None:
+        self.lead = max(self.lead, valid_until - run)
+        for ch in self.store.decompress_values(run, valid_until):
+            self.chunks[ch.name] = ch
+
+    def release(self, next_run: datetime | None) -> None:
+        done = [
+            ch
+            for ch in self.chunks.values()
+            if next_run is None or ch.end <= next_run or ch.start > next_run + self.lead
+        ]
+        if not done:
+            return
+        try:
+            self.store.compress_values(done)
+        except Exception:
+            log.exception("chunk.compress_failed", chunks=[ch.name for ch in done])
+        for ch in done:
+            self.chunks.pop(ch.name, None)
 
 
 def _rows(

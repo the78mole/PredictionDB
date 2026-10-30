@@ -1,10 +1,16 @@
+import base64
+import gzip
+import json
+from pathlib import Path
 from typing import Any
 
 import pytest
 
 from gribkit import HeaderError, find_boundary, parse_head
-from gribkit.headers import HEAD_BYTES, entry
+from gribkit.headers import HEAD_BYTES, entry, idx_line, is_known
 from gribkit.testing import make_global_message
+
+FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def _message(**keys: Any) -> bytes:
@@ -114,3 +120,30 @@ def test_find_boundary() -> None:
     assert find_boundary(b"xxxxGRIB" + b"\0" * 20, 1000) is None
     # Länge, die nicht mehr in die Datei passt, ist ein Fehltreffer
     assert find_boundary(data[len(msg) - 4 :], len(msg)) is None
+
+
+def test_complete_lines_match_noaa_idx() -> None:
+    # Je Name, Flächenart und Zeitangabe eine Nachricht aus GFS v15 (AWS, 2021-03-01 00Z):
+    # Kopf (Sektion 0 bis 4) und die Zeile aus der .idx von NOAA (wgrib2)
+    data = json.loads(gzip.decompress((FIXTURES / "gfs_v15_heads.json.gz").read_bytes()))
+    assert len(data["rows"]) > 300
+    for line, head in data["rows"]:
+        number, offset = line.split(":")[:2]
+        e = entry(int(number), int(offset), parse_head(base64.b64decode(head), complete=True))
+        assert idx_line(e) == line
+        assert is_known(e)
+
+
+def test_complete_keeps_template_keys_apart() -> None:
+    # Vorlagen-Schlüssel bleiben, wie sie sind; nur complete nutzt die ganze Tabelle
+    msg = _message(discipline=0, parameterCategory=1, parameterNumber=22)
+    assert parse_head(msg).var == "var0_1_22"
+    head = parse_head(msg, complete=True)
+    assert head.var == "CLWMR" and len(head.date) == 10
+
+
+def test_complete_unknown_parameter_like_wgrib2() -> None:
+    msg = _message(discipline=0, parameterCategory=250, parameterNumber=250)
+    e = entry(1, 0, parse_head(msg, complete=True))
+    assert e.var.startswith("var discipline=0 master_table=") and "parmcat=250 parm=250" in e.var
+    assert not is_known(e)

@@ -1,0 +1,197 @@
+[DOCUMENT]
+TITLE: Softwarearchitektur wx-ingest (SWA)
+PREFIX: SWA-WXI-
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @architektur
+
+[TEXT]
+STATEMENT: >>>
+Softwarearchitektur nach ISO/IEC/IEEE 12207 für das Softwareelement SYSA-SW-WXI. Jede Komponente
+entspricht einem Modul unter ``services/wx_ingest/src/wx_ingest`` und nennt die
+Softwareanforderungen, die sie umsetzt (``Parent``). Das Modul selbst verweist mit
+``@relation(SWA-WXI-…, scope=file)`` im Modul-Docstring zurück.
+
+Abhängigkeiten: ``predictiondb_core`` (Einstellungen, Logging, S3, DB) und ``gribkit``
+(``.idx``, Byte-Bereiche, Köpfe, Zuschnitt). Abnehmer von Bronze ist wx-process.
+<<<
+
+[[SECTION]]
+TITLE: Komponenten
+
+[ELEMENT]
+UID: SWA-WXI-CLI
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Kommandozeile
+STATEMENT: >>>
+Befehle ``gfs latest``, ``gfs run`` und ``gfs backfill``, Wiederholung mit ``--watch``, Signale,
+Verdrahtung von Konfiguration, Endpunkten, Bronze und Job-Protokoll.
+<<<
+ORT: services/wx_ingest/src/wx_ingest/cli.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXI-002
+- TYPE: Parent
+  VALUE: SWR-WXI-004
+- TYPE: Parent
+  VALUE: SWR-WXI-030
+- TYPE: Parent
+  VALUE: SWR-WXI-031
+
+[ELEMENT]
+UID: SWA-WXI-CONFIG
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Quelldefinition
+STATEMENT: >>>
+Pydantic-Modelle der YAML-Quelldefinition mit Prüfung, Schrittliste, Auswahl der Endpunkte und
+Laufzeiten.
+<<<
+ORT: services/wx_ingest/src/wx_ingest/config.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXI-001
+- TYPE: Parent
+  VALUE: SWR-WXI-002
+- TYPE: Parent
+  VALUE: SWR-WXI-005
+
+[ELEMENT]
+UID: SWA-WXI-ENDPOINT
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Endpunkt und Download
+STATEMENT: >>>
+HTTP-Zugriff je Endpunkt mit Nebenläufigkeit, Rate und Wiederholung. Die drei Mechaniken
+``nomads_filter``, ``idx_range`` und ``header_scan`` mit Vorlagen, Prüfung und Zuschnitt.
+<<<
+ORT: services/wx_ingest/src/wx_ingest/gfs.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXI-011
+- TYPE: Parent
+  VALUE: SWR-WXI-012
+- TYPE: Parent
+  VALUE: SWR-WXI-013
+- TYPE: Parent
+  VALUE: SWR-WXI-014
+- TYPE: Parent
+  VALUE: SWR-WXI-015
+- TYPE: Parent
+  VALUE: SWR-WXI-016
+
+[ELEMENT]
+UID: SWA-WXI-INGESTOR
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Ingest-Zyklus
+STATEMENT: >>>
+Steuert je Lauf und Schritt: Manifest prüfen, Endpunkte in Rangfolge versuchen, ablegen,
+Laufmanifest schreiben; Live-Fenster und Backfill.
+<<<
+ORT: services/wx_ingest/src/wx_ingest/ingest.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXI-002
+- TYPE: Parent
+  VALUE: SWR-WXI-003
+- TYPE: Parent
+  VALUE: SWR-WXI-010
+- TYPE: Parent
+  VALUE: SWR-WXI-022
+- TYPE: Parent
+  VALUE: SWR-WXI-030
+- TYPE: Parent
+  VALUE: SWR-WXI-031
+
+[ELEMENT]
+UID: SWA-WXI-BRONZE
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Bronze-Ablage
+STATEMENT: >>>
+Schlüssel, Schritt- und Laufmanifeste in Garage; Abfrage, ob Silber zu einem Lauf vorliegt.
+<<<
+ORT: services/wx_ingest/src/wx_ingest/bronze.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXI-020
+- TYPE: Parent
+  VALUE: SWR-WXI-021
+- TYPE: Parent
+  VALUE: SWR-WXI-031
+
+[ELEMENT]
+UID: SWA-WXI-JOBLOG
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Job-Protokoll
+STATEMENT: >>>
+Schreibt Backfill-Jobs, Läufe und das Live-Fenster in ``meta.backfill_job`` und
+``meta.backfill_run``; ohne Datenbank stumm.
+<<<
+ORT: services/wx_ingest/src/wx_ingest/jobs.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXI-032
+
+[ELEMENT]
+UID: SWA-WXI-TESTING
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Testhilfen
+STATEMENT: >>>
+Simulierte GFS-Spiegel (S3 mit und ohne ``.idx``, NOMADS) für ``httpx.MockTransport``. Nur für
+Tests, auch von wx-exchange genutzt.
+<<<
+ORT: services/wx_ingest/src/wx_ingest/testing.py
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Schnittstellen
+
+[ELEMENT]
+UID: SWA-WXI-IF-BRONZE
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: Bronze-Layout
+STATEMENT: >>>
+wx-ingest → wx-process, wx-exchange. Bucket ``PDB_BUCKET_BRONZE``, Schlüssel
+``<modell>/<auflösung>/JJJJ/MM/TT/HH/fSSS.grib2`` und ``fSSS.json`` je Schritt, ``run.json`` je
+Lauf. Ein Lauf ist für Abnehmer erst mit ``run.json`` vollständig.
+<<<
+QUELLE: ARCHITEKTUR.md 5.1
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXI-020
+- TYPE: Parent
+  VALUE: SWR-WXI-021
+
+[ELEMENT]
+UID: SWA-WXI-IF-CONFIG
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: Quelldefinition
+STATEMENT: >>>
+Betreiber → wx-ingest. YAML unter ``config/sources/``, Pfad über ``WX_GFS_CONFIG`` oder
+``--config``.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXI-001
+
+[ELEMENT]
+UID: SWA-WXI-IF-JOBLOG
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: Backfill-Tabellen
+STATEMENT: >>>
+wx-ingest → Grafana (Dashboard „Wetter“). Tabellen ``meta.backfill_job`` und ``meta.backfill_run``.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXI-032
+
+[[/SECTION]]

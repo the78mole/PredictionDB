@@ -25,7 +25,12 @@ class IssueConfig(BaseModel):
 
     #: Ausgabezeitpunkt je Tag (UTC); 08 UTC liegt vor dem Gebotsschluss (12 Uhr Ortszeit)
     hour_utc: int = Field(default=8, ge=0, le=23)
-    #: Liefertage nach dem Ausgabetag (Ortszeit Europe/Berlin), 1 = Folgetag
+    #: Mehrere Ausgabestunden fürs Training (UTC), reihum je Ausgabetag eine: Das Modell lernt
+    #: so alle Tageszeiten, zu denen ml-predict stündlich rechnet, bei gleicher Datenmenge.
+    #: Leer = nur ``hour_utc``
+    hours_utc: list[int] = Field(default_factory=list)
+    #: Liefertage nach dem Ausgabetag (Ortszeit Europe/Berlin), 1 = Folgetag, 0 = Rest des
+    #: Ausgabetags ab der Ausgabestunde
     lead_days: list[int] = Field(default_factory=lambda: [1, 2, 3, 4, 5, 6, 7])
     #: Ist-Werte (Last, Erzeugung) gelten ab Intervallende plus diesem Verzug als bekannt
     actual_delay_h: float = Field(default=2.0, ge=0)
@@ -33,6 +38,18 @@ class IssueConfig(BaseModel):
     price_known_local_hour: int = Field(default=13, ge=0, le=23)
     #: Ein Wetterlauf ist ab ``run_time`` plus diesem Verzug vollständig verarbeitet
     nwp_delay_h: float = Field(default=6.0, ge=0)
+
+    @property
+    def train_hours(self) -> list[int]:
+        return self.hours_utc or [self.hour_utc]
+
+    @model_validator(mode="after")
+    def _hours(self) -> IssueConfig:
+        if any(not 0 <= h <= 23 for h in self.hours_utc):
+            raise ValueError("issue.hours_utc: Stunden 0 bis 23")
+        if any(d < 0 for d in self.lead_days):
+            raise ValueError("issue.lead_days: Liefertage ab 0")
+        return self
 
 
 class StageTarget(BaseModel):
@@ -63,13 +80,21 @@ class SeriesGroup(BaseModel):
     - ``asof``: letzter zum Ausgabezeitpunkt veröffentlichter Wert (Spalte ``published`` im
       Snapshot) und seine Änderung gegenüber dem Stand ``change_days`` Tage davor; für Tages-,
       Wochen- und Monatswerte wie Brennstoffpreise und Marktwerte.
+    - ``grenzkosten``: implizites Brennstoff- und CO2-Niveau aus dem Strommarkt selbst. Je
+      Ausgabezeitpunkt der Median des Preises (``codes[0]``) über die zuletzt bekannten
+      ``windows`` Tage, einmal in den Stunden hoher Residuallast (oberes Quartil des Fensters,
+      Gas oder Steinkohle preissetzend) und einmal in den Stunden, in denen Braunkohle in
+      Teillast läuft und Steinkohle und Gas fast stehen (Braunkohle preissetzend, folgt dem
+      CO2-Preis; docs/analysen/eua-rueckrechnung). Dazu ``gk_niveau`` (kürzestes Fenster mit
+      Wert, mindestens ``floor``) als Bezugsgröße für ``Variant.scale`` und das letzte
+      Tagesmittel des Preises relativ dazu.
     - ``outlook``: erwartete Änderung aus der jüngsten veröffentlichten Ausgabe einer
       Monatsprognose (EIA STEO). ``codes`` sind die Stämme (``steo_brent``), gespeichert je
       Vorlauf k als ``<stamm>_h<kk>``; Merkmal ``ol_<stamm>_h<k>`` = log(Prognose Vorlauf k /
       Prognose laufender Monat) für jedes k in ``horizons``.
     """
 
-    mode: Literal["lags", "forecast", "asof", "outlook"]
+    mode: Literal["lags", "forecast", "asof", "outlook", "grenzkosten"]
     codes: list[str]
     lags: list[LagKind] = Field(
         default_factory=lambda: list[LagKind](["day", "mean_day", "mean_7d"])
@@ -77,10 +102,20 @@ class SeriesGroup(BaseModel):
     known_local_hour: int = Field(default=10, ge=0, le=23)
     change_days: int = Field(default=28, ge=1)
     horizons: list[int] = Field(default_factory=lambda: [1, 2, 3])
+    #: ``grenzkosten``: Fenster in Tagen, Mindestniveau (EUR/MWh) und die Reihen der Klassen
+    windows: list[int] = Field(default_factory=lambda: [14, 28, 56])
+    floor: float = Field(default=20.0, gt=0)
+    residual: str = "residual_load"
+    lignite: str = "gen_lignite"
+    hard_coal: str = "gen_hard_coal"
+    gas: str = "gen_gas"
 
     @property
     def stored_codes(self) -> list[str]:
         """Reihen in ``energy.value_best``, die die Gruppe braucht."""
+        if self.mode == "grenzkosten":
+            extra = [self.residual, self.lignite, self.hard_coal, self.gas]
+            return list(dict.fromkeys([*self.codes, *extra]))
         if self.mode != "outlook":
             return list(self.codes)
         ks = sorted({0, *self.horizons})
@@ -108,6 +143,9 @@ class Variant(BaseModel):
     requires_weather: bool = False
     #: Frühester Ausgabetag fürs Training (z. B. Beginn GFS v16 oder der Gebotszone DE-LU)
     train_from: date | None = None
+    #: Ziel zusätzlich durch diese Merkmalsspalte teilen, je Ziel-Code (z. B. Preis durch
+    #: ``gk_niveau``): Abweichungen werden relativ zum Niveau gelernt, nicht in EUR/MWh
+    scale: dict[str, str] = Field(default_factory=dict)
 
 
 class BacktestConfig(BaseModel):
@@ -122,6 +160,21 @@ class BacktestConfig(BaseModel):
     oof_folds: int = Field(default=3, ge=2, le=10)
     #: nur jeden n-ten Ausgabetag trainieren (aufeinanderfolgende Tage überlappen stark)
     train_issue_stride: int = Field(default=2, ge=1)
+
+
+class CalibrationConfig(BaseModel):
+    """Nachkalibrierung der Quantile je Ziel und Vorlauftag (konformal, Romano et al. 2019).
+
+    Ein zweites Modell wird ohne die letzten ``months`` Monate trainiert und sagt diese voraus.
+    Aus den Abweichungen ergibt sich je Ziel, Vorlauftag und Quantil eine Verschiebung im
+    Lernraum (nach Kapazitäts- und Niveau-Normierung), sodass z. B. P10 dort wirklich 10 % der
+    Ist-Werte unterschreiten. Der Median bleibt unverändert. Kostet eine zweite Anpassung.
+    """
+
+    #: Länge des Kalibrierzeitraums am Ende der Trainingsdaten; 0 = aus
+    months: int = Field(default=0, ge=0, le=24)
+    #: Mindestzahl Zeilen je Ziel und Vorlauftag, sonst keine Verschiebung
+    min_rows: int = Field(default=200, ge=10)
 
 
 class PromotionRule(BaseModel):
@@ -146,6 +199,7 @@ class ModelConfig(BaseModel):
     lgbm: LgbmParams = Field(default_factory=LgbmParams)
     backtest: BacktestConfig
     promotion: PromotionRule = Field(default_factory=PromotionRule)
+    calibration: CalibrationConfig = Field(default_factory=CalibrationConfig)
     #: Reihen, die als Lags in die Merkmale gehen (zusätzlich zu den Zielgrößen)
     lag_series: list[str] = Field(default_factory=list)
     #: Reihen, deren Lags ``day`` und ``week`` dieselbe Uhrzeit in Ortszeit nehmen (Verhalten

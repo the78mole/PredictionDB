@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal
@@ -35,7 +36,7 @@ from wx_exchange.artifact import (
     read_files,
     unpack,
 )
-from wx_exchange.oci import Registry, RegistryError, digest
+from wx_exchange.oci import Registry, digest
 from wx_process.silver import Silver
 from wx_process.store import Store
 from wx_process.variables import SILVER_VERSION
@@ -141,6 +142,7 @@ class Importer:
         hours: list[int] | None = None,
         *,
         force: bool = False,
+        workers: int = 4,
     ) -> ImportResult:
         result = ImportResult()
         known = self.ledger.silver_runs(self.source_id) if self.ledger is not None else {}
@@ -151,10 +153,12 @@ class Importer:
             name = f"{run:%Y%m%d%H}"
             if layer.silver_version != SILVER_VERSION:
                 result.runs[name] = "other_version"
+            elif not force and known.get(run) == "present":
+                # Bestand schon gemeldet: kein GET je Lauf (≈ 5 000 Layer, ≈ 70 ms je GET)
+                result.runs[name] = "present"
             elif not force and self.present(run):
                 result.runs[name] = "present"
-                if known.get(run) != "present":
-                    unrecorded.append(run)
+                unrecorded.append(run)
             else:
                 todo.append((t, layer))
         if self.ledger is not None:
@@ -163,29 +167,37 @@ class Importer:
             self.ledger.mark_silver(self.source_id, unrecorded, "present", "ghcr")
             self.ledger.mark_silver(self.source_id, [lay.run for _, lay in todo], "loading", "ghcr")
         try:
-            for t, layer in todo:
-                run = layer.run
-                name = f"{run:%Y%m%d%H}"
-                try:
-                    data = self.registry.blob(layer.digest)
-                    prefix = self.silver.key(self.model, self.resolution, run)
-                    self._clear(prefix)
-                    unpack(data, self.store, prefix)
-                except (RegistryError, ValueError, OSError) as exc:
-                    log.warning("import_failed", run=name, error=str(exc))
-                    result.runs[name] = "failed"
-                    if self.ledger is not None:
-                        self.ledger.clear_silver_loading(self.source_id, [run])
-                    continue
-                result.runs[name] = "imported"
-                result.bytes += len(data)
-                if self.ledger is not None:
-                    self.ledger.mark_silver(self.source_id, [run], "present", "ghcr")
-                log.info("run_imported", run=name, tag=t, bytes=len(data))
+            # Mehrere Läufe zugleich: Je Lauf wartet der Import fast nur (Download, viele
+            # kleine Puts nach Garage); einzeln kam GFS Europa auf ≈ 30 Läufe pro Stunde.
+            with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+                for name, status, nbytes in pool.map(lambda e: self._fetch(*e), todo):
+                    result.runs[name] = status
+                    result.bytes += nbytes
         finally:
             if self.ledger is not None:
                 self.ledger.clear_silver_loading(self.source_id)
         return result
+
+    def _fetch(self, tag: str, layer: Layer) -> tuple[str, ImportStatus, int]:
+        run = layer.run
+        name = f"{run:%Y%m%d%H}"
+        try:
+            data = self.registry.blob(layer.digest)
+            prefix = self.silver.key(self.model, self.resolution, run)
+            if self.silver.attrs(self.model, self.resolution, run) is not None:
+                # nur bei vorhandenem Lauf (andere Version, --force): das List kostet unter Last
+                # mehrere Sekunden, neue Läufe haben nichts zu löschen
+                self._clear(prefix)
+            unpack(data, self.store, prefix)
+        except Exception as exc:  # ein Lauf (z. B. Garage-Timeout) darf den Import nicht beenden
+            log.warning("import_failed", run=name, error=str(exc))
+            if self.ledger is not None:
+                self.ledger.clear_silver_loading(self.source_id, [run])
+            return name, "failed", 0
+        if self.ledger is not None:
+            self.ledger.mark_silver(self.source_id, [run], "present", "ghcr")
+        log.info("run_imported", run=name, tag=tag, bytes=len(data))
+        return name, "imported", len(data)
 
     def verify(
         self,

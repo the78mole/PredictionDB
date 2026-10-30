@@ -7,6 +7,8 @@ Beispiele::
     wx-ingest gfs run 2026102012 --steps 0-12    # ein Lauf, optional nur Teilbereich
     wx-ingest gfs backfill 2026-10-01T00 2026-10-07T18   # nur Archiv-Endpunkte
     wx-ingest gfs backfill 2021-03-22T12 --runs 0,12 --newest-first --parallel-runs 2
+
+@relation(SWA-WXI-CLI, scope=file)
 """
 
 from __future__ import annotations
@@ -58,9 +60,10 @@ def parse_steps(text: str) -> list[int]:
     return sorted(steps)
 
 
-def parse_hours(text: str) -> list[int]:
+def parse_hours_ordered(text: str) -> list[int]:
+    """Laufzeiten in der angegebenen Reihenfolge (Priorität), ohne Doppelte."""
     try:
-        hours = sorted({int(h) for h in text.split(",")})
+        hours = list(dict.fromkeys(int(h) for h in text.split(",")))
     except ValueError:
         raise argparse.ArgumentTypeError(f"Laufzeiten {text!r} nicht lesbar (z. B. 0,12)") from None
     if any(h not in (0, 6, 12, 18) for h in hours):
@@ -68,15 +71,30 @@ def parse_hours(text: str) -> list[int]:
     return hours
 
 
-def add_backfill_args(p: argparse.ArgumentParser) -> None:
-    """Zeitraum und Laufauswahl, gemeinsam für ``wx-ingest`` und ``wx-process``."""
+def parse_hours(text: str) -> list[int]:
+    return sorted(parse_hours_ordered(text))
+
+
+def add_backfill_args(p: argparse.ArgumentParser, *, ordered: bool = False) -> None:
+    """Zeitraum und Laufauswahl, gemeinsam für ``wx-ingest`` und ``wx-process``.
+
+    ``ordered`` behält die Reihenfolge von ``--runs`` als Priorität bei (``wx-process``).
+
+    @relation(SWR-WXI-030, SWR-WXI-031, scope=function)
+    """
     p.add_argument("start", type=parse_run)
     p.add_argument("end", type=parse_run, nargs="?", help="Standard: jetzt")
-    p.add_argument("--runs", type=parse_hours, metavar="HH,…", help="nur diese Läufe, z. B. 0,12")
+    p.add_argument(
+        "--runs",
+        type=parse_hours_ordered if ordered else parse_hours,
+        metavar="HH,…",
+        help="nur diese Läufe, z. B. 0,12" + (" (in dieser Reihenfolge)" if ordered else ""),
+    )
     p.add_argument("--newest-first", action="store_true", help="jüngste Läufe zuerst")
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """@relation(SWR-WXI-005, scope=function)"""
     p = argparse.ArgumentParser(
         prog="wx-ingest", description="Wettermodell-Ingest nach Garage (Bronze)"
     )
@@ -153,7 +171,10 @@ async def _main(args: argparse.Namespace) -> int:
 async def _latest(
     args: argparse.Namespace, config: GfsConfig, ingestor: GfsIngestor
 ) -> list[RunResult]:
-    """Live-Modus mit Protokoll in ``meta.backfill_job`` (mode 'live') für das Dashboard."""
+    """Live-Modus mit Protokoll in ``meta.backfill_job`` (mode 'live') für das Dashboard.
+
+    @relation(SWR-WXI-002, scope=function)
+    """
     jobs = JobLog(create_db_engine() if args.watch else None)
     now = datetime.now(UTC)
     start = now - timedelta(hours=config.lookback_hours)
@@ -196,7 +217,10 @@ async def _latest(
 async def _backfill(
     args: argparse.Namespace, config: GfsConfig, ingestor: GfsIngestor
 ) -> list[RunResult]:
-    """Backfill mit Protokoll in ``meta.backfill_job`` (für das Status-Dashboard)."""
+    """Backfill mit Protokoll in ``meta.backfill_job`` (für das Status-Dashboard).
+
+    @relation(SWR-WXI-030, scope=function)
+    """
     # Ohne Ende nur bis vor das Fenster des Live-Modus: jüngere Läufe erscheinen noch und
     # gehören ``wx-ingest gfs latest``; der Backfill würde sie sonst als unvollständig abhaken.
     end = args.end or datetime.now(UTC) - timedelta(hours=config.lookback_hours)
@@ -247,11 +271,15 @@ async def _backfill(
 
 
 def _terminate(signum: int, frame: object) -> None:
-    # docker stop schickt SIGTERM: als Abbruch behandeln, damit das Protokoll abschließt
+    """``docker stop`` schickt SIGTERM: als Abbruch behandeln, damit das Protokoll abschließt.
+
+    @relation(SWR-WXI-004, scope=function)
+    """
     raise KeyboardInterrupt
 
 
 def main(argv: list[str] | None = None) -> int:
+    """@relation(SWR-WXI-004, scope=function)"""
     args = build_parser().parse_args(argv)
     settings = get_settings()
     configure_logging("DEBUG" if args.verbose else settings.log_level, settings.log_json)

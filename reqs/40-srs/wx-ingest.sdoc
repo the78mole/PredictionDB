@@ -1,0 +1,334 @@
+[DOCUMENT]
+TITLE: Softwareanforderungen wx-ingest (SRS)
+PREFIX: SWR-WXI-
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @anforderung
+
+[TEXT]
+STATEMENT: >>>
+Software Requirements Specification nach ISO/IEC/IEEE 29148 für das Softwareelement
+SYSA-SW-WXI (``services/wx_ingest``). Jede Anforderung leitet sich aus mindestens einer
+Systemanforderung ab. Funktionen, die sie umsetzen, und Tests, die sie prüfen, verweisen mit
+``@relation(SWR-WXI-…, scope=function)`` auf sie.
+<<<
+
+[[SECTION]]
+TITLE: Konfiguration und Steuerung
+
+[REQUIREMENT]
+UID: SWR-WXI-001
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Quelldefinition als YAML
+STATEMENT: >>>
+wx-ingest muss Modell, Auflösung, Produkt, Laufzeiten, Schritte, Ausschnitt, Endpunkte mit Art,
+Rang, Nebenläufigkeit und Rate sowie die Liste der Nachrichten aus einer YAML-Quelldefinition
+lesen. Ungültige Definitionen (Laufzeiten außer 0, 6, 12, 18 UTC, keine Endpunkte oder
+Nachrichten, ungültige Schrittbereiche, Ausschnitt ohne Fläche, ``header_scan`` ohne Pfad) muss
+es beim Start ablehnen.
+<<<
+QUELLE: config/sources/gfs_0p25.yaml
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-001
+- TYPE: Parent
+  VALUE: SYSR-QA-003
+
+[REQUIREMENT]
+UID: SWR-WXI-002
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Live-Modus
+STATEMENT: >>>
+Im Live-Modus muss wx-ingest alle konfigurierten Läufe im Rückblickfenster (``lookback_hours``)
+in zeitlicher Reihenfolge prüfen und mit ``--watch N`` alle N Sekunden wiederholen.
+<<<
+RATIONALE: >>>
+Mit ``--watch 600`` und einem Zyklus, der nur fehlende Schritte lädt, wird ein neuer Schritt
+innerhalb von 10 min erkannt (SYSR-WX-001).
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-001
+
+[REQUIREMENT]
+UID: SWR-WXI-003
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Teilweise veröffentlichte Läufe
+STATEMENT: >>>
+Ist ein Schritt bei keinem Endpunkt veröffentlicht, muss wx-ingest ihn als ``pending`` führen und
+im Live-Modus keine späteren Schritte dieses Laufs anfragen. Der nächste Zyklus setzt dort fort.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-001
+- TYPE: Parent
+  VALUE: SYSR-WX-002
+
+[REQUIREMENT]
+UID: SWR-WXI-004
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Inspektion
+TITLE: Beenden und Protokoll
+STATEMENT: >>>
+wx-ingest muss SIGTERM (``docker stop``) wie einen Abbruch behandeln und dabei das
+Job-Protokoll abschließen. Jeden Schritt und Lauf muss es als strukturierte Protokollzeile
+ausgeben.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-OPS-005
+- TYPE: Parent
+  VALUE: SYSR-OPS-001
+
+[REQUIREMENT]
+UID: SWR-WXI-005
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: GFS Europa mit demselben Dienst
+STATEMENT: >>>
+wx-ingest muss mit einer zweiten Quelldefinition (GFS 0,5°, Europa) als eigener Dienst laufen,
+ohne Codeänderung.
+<<<
+QUELLE: config/sources/gfs_0p5.yaml; ARCHITEKTUR.md 5.7
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-008
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Download
+
+[REQUIREMENT]
+UID: SWR-WXI-010
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Endpunkte in Rangfolge
+STATEMENT: >>>
+wx-ingest muss für jeden Schritt die Endpunkte in der Reihenfolge der Quelldefinition versuchen.
+Fehlt der Schritt oder schlägt der Abruf fehl, muss es den nächsten Endpunkt versuchen. Erst wenn
+alle scheitern, gilt der Schritt als ``failed``.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-003
+
+[REQUIREMENT]
+UID: SWR-WXI-011
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Wiederholung bei vorübergehenden Fehlern
+STATEMENT: >>>
+Bei Transportfehlern und vorübergehenden HTTP-Status muss wx-ingest eine Anfrage bis zu
+viermal mit exponentiell wachsender Wartezeit (höchstens 30 s) wiederholen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-003
+- TYPE: Parent
+  VALUE: SYSR-OPS-001
+
+[REQUIREMENT]
+UID: SWR-WXI-012
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Grenzen je Endpunkt
+STATEMENT: >>>
+wx-ingest muss je Endpunkt die konfigurierte Zahl gleichzeitiger Anfragen und die Anfragen je
+Minute einhalten, auch über parallel geladene Läufe hinweg.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-002
+
+[REQUIREMENT]
+UID: SWR-WXI-013
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: NOMADS-Filter
+STATEMENT: >>>
+Über einen Endpunkt der Art ``nomads_filter`` muss wx-ingest Variablen, Level und Ausschnitt
+serverseitig filtern lassen. Die Antwort muss es auf Nord→Süd drehen und verlustfrei mit CCSDS
+packen, damit Bronze unabhängig vom Endpunkt einheitlich ist.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-002
+- TYPE: Parent
+  VALUE: SYSR-WX-004
+
+[REQUIREMENT]
+UID: SWR-WXI-014
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Range-Anfragen über die .idx
+STATEMENT: >>>
+Über einen Endpunkt der Art ``idx_range`` muss wx-ingest die ``.idx`` laden, die konfigurierten
+Nachrichten wählen, je zusammengefasstem Byte-Bereich eine Range-Anfrage stellen, Länge und
+GRIB-Struktur der Antwort prüfen und lokal auf den Ausschnitt zuschneiden. Eine verkürzte oder
+falsche Antwort muss es verwerfen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-002
+- TYPE: Parent
+  VALUE: SYSR-WX-004
+
+[REQUIREMENT]
+UID: SWR-WXI-015
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Veraltete .idx
+STATEMENT: >>>
+Passt die ``.idx`` nicht zur GRIB-Datei, muss wx-ingest die ganze Datei laden und die Nachrichten
+über ihre Position den Zeilen der ``.idx`` zuordnen.
+<<<
+QUELLE: Archivfehler 2022-11-30 00Z
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-004
+- TYPE: Parent
+  VALUE: SYSR-WX-005
+
+[REQUIREMENT]
+UID: SWR-WXI-016
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Archive ohne .idx
+STATEMENT: >>>
+Über einen Endpunkt der Art ``header_scan`` muss wx-ingest das Inventar aus den Nachrichtenköpfen
+bilden, die Datei dafür in Abschnitte teilen und vollständige Inventare als Vorlagen für denselben
+Schritt späterer Läufe verwenden. Passt keine Vorlage, entsteht ein neues vollständiges
+Inventar. Landet der Lauf über die Köpfe nicht an einem Nachrichtenanfang, muss es die ganze
+Datei laden.
+<<<
+QUELLE: ARCHITEKTUR.md 4.2; services/wx_ingest/README.md
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-002
+- TYPE: Parent
+  VALUE: SYSR-WX-005
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Ablage in Bronze
+
+[REQUIREMENT]
+UID: SWR-WXI-020
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Schritt mit Manifest
+STATEMENT: >>>
+wx-ingest muss jeden Schritt unter ``<modell>/<auflösung>/JJJJ/MM/TT/HH/fSSS.grib2`` ablegen und
+erst danach das Manifest ``fSSS.json`` mit Endpunkt, URL, SHA-256, Größe, Nachrichten, gewählten
+Variablen, fehlenden Variablen und Ausschnitt schreiben. Ein Schritt gilt nur mit Manifest als
+gespeichert.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-004
+- TYPE: Parent
+  VALUE: SYSR-OPS-001
+
+[REQUIREMENT]
+UID: SWR-WXI-021
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Laufmanifest
+STATEMENT: >>>
+Liegen alle Schritte eines Laufs, muss wx-ingest ``run.json`` mit Schrittzahl, Bytes, genutzten
+Endpunkten, Variablen, Ausschnitt und Abschlusszeit schreiben.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-004
+
+[REQUIREMENT]
+UID: SWR-WXI-022
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Nichts doppelt laden
+STATEMENT: >>>
+Schritte und Läufe mit passendem Manifest muss wx-ingest überspringen. Ändern sich Variablenliste
+oder Ausschnitt, muss es die betroffenen Schritte neu laden.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-OPS-001
+- TYPE: Parent
+  VALUE: SYSR-WX-002
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Historie
+
+[REQUIREMENT]
+UID: SWR-WXI-030
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Backfill aus dem Archiv
+STATEMENT: >>>
+Der Backfill muss nur Archiv-Endpunkte nutzen, Laufzeiten auswählen lassen, wahlweise mit den
+jüngsten Läufen beginnen und mehrere Läufe parallel laden. Ein erneuter Aufruf muss bei den
+fehlenden Läufen fortsetzen. Im Archiv fehlende Läufe bleiben ``pending`` und sind kein Fehler.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-005
+
+[REQUIREMENT]
+UID: SWR-WXI-031
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Läufe mit Silber auslassen
+STATEMENT: >>>
+Liegt für einen Lauf schon Silber vor (z. B. aus GHCR importiert), muss der Backfill ihn
+auslassen, außer ``--bronze-with-silver`` bzw. ``GFS_BACKFILL_BRONZE=true`` ist gesetzt.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-005
+- TYPE: Parent
+  VALUE: SYSR-PUB-001
+
+[REQUIREMENT]
+UID: SWR-WXI-032
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Job-Protokoll
+STATEMENT: >>>
+wx-ingest muss jeden Backfill in ``meta.backfill_job`` und jeden Lauf in ``meta.backfill_run``
+protokollieren (Zeitraum, Fortschritt, Bytes, Status) und das Live-Fenster ebenso melden. Ist die
+Datenbank nicht erreichbar, muss es nur warnen und ohne Protokoll weiterladen. Ein Job ohne
+Lebenszeichen seit einer Stunde gilt als abgebrochen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-OPS-003
+- TYPE: Parent
+  VALUE: SYSR-OPS-001
+
+[[/SECTION]]

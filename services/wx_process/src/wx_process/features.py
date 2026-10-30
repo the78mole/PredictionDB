@@ -13,6 +13,7 @@ Features je Art der Technologie (``config/process/*.yaml``):
           ``wind_cf`` (Kapazitätsfaktor 0-1), ``wind_power`` (MW = cf mal Clusterleistung)
 ``pv``    ``ghi``, ``t2m``, ``cloud_cover``, ``snow_fraction``, ``pv_cf``, ``pv_power`` (MW)
 ``hydro`` ``precip``, ``t2m``, ``snow_fraction``
+``area``  alles aus ``wind``, ``pv`` und ``hydro`` (Gebotszone als Fläche, GFS Europa)
 ``other`` ``t2m``
 ========= ==================================================================================
 
@@ -34,7 +35,7 @@ from pydantic import BaseModel, Field
 from wx_process.silver import Dataset
 
 F64 = NDArray[np.float64]
-Kind = Literal["wind", "pv", "hydro", "other"]
+Kind = Literal["wind", "pv", "hydro", "area", "other"]
 
 #: Version der Feature-Definitionen; eine Änderung lässt ``latest`` die Läufe neu rechnen
 FEATURES_VERSION = "1"
@@ -196,7 +197,8 @@ class FeatureBuilder:
         if t_c is not None:
             res["t2m"] = mean(t_c)
 
-        if tech.kind == "wind":
+        kinds = {"wind", "pv", "hydro"} if tech.kind == "area" else {tech.kind}
+        if "wind" in kinds:
             u10, v10, u100, v100 = (field(n) for n in ("u10", "v10", "u100", "v100"))
             if u10 is not None and v10 is not None:
                 ws10 = np.hypot(u10, v10)
@@ -219,7 +221,7 @@ class FeatureBuilder:
             if gust is not None:
                 res["gust"] = mean(gust)
 
-        elif tech.kind == "pv":
+        if "pv" in kinds:
             ghi = field("dswrf")
             if ghi is not None:
                 res["ghi"] = mean(ghi)
@@ -235,7 +237,7 @@ class FeatureBuilder:
             if snow is not None:
                 res["snow_fraction"] = mean(snow)
 
-        elif tech.kind == "hydro":
+        if "hydro" in kinds:
             tp = field("tp")
             if tp is not None:
                 res["precip"] = mean(tp)

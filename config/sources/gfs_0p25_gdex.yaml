@@ -17,15 +17,26 @@ bbox: {north: 58, south: 44, west: 0, east: 20}
 lookback_hours: 30
 # Keine .idx: je Schritt einige hundert kleine Range-Anfragen für die Köpfe
 step_concurrency: 8
+# Kopf-Inventare je Schritt eines v15-Laufs; spätere Läufe springen damit gezielt zu den
+# gewählten Nachrichten. Fehlende Schritte ergänzt der Workflow gfs-templates.yml.
+templates: gfs_0p25_gdex.templates.json.gz
 
-# OSDF leitet auf einen nahen Cache weiter; data.gdex.ucar.edu ist der Ursprung.
+# Zuerst ein fester OSDF-Cache (internet2 Amsterdam): Der Director lenkte teils auf Caches, die
+# Range-Anfragen mit HTTP 500 beantworteten oder hängen blieben. Danach der Director, zuletzt
+# data.gdex.ucar.edu als Ursprung (setzt Verbindungen bei Last pro IP schnell zurück).
 endpoints:
+  - name: gdex-cache
+    kind: header_scan
+    url: https://osdf1.amst.nrp.internet2.edu:8443/ncar/gdex/d084001
+    path: "{run:%Y}/{run:%Y%m%d}/gfs.0p25.{run:%Y%m%d%H}.f{step:03d}.grib2"
+    archive: true
+    concurrency: 16
   - name: gdex
     kind: header_scan
     url: https://osdf-director.osg-htc.org/ncar/gdex/d084001
     path: "{run:%Y}/{run:%Y%m%d}/gfs.0p25.{run:%Y%m%d%H}.f{step:03d}.grib2"
     archive: true
-    concurrency: 32
+    concurrency: 16
   - name: gdex-origin
     kind: header_scan
     url: https://data.gdex.ucar.edu/d084001

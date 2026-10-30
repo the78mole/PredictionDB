@@ -3,8 +3,8 @@
 Silber-Austausch über die GitHub Container Registry (`docs/ARCHITEKTUR.md` 5.5). Die GFS-Historie
 entsteht im GitHub-Actions-Runner statt auf der VM: Ein Lauf überträgt aus dem AWS-Archiv rund
 3,3 GB (globale GRIB-Felder, der Ausschnitt ist davon 0,4 %), als Silber bleiben rund 13 MB. Über
-die gedrosselte Leitung der VM (8,3 MB/s) kostet ein Lauf mindestens 6–7 Minuten,
-im Runner voraussichtlich etwa eine Minute, und auf die VM kommen nur die 13 MB.
+eine Leitung mit 8 MB/s kostet ein Lauf mindestens 6–7 Minuten, im Runner etwa eine Minute, und
+auf die VM kommen nur die 13 MB.
 
 ```
 GitHub Actions (gfs-history.yml)                     VM
@@ -80,7 +80,7 @@ docker compose --profile history up -d    # wx-import + wx-process-backfill
 `SILVER_VERSION` vorliegen. Selbst geladenes Silber bleibt unangetastet. Den lokalen Bestand meldet
 er nach `meta.silver_run` (zu Beginn eines Durchgangs alle zu holenden Läufe als `loading`, jeden
 geholten als `present`); `wx-process` meldet dort jedes Silber, das es baut oder liest. Daraus
-zeigt das Status-Dashboard je Monat den Anteil der GFS-Läufe mit lokalem Silber (grün) und im
+zeigt das Dashboard „Wetter“ je Monat den Anteil der GFS-Läufe mit lokalem Silber (grün) und im
 Download (gelb, dazu laufende Bronze-Downloads aus `meta.backfill_run`). `wx-process` erkennt
 importierte Läufe ohne Bronze, nimmt das Silber unverändert und rechnet nur Gold (in
 `meta.nwp_run` mit `endpoint = ghcr`).
@@ -104,6 +104,71 @@ Dateien bzw. Attributen), `imported` (noch die Kopie aus GHCR, kein eigener Bau)
 `local_missing`. Verglichen wird ohne Download über die Annotation `content`; nur für Abweichungen
 wird der Layer geladen.
 
+## Vollständige .idx zu GDEX
+
+Das NCAR-Archiv GDEX d084001 (GFS vor v16) hat keine `.idx`. Der Workflow `gfs-idx.yml` liest
+je Datei alle Nachrichtenköpfe und schreibt eine `.idx` im Format von `wgrib2 -s` mit allen
+Nachrichten (geprüft: an GFS-v15-Dateien auf AWS Zeile für Zeile gleich den `.idx` von NOAA).
+Abgelegt wird ein einziges Artefakt mit einem Layer je Monat und Laufzeit:
+
+```text
+ghcr.io/the78mole/predictiondb-data/gfs-0p25-gdex-idx:v1
+  Layer gfs-0p25-gdex-idx-2019-07-00z.tar.gz   org.predictiondb.month=2019-07, .hour=0
+        └─ 2019/20190701/gfs.0p25.2019070100.f000.grib2.idx …
+```
+
+Die Annotationen eines Layers tragen den Stand: `complete`, `failed` (Dateien, die der nächste
+Start nachholt), `absent` (fehlen im Archiv), `broken` (im Archiv leer oder abgeschnitten, werden
+nicht wiederholt) und `unknown` (Zeilen mit Namen, die nicht in der
+NCEP-Tabelle stehen). Der Abschlussjob schreibt das Manifest auch, wenn einzelne Monatsjobs
+scheitern; ein erneuter Start nimmt nur Monate ohne vollständigen Layer und übernimmt dabei schon
+gebaute `.idx`. Ein Prozess schafft nur einen Kern; auf einer ausgelasteten Maschine teilt
+`idx-build --workers N` Dateien und gleichzeitige Anfragen auf N Prozesse auf (gleiche Last auf
+das Archiv). Einen Monat holen:
+
+```bash
+oras manifest fetch ghcr.io/the78mole/predictiondb-data/gfs-0p25-gdex-idx:v1 \
+  | jq -r '.layers[] | select(.annotations["org.predictiondb.month"]=="2019-07") | .digest'
+oras blob fetch -o 2019-07-00z.tar.gz ghcr.io/the78mole/predictiondb-data/gfs-0p25-gdex-idx@sha256:…
+```
+
+`publish` nutzt den Layer selbst: Vor einem Monat lädt es den passenden Layer (Monat und
+Laufzeit) und liest die gewählten Nachrichten wie bei `idx_range` direkt über die `.idx`, ohne
+Köpfe abzulaufen (Log `idx_loaded`). Dateien ohne `.idx` (noch `failed`) und `.idx`, die nicht
+zur Datei passen, laufen weiter über Vorlagen und Köpfe. `--idx-repository ''` schaltet das ab.
+
+## GEFS-Ensemble
+
+`wx-exchange gefs` baut das Silber des GEFS v12 (0,5°, 31 Mitglieder, 00Z, bis 384 h, Verbundnetz Europa) direkt
+aus dem AWS-Archiv, ohne Bronze: je Mitglied-Schritt nur die Felder aus
+`config/sources/gefs_0p5.yaml` per Byte-Bereich, verdichtet je Region aus
+`config/gefs/regions_v2.json.gz`. Nach GHCR geht je Monat ein Manifest mit einem Layer je Lauf
+(`ghcr.io/the78mole/predictiondb-data/gefs-0p5-silver:JJJJ-MM-00z`, Inhalt siehe
+`docs/ARCHITEKTUR.md` 5.6). Der Workflow `gefs-history.yml` füllt die Historie ab 2021-03-22
+mit abgeschlossenen Monaten; den aktuellen Monat baut die VM selbst.
+
+Auf der VM läuft `wx-exchange gefs vm` als Dienst `wx-gefs` (alle 30 min):
+
+1. **Live:** Läufe des aktuellen Monats (und der letzten 3 Tage des Vormonats), sobald der
+   letzte Schritt des letzten Mitglieds auf AWS liegt. Dabei landen die Nachrichten auf den
+   Ausschnitt zugeschnitten in `wx-bronze` (`gefs/0p5/JJJJ/MM/TT/HH/<mitglied>.fSSS.grib2`), das
+   Silber in `wx-silver` (`gefs/0p5/JJJJ/MM/TT/HH.tar.gz`, byte-gleich mit dem Layer) und in GHCR.
+2. **Import:** abgeschlossene Monate aus GHCR, nur Layer mit aktuellem Fingerabdruck.
+3. **Gold:** je Lauf Mittel, Streuung, P10 und P90 über die Mitglieder je Region, Größe und
+   Schritt nach `feat.nwp_value` (Merkmal `<größe>_<kennzahl>`, Aggregation `ensemble`, Region
+   `gefs:<code>`), jüngste Läufe zuerst.
+4. **Bronze aufräumen:** nach `--bronze-days` (183), aber nur, wenn das Silber des Laufs lokal
+   und in GHCR mit gleichem Inhalts-Hash liegt; sonst bleibt sie und das Log meldet
+   `gefs_bronze_kept`.
+
+```bash
+uv run wx-exchange gefs plan 2021-03-22T12
+WX_EXCHANGE_USERNAME=… WX_EXCHANGE_TOKEN=… uv run wx-exchange gefs publish 2026-09 0
+# neue Regionen-Datei (MaStR-CSV aus config/gefs/mastr_cells.sql)
+uv run wx-exchange gefs regions --mastr de_capacity_0p5.csv --natural-earth ne/ --version v2 \
+  --out config/gefs/regions_v2.json.gz
+```
+
 ## Aufruf
 
 ```bash
@@ -116,6 +181,7 @@ uv run wx-exchange gfs import 2021-03-22T12 --runs 0,12 --watch 3600
 |---|---|
 | `WX_EXCHANGE_REGISTRY` | `ghcr.io` |
 | `WX_EXCHANGE_REPOSITORY` | `the78mole/predictiondb-data/gfs-0p25-silver` |
+| `WX_EXCHANGE_GEFS_REPOSITORY` | `the78mole/predictiondb-data/gefs-0p5-silver` (nur `gefs`) |
 | `WX_EXCHANGE_USERNAME`, `WX_EXCHANGE_TOKEN` | nur zum Schreiben; Lesen geht anonym |
 
 ## Tests
@@ -128,3 +194,25 @@ uv run pytest services/wx_exchange   # offline, mit simulierter Registry und GFS
 
 - Signatur der Manifeste mit `cosign` (5.5.3).
 - `wx-publish` für den laufenden Betrieb der VM (neue Läufe nach GHCR), Bronze-Artefakt.
+
+## Öffentlicher Grafana-Snapshot (`wx-exchange snapshot`)
+
+Dienst `grafana-snapshot` (Compose-Profil `public`): täglich um `PDB_SNAPSHOT_AT` (Standard
+14:30 Ortszeit, nach Day-Ahead-Auktion und Prognoselauf) holt er das Dashboard „Prognose
+öffentlich“ (Vorlage nur mit Standard-Panels, denn raintank kennt keine Zusatz-Plugins wie das
+ECharts-Panel in „Prognose aktuell“) im Schema v2 aus der eigenen Grafana, führt die Abfragen der Wochenpanels (67–70) für
+heute 00:00 bis Ende D+7 aus, bettet die Frames als Abfrage `queryType: snapshot` ein und lädt
+das Ganze über `POST /api/snapshots` mit `external: true` auf snapshots.raintank.io hoch
+(Ablauf `PDB_SNAPSHOT_EXPIRES`, Standard 30 Tage, 0 = nie). Der Snapshot bleibt interaktiv
+(Tooltips, Zoom, Legende), hat aber jedes Mal eine neue Adresse. Unten listet jeder Snapshot die
+früheren, noch gültigen Stände mit Link (aus `GET /api/dashboard/snapshots` der eigenen Grafana),
+damit man alte Prognosen später mit dem Eingetretenen vergleichen kann. Intern stehen dieselben
+Stände unter Dashboards → Snapshots. Deshalb biegt der Dienst danach einen Kurzlink um:
+`PDB_SHORTLINK_KIND=shortio` (Short.io, `PDB_SHORTIO_DOMAIN` und
+`PDB_SHORTIO_PATH`, Standard `predb`; fehlt der Link, legt der Dienst ihn an) oder `shlink`
+(`PDB_SHLINK_URL`, `PDB_SHLINK_CODE`), Schlüssel in `PDB_SHORTLINK_API_KEY`. Ohne Kurzlink wird
+nur hochgeladen.
+
+Gestern/Heute/Morgen bleiben draußen: Ein Snapshot hat einen festen Zeitraum, und dann ignoriert
+Grafana relative Panel-Zeiträume. Einmalig von Hand: `docker compose --profile public run --rm
+grafana-snapshot wx-exchange snapshot --once`.

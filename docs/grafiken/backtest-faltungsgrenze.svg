@@ -1,0 +1,146 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="922" height="496" viewBox="0 0 922 496" font-family="Helvetica, Arial, sans-serif" font-size="12">
+<rect width="922" height="496" fill="#ffffff"/>
+<text x="190" y="24" font-size="15" font-weight="bold" fill="#212121">An der Faltungsgrenze: Ausgabetage × Liefertage D+1 bis D+7</text>
+<text x="190" y="44" fill="#616161">Beispiel train_issue_stride: 2, gap_days: 8. Tag 0 = test_from der Faltung, train_to = Tag −8.</text>
+<rect x="424" y="88" width="182" height="268" fill="#fff3e0"/>
+<line x1="190" y1="88" x2="190" y2="356" stroke="#e0e0e0"/>
+<line x1="216" y1="88" x2="216" y2="356" stroke="#e0e0e0"/>
+<line x1="242" y1="88" x2="242" y2="356" stroke="#e0e0e0"/>
+<line x1="268" y1="88" x2="268" y2="356" stroke="#e0e0e0"/>
+<line x1="294" y1="88" x2="294" y2="356" stroke="#e0e0e0"/>
+<line x1="320" y1="88" x2="320" y2="356" stroke="#e0e0e0"/>
+<line x1="346" y1="88" x2="346" y2="356" stroke="#e0e0e0"/>
+<line x1="372" y1="88" x2="372" y2="356" stroke="#e0e0e0"/>
+<line x1="398" y1="88" x2="398" y2="356" stroke="#e0e0e0"/>
+<line x1="424" y1="88" x2="424" y2="356" stroke="#e0e0e0"/>
+<line x1="450" y1="88" x2="450" y2="356" stroke="#e0e0e0"/>
+<line x1="476" y1="88" x2="476" y2="356" stroke="#e0e0e0"/>
+<line x1="502" y1="88" x2="502" y2="356" stroke="#e0e0e0"/>
+<line x1="528" y1="88" x2="528" y2="356" stroke="#e0e0e0"/>
+<line x1="554" y1="88" x2="554" y2="356" stroke="#e0e0e0"/>
+<line x1="580" y1="88" x2="580" y2="356" stroke="#e0e0e0"/>
+<line x1="606" y1="88" x2="606" y2="356" stroke="#e0e0e0"/>
+<line x1="632" y1="88" x2="632" y2="356" stroke="#e0e0e0"/>
+<line x1="658" y1="88" x2="658" y2="356" stroke="#e0e0e0"/>
+<line x1="684" y1="88" x2="684" y2="356" stroke="#e0e0e0"/>
+<line x1="710" y1="88" x2="710" y2="356" stroke="#e0e0e0"/>
+<line x1="736" y1="88" x2="736" y2="356" stroke="#e0e0e0"/>
+<line x1="762" y1="88" x2="762" y2="356" stroke="#e0e0e0"/>
+<line x1="788" y1="88" x2="788" y2="356" stroke="#e0e0e0"/>
+<line x1="814" y1="88" x2="814" y2="356" stroke="#e0e0e0"/>
+<line x1="840" y1="88" x2="840" y2="356" stroke="#e0e0e0"/>
+<line x1="866" y1="88" x2="866" y2="356" stroke="#e0e0e0"/>
+<line x1="892" y1="88" x2="892" y2="356" stroke="#e0e0e0"/>
+<text x="203.0" y="372" text-anchor="middle" fill="#616161">−16</text>
+<text x="255.0" y="372" text-anchor="middle" fill="#616161">−14</text>
+<text x="307.0" y="372" text-anchor="middle" fill="#616161">−12</text>
+<text x="359.0" y="372" text-anchor="middle" fill="#616161">−10</text>
+<text x="411.0" y="372" text-anchor="middle" fill="#616161">−8</text>
+<text x="463.0" y="372" text-anchor="middle" fill="#616161">−6</text>
+<text x="515.0" y="372" text-anchor="middle" fill="#616161">−4</text>
+<text x="567.0" y="372" text-anchor="middle" fill="#616161">−2</text>
+<text x="619.0" y="372" text-anchor="middle" fill="#616161">+0</text>
+<text x="671.0" y="372" text-anchor="middle" fill="#616161">+2</text>
+<text x="723.0" y="372" text-anchor="middle" fill="#616161">+4</text>
+<text x="775.0" y="372" text-anchor="middle" fill="#616161">+6</text>
+<text x="827.0" y="372" text-anchor="middle" fill="#616161">+8</text>
+<text x="879.0" y="372" text-anchor="middle" fill="#616161">+10</text>
+<text x="180" y="372" text-anchor="end" fill="#616161">Tag</text>
+<text x="180" y="113" text-anchor="end" fill="#212121">Training, Ausgabe Tag −16</text>
+<rect x="217" y="100" width="24" height="18" rx="2" fill="#2e7d32"/>
+<rect x="243" y="100" width="24" height="18" rx="2" fill="#2e7d32"/>
+<rect x="269" y="100" width="24" height="18" rx="2" fill="#2e7d32"/>
+<rect x="295" y="100" width="24" height="18" rx="2" fill="#2e7d32"/>
+<rect x="321" y="100" width="24" height="18" rx="2" fill="#2e7d32"/>
+<rect x="347" y="100" width="24" height="18" rx="2" fill="#2e7d32"/>
+<rect x="373" y="100" width="24" height="18" rx="2" fill="#2e7d32"/>
+<circle cx="203.0" cy="109.0" r="4.5" fill="#212121"/>
+<text x="180" y="139" text-anchor="end" fill="#212121">Training, Ausgabe Tag −14</text>
+<rect x="269" y="126" width="24" height="18" rx="2" fill="#2e7d32"/>
+<rect x="295" y="126" width="24" height="18" rx="2" fill="#2e7d32"/>
+<rect x="321" y="126" width="24" height="18" rx="2" fill="#2e7d32"/>
+<rect x="347" y="126" width="24" height="18" rx="2" fill="#2e7d32"/>
+<rect x="373" y="126" width="24" height="18" rx="2" fill="#2e7d32"/>
+<rect x="399" y="126" width="24" height="18" rx="2" fill="#2e7d32"/>
+<rect x="425" y="126" width="24" height="18" rx="2" fill="#bdbdbd"/>
+<circle cx="255.0" cy="135.0" r="4.5" fill="#212121"/>
+<text x="180" y="165" text-anchor="end" fill="#212121">Training, Ausgabe Tag −12</text>
+<rect x="321" y="152" width="24" height="18" rx="2" fill="#2e7d32"/>
+<rect x="347" y="152" width="24" height="18" rx="2" fill="#2e7d32"/>
+<rect x="373" y="152" width="24" height="18" rx="2" fill="#2e7d32"/>
+<rect x="399" y="152" width="24" height="18" rx="2" fill="#2e7d32"/>
+<rect x="425" y="152" width="24" height="18" rx="2" fill="#bdbdbd"/>
+<rect x="451" y="152" width="24" height="18" rx="2" fill="#bdbdbd"/>
+<rect x="477" y="152" width="24" height="18" rx="2" fill="#bdbdbd"/>
+<circle cx="307.0" cy="161.0" r="4.5" fill="#212121"/>
+<text x="180" y="191" text-anchor="end" fill="#212121">Training, Ausgabe Tag −10</text>
+<rect x="373" y="178" width="24" height="18" rx="2" fill="#2e7d32"/>
+<rect x="399" y="178" width="24" height="18" rx="2" fill="#2e7d32"/>
+<rect x="425" y="178" width="24" height="18" rx="2" fill="#bdbdbd"/>
+<rect x="451" y="178" width="24" height="18" rx="2" fill="#bdbdbd"/>
+<rect x="477" y="178" width="24" height="18" rx="2" fill="#bdbdbd"/>
+<rect x="503" y="178" width="24" height="18" rx="2" fill="#bdbdbd"/>
+<rect x="529" y="178" width="24" height="18" rx="2" fill="#bdbdbd"/>
+<circle cx="359.0" cy="187.0" r="4.5" fill="#212121"/>
+<text x="180" y="217" text-anchor="end" fill="#212121">Training, Ausgabe Tag −8</text>
+<rect x="425" y="204" width="24" height="18" rx="2" fill="#bdbdbd"/>
+<rect x="451" y="204" width="24" height="18" rx="2" fill="#bdbdbd"/>
+<rect x="477" y="204" width="24" height="18" rx="2" fill="#bdbdbd"/>
+<rect x="503" y="204" width="24" height="18" rx="2" fill="#bdbdbd"/>
+<rect x="529" y="204" width="24" height="18" rx="2" fill="#bdbdbd"/>
+<rect x="555" y="204" width="24" height="18" rx="2" fill="#bdbdbd"/>
+<rect x="581" y="204" width="24" height="18" rx="2" fill="#bdbdbd"/>
+<circle cx="411.0" cy="213.0" r="4.5" fill="#212121"/>
+<text x="180" y="243" text-anchor="end" fill="#616161" font-style="italic">keine Ausgabe</text>
+<text x="180" y="269" text-anchor="end" fill="#212121">Test, Ausgabe Tag +0</text>
+<rect x="633" y="256" width="24" height="18" rx="2" fill="#1565c0"/>
+<rect x="659" y="256" width="24" height="18" rx="2" fill="#1565c0"/>
+<rect x="685" y="256" width="24" height="18" rx="2" fill="#1565c0"/>
+<rect x="711" y="256" width="24" height="18" rx="2" fill="#1565c0"/>
+<rect x="737" y="256" width="24" height="18" rx="2" fill="#1565c0"/>
+<rect x="763" y="256" width="24" height="18" rx="2" fill="#1565c0"/>
+<rect x="789" y="256" width="24" height="18" rx="2" fill="#1565c0"/>
+<circle cx="619.0" cy="265.0" r="4.5" fill="#212121"/>
+<text x="180" y="295" text-anchor="end" fill="#212121">Test, Ausgabe Tag +1</text>
+<rect x="659" y="282" width="24" height="18" rx="2" fill="#1565c0"/>
+<rect x="685" y="282" width="24" height="18" rx="2" fill="#1565c0"/>
+<rect x="711" y="282" width="24" height="18" rx="2" fill="#1565c0"/>
+<rect x="737" y="282" width="24" height="18" rx="2" fill="#1565c0"/>
+<rect x="763" y="282" width="24" height="18" rx="2" fill="#1565c0"/>
+<rect x="789" y="282" width="24" height="18" rx="2" fill="#1565c0"/>
+<rect x="815" y="282" width="24" height="18" rx="2" fill="#1565c0"/>
+<circle cx="645.0" cy="291.0" r="4.5" fill="#212121"/>
+<text x="180" y="321" text-anchor="end" fill="#212121">Test, Ausgabe Tag +2</text>
+<rect x="685" y="308" width="24" height="18" rx="2" fill="#1565c0"/>
+<rect x="711" y="308" width="24" height="18" rx="2" fill="#1565c0"/>
+<rect x="737" y="308" width="24" height="18" rx="2" fill="#1565c0"/>
+<rect x="763" y="308" width="24" height="18" rx="2" fill="#1565c0"/>
+<rect x="789" y="308" width="24" height="18" rx="2" fill="#1565c0"/>
+<rect x="815" y="308" width="24" height="18" rx="2" fill="#1565c0"/>
+<rect x="841" y="308" width="24" height="18" rx="2" fill="#1565c0"/>
+<circle cx="671.0" cy="317.0" r="4.5" fill="#212121"/>
+<text x="180" y="347" text-anchor="end" fill="#212121">Test, Ausgabe Tag +3</text>
+<rect x="711" y="334" width="24" height="18" rx="2" fill="#1565c0"/>
+<rect x="737" y="334" width="24" height="18" rx="2" fill="#1565c0"/>
+<rect x="763" y="334" width="24" height="18" rx="2" fill="#1565c0"/>
+<rect x="789" y="334" width="24" height="18" rx="2" fill="#1565c0"/>
+<rect x="815" y="334" width="24" height="18" rx="2" fill="#1565c0"/>
+<rect x="841" y="334" width="24" height="18" rx="2" fill="#1565c0"/>
+<rect x="867" y="334" width="24" height="18" rx="2" fill="#1565c0"/>
+<circle cx="697.0" cy="343.0" r="4.5" fill="#212121"/>
+<line x1="424" y1="84" x2="424" y2="358" stroke="#c62828" stroke-width="2" stroke-dasharray="5 3"/>
+<text x="420" y="82" text-anchor="end" fill="#c62828" font-weight="bold">Ende Tag train_to: letzte Zielstunde im Training</text>
+<line x1="606" y1="84" x2="606" y2="358" stroke="#c62828" stroke-width="2" stroke-dasharray="5 3"/>
+<text x="610" y="82" text-anchor="start" fill="#c62828" font-weight="bold">test_from: erste Ausgabe im Test</text>
+<defs><marker id="pf" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" fill="#e65100"/></marker></defs>
+<line x1="411.0" y1="239.0" x2="619.0" y2="239.0" stroke="#e65100" stroke-width="1.5" marker-start="url(#pf)" marker-end="url(#pf)"/>
+<text x="515.0" y="234.0" text-anchor="middle" fill="#e65100">gap_days = 8 Tage</text>
+<circle cx="199" cy="396" r="4.5" fill="#212121"/>
+<text x="216" y="400" fill="#212121">Ausgabezeitpunkt (issue_time)</text>
+<rect x="190" y="410" width="18" height="14" rx="2" fill="#2e7d32"/>
+<text x="216" y="422" fill="#212121">Zielstunden im Training</text>
+<rect x="190" y="432" width="18" height="14" rx="2" fill="#bdbdbd"/>
+<text x="216" y="444" fill="#212121">verworfen: Liefertag nach train_to, zu Faltungsbeginn noch unbekannt</text>
+<rect x="190" y="454" width="18" height="14" rx="2" fill="#1565c0"/>
+<text x="216" y="466" fill="#212121">geprüft: Prognose der Faltung gegen Ist-Wert</text>
+</svg>

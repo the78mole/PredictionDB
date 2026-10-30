@@ -2,7 +2,7 @@ import time
 from datetime import UTC, datetime, timedelta
 from itertools import pairwise
 
-from energy_ingest.config import EnergySettings
+from energy_ingest.config import ALL_SOURCES, EnergySettings
 from energy_ingest.ingest import ANCHOR, EnergyIngestor, chunks, day_window
 from energy_ingest.model import QUARTER_HOUR, SeriesData, series
 from energy_ingest.sources import FormatError, SourceMeta
@@ -269,3 +269,27 @@ def test_format_error_reported_and_chunk_not_marked() -> None:
     assert {r.status for r in results} == {"format"}
     assert store.done == {}
     assert store.status[(store.ids["x"], "a")][0] == "format"
+
+
+def test_price_sources_come_before_slow_entsoe_in_sync() -> None:
+    """Der Day-Ahead-Preis darf im Abgleich nicht hinter den langsamen ENTSO-E-Abrufen warten."""
+    for fast in ("smard", "energy_charts"):
+        for slow in ("entsoe", "entsoe_last"):
+            assert ALL_SOURCES.index(fast) < ALL_SOURCES.index(slow)
+    assert ALL_SOURCES.index("netztransparenz") < ALL_SOURCES.index("pdb_marktwert")
+
+
+def test_sync_fetches_day_ahead_prices_first() -> None:
+    class PriceSource(FakeSource):
+        def datasets(self) -> list[str]:
+            return ["load_actual", "da_price_de_lu"]
+
+    slow, fast = FakeSource("slow"), PriceSource("fast")
+    ingestor = EnergyIngestor([slow, fast], FakeStore(), EnergySettings())
+    results = ingestor.sync(NOW)
+    assert [(r.source, r.dataset) for r in results] == [
+        ("fast", "da_price_de_lu"),
+        ("slow", "a"),
+        ("slow", "b"),
+        ("fast", "load_actual"),
+    ]

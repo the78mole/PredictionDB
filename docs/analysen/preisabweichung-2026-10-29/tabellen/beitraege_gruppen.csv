@@ -1,0 +1,6 @@
+version,Bestand,Brennstoffe,Kalender,"Last, Wind, PV, Residuallast",Marktwerte,Nachbarpreise,Preisgedächtnis DE-LU,Wetter
+v1 kalender 24.10. (previous),12.9,0.0,-4.0,-8.9,0.0,0.0,-44.4,0.0
+v1 kalender 27.10. (Champion),13.6,0.0,-4.0,-9.8,0.0,0.0,-35.0,0.0
+v2 frei 25.10.,5.2,6.7,-0.6,-0.7,0.0,-10.8,-11.5,0.0
+v2 frei 27.10.,1.9,3.4,-1.4,-2.4,0.0,-16.1,-17.7,0.0
+v2 wetter_frei 27.10.,21.2,1.6,1.1,15.2,1.0,-57.1,-18.0,7.3

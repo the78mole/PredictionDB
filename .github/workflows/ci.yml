@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.3.2
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           enable-cache: true
           save-cache: false  # nur der Job test speichert den gemeinsamen Cache
@@ -27,13 +27,20 @@ jobs:
       # Ruff (check, format) und mypy wie in .pre-commit-config.yaml, damit
       # lokal mit pre-commit und in der CI genau dasselbe geprüft wird.
       - run: uv run pre-commit run --all-files --show-diff-on-failure
+      # HTML der Anforderungen (vom Hook strictdoc erzeugt) zum Ansehen am Lauf
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: anforderungen-html
+          path: build/reqs/html
+          if-no-files-found: ignore
 
   test:
     name: Unit-Tests
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.3.2
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           enable-cache: true
       - run: uv sync --locked --all-packages
@@ -44,7 +51,7 @@ jobs:
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.3.2
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           enable-cache: true
           save-cache: false

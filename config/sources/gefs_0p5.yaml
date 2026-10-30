@@ -1,0 +1,51 @@
+# NOAA GEFS v12, 0,5°, aus dem AWS-Archiv noaa-gefs-pds (NOAA Open Data, gemeinfrei).
+# Verdichtet wird nur im Runner (GitHub Actions, wx-exchange gefs publish): je Lauf, Mitglied
+# und Schritt die Felder unten per Byte-Bereich laden, auf Europa zuschneiden und zu Kennzahlen
+# je Region (config/gefs/regions_v2.json.gz) verdichten. GRIB bleibt nie liegen; nach GHCR geht
+# nur das Silber (Werte je Mitglied, Schritt, Region und Größe). Siehe docs/ARCHITEKTUR.md 5.6.
+code: gefs_0p5
+base_url: https://noaa-gefs-pds.s3.amazonaws.com
+# Historie ab dem Beginn der GFS-v16-Läufe (2021-03-22 12Z), damit GFS und GEFS dieselbe
+# Spanne abdecken; GEFS v12 läge im Archiv schon ab 2020-09-24 (Nutzerentscheidung 2026-10-29)
+first_run: 2021-03-22T12:00:00Z
+hours: [0]
+# gec00 (Kontrolle) und gep01 bis gep30
+perturbed: 30
+# 6-stündlich bis 384 h: Mittel und Summen beziehen sich dann immer auf die 6 h davor
+steps: {start: 0, end: 384, every: 6}
+# Name → (Produkt a/b, GRIB-Kürzel, Ebene wie in der .idx)
+fields:
+  t2m: {product: a, param: TMP, level: 2 m above ground}
+  u10: {product: a, param: UGRD, level: 10 m above ground}
+  v10: {product: a, param: VGRD, level: 10 m above ground}
+  tp: {product: a, param: APCP, level: surface}
+  tcc: {product: a, param: TCDC, level: entire atmosphere}
+  dswrf: {product: a, param: DSWRF, level: surface}
+  u100: {product: b, param: UGRD, level: 100 m above ground}
+  v100: {product: b, param: VGRD, level: 100 m above ground}
+# Verbundnetz: ENTSO-E (mit Nordeuropa, GB, Irland), Ukraine, Moldau, Türkei (Nutzer 2026-10-29)
+bbox: {north: 71.5, south: 34.5, west: -10.5, east: 45}
+regions: config/gefs/regions_v2.json.gz
+# gleichzeitige Anfragen ans Archiv je Job
+concurrency: 48
+# Läufe jünger als das gelten als noch nicht vollständig veröffentlicht (nicht als fehlend)
+pending_hours: 30
+# ab so vielen fehlenden Mitglied-Schritt-Dateien (Anteil) gilt ein Lauf als fehlend
+max_missing_share: 0.1
+
+# Leistungskurven und PV-Modell wie in config/process/gfs_0p25.yaml
+technologies:
+  wind_on:
+    kind: wind
+    hub_height_m: 100
+    power_curve: {cut_in: 3.0, rated: 12.0, cut_out: 25.0}
+  wind_off:
+    kind: wind
+    hub_height_m: 105
+    power_curve: {cut_in: 3.5, rated: 13.0, cut_out: 25.0}
+  pv: {kind: pv}
+  area: {kind: other}
+pv:
+  performance_ratio: 0.85
+  temp_coeff: -0.004
+  noct_c: 45

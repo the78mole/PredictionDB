@@ -4,8 +4,9 @@ Erstes Prognosemodell für die **Netzlast DE** und den **Day-Ahead-Preis DE-LU**
 P10/P50/P90 je Stunde für die Liefertage D+1 bis D+7, zweistufig mit LightGBM
 (Kap. 7.3, 7.4 und 7.7 in `docs/ARCHITEKTUR.md`). Ausführliche Beschreibung für Anwender:
 [`docs/PROGNOSEMODELLE.md`](../../docs/PROGNOSEMODELLE.md). Konfiguration in
-`config/ml/de_lu_v1.yaml`, Backtest-Ergebnisse in
-[`docs/analysen/prognose-de-lu-v1/`](../../docs/analysen/prognose-de-lu-v1/README.md).
+`config/ml/de_lu_v1.yaml` und `config/ml/de_lu_v2.yaml`, Backtest-Ergebnisse in
+[`docs/analysen/prognose-de-lu-v1/`](../../docs/analysen/prognose-de-lu-v1/README.md) und
+[`docs/analysen/prognose-de-lu-v2/`](../../docs/analysen/prognose-de-lu-v2/README.md).
 
 ## Aufbau
 
@@ -40,8 +41,14 @@ flowchart LR
   neue Preisniveaus beherrschbar.
 - **Varianten:** `kalender` (ohne Wetter, ab Start der Gebotszone DE-LU im Oktober 2018) ist der
   Maßstab, `wetter` nutzt zusätzlich die GFS-Features und braucht deren Historie.
+- **`de_lu_v2`:** weitere freie Reihen als Merkmalsgruppen (`series_groups`): Nachbarpreise,
+  ÜNB-Lastprognose, Brennstoffe, Marktwerte, Preisniveau, EIA STEO (`outlook`) und der
+  Grenzkostenindex aus SMARD (`grenzkosten`); Varianten mit `scale` lernen den Preis relativ zu
+  `gk_niveau`. Einzelheiten in `docs/PROGNOSEMODELLE.md` Kap. 10.2.
 
 ## Aufruf
+
+Was ein Backtest genau tut (Faltungen, Kennzahlen, Freigabe): [`docs/BACKTEST.md`](../../docs/BACKTEST.md).
 
 ```bash
 uv run ml-train snapshot --out .ml-data/snap                      # aus PDB_DATABASE_URL
@@ -60,7 +67,9 @@ uv run ml-train predict --dry-run                                  # aktive Vers
 
 Auf der VM laufen dieselben Befehle über das Compose-Profil `ml` (`docker compose --profile ml
 run --rm ml-train …`, Ordner `/data` im Volume `ml-data`), die Inferenz als Dienst
-`ml-predict` (jede volle Stunde, verpasste Stunden bis 24 h zurück werden nachgeholt). Der Trainings-Container hat eine feste CPU-Grenze
+`ml-predict` (jede volle Stunde für `de_lu_v1` und `de_lu_v2`, verpasste Stunden bis 24 h zurück
+werden nachgeholt, neue Versionen rechnen mit `--fill-new 216` die Vergleichszeitpunkte der
+letzten neun Tage nach). Der Trainings-Container hat eine feste CPU-Grenze
 (`ML_TRAIN_CPUS`, Vorgabe 4), damit Ingest und Verarbeitung nebenher weiterlaufen.
 
 | Variable | Standard |
@@ -84,7 +93,7 @@ Ziel im Mittel (Pinball-Loss über P10/P50/P90) besser sein und darf in keiner G
 Vorlauftag und Jahreszeit mit mindestens 200 Werten mehr als 5 % schlechter sein
 (`promotion` in der YAML).
 
-### Spiegel in der Datenbank (Status-Dashboard)
+### Spiegel in der Datenbank (Dashboard „Prognose und Energiedaten“)
 
 Grafana liest keine Dateien aus Garage. `registry sync` schreibt deshalb Versionen mit Rolle,
 Trainingsdauer und -zeitraum nach `meta.model_version`, den Verlauf nach `meta.model_event` und
@@ -122,8 +131,8 @@ Ausrichtung der Wetterintervalle, Faltungen, Speichern/Laden und die Champion/Ch
 ## Offen
 
 - `fcst.model_spread` (Streuung der aktiven Versionen) und der Grafana-Teil aus Kap. 7.10.
-- Schulferien, bevölkerungsgewichtete Temperatur (Regionsmasken), Nachbarländer, Gas- und
-  CO₂-Preise als Merkmale.
+- Schulferien, bevölkerungsgewichtete Temperatur (Regionsmasken), Grenzhandel und
+  Lastprognosen der Nachbarn (seit #159 in `energy.value_best`) als Merkmale.
 - Reaktion auf `NOTIFY features_ready` statt stündlicher Inferenz; Ausgabe auch nach dem
   06Z-Lauf.
 - MLflow statt Datei-Registry; Snapshot-Austausch über `ml-exchange` mit presigned URLs.

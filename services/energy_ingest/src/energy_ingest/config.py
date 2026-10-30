@@ -23,9 +23,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from energy_ingest.sources.oil_bulletin import URL as OIL_BULLETIN_URL
 from energy_ingest.sources.worldbank import URL as WORLDBANK_URL
 
+#: Reihenfolge = Reihenfolge im Abgleich. SMARD und Energy-Charts zuerst, damit der
+#: Day-Ahead-Preis des Folgetags kurz nach der Auktion da ist; die ENTSO-E-Abrufe dauern
+#: auf der VM je Anfrage über eine Minute und laufen deshalb am Ende des Zyklus.
 ALL_SOURCES = [
-    "entsoe",
-    "entsoe_last",
     "smard",
     "energy_charts",
     "netztransparenz",
@@ -42,6 +43,9 @@ ALL_SOURCES = [
     "gie_agsi",
     "gie_alsi",
     "eurostat",
+    # ENTSO-E (Last-Prognosen der Nachbarländer, ggf. unfreie Reihen)
+    "entsoe",
+    "entsoe_last",
 ]
 
 #: Unfreie Quellen und das Feld ihrer Freigabe in ``EnergySettings``

@@ -97,6 +97,10 @@ uv run pre-commit run --all-files  # dieselben Prüfungen wie die CI
 uv run pytest
 ```
 
+Neue oder geänderte Funktionen gehören zu einer Softwareanforderung unter [reqs/](reqs/README.md):
+Code und Tests verweisen im Docstring mit `@relation(SWR-…, scope=function)` darauf. Die Hooks
+`strictdoc` und `reqs-abdeckung` prüfen das.
+
 ---
 
 ## English summary

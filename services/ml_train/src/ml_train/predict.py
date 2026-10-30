@@ -8,6 +8,11 @@ Im Dauerbetrieb (``--watch``) läuft jede volle Stunde ein Ausgabezeitpunkt. Ver
 (Neustart, langer Lauf) werden nachgeholt, damit z. B. der Lauf um 10 Uhr Ortszeit, zeitgleich
 mit der Day-Ahead-Lastprognose der ÜNB, für den Vergleich im Dashboard nie fehlt. Nachholen
 ist leakage-sicher: Merkmale nutzen nur Werte, die zum Ausgabezeitpunkt veröffentlicht waren.
+
+Kommt eine Version neu hinzu (``--fill-new``), rechnet sie rückwirkend die Ausgabezeitpunkte
+der Vergleichsgrafiken (08 UTC, 10 Uhr Ortszeit) im Fenster nach. Sie erscheint so sofort neben
+Champion und Challengern, mit demselben Veröffentlichungsstand der Eingänge wie diese, und mit
+einem Fenster von acht Tagen zeigt sie für gestern alle Vorlauftage D+1 bis D+7.
 """
 
 from __future__ import annotations
@@ -19,7 +24,7 @@ import pandas as pd
 from sqlalchemy import Engine, text
 
 from ml_train.config import ModelConfig, Variant
-from ml_train.dataset import FeatureBuilder, FeatureFrame
+from ml_train.dataset import UTIL_DAYS, FeatureBuilder, FeatureFrame
 from ml_train.models import TwoStageModel
 from ml_train.registry import Registry
 from ml_train.snapshot import Snapshot, export_snapshot
@@ -44,6 +49,8 @@ def lookback_days(cfg: ModelConfig, variant: Variant) -> int:
             back = max(back, ASOF_BACK_DAYS + g.change_days)
         if g is not None and g.mode == "outlook":
             back = max(back, OUTLOOK_BACK_DAYS)
+        if g is not None and g.mode == "grenzkosten":
+            back = max(back, max(g.windows) + UTIL_DAYS + 3)
     return back
 
 
@@ -71,17 +78,69 @@ def last_issue(engine: Engine, versions: list[str]) -> pd.Timestamp | None:
     return None if t is None else pd.Timestamp(t).tz_convert("UTC")
 
 
-def live_snapshot(engine: Engine, cfg: ModelConfig, issue: pd.Timestamp) -> Snapshot:
+OWN_ISSUES = text("""
+    SELECT DISTINCT issue_time FROM fcst.prediction
+     WHERE model_version = :version AND issue_time >= :since AND issue_time <= :until""")
+
+
+def missing_compare_issues(
+    engine: Engine, version: str, since: pd.Timestamp, until: pd.Timestamp
+) -> list[pd.Timestamp]:
+    """Ausgabezeitpunkte der Vergleichsgrafiken im Fenster, die ``version`` noch nicht hat."""
+    with engine.connect() as c:
+        rows = c.execute(
+            OWN_ISSUES,
+            {"version": version, "since": since.to_pydatetime(), "until": until.to_pydatetime()},
+        ).scalars()
+        have = {pd.Timestamp(t).tz_convert("UTC") for t in rows}
+    hours = pd.date_range(since.ceil("h"), until, freq="h")
+    return [h for h in hours if compare_issue(h) and h not in have]
+
+
+def compare_issue(issue: pd.Timestamp) -> bool:
+    """Ausgabezeitpunkt, den die Vergleichsgrafiken zeigen: 08 UTC (Fehler D+1, Tabelle) oder
+    10 Uhr Ortszeit (Vortag 10 Uhr, zeitgleich mit der ÜNB-Prognose)."""
+    return bool(issue.hour == 8 or issue.tz_convert("Europe/Berlin").hour == 10)
+
+
+def needs_weather(cfg: ModelConfig, registry: Registry, versions: list[str]) -> bool:
+    """Ob eine der Versionen Wetter braucht (sonst bleibt der langsame Wetterteil weg)."""
+    for version in versions:
+        try:
+            if cfg.variant(registry.manifest(version)["variant"]["name"]).requires_weather:
+                return True
+        except (KeyError, ValueError):
+            return True  # unbekannte Variante: lieber mit Wetter
+    return False
+
+
+def by_issue(missing: dict[str, list[pd.Timestamp]]) -> dict[pd.Timestamp, list[str]]:
+    """Fehlende Ausgabezeitpunkte je Version zu Versionen je Ausgabezeitpunkt (aufsteigend),
+    damit jeder Zeitpunkt nur einen Snapshot braucht."""
+    out: dict[pd.Timestamp, list[str]] = {}
+    for version, issues in missing.items():
+        for issue in issues:
+            out.setdefault(issue, []).append(version)
+    return dict(sorted(out.items()))
+
+
+def live_snapshot(
+    engine: Engine, cfg: ModelConfig, issue: pd.Timestamp, *, weather: bool = True
+) -> Snapshot:
+    """Kleiner Snapshot um ``issue``. Wetterläufe nur bis zum Ausgabezeitpunkt: spätere
+    nutzt die Merkmalsbildung ohnehin nicht, beim Nachrechnen gibt es sie aber schon."""
     codes = list(dict.fromkeys(cfg.targets + cfg.lag_series + cfg.series_codes))
     back = max(lookback_days(cfg, v) for v in cfg.variants)
     start = (issue - timedelta(days=back)).to_pydatetime()
     end = (issue + timedelta(days=max(cfg.issue.lead_days) + 2)).to_pydatetime()
+    wx_from = (issue - timedelta(days=2)).to_pydatetime()
     return export_snapshot(
         engine,
         codes,
         start,
         end,
-        weather_from=(issue - timedelta(days=2)).to_pydatetime(),
+        weather_from=wx_from,
+        weather_to=(issue + timedelta(hours=1)).to_pydatetime() if weather else wx_from,
         max_lead_h=24 * (max(cfg.issue.lead_days) + 2),
     )
 
@@ -94,12 +153,13 @@ def predict_model(
     Fehlt eine Merkmalsspalte ganz (Reihe zum Ausgabezeitpunkt nicht abrufbar), bleibt sie leer;
     LightGBM behandelt das wie im Training als fehlenden Wert.
     """
-    f = frame
+    # nur die Vorlauftage, die die Version gelernt hat (ältere Versionen ohne Resttag D+0)
+    f = frame.subset(frame.meta["lead_day"].isin(model.lead_days).to_numpy())
     if model.variant.requires_weather:
-        if "wx_lead_h" not in frame.X.columns:
+        if "wx_lead_h" not in f.X.columns:
             log.warning("predict.no_weather", version=version, issue=str(issue))
             return pd.DataFrame()
-        f = frame.subset(frame.X["wx_lead_h"].notna().to_numpy())
+        f = f.subset(f.X["wx_lead_h"].notna().to_numpy())
         if len(f) == 0:
             log.warning("predict.no_weather", version=version, issue=str(issue))
             return pd.DataFrame()
@@ -107,7 +167,12 @@ def predict_model(
     if missing:
         log.warning("predict.missing_features", version=version, columns=missing)
         f = FeatureFrame(
-            f.X.reindex(columns=[*f.X.columns, *missing]), f.meta, f.y, f.benchmarks, f.groups
+            f.X.reindex(columns=[*f.X.columns, *missing]),
+            f.meta,
+            f.y,
+            f.benchmarks,
+            f.groups,
+            f.known,
         )
     rows = []
     for target, q in model.predict(f).items():
@@ -124,7 +189,21 @@ def predict_model(
                     }
                 )
             )
-    return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
+    if not rows:
+        return pd.DataFrame()
+    out = pd.concat(rows, ignore_index=True)
+    # NaN nie schreiben: ein Lauf ohne gültige Werte gilt als fehlend und wird nachgeholt
+    bad = out["value"].isna()
+    if bad.any():
+        log.error(
+            "predict.nan",
+            version=version,
+            issue=str(issue),
+            targets=sorted(out.loc[bad, "target"].unique()),
+            rows=int(bad.sum()),
+        )
+        out = out[~bad].reset_index(drop=True)
+    return out
 
 
 def predict_versions(

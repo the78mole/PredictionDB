@@ -21,6 +21,24 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+    # Verschwindet ein Client ohne Verbindungsabbau (z. B. Container-Neustart beim Deploy),
+    # merken die Keepalives das nach ca. 2 min und Postgres gibt seine Sperren frei; sonst
+    # wartet ein COPY ewig auf Daten und blockiert alle weiteren Schreiber derselben Chunks.
+    # client_connection_check_interval prüft das auch während laufender Anweisungen.
+    # Der Leerlauf-Timeout fängt liegengebliebene Transaktionen ab (großzügig wegen
+    # Server-Cursorn, die zwischen zwei Abrufen rechnen).
+    command:
+      - postgres
+      - -c
+      - tcp_keepalives_idle=60
+      - -c
+      - tcp_keepalives_interval=10
+      - -c
+      - tcp_keepalives_count=6
+      - -c
+      - client_connection_check_interval=10s
+      - -c
+      - idle_in_transaction_session_timeout=30min
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
@@ -102,7 +120,8 @@ services:
   # Rechnet alle 10 min die vollständigen Läufe der letzten 48 h, die noch fehlen.
   wx-process:
     <<: *app
-    command: ["wx-process", "gfs", "latest", "--watch", "600"]
+    # Bronze älter als GFS_BRONZE_DAYS (Standard 92) wird gelöscht, sobald Silber vorliegt
+    command: ["wx-process", "gfs", "latest", "--watch", "600", "--bronze-days", "${GFS_BRONZE_DAYS:-92}"]
     depends_on:
       garage-init: {condition: service_completed_successfully}
       migrate: {condition: service_completed_successfully}
@@ -110,7 +129,8 @@ services:
   # GFS-Historie aus dem AWS-Archiv (nur bei Bedarf: docker compose --profile backfill up -d).
   # Ab GFS v16 (2021-03-22 12Z) bis vor das 30-h-Fenster von ingest-gfs, jüngste Läufe zuerst;
   # ein Neustart setzt dort fort, wo er stand. Läufe, deren Silber schon vorliegt (z. B. von
-  # wx-import aus GHCR), werden übersprungen; GFS_BACKFILL_BRONZE=true lädt auch für sie Bronze.
+  # wx-import aus GHCR), werden übersprungen; GFS_BACKFILL_BRONZE=true lädt auch für sie Bronze
+  # (wx-process löscht es nach GFS_BRONZE_DAYS wieder, sobald Silber vorliegt).
   # Läufe per GFS_BACKFILL_RUNS wählbar (Standard 0,12), danach z. B. 6,18 nachziehen.
   # Tempo: GFS_BACKFILL_PARALLEL Läufe gleichzeitig, GFS_BACKFILL_CONCURRENCY Anfragen je
   # Archiv-Endpunkt für alle Läufe zusammen (Engpass ist die Latenz zum Archiv, nicht die CPU).
@@ -135,16 +155,23 @@ services:
 
   # Rechnet die nachgeladenen bzw. importierten Läufe stündlich nach Silber und Features
   # (wx-process latest schaut nur 48 h zurück).
+  # GFS_PROCESS_RUNS gibt die Laufzeiten in Reihenfolge der Priorität an; Läufe ohne Silber
+  # werden übersprungen, die Liste darf also mehr enthalten als gfs-backfill lädt.
+  # --decompress entpackt die schon komprimierten Chunks von feat.nwp_value, solange Läufe
+  # hineinschreiben (ein COPY in komprimierte Chunks ist etwa dreimal langsamer).
   wx-process-backfill:
     <<: *app
     profiles: [backfill, history]
+    # Zeit, um einen laufenden Feature-COPY sauber abzuschließen, bevor Docker hart beendet
+    stop_grace_period: 120s
     command:
       - wx-process
       - gfs
       - backfill
       - ${GFS_HISTORY_START:-${GFS_BACKFILL_START:-2021-03-22T12}}
-      - --runs=${GFS_BACKFILL_RUNS:-0,12}
+      - --runs=${GFS_PROCESS_RUNS:-0,12,6,18}
       - --newest-first
+      - --decompress
       - --watch=3600
     depends_on:
       garage-init: {condition: service_completed_successfully}
@@ -165,6 +192,86 @@ services:
       - ${GFS_HISTORY_START:-${GFS_BACKFILL_START:-2021-03-22T12}}
       - --runs=${GFS_HISTORY_RUNS:-0,12,6,18}
       - --watch=3600
+    depends_on:
+      garage-init: {condition: service_completed_successfully}
+      migrate: {condition: service_completed_successfully}
+
+  # GFS 0,5° fürs ganze Verbundnetz (ARCHITEKTUR.md 5.7, Quelle gfs_0p5): gleiche Läufe wie
+  # ingest-gfs, aber Produkt pgrb2.0p50 im GEFS-Ausschnitt, nur aus den Archiven (AWS, GCS),
+  # damit NOMADS für GFS DE frei bleibt. ≈ 27 MB Bronze je Lauf.
+  ingest-gfs-eu:
+    <<: *app
+    command: ["wx-ingest", "gfs", "--config", "config/sources/gfs_0p5.yaml", "latest", "--watch", "600"]
+    depends_on:
+      garage-init: {condition: service_completed_successfully}
+      migrate: {condition: service_completed_successfully}
+
+  # Bronze → Silber für gfs_0p5. Gold je Gebotszone folgt mit einer Clusterung für das Gitter
+  # gfs_0p5; bis dahin bleibt es beim Silber (Ergebnis silver_only).
+  wx-process-eu:
+    <<: *app
+    command: ["wx-process", "--config", "config/process/gfs_0p5.yaml", "gfs", "latest", "--watch", "600", "--bronze-days", "${GFS_BRONZE_DAYS:-92}"]
+    depends_on:
+      garage-init: {condition: service_completed_successfully}
+      migrate: {condition: service_completed_successfully}
+
+  # Gold für die Historie GFS Europa (Silber von wx-import-eu), wie wx-process-backfill, aber
+  # ohne --decompress: die Chunks von feat.nwp_value entpackt und packt wx-process-backfill.
+  wx-process-backfill-eu:
+    <<: *app
+    profiles: [history]
+    stop_grace_period: 120s
+    command:
+      - wx-process
+      - --config=config/process/gfs_0p5.yaml
+      - gfs
+      - backfill
+      - ${GFS_HISTORY_START:-${GFS_BACKFILL_START:-2021-03-22T12}}
+      - --runs=${GFS_PROCESS_RUNS:-0,12,6,18}
+      - --newest-first
+      - --watch=3600
+    depends_on:
+      garage-init: {condition: service_completed_successfully}
+      migrate: {condition: service_completed_successfully}
+
+  # Historie GFS Europa als Silber aus GHCR (gfs-history.yml mit source=eu, Paket
+  # gfs-0p5-silver), wie wx-import.
+  wx-import-eu:
+    <<: *app
+    profiles: [history]
+    command:
+      - wx-exchange
+      - gfs
+      - --config=config/sources/gfs_0p5.yaml
+      - --process-config=config/process/gfs_0p5.yaml
+      - import
+      - ${GFS_HISTORY_START:-${GFS_BACKFILL_START:-2021-03-22T12}}
+      - --runs=${GFS_HISTORY_RUNS:-0,12,6,18}
+      - --watch=3600
+    depends_on:
+      garage-init: {condition: service_completed_successfully}
+      migrate: {condition: service_completed_successfully}
+
+  # GEFS-Ensemble (ARCHITEKTUR.md 5.6): baut den aktuellen Monat selbst (00Z-Läufe, sobald
+  # vollständig), hält die Bronze GEFS_BRONZE_DAYS Tage in wx-bronze und schiebt das Silber nach
+  # GHCR (WX_EXCHANGE_TOKEN mit write:packages); abgeschlossene Monate kommen aus GHCR (Actions).
+  # Danach Gold (Mittel, Streuung, P10/P90 je Gebotszone) nach feat.nwp_value. Lädt ≈ 3,7 GB je
+  # Lauf vom AWS-Archiv.
+  wx-gefs:
+    <<: *app
+    command:
+      - wx-exchange
+      - gefs
+      - vm
+      - --history-start=${GEFS_HISTORY_START:-2021-03-22T12}
+      - --bronze-days=${GEFS_BRONZE_DAYS:-183}
+      # Gold in kleinen Runden (≈ 75 s und 96 000 Werte je Lauf), jüngste Läufe zuerst; jede Runde
+      # sieht frisch importierte Monate, und das GFS-Gold wartet nicht lange
+      - --gold-limit=${GEFS_GOLD_LIMIT:-12}
+      - --watch=1800
+    environment:
+      <<: *app-env
+      WX_EXCHANGE_USERNAME: ${WX_EXCHANGE_USERNAME:-the78mole}
     depends_on:
       garage-init: {condition: service_completed_successfully}
       migrate: {condition: service_completed_successfully}
@@ -200,13 +307,31 @@ services:
   ml-predict:
     <<: *app
     profiles: [ml]
-    command: ["ml-train", "predict", "--watch", "3600", "--catch-up", "24", "--also-config", "config/ml/de_lu_v2.yaml"]
+    command: ["ml-train", "predict", "--watch", "3600", "--catch-up", "24", "--fill-new", "216", "--also-config", "config/ml/de_lu_v2.yaml"]
     environment:
       <<: *app-env
       PDB_ML_REGISTRY: s3://ml-artifacts/models
       OMP_NUM_THREADS: ${ML_PREDICT_THREADS:-2}
     depends_on:
       migrate: {condition: service_completed_successfully}
+
+  # Öffentlicher Snapshot der Wochenprognose (Dashboard „Prognose öffentlich“) auf
+  # snapshots.raintank.io, täglich um PDB_SNAPSHOT_AT; danach zeigt der Kurzlink
+  # (PDB_SHORTLINK_KIND = shortio oder shlink) auf den neuen Snapshot. Nur mit Profil public.
+  grafana-snapshot:
+    <<: *app
+    profiles: [public]
+    command:
+      - wx-exchange
+      - snapshot
+      - --at=${PDB_SNAPSHOT_AT:-14:30}
+      - --expires=${PDB_SNAPSHOT_EXPIRES:-2592000}
+    environment:
+      <<: *app-env
+      PDB_GRAFANA_URL: http://grafana:3000
+      PDB_GRAFANA_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+    depends_on:
+      grafana: {condition: service_started}
 
   # Status-Dashboards (config/grafana). Liest über die Rolle grafana_reader (Migration 0004).
   # Port wird erst im Override veröffentlicht (VM: Proxy-Netz, lokal: localhost).
@@ -221,10 +346,13 @@ services:
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      # Business Charts (ECharts, Apache-2.0) für die beschrifteten Tagesmittel in
+      # „Prognose aktuell“; feste Version, beim Start installiert
+      GF_PLUGINS_PREINSTALL_SYNC: volkovlabs-echarts-panel@7.2.5
       # SQLite im WAL-Modus: Schreibzugriffe (Alarm-Auswertung, Sessions) sperren sonst bei
       # ausgelasteter Platte (Backfills) alle Lesezugriffe, Grafana antwortet dann mit 500.
       GF_DATABASE_WAL: "true"
-      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana-dashboards/status.json
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana-dashboards/prognose-energiedaten.json
       # Deutsches Datums- und Zeitformat an Achsen und in Tabellen
       GF_DATE_FORMATS_FULL_DATE: DD.MM.YYYY HH:mm:ss
       GF_DATE_FORMATS_INTERVAL_SECOND: HH:mm:ss

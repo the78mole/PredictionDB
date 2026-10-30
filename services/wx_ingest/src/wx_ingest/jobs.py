@@ -4,6 +4,8 @@ Beides speist die Backfill-Tabellen im Status-Dashboard.
 
 Die Datenbank ist für den Download nicht nötig: Ist sie nicht erreichbar, wird nur gewarnt
 und ohne Protokoll weitergeladen.
+
+@relation(SWA-WXI-JOBLOG, scope=file)
 """
 
 from __future__ import annotations
@@ -30,6 +32,7 @@ class JobLog:
         self.mode = "backfill"
 
     def _run(self, sql: str, params: dict[str, object]) -> object | None:
+        """@relation(SWR-WXI-032, scope=function)"""
         if self.engine is None:
             return None
         try:
@@ -52,13 +55,24 @@ class JobLog:
         runs: list[datetime],
         mode: str = "backfill",
     ) -> None:
-        """Legt den Job und seine Läufe in Warteschlangen-Reihenfolge an."""
+        """Legt den Job und seine Läufe in Warteschlangen-Reihenfolge an.
+
+        @relation(SWR-WXI-032, scope=function)
+        """
         self.mode = mode
+        host = socket.gethostname()
+        # Verwaist sind Jobs ohne Lebenszeichen und Jobs desselben Dienstes (Quelle und Modus)
+        # aus einem anderen Container: Je Dienst läuft nur ein Container, ein Neustart (Deploy)
+        # beendet den alten, auch wenn er seinen Abschluss nicht mehr schreiben konnte.
         self._run(
             f"""WITH stale AS (
                   UPDATE meta.backfill_job SET status = 'aborted', finished_at = updated_at,
                          error = 'ohne Abschluss beendet'
-                   WHERE status = 'running' AND updated_at < now() - interval '{STALE}'
+                   WHERE status = 'running'
+                     AND (updated_at < now() - interval '{STALE}'
+                          OR (mode = :mode AND host IS DISTINCT FROM :host
+                              AND source_id = (SELECT source_id FROM meta.source
+                                                WHERE code = :source)))
                   RETURNING job_id, mode)
                 UPDATE meta.backfill_run r
                    SET status = CASE s.mode WHEN 'live' THEN 'handed_over' ELSE 'aborted' END,
@@ -66,6 +80,14 @@ class JobLog:
                   FROM stale s
                  WHERE r.job_id = s.job_id
                    AND (r.status = 'running' OR (s.mode = 'live' AND r.status = 'queued'))""",
+            {"mode": mode, "host": host, "source": source},
+        )
+        # Läufe beendeter Jobs, die noch als laufend stehen (z. B. nach einem Absturz)
+        self._run(
+            """UPDATE meta.backfill_run r SET status = 'aborted', finished_at = now(),
+                      updated_at = now()
+                 FROM meta.backfill_job j
+                WHERE r.job_id = j.job_id AND j.status <> 'running' AND r.status = 'running'""",
             {},
         )
         job_id = self._run(
@@ -81,7 +103,7 @@ class JobLog:
                 "hours": hours,
                 "newest": newest_first,
                 "n": len(runs),
-                "host": socket.gethostname(),
+                "host": host,
                 "mode": mode,
             },
         )
@@ -161,7 +183,10 @@ class JobLog:
         )
 
     def live_window(self, start: datetime, end: datetime, runs: list[datetime]) -> None:
-        """Live-Modus: gleitendes Fenster nachführen, neue Läufe hinten einreihen."""
+        """Live-Modus: gleitendes Fenster nachführen, neue Läufe hinten einreihen.
+
+        @relation(SWR-WXI-032, scope=function)
+        """
         if self.job_id is None:
             return
         self._run(

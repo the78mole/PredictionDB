@@ -128,7 +128,9 @@ ENERGY_SQL = text("""
     WHERE code = :code AND ts >= :a AND ts < :b
     GROUP BY 1 ORDER BY 1""")
 
-# *_power als Summe über die Cluster, sonst nach Clusterleistung (Gitter-Gewichte) gemittelt
+# *_power als Summe über die Cluster, sonst nach Clusterleistung (Gitter-Gewichte) gemittelt.
+# feat.nwp_value ist nach valid_time partitioniert: Die Grenzen auf valid_time (konstant,
+# aus run_time und max_lead) lassen TimescaleDB alle übrigen Chunks überspringen
 WEATHER_SQL = text("""
     WITH w AS (
       SELECT c.region_id, c.technology, sum(g.capacity_mw) AS cap
@@ -144,6 +146,7 @@ WEATHER_SQL = text("""
     JOIN meta.feature f USING (feature_id)
     JOIN meta.source s ON s.source_id = f.source_id AND s.code = :source
     WHERE n.run_time >= :a AND n.run_time < :b
+      AND n.valid_time >= :a AND n.valid_time < :valid_to
       AND extract(hour FROM n.run_time AT TIME ZONE 'UTC') = ANY(:hours)
       AND n.valid_time <= n.run_time + make_interval(hours => :max_lead)
     GROUP BY n.run_time, n.valid_time, w.technology, f.code""")
@@ -178,6 +181,7 @@ def export_snapshot(
     end: datetime,
     *,
     weather_from: datetime | None = None,
+    weather_to: datetime | None = None,
     run_hours: list[int] | None = None,
     max_lead_h: int = 216,
     clustering_version: str | None = None,
@@ -185,7 +189,11 @@ def export_snapshot(
     grid: str = "gfs_0p25",
     progress: Progress = no_progress,
 ) -> Snapshot:
-    """Liest Energie, Wetter-Features und Bestand für ``[start, end)`` aus der Datenbank."""
+    """Liest Energie, Wetter-Features und Bestand für ``[start, end)`` aus der Datenbank.
+
+    Wetterläufe nur mit ``run_time`` in ``[weather_from, weather_to)`` (Vorgabe: ``start``,
+    ``end``); ``weather_to <= weather_from`` lässt das Wetter ganz weg.
+    """
     cv = clustering_version or latest_clustering(engine)
     hours = run_hours or [0, 12]
     energy_parts: list[pd.DataFrame] = []
@@ -198,7 +206,9 @@ def export_snapshot(
             energy_parts.append(df)
             log.info("snapshot.energy", code=code, rows=len(df))
         if cv is not None:
-            months = list(_months(max(start, weather_from or start), end))
+            wx_start = max(start, weather_from or start)
+            wx_end = min(end, weather_to) if weather_to is not None else end
+            months = list(_months(wx_start, wx_end)) if wx_start < wx_end else []
             for j, (a, b) in enumerate(months):
                 progress(f"Wetter {j + 1}/{len(months)} · {a:%Y-%m}")
                 df = pd.read_sql(
@@ -210,6 +220,7 @@ def export_snapshot(
                         "source": source,
                         "a": a,
                         "b": b,
+                        "valid_to": b + timedelta(hours=max_lead_h),
                         "hours": hours,
                         "max_lead": max_lead_h,
                     },

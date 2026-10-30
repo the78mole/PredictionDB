@@ -1,0 +1,5 @@
+Berichte: 56 (cap_report_201503_en bis cap_report_202506_en)
+Auktionszeilen roh: 1766, abgesagt: 3, bereinigt: 1761
+Prüfung: {'ok': 1758, 'korrigiert': 2, 'abgeleitet': 1}
+Nicht lesbare Zeilen: 0
+

@@ -1,0 +1,43 @@
+name: GHCR aufräumen
+
+# Löscht untagged Versionen der Datenpakete unter ghcr.io/the78mole/predictiondb-data/. Sie
+# entstehen, wenn ein Monatsmanifest unter demselben Tag neu geschrieben wird (Neubau mit neuem
+# Fingerabdruck, Lückenfüller, idx-Artefakt v1). Import und VM folgen nur den Tags; die alten
+# Manifeste und ihre Layer sind Ballast. Nur von Hand starten und nicht, während ein
+# Historien-Workflow ins selbe Paket schreibt.
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Paket (ohne predictiondb-data/)
+        type: choice
+        options:
+          - gefs-0p5-silver
+          - gfs-0p25-silver
+          - gfs-0p5-silver
+          - gfs-0p25-gdex-idx
+
+permissions:
+  packages: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      # actions/delete-package-versions löscht höchstens 100 Versionen je Lauf; nach Neubauten
+      # sind es mehr. Daher erst alle untagged IDs einsammeln, dann einzeln löschen.
+      - name: Untagged Versionen löschen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE: predictiondb-data/${{ inputs.package }}
+        run: |
+          set -euo pipefail
+          base="/users/the78mole/packages/container/${PACKAGE//\//%2F}/versions"
+          gh api --paginate "$base?per_page=100" \
+            --jq '.[] | select((.metadata.container.tags | length) == 0) | .id' > untagged.txt
+          echo "Untagged: $(wc -l < untagged.txt)"
+          n=0
+          while read -r id; do
+            gh api -X DELETE "$base/$id" --silent && n=$((n + 1))
+          done < untagged.txt
+          echo "Gelöscht: $n" | tee -a "$GITHUB_STEP_SUMMARY"

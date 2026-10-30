@@ -1,0 +1,170 @@
+name: GFS-idx (GDEX)
+
+# Vollständige .idx (Format wgrib2 -s, alle Nachrichten) für die GFS-0,25°-Dateien im
+# NCAR-Archiv GDEX d084001, das selbst keine .idx hat. Je Datei werden alle Nachrichtenköpfe per
+# Range gelesen (wx-exchange gfs idx-build), das kostet rund 6 bis 7 Minuten je Lauf.
+#
+# Ergebnis ist EIN OCI-Artefakt ghcr.io/the78mole/predictiondb-data/gfs-0p25-gdex-idx:v1 mit
+# einem Layer (tar.gz) je Monat und Laufzeit; Monat und Laufzeit stehen in den Annotationen
+# org.predictiondb.month und .hour, sodass sich ein Monat gezielt als Blob laden lässt. Die
+# Annotationen halten auch den Stand fest (failed, absent, complete).
+#
+# Ablauf: Plan liest das Manifest und nimmt nur Monat-Laufzeit-Paare ohne vollständigen Layer.
+# Je Matrix-Job wird ein Layer gebaut und als Blob hochgeladen; schlägt ein Job fehl oder
+# bleiben Dateien offen, schreibt der Abschlussjob das Manifest trotzdem mit allen übrigen.
+# Ein erneuter Start ergänzt nur die Lücken: Vorhandene Layer bleiben liegen, ein
+# unvollständiger Layer wird übernommen und nur um die fehlenden Dateien ergänzt.
+#
+# Lizenz der Inventare wie der Daten: CC BY 4.0, NCEP GFS 0.25 Degree Global Forecast Grids
+# Historical Archive, Research Data Archive at NCAR, https://doi.org/10.5065/D65D8PWK
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: Frühester Lauf (Beginn von d084001)
+        default: 2015-01-15T00
+      end:
+        description: Spätester Lauf (danach AWS mit .idx)
+        default: 2021-03-22T06
+      runs:
+        description: Laufzeiten in Reihenfolge der Priorität
+        default: "0,12"
+      max_parallel:
+        description: Gleichzeitige Monatsjobs (GDEX-Silber-Backfill läuft mit bis zu 8 daneben)
+        type: number
+        default: 8
+      concurrency:
+        # 8 Jobs mit je 96 Anfragen brachten OSDF dazu, Verbindungen abzubrechen; 24 liefen
+        # auf der VM über den festen Cache ohne Abbrüche
+        description: Gleichzeitige Anfragen je Job ans Archiv
+        default: "24"
+      limit:
+        description: Höchstens so viele Monatsjobs je Start (Matrix-Grenze 256)
+        default: "256"
+      rebuild:
+        description: Alle Layer neu bauen (vorhandene nicht übernehmen)
+        type: boolean
+        default: false
+
+concurrency:
+  group: gfs-idx
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CONFIG: config/sources/gfs_0p25_gdex.yaml
+  WX_EXCHANGE_REPOSITORY: the78mole/predictiondb-data/gfs-0p25-gdex-idx
+  PDB_LOG_JSON: "false"
+  # Log sofort zeigen, nicht erst gepuffert am Ende
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  plan:
+    name: Lücken planen
+    runs-on: ubuntu-26.04
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+          save-cache: false
+      - run: uv sync --locked --no-dev --package wx-exchange
+      - id: plan
+        env:
+          START: ${{ inputs.start }}
+          END: ${{ inputs.end }}
+          RUNS: ${{ inputs.runs }}
+          LIMIT: ${{ inputs.limit }}
+          REBUILD: ${{ inputs.rebuild }}
+        run: |
+          args=(gfs --config "$CONFIG" idx-plan "$START" "$END" --runs "$RUNS" --limit "$LIMIT")
+          [ "$REBUILD" = "true" ] && args+=(--all)
+          uv run --no-sync wx-exchange "${args[@]}"
+
+  month:
+    name: ${{ matrix.month }} ${{ matrix.hour }}Z
+    needs: plan
+    if: needs.plan.outputs.matrix != '[]'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 300
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      # Beim Start über die API kommt die Eingabe als Text; fromJSON macht daraus eine Zahl
+      max-parallel: ${{ fromJSON(inputs.max_parallel) }}
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    env:
+      WX_EXCHANGE_USERNAME: ${{ github.actor }}
+      WX_EXCHANGE_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+          save-cache: false
+      - run: uv sync --locked --no-dev --package wx-exchange
+      - name: Köpfe lesen, .idx packen, Blob hochladen
+        env:
+          MONTH: ${{ matrix.month }}
+          HOUR: ${{ matrix.hour }}
+          START: ${{ inputs.start }}
+          END: ${{ inputs.end }}
+          CONCURRENCY: ${{ inputs.concurrency }}
+          REBUILD: ${{ inputs.rebuild }}
+        run: |
+          mkdir -p layer
+          # Nach 270 min keine neue Datei mehr beginnen, damit der Layer vor der Job-Grenze
+          # hochgeladen wird; offene Dateien holt der nächste Start nach
+          args=(gfs --config "$CONFIG" idx-build "$MONTH" "$HOUR" --start "$START" --end "$END"
+                --out "layer/$MONTH-${HOUR}z.json" --archive-concurrency "$CONCURRENCY"
+                --minutes 270)
+          [ "$REBUILD" = "true" ] && args+=(--rebuild)
+          uv run --no-sync wx-exchange "${args[@]}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: idx-layer-${{ matrix.month }}-${{ matrix.hour }}z
+          path: layer/
+          retention-days: 7
+
+  manifest:
+    name: Manifest schreiben
+    needs: [plan, month]
+    # Auch wenn einzelne Monate fehlschlagen: alle übrigen Layer kommen ins Manifest
+    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.matrix != '[]' }}
+    runs-on: ubuntu-26.04
+    permissions:
+      actions: read
+      contents: read
+      packages: write
+    env:
+      WX_EXCHANGE_USERNAME: ${{ github.actor }}
+      WX_EXCHANGE_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+          save-cache: false
+      - run: uv sync --locked --no-dev --package wx-exchange
+      - name: Layer-Beschreibungen der Monatsjobs holen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download "$GITHUB_RUN_ID" -R "$GITHUB_REPOSITORY" -p 'idx-layer-*' -D artifacts \
+            || echo "keine Layer-Beschreibungen"
+          mkdir -p layers
+          find artifacts -name '*.json' -exec cp {} layers/ \; 2>/dev/null || true
+          ls layers
+      - name: Manifest neu schreiben
+        run: |
+          uv run --no-sync wx-exchange gfs --config "$CONFIG" idx-manifest layers \
+            | tee summary.json
+          { echo '### GFS-idx (GDEX)'; echo '```json'; cat summary.json; echo '```'; } \
+            >> "$GITHUB_STEP_SUMMARY"

@@ -11,6 +11,12 @@ on:
       config:
         type: string
         default: config/sources/gfs_0p25.yaml
+      process_config:
+        type: string
+        default: config/process/gfs_0p25.yaml
+      repository:
+        type: string
+        default: the78mole/predictiondb-data/gfs-0p25-silver
       archive_concurrency:
         type: string
         default: "16"
@@ -39,13 +45,15 @@ jobs:
       matrix:
         include: ${{ fromJSON(inputs.matrix) }}
     env:
-      WX_EXCHANGE_REPOSITORY: the78mole/predictiondb-data/gfs-0p25-silver
+      WX_EXCHANGE_REPOSITORY: ${{ inputs.repository }}
       WX_EXCHANGE_USERNAME: ${{ github.actor }}
       WX_EXCHANGE_TOKEN: ${{ github.token }}
       PDB_LOG_JSON: "false"
+      # Log sofort zeigen, nicht erst gepuffert am Ende
+      PYTHONUNBUFFERED: "1"
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.3.2
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           enable-cache: true
           save-cache: false
@@ -53,6 +61,7 @@ jobs:
       - name: Monat laden, verdichten und nach GHCR
         env:
           CONFIG: ${{ inputs.config }}
+          PROCESS_CONFIG: ${{ inputs.process_config }}
           CONCURRENCY: ${{ inputs.archive_concurrency }}
           MONTH: ${{ matrix.month }}
           HOUR: ${{ matrix.hour }}
@@ -60,7 +69,8 @@ jobs:
           END: ${{ inputs.end }}
           REBUILD: ${{ inputs.rebuild }}
         run: |
-          args=(gfs --config "$CONFIG" publish "$MONTH" "$HOUR" --start "$START" --parallel-runs 2
+          args=(gfs --config "$CONFIG" --process-config "$PROCESS_CONFIG" publish "$MONTH" "$HOUR"
+                --start "$START" --parallel-runs 2
                 --archive-concurrency "$CONCURRENCY")
           [ -n "$END" ] && args+=(--end "$END")
           [ "$REBUILD" = "true" ] && args+=(--rebuild)

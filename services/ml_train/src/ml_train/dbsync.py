@@ -81,9 +81,10 @@ def version_row(version: str, role: str, man: dict[str, Any], config: str) -> di
 
 
 def metric_rows(version: str, bt: pd.DataFrame) -> list[dict[str, Any]]:
-    """Kennzahlen je Ziel und Vorlauftag sowie über alle Vorlauftage (``lead_day`` 0)."""
+    """Kennzahlen je Ziel und Vorlauftag sowie über alle Vorlauftage (``lead_day`` -1; 0 ist
+    der Rest des Ausgabetags)."""
     ctx = add_context(bt)
-    parts = [score(ctx, ["target", "lead_day"]), score(ctx, ["target"]).assign(lead_day=0)]
+    parts = [score(ctx, ["target", "lead_day"]), score(ctx, ["target"]).assign(lead_day=-1)]
     m = pd.concat(parts, ignore_index=True)
     cols = ["mae", "rmse", "bias", "pinball", "coverage80"]
     m[cols] = m[cols].astype(float).replace({np.nan: None})

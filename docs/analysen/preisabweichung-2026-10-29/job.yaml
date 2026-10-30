@@ -1,0 +1,32 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; ausgewertet von auswertung.py im selben Ordner
+id: preisabweichung-2026-10-29
+title: Preisprognose für den 29.10.2026 deutlich unter dem Day-Ahead-Preis
+question: >
+  Warum liegen alle aktiven Preismodelle für den Liefertag 29.10.2026 weit unter dem
+  Day-Ahead-Preis? Liegt es an den stark gestiegenen Preisen für fossile Energieträger?
+  Mit welchen Daten wurden die Modelle trainiert?
+requested_by: Maulwurf
+kind: custom
+inputs:
+  predictions: {table: fcst.prediction, issue_time: 2026-10-28T08:00Z, valid: 2026-10-29}
+  models: [de_lu_v1-kalender-202610242054-9a18ba, de_lu_v1-kalender-202610270115-7e355b,
+           de_lu_v2-frei-202610251049-7e1594, de_lu_v2-frei-202610270147-6b979e,
+           de_lu_v2-wetter_frei-202610271848-df539f]
+  series:
+    view: energy.value_best        # nur freie Quellen, Stand 28.10.2026 ~14:30 UTC
+    codes: [da_price_de_lu, da_price_<nachbarn>, residual_load, load_actual, gen_wind_onshore,
+            gen_wind_offshore, gen_solar, load_da_forecast, gen_da_forecast_*, gas_eu_m,
+            oil_brent_m, coal_au_m, coal_za_m, lng_japan_m, gas_henry_hub_m, oil_ulsd_nyh,
+            oil_ulsd_usgc, retail_de_diesel_net, retail_de_heating_oil_net, fx_usd_eur,
+            gas_storage_de, steo_brent_h*, mw_base]
+method:
+  vergleich: P50/P10/P90 je Version gegen Ist je Stunde
+  beitraege: LightGBM pred_contrib (SHAP) des Preis-P50 je Merkmal, Summe je Merkmalsgruppe
+  brennstoffe: Monatsmittel Strom vs. Gas/Öl/Kohle 2021-2026, Preis je Residuallastklasse und Zeitraum
+  rueckfall: Folgetag nach Tagen mit Tagesmittel >= 1,7 x 7-Tage-Mittel und >= 100 EUR/MWh
+  training: Manifeste der Registry, Anteil Trainingstage je Gaspreisniveau
+outputs:
+  tables: [zusammenfassung, stunden_29_10, beitraege_gruppen, brennstoffe_monat,
+           preis_je_residuallast, rueckfall_jahre, trainingsabdeckung_gas]
+  figures: [preis_29_10, beitraege_29_10, brennstoffe_verlauf, preis_je_residuallast]
+schedule: once

@@ -1,0 +1,1965 @@
+{
+  "uid": "pdb-wetter",
+  "title": "PredictionDB Wetter",
+  "tags": [
+    "predictiondb"
+  ],
+  "timezone": "",
+  "schemaVersion": 41,
+  "version": 1,
+  "editable": false,
+  "refresh": "5m",
+  "time": {
+    "from": "now-2d",
+    "to": "now"
+  },
+  "links": [
+    {
+      "type": "link",
+      "title": "Prognose aktuell",
+      "url": "/d/pdb-prognose-aktuell/predictiondb-prognose-aktuell",
+      "icon": "dashboard",
+      "tooltip": "Woche bis D+7 mit Bändern und Tagesmitteln, Gestern, Heute und Morgen",
+      "targetBlank": false,
+      "includeVars": false,
+      "keepTime": false,
+      "asDropdown": false,
+      "tags": []
+    },
+    {
+      "type": "link",
+      "title": "Prognose und Energiedaten",
+      "url": "/d/pdb-prognose-energie/predictiondb-prognose-und-energiedaten",
+      "icon": "dashboard",
+      "tooltip": "Modelle, Prognosefehler, Energiedaten und Anlagenbestand",
+      "targetBlank": false,
+      "includeVars": false,
+      "keepTime": true,
+      "asDropdown": false,
+      "tags": []
+    },
+    {
+      "type": "link",
+      "title": "System",
+      "url": "/d/pdb-system/predictiondb-system",
+      "icon": "dashboard",
+      "tooltip": "Auslastung der VM, Dienste, Speicher und Datenbank",
+      "targetBlank": false,
+      "includeVars": false,
+      "keepTime": true,
+      "asDropdown": false,
+      "tags": []
+    },
+    {
+      "type": "link",
+      "title": "Karte",
+      "url": "/d/pdb-karte/predictiondb-karte",
+      "icon": "external link",
+      "tooltip": "Cluster, Wetter und Erzeugung auf der Deutschlandkarte",
+      "targetBlank": false,
+      "includeVars": false,
+      "keepTime": false,
+      "asDropdown": false,
+      "tags": []
+    }
+  ],
+  "panels": [
+    {
+      "type": "row",
+      "title": "GFS-Läufe (verarbeitet)",
+      "id": 49,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Neuester verarbeiteter Lauf",
+      "id": 7,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT to_char(max(run_time) AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24:MI \"UTC\"') AS \"Lauf\"\n  FROM meta.nwp_feature_run"
+        }
+      ],
+      "description": "Aus meta.nwp_feature_run (wx-process). Bronze-Downloads selbst stehen nur im Log von ingest-gfs.",
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/.*/"
+        },
+        "colorMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "type": "table",
+      "title": "Letzte verarbeitete GFS-Läufe",
+      "id": 9,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 18,
+        "x": 6,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT to_char(run_time AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24:MI \"UTC\"') AS \"Lauf\",\n       clustering_version AS \"Clusterung\", features_version AS \"Features\",\n       n_values AS \"Werte\", processed_at AS \"Verarbeitet\"\n  FROM meta.nwp_feature_run\n ORDER BY run_time DESC LIMIT 12"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Alter des neuesten Laufs",
+      "id": 8,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT extract(epoch FROM now() - max(run_time)) / 3600 AS \"Stunden\" FROM meta.nwp_feature_run"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "h",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 12
+              },
+              {
+                "color": "red",
+                "value": 24
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "background"
+      }
+    },
+    {
+      "type": "row",
+      "title": "GFS-Downloads",
+      "id": 50,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "panels": []
+    },
+    {
+      "type": "table",
+      "title": "GFS-Downloads: laufende Jobs",
+      "id": 25,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 24,
+        "x": 0,
+        "y": 10
+      },
+      "description": "Neu = neu geladene Läufe, Da = schon vorhanden, Unv. = unvollständig, Fehler = fehlgeschlagene Schritte. Zeitraum und Zuletzt in UTC, Start und Fertig ca. lokal.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT job_id AS \"Job\",\n       CASE mode WHEN 'live' THEN 'Live' ELSE 'Backfill' END AS \"Art\",\n       to_char(range_start AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') || ' – ' ||\n         to_char(range_end AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zeitraum\",\n       array_to_string(run_hours, '/') || 'Z' AS \"Läufe\",\n       round(100.0 * (n_complete + n_incomplete) / nullif(n_runs, 0), 1) AS \"Fortschritt\",\n       (n_complete + n_incomplete) || '/' || n_runs AS \"Bearbeitet\",\n       n_complete - n_skipped AS \"Neu\",\n       n_skipped AS \"Da\",\n       n_incomplete AS \"Unv.\",\n       n_failed_steps AS \"Fehler\",\n       bytes_stored AS \"Bronze\",\n       to_char(last_run AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zuletzt\",\n       to_char(started_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Start\",\n       CASE WHEN mode = 'backfill' AND n_complete + n_incomplete > n_skipped\n            THEN to_char((now() + (now() - started_at) * (n_runs - n_complete - n_incomplete)\n                          / (n_complete + n_incomplete - n_skipped)) AT TIME ZONE 'Europe/Berlin',\n                         'DD.MM. HH24:MI') END AS \"Fertig ca.\",\n       CASE WHEN updated_at < now() - interval '30 minutes' THEN 'hängt?' ELSE 'läuft' END AS \"Status\"\n  FROM meta.backfill_job\n WHERE status = 'running'\n ORDER BY started_at DESC"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "minWidth": 30
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Job"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 40
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Art"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Zeitraum"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 196
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Läufe"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 78
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Fortschritt"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 324
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Bearbeitet"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Neu"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 46
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Da"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 42
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Unv."
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 46
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Fehler"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 52
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Bronze"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 74
+              },
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Zuletzt"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 96
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Start"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 88
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Fertig ca."
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 88
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 72
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
+    {
+      "type": "table",
+      "title": "GFS-Downloads: laufende und anstehende Läufe",
+      "id": 27,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 13,
+        "x": 0,
+        "y": 15
+      },
+      "description": "Oben die Live-Läufe (ingest-gfs, eigener Dienst mit eigener Quelle NOMADS, unabhängig vom Backfill): „NOAA ab hh:mm“ = Lauf noch nicht veröffentlicht, frühestens ab dieser lokalen Zeit; „wartet (NOAA)“ = teilweise veröffentlicht. Darunter laufende Backfill-Läufe und die nächsten der Warteschlange. Lauf in UTC, Start lokal.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT CASE j.mode WHEN 'live' THEN 'Live' ELSE 'Backfill' END AS \"Art\",\n       CASE WHEN r.status = 'running' THEN 'läuft'\n            WHEN j.mode = 'live' AND r.steps_done = 0\n              THEN 'NOAA ab ' || to_char((r.run_time + interval '3 hours 30 minutes')\n                                         AT TIME ZONE 'Europe/Berlin', 'HH24:MI')\n            WHEN j.mode = 'live' THEN 'wartet (NOAA)'\n            ELSE 'wartet' END AS \"Status\",\n       r.queue_pos AS \"Pos\",\n       to_char(r.run_time AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') AS \"Lauf\",\n       CASE WHEN r.status = 'running'\n            THEN round(100.0 * r.steps_done / nullif(r.n_steps, 0), 1) END AS \"Fortschritt\",\n       CASE WHEN r.status = 'running' THEN r.steps_done || '/' || r.n_steps END AS \"Schritte\",\n       CASE WHEN r.status = 'running' THEN r.bytes_stored END AS \"Bronze\",\n       to_char(r.started_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Start\"\n  FROM meta.backfill_run r JOIN meta.backfill_job j USING (job_id)\n WHERE j.status = 'running' AND r.status IN ('running', 'queued')\n ORDER BY (j.mode = 'live') DESC, (r.status = 'running') DESC, r.queue_pos\n LIMIT 50"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "minWidth": 30
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Art"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 124
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Pos"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 42
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Lauf"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 118
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Schritte"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 66
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Bronze"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 72
+              },
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Start"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 86
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Fortschritt"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 258
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "GFS-Downloads: zuletzt abgeschlossene Läufe",
+      "id": 28,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 11,
+        "x": 13,
+        "y": 15
+      },
+      "description": "Die letzten 50 abgeschlossenen Läufe aller Jobs, neueste oben. Neu = neu geladene Schritte; Lauf in UTC, Fertig in lokaler Zeit. übergeben = vom nächsten Live-Job geladen.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "SELECT to_char(r.run_time AT TIME ZONE 'UTC', 'DD.MM.YYYY HH24\"Z\"') AS \"Lauf\",\n       CASE WHEN r.status = 'complete' AND r.steps_stored = 0 THEN 'schon da'\n                     ELSE CASE r.status WHEN 'complete' THEN 'geladen' WHEN 'skipped' THEN 'schon da'\n                     WHEN 'incomplete' THEN 'unvollst.' WHEN 'handed_over' THEN 'übergeben' ELSE 'abgebr.' END END AS \"Ergebnis\",\n       r.steps_stored AS \"Neu\",\n       r.steps_failed AS \"Fehler\",\n       r.bytes_stored AS \"Bronze\",\n       to_char(r.finished_at - r.started_at, 'HH24:MI:SS') AS \"Dauer\",\n       to_char(r.finished_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Fertig\",\n       CASE j.mode WHEN 'live' THEN 'Live' ELSE 'Backfill' END AS \"Art\"\n  FROM meta.backfill_run r JOIN meta.backfill_job j USING (job_id)\n WHERE r.finished_at IS NOT NULL\n ORDER BY r.finished_at DESC\n LIMIT 50"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Lauf"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 118
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Ergebnis"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 82
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Neu"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 50
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Fehler"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 58
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Bronze"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 82
+              },
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Dauer"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Fertig"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Art"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "GFS-Downloads: letzte 10 abgeschlossene Jobs",
+      "id": 55,
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 27
+      },
+      "panels": [
+        {
+          "type": "table",
+          "title": "GFS-Downloads: letzte 10 abgeschlossene Jobs",
+          "id": 26,
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "gridPos": {
+            "h": 11,
+            "w": 24,
+            "x": 0,
+            "y": 28
+          },
+          "description": "Neu = neu geladene Läufe, Da = schon vorhanden, Unv. = unvollständig, Überg. = offene Läufe eines beendeten Live-Jobs, die der nächste Job lädt (meist der jüngste, bei NOAA noch nicht veröffentlichte; zählen nicht zum Fortschritt), Fehler = fehlgeschlagene Schritte, abgebr. = abgebrochen. Dauer in Stunden:Minuten. Fehlermeldungen stehen in meta.backfill_job.error.",
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "grafana-postgresql-datasource",
+                "uid": "pdb-postgres"
+              },
+              "rawQuery": true,
+              "editorMode": "code",
+              "format": "table",
+              "rawSql": "SELECT job_id AS \"Job\",\n       CASE mode WHEN 'live' THEN 'Live' ELSE 'Backfill' END AS \"Art\",\n       to_char(range_start AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') || ' – ' ||\n         to_char(range_end AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zeitraum\",\n       array_to_string(run_hours, '/') || 'Z' AS \"Läufe\",\n       round(100.0 * (n_complete + n_incomplete) / nullif(n_runs - h.n, 0), 1) AS \"Fortschritt\",\n       (n_complete + n_incomplete) || '/' || (n_runs - h.n) AS \"Bearbeitet\",\n       n_complete - n_skipped AS \"Neu\",\n       n_skipped AS \"Da\",\n       n_incomplete AS \"Unv.\",\n       h.n AS \"Überg.\",\n       n_failed_steps AS \"Fehler\",\n       bytes_stored AS \"Bronze\",\n       to_char(last_run AT TIME ZONE 'UTC', 'DD.MM.YY HH24\"Z\"') AS \"Zuletzt\",\n       to_char(started_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Start\",\n       to_char(finished_at AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS \"Ende\",\n       floor(extract(epoch FROM finished_at - started_at) / 3600)::int || ':' || to_char(finished_at - started_at, 'MI') AS \"Dauer\",\n       CASE WHEN status = 'done' THEN 'fertig' WHEN status = 'failed' THEN 'Fehler'\n            WHEN mode = 'live' THEN 'beendet' ELSE 'abgebr.' END AS \"Status\"\n  FROM meta.backfill_job j,\n       LATERAL (SELECT count(*) AS n FROM meta.backfill_run r\n                 WHERE r.job_id = j.job_id AND r.status = 'handed_over') h\n WHERE status <> 'running'\n ORDER BY finished_at DESC NULLS LAST\n LIMIT 10"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "minWidth": 30
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Job"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 40
+                  },
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Art"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 70
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Zeitraum"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 196
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Läufe"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 78
+                  },
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Fortschritt"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 324
+                  },
+                  {
+                    "id": "unit",
+                    "value": "percent"
+                  },
+                  {
+                    "id": "min",
+                    "value": 0
+                  },
+                  {
+                    "id": "max",
+                    "value": 100
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "gauge",
+                      "mode": "basic"
+                    }
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 1
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "green"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Bearbeitet"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 80
+                  },
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Neu"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 46
+                  },
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Da"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 42
+                  },
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Unv."
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 46
+                  },
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Überg."
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 56
+                  },
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Fehler"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 52
+                  },
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Bronze"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 74
+                  },
+                  {
+                    "id": "unit",
+                    "value": "bytes"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Zuletzt"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 96
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Start"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 88
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Ende"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 88
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Dauer"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 56
+                  },
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Status"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 72
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm"
+          }
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Lokaler Bestand (Bronze, Silber und Gold)",
+      "id": 51,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 28
+      },
+      "panels": []
+    },
+    {
+      "type": "barchart",
+      "title": "Bronze lokal je Monat (Anteil der Läufe: GFS DE, GFS Europa, GEFS)",
+      "id": 52,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 29
+      },
+      "description": "Je Monat der Anteil der erwarteten GFS-DE-Läufe (linker Balken) (wie beim Silber-Panel, Laufzeiten oben unter „GFS-Läufe“), deren zugeschnittene GRIB-Schritte (Bronze) vollständig in Garage wx-bronze liegen. Grün = fertig: ein Download-Lauf (gfs-ingest oder gfs-backfill) hat den Lauf vollständig abgelegt oder vollständig vorgefunden (meta.backfill_run complete/skipped), oder das lokale Silber wurde aus Bronze gerechnet (meta.silver_run origin bronze). Gelb = gerade im Bronze-Download. Läufe, deren Silber nur aus GHCR importiert wurde, haben lokal kein Bronze. Je Monat drei Balken, beschriftet ist der linke. GFS Europa (Mitte, lila; 0,5° fürs ganze Verbundnetz, Quelle gfs_0p5): Bronze nur, wo die VM den Lauf selbst geladen hat; die Historie kommt als Silber aus GHCR. GEFS (rechts, blau): je Tag ein 00Z-Lauf ab 23.03.2021. Bronze lädt nur wx-gefs auf der VM für den laufenden Monat und hält es etwa 6 Monate (meta.bronze_run). Blau = vorhanden, orange = im Download, grau = nach der Frist gelöscht (Silber liegt dann lokal und in GHCR).\n\nZuständige Dienste: GFS DE ingest-gfs (live) und gfs-backfill (Historie, derzeit aus); GFS Europa ingest-gfs-eu; GEFS wx-gefs (hält Bronze 183 Tage).",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "-- Erwartete Läufe wie im Silber-Panel. Grün: Bronze liegt vollständig in wx-bronze, d. h. ein\n-- Download hat den Lauf abgeschlossen oder vollständig vorgefunden (meta.backfill_run complete\n-- bzw. skipped) oder das Silber wurde lokal aus Bronze gerechnet (meta.silver_run origin bronze).\n-- Gelb: gerade im Bronze-Download (meta.backfill_run running).\n-- GFS Europa (mittlerer Balken, 0,5°): Läufe wie oben; Bronze lädt nur die VM selbst (Silber aus\n-- Bronze bzw. meta.backfill_run). GEFS (rechter Balken): je Tag ein 00Z-Lauf ab 23.03.2021,\n-- Bronze hält nur wx-gefs (meta.bronze_run), grau = nach der Frist gelöscht.\nWITH soll AS (\n  SELECT t FROM generate_series(timestamptz '2021-03-22 12:00+00',\n                                date_bin('6 hours', now() - interval '5 hours', timestamptz '2000-01-01'),\n                                interval '6 hours') t\n   WHERE extract(hour FROM t AT TIME ZONE 'UTC')::int::text IN ($gfs_lauf)),\nq AS (SELECT source_id FROM meta.source WHERE code = 'gfs_0p25'),\ndl AS (SELECT r.run_time, bool_or(r.status IN ('complete', 'skipped')) AS fertig,\n              bool_or(r.status = 'running') AS laden\n         FROM meta.backfill_run r JOIN meta.backfill_job j USING (job_id)\n        WHERE j.source_id = (SELECT source_id FROM q)\n        GROUP BY r.run_time),\nsilber AS (SELECT run_time FROM meta.silver_run\n            WHERE source_id = (SELECT source_id FROM q) AND origin = 'bronze' AND status = 'present'),\nz AS (\n  SELECT soll.t,\n         CASE WHEN dl.fertig OR silber.run_time IS NOT NULL THEN 'fertig'\n              WHEN dl.laden THEN 'laden' END AS zustand\n    FROM soll LEFT JOIN dl ON dl.run_time = soll.t LEFT JOIN silber ON silber.run_time = soll.t),\nesoll AS (SELECT t FROM soll),\neq AS (SELECT source_id FROM meta.source WHERE code = 'gfs_0p5'),\nedl AS (SELECT r.run_time, bool_or(r.status IN ('complete', 'skipped')) AS fertig,\n               bool_or(r.status = 'running') AS laden\n          FROM meta.backfill_run r JOIN meta.backfill_job j USING (job_id)\n         WHERE j.source_id = (SELECT source_id FROM eq)\n         GROUP BY r.run_time),\nez AS (\n  SELECT esoll.t,\n         CASE WHEN edl.fertig OR s.run_time IS NOT NULL THEN 'fertig'\n              WHEN edl.laden THEN 'laden' END AS zustand\n    FROM esoll LEFT JOIN edl ON edl.run_time = esoll.t\n    LEFT JOIN meta.silver_run s\n      ON s.run_time = esoll.t AND s.source_id = (SELECT source_id FROM eq)\n     AND s.origin = 'bronze' AND s.status = 'present'),\ngsoll AS (\n  SELECT t FROM generate_series(timestamptz '2021-03-23 00:00+00',\n                                date_bin('1 day', now() - interval '8 hours', timestamptz '2000-01-01'),\n                                interval '1 day') t),\ngq AS (SELECT source_id FROM meta.source WHERE code = 'gefs_0p5'),\ngz AS (\n  SELECT gsoll.t,\n         CASE WHEN b.status = 'present' THEN 'fertig'\n              WHEN b.status = 'loading' AND b.updated_at > now() - interval '12 hours' THEN 'laden'\n              WHEN b.status = 'deleted' THEN 'geloescht' END AS zustand\n    FROM gsoll LEFT JOIN meta.bronze_run b\n      ON b.run_time = gsoll.t AND b.source_id = (SELECT source_id FROM gq)),\ngfs AS (\n  SELECT to_char(t AT TIME ZONE 'UTC', 'YYYY-MM') AS \"Monat\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'fertig') / count(*), 1) AS \"GFS DE fertig\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'laden') / count(*), 1) AS \"GFS DE im Download\"\n    FROM z\n   GROUP BY 1),\neu AS (\n  SELECT to_char(t AT TIME ZONE 'UTC', 'YYYY-MM') AS \"Monat\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'fertig') / count(*), 1) AS \"GFS Europa fertig\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'laden') / count(*), 1) AS \"GFS Europa im Download\"\n    FROM ez\n   GROUP BY 1),\ngefs AS (\n  SELECT to_char(t AT TIME ZONE 'UTC', 'YYYY-MM') AS \"Monat\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'fertig') / count(*), 1) AS \"GEFS fertig\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'laden') / count(*), 1) AS \"GEFS im Download\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'geloescht') / count(*), 1) AS \"GEFS gelöscht (Frist)\"\n    FROM gz\n   GROUP BY 1),\nm AS (SELECT * FROM gfs FULL JOIN eu USING (\"Monat\") FULL JOIN gefs USING (\"Monat\"))\n-- Grafanas Balkendiagramm kennt keine Stapelgruppen: je Monat vier Zeilen (GFS DE,\n-- GFS Europa, GEFS, Lücke), beschriftet ist nur die erste\nSELECT CASE WHEN b.k = 0 THEN m.\"Monat\" ELSE '' END AS \"Monat\",\n       CASE WHEN b.k = 0 THEN m.\"GFS DE fertig\" END AS \"GFS DE fertig\",\n       CASE WHEN b.k = 0 THEN m.\"GFS DE im Download\" END AS \"GFS DE im Download\",\n       CASE WHEN b.k = 1 THEN m.\"GFS Europa fertig\" END AS \"GFS Europa fertig\",\n       CASE WHEN b.k = 1 THEN m.\"GFS Europa im Download\" END AS \"GFS Europa im Download\",\n       CASE WHEN b.k = 2 THEN m.\"GEFS fertig\" END AS \"GEFS fertig\",\n       CASE WHEN b.k = 2 THEN m.\"GEFS im Download\" END AS \"GEFS im Download\",\n       CASE WHEN b.k = 2 THEN m.\"GEFS gelöscht (Frist)\" END AS \"GEFS gelöscht (Frist)\"\n  FROM m CROSS JOIN (VALUES (0), (1), (2), (3)) AS b(k)\n ORDER BY m.\"Monat\", b.k"
+        }
+      ],
+      "options": {
+        "orientation": "vertical",
+        "stacking": "normal",
+        "showValue": "never",
+        "groupWidth": 0.8,
+        "barWidth": 0.97,
+        "barRadius": 0,
+        "xField": "Monat",
+        "xTickLabelRotation": -45,
+        "xTickLabelSpacing": 0,
+        "fullHighlight": false,
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "decimals": 1,
+          "color": {
+            "mode": "fixed"
+          },
+          "custom": {
+            "fillOpacity": 85,
+            "lineWidth": 0,
+            "gradientMode": "none",
+            "axisSoftMin": 0,
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GFS DE fertig"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GFS DE im Download"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GFS Europa fertig"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GFS Europa im Download"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FF8FD0"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GEFS fertig"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GEFS im Download"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GEFS gelöscht (Frist)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "barchart",
+      "title": "Silber lokal je Monat (Anteil der Läufe: GFS DE, GFS Europa, GEFS)",
+      "id": 46,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 38
+      },
+      "description": "Je Monat der Anteil der erwarteten GFS-DE-Läufe (linker Balken) (ab v16, 22.03.2021 12Z, bis zum jüngsten veröffentlichten Lauf; Laufzeiten oben unter „GFS-Läufe“ wählbar), deren Silber vollständig in Garage wx-silver liegt. Grün = fertig, gelb = gerade im Download: im laufenden Import-Durchgang aus GHCR (wx-import) vorgesehen oder im Bronze-Backfill (gfs-backfill) in Arbeit. Läufe, die im NOAA-Archiv fehlen, bleiben offen, daher erreichen manche Monate keine 100 %. Je Monat drei Balken, beschriftet ist der linke. GFS Europa (Mitte, lila; Quelle gfs_0p5, Laufzeiten wie GFS DE): Silber in wx-silver (aus GHCR oder auf der VM gebaut). GEFS (rechts, blau): je Tag ein 00Z-Lauf ab 23.03.2021; blau = Silber liegt vor (aus GHCR oder von wx-gefs gebaut), orange = wx-gefs baut es gerade im laufenden Monat.\n\nZuständige Dienste (Bronze → Silber bzw. Import aus GHCR): GFS DE wx-process (live) und wx-import (Historie); GFS Europa wx-process-eu (live) und wx-import-eu (Historie); GEFS wx-gefs (live und Import).",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "-- Erwartet: alle GFS-Läufe ab v16 (22.03.2021 12Z) bis zum jüngsten, der veröffentlicht sein sollte\n-- (NOAA ca. 3,5-5 h nach Laufzeit), nur die gewählten Laufzeiten. Grün: Silber liegt vollständig\n-- in wx-silver (meta.silver_run present). Gelb: im laufenden Import-Durchgang aus GHCR vorgesehen\n-- (loading, höchstens 12 h alt) oder gerade im Bronze-Download (meta.backfill_run running).\n-- GFS Europa (mittlerer Balken, 0,5°): Läufe wie oben, meta.silver_run der Quelle gfs_0p5.\n-- GEFS (rechter Balken): je Tag ein 00Z-Lauf ab 23.03.2021, Silber aus wx-gefs.\nWITH soll AS (\n  SELECT t FROM generate_series(timestamptz '2021-03-22 12:00+00',\n                                date_bin('6 hours', now() - interval '5 hours', timestamptz '2000-01-01'),\n                                interval '6 hours') t\n   WHERE extract(hour FROM t AT TIME ZONE 'UTC')::int::text IN ($gfs_lauf)),\ns AS (SELECT r.run_time, r.status, r.updated_at\n        FROM meta.silver_run r JOIN meta.source q USING (source_id)\n       WHERE q.code = 'gfs_0p25'),\nbronze AS (SELECT DISTINCT run_time FROM meta.backfill_run WHERE status = 'running'),\nz AS (\n  SELECT soll.t,\n         CASE WHEN s.status = 'present' THEN 'fertig'\n              WHEN s.status = 'loading' AND s.updated_at > now() - interval '12 hours' THEN 'laden'\n              WHEN bronze.run_time IS NOT NULL THEN 'laden' END AS zustand\n    FROM soll LEFT JOIN s ON s.run_time = soll.t LEFT JOIN bronze ON bronze.run_time = soll.t),\nesoll AS (SELECT t FROM soll),\neq AS (SELECT source_id FROM meta.source WHERE code = 'gfs_0p5'),\nez AS (\n  SELECT esoll.t,\n         CASE WHEN s.status = 'present' THEN 'fertig'\n              WHEN s.status = 'loading' AND s.updated_at > now() - interval '12 hours' THEN 'laden'\n         END AS zustand\n    FROM esoll LEFT JOIN meta.silver_run s\n      ON s.run_time = esoll.t AND s.source_id = (SELECT source_id FROM eq)),\ngsoll AS (\n  SELECT t FROM generate_series(timestamptz '2021-03-23 00:00+00',\n                                date_bin('1 day', now() - interval '8 hours', timestamptz '2000-01-01'),\n                                interval '1 day') t),\ngq AS (SELECT source_id FROM meta.source WHERE code = 'gefs_0p5'),\ngz AS (\n  SELECT gsoll.t,\n         CASE WHEN s.status = 'present' THEN 'fertig'\n              WHEN s.status = 'loading' AND s.updated_at > now() - interval '12 hours' THEN 'laden'\n         END AS zustand\n    FROM gsoll LEFT JOIN meta.silver_run s\n      ON s.run_time = gsoll.t AND s.source_id = (SELECT source_id FROM gq)),\ngfs AS (\n  SELECT to_char(t AT TIME ZONE 'UTC', 'YYYY-MM') AS \"Monat\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'fertig') / count(*), 1) AS \"GFS DE fertig\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'laden') / count(*), 1) AS \"GFS DE im Download\"\n    FROM z\n   GROUP BY 1),\neu AS (\n  SELECT to_char(t AT TIME ZONE 'UTC', 'YYYY-MM') AS \"Monat\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'fertig') / count(*), 1) AS \"GFS Europa fertig\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'laden') / count(*), 1) AS \"GFS Europa im Download\"\n    FROM ez\n   GROUP BY 1),\ngefs AS (\n  SELECT to_char(t AT TIME ZONE 'UTC', 'YYYY-MM') AS \"Monat\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'fertig') / count(*), 1) AS \"GEFS fertig\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'laden') / count(*), 1) AS \"GEFS im Download\"\n    FROM gz\n   GROUP BY 1),\nm AS (SELECT * FROM gfs FULL JOIN eu USING (\"Monat\") FULL JOIN gefs USING (\"Monat\"))\n-- Grafanas Balkendiagramm kennt keine Stapelgruppen: je Monat vier Zeilen (GFS DE,\n-- GFS Europa, GEFS, Lücke), beschriftet ist nur die erste\nSELECT CASE WHEN b.k = 0 THEN m.\"Monat\" ELSE '' END AS \"Monat\",\n       CASE WHEN b.k = 0 THEN m.\"GFS DE fertig\" END AS \"GFS DE fertig\",\n       CASE WHEN b.k = 0 THEN m.\"GFS DE im Download\" END AS \"GFS DE im Download\",\n       CASE WHEN b.k = 1 THEN m.\"GFS Europa fertig\" END AS \"GFS Europa fertig\",\n       CASE WHEN b.k = 1 THEN m.\"GFS Europa im Download\" END AS \"GFS Europa im Download\",\n       CASE WHEN b.k = 2 THEN m.\"GEFS fertig\" END AS \"GEFS fertig\",\n       CASE WHEN b.k = 2 THEN m.\"GEFS im Download\" END AS \"GEFS im Download\"\n  FROM m CROSS JOIN (VALUES (0), (1), (2), (3)) AS b(k)\n ORDER BY m.\"Monat\", b.k"
+        }
+      ],
+      "options": {
+        "orientation": "vertical",
+        "stacking": "normal",
+        "showValue": "never",
+        "groupWidth": 0.8,
+        "barWidth": 0.97,
+        "barRadius": 0,
+        "xField": "Monat",
+        "xTickLabelRotation": -45,
+        "xTickLabelSpacing": 0,
+        "fullHighlight": false,
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "decimals": 1,
+          "color": {
+            "mode": "fixed"
+          },
+          "custom": {
+            "fillOpacity": 85,
+            "lineWidth": 0,
+            "gradientMode": "none",
+            "axisSoftMin": 0,
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GFS DE fertig"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GFS DE im Download"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GFS Europa fertig"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GFS Europa im Download"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FF8FD0"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GEFS fertig"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GEFS im Download"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "barchart",
+      "title": "Gold lokal je Monat (Anteil der Läufe mit Wetter-Features: GFS DE, GFS Europa, GEFS)",
+      "id": 47,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 47
+      },
+      "description": "Je Monat der Anteil der erwarteten GFS-DE-Läufe (linker Balken) (wie beim Silber-Panel, Laufzeiten oben unter „GFS-Läufe“), für die die Wetter-Features je Cluster (Gold, feat.nwp_value) mit der aktuellen Clusterung und Feature-Version gerechnet sind. Grün = fertig, gelb = in Arbeit: Silber liegt lokal vor, Gold steht noch aus (wx-process-backfill rechnet stündlich nach, nur für die Laufzeiten in GFS_BACKFILL_RUNS). Eine neue Clusterung macht alle Läufe wieder gelb, bis sie neu gerechnet sind. Je Monat drei Balken, beschriftet ist der linke. GFS Europa (Mitte, lila): Features je Gebotszone der Quelle gfs_0p5, bis es eine Clusterung für das 0,5°-Gitter gibt nur Silber (hell). GEFS (rechts, blau): Ensemble-Kennzahlen je Gebotszone (Quelle gefs_0p5); orange = Silber liegt vor, Gold steht noch aus.\n\nZuständige Dienste (Silber → Gold): GFS DE wx-process (live) und wx-process-backfill (Historie); GFS Europa noch keiner (Gold folgt mit einer Clusterung für gfs_0p5); GEFS wx-gefs.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "-- Erwartete Läufe wie im Silber-Panel. Grün: meta.nwp_feature_run hat den Lauf für die aktuelle\n-- Clusterung (jüngste mit Gitter-Gewichten) und die zuletzt verwendete Feature-Version.\n-- Gelb: Silber liegt vor (meta.silver_run present), Gold fehlt noch.\n-- GFS Europa (mittlerer Balken) und GEFS (rechter Balken): grün mit der zuletzt verwendeten\n-- Clusterung und Feature-Version der Quelle (meta.nwp_feature_run), sonst in Arbeit, wenn Silber\n-- vorliegt.\nWITH soll AS (\n  SELECT t FROM generate_series(timestamptz '2021-03-22 12:00+00',\n                                date_bin('6 hours', now() - interval '5 hours', timestamptz '2000-01-01'),\n                                interval '6 hours') t\n   WHERE extract(hour FROM t AT TIME ZONE 'UTC')::int::text IN ($gfs_lauf)),\nq AS (SELECT source_id FROM meta.source WHERE code = 'gfs_0p25'),\ncl AS (SELECT c.clustering_version FROM assets.clustering c\n        WHERE EXISTS (SELECT 1 FROM assets.grid_weight w\n                       WHERE w.clustering_version = c.clustering_version AND w.grid = 'gfs_0p25')\n        ORDER BY c.created_at DESC LIMIT 1),\nfv AS (SELECT features_version FROM meta.nwp_feature_run\n        WHERE source_id = (SELECT source_id FROM q) ORDER BY processed_at DESC LIMIT 1),\ngold AS (SELECT f.run_time FROM meta.nwp_feature_run f\n          WHERE f.source_id = (SELECT source_id FROM q)\n            AND f.clustering_version = (SELECT clustering_version FROM cl)\n            AND f.features_version = (SELECT features_version FROM fv)),\nsilber AS (SELECT run_time FROM meta.silver_run\n            WHERE source_id = (SELECT source_id FROM q) AND status = 'present'),\nz AS (\n  SELECT soll.t,\n         CASE WHEN gold.run_time IS NOT NULL THEN 'fertig'\n              WHEN silber.run_time IS NOT NULL THEN 'arbeit' END AS zustand\n    FROM soll LEFT JOIN gold ON gold.run_time = soll.t LEFT JOIN silber ON silber.run_time = soll.t),\nesoll AS (SELECT t FROM soll),\neq AS (SELECT source_id FROM meta.source WHERE code = 'gfs_0p5'),\nev AS (SELECT clustering_version, features_version FROM meta.nwp_feature_run\n        WHERE source_id = (SELECT source_id FROM eq) ORDER BY processed_at DESC LIMIT 1),\nez AS (\n  SELECT esoll.t,\n         CASE WHEN f.run_time IS NOT NULL THEN 'fertig'\n              WHEN s.run_time IS NOT NULL THEN 'arbeit' END AS zustand\n    FROM esoll\n    LEFT JOIN meta.nwp_feature_run f\n      ON f.run_time = esoll.t AND f.source_id = (SELECT source_id FROM eq)\n     AND (f.clustering_version, f.features_version) = (SELECT * FROM ev)\n    LEFT JOIN meta.silver_run s\n      ON s.run_time = esoll.t AND s.source_id = (SELECT source_id FROM eq) AND s.status = 'present'),\ngsoll AS (\n  SELECT t FROM generate_series(timestamptz '2021-03-23 00:00+00',\n                                date_bin('1 day', now() - interval '8 hours', timestamptz '2000-01-01'),\n                                interval '1 day') t),\ngq AS (SELECT source_id FROM meta.source WHERE code = 'gefs_0p5'),\ngv AS (SELECT clustering_version, features_version FROM meta.nwp_feature_run\n        WHERE source_id = (SELECT source_id FROM gq) ORDER BY processed_at DESC LIMIT 1),\ngz AS (\n  SELECT gsoll.t,\n         CASE WHEN f.run_time IS NOT NULL THEN 'fertig'\n              WHEN s.run_time IS NOT NULL THEN 'arbeit' END AS zustand\n    FROM gsoll\n    LEFT JOIN meta.nwp_feature_run f\n      ON f.run_time = gsoll.t AND f.source_id = (SELECT source_id FROM gq)\n     AND (f.clustering_version, f.features_version) = (SELECT * FROM gv)\n    LEFT JOIN meta.silver_run s\n      ON s.run_time = gsoll.t AND s.source_id = (SELECT source_id FROM gq) AND s.status = 'present'),\ngfs AS (\n  SELECT to_char(t AT TIME ZONE 'UTC', 'YYYY-MM') AS \"Monat\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'fertig') / count(*), 1) AS \"GFS DE fertig\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'arbeit') / count(*), 1) AS \"GFS DE in Arbeit\"\n    FROM z\n   GROUP BY 1),\neu AS (\n  SELECT to_char(t AT TIME ZONE 'UTC', 'YYYY-MM') AS \"Monat\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'fertig') / count(*), 1) AS \"GFS Europa fertig\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'arbeit') / count(*), 1) AS \"GFS Europa in Arbeit\"\n    FROM ez\n   GROUP BY 1),\ngefs AS (\n  SELECT to_char(t AT TIME ZONE 'UTC', 'YYYY-MM') AS \"Monat\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'fertig') / count(*), 1) AS \"GEFS fertig\",\n         round(100.0 * count(*) FILTER (WHERE zustand = 'arbeit') / count(*), 1) AS \"GEFS in Arbeit\"\n    FROM gz\n   GROUP BY 1),\nm AS (SELECT * FROM gfs FULL JOIN eu USING (\"Monat\") FULL JOIN gefs USING (\"Monat\"))\n-- Grafanas Balkendiagramm kennt keine Stapelgruppen: je Monat vier Zeilen (GFS DE,\n-- GFS Europa, GEFS, Lücke), beschriftet ist nur die erste\nSELECT CASE WHEN b.k = 0 THEN m.\"Monat\" ELSE '' END AS \"Monat\",\n       CASE WHEN b.k = 0 THEN m.\"GFS DE fertig\" END AS \"GFS DE fertig\",\n       CASE WHEN b.k = 0 THEN m.\"GFS DE in Arbeit\" END AS \"GFS DE in Arbeit\",\n       CASE WHEN b.k = 1 THEN m.\"GFS Europa fertig\" END AS \"GFS Europa fertig\",\n       CASE WHEN b.k = 1 THEN m.\"GFS Europa in Arbeit\" END AS \"GFS Europa in Arbeit\",\n       CASE WHEN b.k = 2 THEN m.\"GEFS fertig\" END AS \"GEFS fertig\",\n       CASE WHEN b.k = 2 THEN m.\"GEFS in Arbeit\" END AS \"GEFS in Arbeit\"\n  FROM m CROSS JOIN (VALUES (0), (1), (2), (3)) AS b(k)\n ORDER BY m.\"Monat\", b.k"
+        }
+      ],
+      "options": {
+        "orientation": "vertical",
+        "stacking": "normal",
+        "showValue": "never",
+        "groupWidth": 0.8,
+        "barWidth": 0.97,
+        "barRadius": 0,
+        "xField": "Monat",
+        "xTickLabelRotation": -45,
+        "xTickLabelSpacing": 0,
+        "fullHighlight": false,
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "decimals": 1,
+          "color": {
+            "mode": "fixed"
+          },
+          "custom": {
+            "fillOpacity": 85,
+            "lineWidth": 0,
+            "gradientMode": "none",
+            "axisSoftMin": 0,
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GFS DE fertig"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GFS DE in Arbeit"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GFS Europa fertig"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GFS Europa in Arbeit"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FF8FD0"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GEFS fertig"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GEFS in Arbeit"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "row",
+      "title": "Rechenlast der Wetter-Dienste",
+      "id": 53,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 56
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "CPU der Wetter-Dienste (100 % = ein Kern)",
+      "id": 54,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "pdb-prometheus"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 57
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "pdb-prometheus"
+          },
+          "expr": "sum by (container_label_com_docker_compose_service) (rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_service=~\"ingest-gfs.*|gfs-.+|wx-.+\"}[2m])) * 100",
+          "legendFormat": "{{container_label_com_docker_compose_service}}",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "pdb-prometheus"
+          },
+          "expr": "sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_service=~\"ingest-gfs.*|gfs-.+|wx-.+\"}[2m])) * 100",
+          "legendFormat": "Gesamt",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 30
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Gesamt"
+            },
+            "properties": [
+              {
+                "id": "custom.stacking",
+                "value": {
+                  "mode": "none",
+                  "group": "gesamt"
+                }
+              },
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "viz": true,
+                  "legend": true,
+                  "tooltip": false
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ingest-gfs"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "ingest-gfs – GFS DE live: Download → Bronze"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ingest-gfs-eu"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "ingest-gfs-eu – GFS Europa live: Download → Bronze"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "gfs-backfill"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "gfs-backfill – GFS DE Historie: Download → Bronze (AWS)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "wx-process"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "wx-process – GFS DE live: Bronze → Silber → Gold"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "wx-process-eu"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "wx-process-eu – GFS Europa live: Bronze → Silber (Gold folgt)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "wx-process-backfill"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "wx-process-backfill – GFS DE Historie: Silber → Gold"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "wx-import"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "wx-import – GFS DE Historie: Silber aus GHCR"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "wx-import-eu"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "wx-import-eu – GFS Europa Historie: Silber aus GHCR"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "wx-gefs"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "wx-gefs – GEFS: live Download → Bronze → Silber (→ GHCR), Historie aus GHCR, Silber → Gold"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "CPU je Container der Wetterkette (cAdvisor), gestapelt; der Tooltip zeigt zusätzlich die Summe. Wer was macht:\n- ingest-gfs: GFS DE live: Download → Bronze\n- ingest-gfs-eu: GFS Europa live: Download → Bronze\n- gfs-backfill: GFS DE Historie: Download → Bronze (AWS)\n- wx-process: GFS DE live: Bronze → Silber → Gold\n- wx-process-eu: GFS Europa live: Bronze → Silber (Gold folgt)\n- wx-process-backfill: GFS DE Historie: Silber → Gold\n- wx-import: GFS DE Historie: Silber aus GHCR\n- wx-import-eu: GFS Europa Historie: Silber aus GHCR\n- wx-gefs: GEFS: live Download → Bronze → Silber (→ GHCR), Historie aus GHCR, Silber → Gold\nDazu einmalige Läufe dieser Dienste per docker compose run (Muster ingest-gfs*, gfs-*, wx-*). Alle Dienste stehen im Dashboard „System“."
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "type": "custom",
+        "name": "gfs_lauf",
+        "label": "GFS-Läufe (Bronze/Silber/Gold je Monat)",
+        "query": "00Z : 0, 06Z : 6, 12Z : 12, 18Z : 18",
+        "multi": true,
+        "includeAll": true,
+        "hide": 0,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          {
+            "selected": false,
+            "text": "00Z",
+            "value": "0"
+          },
+          {
+            "selected": false,
+            "text": "06Z",
+            "value": "6"
+          },
+          {
+            "selected": false,
+            "text": "12Z",
+            "value": "12"
+          },
+          {
+            "selected": false,
+            "text": "18Z",
+            "value": "18"
+          }
+        ]
+      }
+    ]
+  },
+  "annotations": {
+    "list": []
+  }
+}

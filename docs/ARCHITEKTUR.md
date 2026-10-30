@@ -1,6 +1,6 @@
 # Strompreisprognose – Architekturentwurf
 
-**Version:** 0.11 (Entwurf) · **Stand:** 2026-10-25 · **Status:** zur Diskussion
+**Version:** 0.12 (Entwurf) · **Stand:** 2026-10-28 · **Status:** zur Diskussion
 
 ---
 
@@ -62,7 +62,7 @@ Ebenfalls ausgewertet:
 
 | Repo | Inhalt | Bedeutung für dieses Projekt |
 |---|---|---|
-| `the78mole/PredictionDB` (privat) | Nur `SPECIFICATION.md` v0.1 (Juli 2026): MariaDB + Python-Worker mit Plugin-Konzept je Quelle, Tabellen `pdid_registry` und `datapoints_{int,float,varchar}`, Schlüssel `(pdid, lat, lon, timestamp, offset)`; als Schnittstelle für ein Prognosesystem gedacht. | Direkter Vorläufer. Plugin-Idee, PDID-Register und die Semantik „Gültigkeitszeit + Vorlauf, negativer Offset = Messung“ übernehme ich. Das zeilenweise Speichern von Gitterwerten und MariaDB ersetze ich (Begründung in 5.4). |
+| `the78mole/PredictionDB` (damals privat) | Nur `SPECIFICATION.md` v0.1 (Juli 2026): MariaDB + Python-Worker mit Plugin-Konzept je Quelle, Tabellen `pdid_registry` und `datapoints_{int,float,varchar}`, Schlüssel `(pdid, lat, lon, timestamp, offset)`; als Schnittstelle für ein Prognosesystem gedacht. | Direkter Vorläufer. Plugin-Idee, PDID-Register und die Semantik „Gültigkeitszeit + Vorlauf, negativer Offset = Messung“ übernehme ich. Das zeilenweise Speichern von Gitterwerten und MariaDB ersetze ich (Begründung in 5.4). |
 | `the78mole/test-meteo` | Streamlit-Demo, Open-Meteo-Abfrage für Wind in 120 m bei Cuxhaven | Bestätigt Open-Meteo als Schnellstart-Quelle |
 | `the78mole/eprice-demo` | Rust-Demo, Day-Ahead-Preise DE über `api.energy-charts.info` | Bestätigt Energy-Charts als Preisquelle |
 
@@ -202,7 +202,7 @@ Für das **Training** wird Historie benötigt. Archiv-Optionen:
 
 | Zweck | Quelle | Bemerkung |
 |---|---|---|
-| Historische GFS-Prognosen | AWS `noaa-gfs-bdp-pds` (ab GFS v16, 2021-03-22 12Z), NCAR GDEX d084001 (2015-01-15 bis 2021-03-22 06Z, CC BY 4.0) | AWS per `.idx`-Range wie im Live-Betrieb; GDEX ohne `.idx`, Inventar aus den Nachrichtenköpfen per Range (`header_scan`), dreistündlich bis 240 h, danach zwölfstündlich |
+| Historische GFS-Prognosen | AWS `noaa-gfs-bdp-pds` (ab GFS v16, 2021-03-22 12Z), NCAR GDEX d084001 (2015-01-15 bis 2021-03-22 06Z, CC BY 4.0) | AWS per `.idx`-Range wie im Live-Betrieb; GDEX hat keine `.idx` und nur dreistündliche Schritte bis 240 h, danach zwölfstündlich. Die fehlenden `.idx` baut der Workflow `gfs-idx.yml` aus den Nachrichtenköpfen und legt sie als ORAS-Artefakt `predictiondb-data/gfs-0p25-gdex-idx:v1` ab; ohne passende `.idx` liest `header_scan` die Köpfe per Range (5.5) |
 | Historische ECMWF-Open-Data-Prognosen | AWS `ecmwf-forecasts` (ab ~2023) | Umfang vorher prüfen |
 | Wetter-„Wahrheit“ | ERA5 über Copernicus CDS (kostenloses Konto), DWD-Stationsdaten (CDC), NOAA ISD/Global Hourly auf AWS als Ausweichquelle (7.9) | für Bias-Korrektur und als Ziel bei Hilfsmodellen |
 | Schnell-Backfill Punktdaten | Open-Meteo Historical Forecast API | gut für erste Modelle |
@@ -225,7 +225,9 @@ Für das **Training** wird Historie benötigt. Archiv-Optionen:
 | Speicherfüllstände Wasserkraft (Nachbarländer) | ENTSO-E „Water reservoirs and hydro storage plants“ | Token | Woche | – |
 | Feiertage, Schulferien | Python `holidays`; Ferien-API bzw. statische Tabellen | offen | Tag | – |
 
-Bekannte Lücke: **Brennstoff- und CO₂-Preise** (TTF-Gas, EUA) sind als Echtzeitdaten nicht verlässlich kostenlos zu bekommen. Für den Anfang reicht eine tägliche, verzögerte Reihe (z. B. aus frei veröffentlichten Tagesschlusskursen bzw. Energy-Charts, falls verfügbar). Das wird in Phase 3 geklärt; das Modell funktioniert auch ohne, verliert aber bei Preisregimewechseln an Güte.
+Die Tabelle zeigt die Planung. **Umgesetzt** sind in `services/energy_ingest` SMARD (Rang 1), Energy-Charts (Preise DE-LU und 14 Nachbarzonen, Erzeugung, Last, Prognosen, Grenzhandel `xb_trade_<land>` und physikalische Flüsse `xb_flow_<land>` je Grenze samt Summe `_net`), die ENTSO-E-Day-Ahead-Lastprognose für DE und 11 Nachbarzonen (`entsoe_last`), eigene Marktwerte aus SMARD (`pdb_marktwert`), Brennstoffpreise und Wechselkurs (EZB, Weltbank, EU Oil Bulletin, EIA, EIA STEO), Gasspeicher und LNG (GIE AGSI+/ALSI) und Monatsbilanzen von Eurostat. Unfreie Quellen (ENTSO-E-Preis/Ist-Last/Erzeugung, Netztransparenz, Reuters-Reihen der EIA, THE) laufen nur hinter `PDB_ALLOW_*` (7.11.1). Übersicht mit Lizenzen und Schlüsseln: [DATENQUELLEN-ZUGANG.md](DATENQUELLEN-ZUGANG.md). Pegel, Radar, GloFAS und Wasserkraft-Speicher sind noch nicht angebunden.
+
+**Brennstoff- und CO₂-Preise:** Tägliche Preise für TTF-Gas und EUA sind nicht frei zu bekommen (EEX, ICE und THE untersagen die Weitergabe). Frei sind Monatspreise (Weltbank), Wochenpreise (Oil Bulletin), Tageswerte für Diesel/Gasöl (EIA) und die Monatsprognosen des EIA STEO. Als tägliches Ersatzmaß rechnet `ml-train` einen Grenzkostenindex aus SMARD: den Preis in Stunden hoher Residuallast (Gas, Steinkohle preissetzend) und in Braunkohle-Stunden (folgt dem CO₂-Preis), siehe [PROGNOSEMODELLE.md](PROGNOSEMODELLE.md) 10.2.
 
 ### 3.3 Redundanzkonzept
 
@@ -554,12 +556,27 @@ Mit ECMWF, ICON-EU (höhere Auflösung, aber kürzerer Horizont) und GEFS-Mittel
 
 ### 5.5 Datenaustausch zwischen Instanzen über GHCR (geplant)
 
-> **Stand der Umsetzung:** Die Historie baut bereits der Workflow `gfs-history.yml` im
-> GitHub-Actions-Runner (`services/wx_exchange`), die VM holt sie mit `wx-import`. Abweichend
-> vom Entwurf unten gibt es ein Manifest je Monat **und Laufzeit** (Tag `JJJJ-MM-HHz`), damit jeder
-> Matrix-Job genau ein Manifest schreibt; der Stand steht in den Manifest-Annotationen, die
-> Tag-Liste ersetzt den Index. Noch offen sind `wx-publish` für den laufenden Betrieb, das
-> Bronze-Artefakt und die `cosign`-Signatur. Einzelheiten: `services/wx_exchange/README.md`.
+> **Stand der Umsetzung:** Die Historie baut der Workflow `gfs-history.yml` im
+> GitHub-Actions-Runner (`services/wx_exchange`), eine Instanz holt sie mit `wx-import`
+> (Compose-Profil `history`). Abweichend vom Entwurf unten gibt es ein Manifest je Monat **und
+> Laufzeit** (Tag `JJJJ-MM-HHz`), damit jeder Matrix-Job genau ein Manifest schreibt; der Stand
+> steht in den Manifest-Annotationen (`fingerprint`, `content`, `missing`), die Tag-Liste ersetzt
+> den Index.
+>
+> - **Quellen:** `source: aws` für GFS v16 ab 2021-03-22 12Z, `source: gdex` für ältere Läufe aus
+>   NCAR GDEX d084001 (bis 2015-01-15). Beide landen im selben Artefakt; `GFS_HISTORY_START` vor
+>   2021-03-22 holt auch die GDEX-Läufe.
+> - **`.idx` zu GDEX:** Der Workflow `gfs-idx.yml` baut für jede GDEX-Datei eine vollständige
+>   `.idx` (Format `wgrib2 -s`) und legt sie als ein Artefakt
+>   `predictiondb-data/gfs-0p25-gdex-idx:v1` mit einem Layer je Monat und Laufzeit ab. `publish`
+>   liest damit nur die gewählten Nachrichten per Range, statt die Köpfe abzulaufen.
+> - **Bestand:** `wx-import` und `wx-process` melden lokales Silber nach `meta.silver_run`; das
+>   Dashboard „Wetter“ zeigt daraus Bronze, Silber und Gold je Monat.
+> - **Prüfung:** `wx-exchange gfs verify` vergleicht selbst gebautes Silber über den Inhalts-Hash
+>   mit GHCR.
+>
+> Noch offen sind `wx-publish` für den laufenden Betrieb, das Bronze-Artefakt und die
+> `cosign`-Signatur. Einzelheiten: `services/wx_exchange/README.md`.
 
 Eine neue Instanz müsste für die GFS-Historie ab 2021-03 heute rund 8 000 Läufe selbst laden: je Lauf etwa 3,3 GB Transfer und 3 300 Range-Anfragen, zusammen rund 27 TB und 27 Mio. Anfragen gegen AWS. Die verdichteten Silber-Stores derselben Läufe sind zusammen nur gut 100 GB groß. Deshalb veröffentlicht die Hauptinstanz ihre verdichteten Wetterdaten als **OCI-Artefakte in der GitHub Container Registry** (`ghcr.io/the78mole/predictiondb-data/…`), und andere Instanzen importieren sie dort, statt GFS selbst herunterzuladen.
 
@@ -588,6 +605,7 @@ Ein fehlendes Bronze ist nicht endgültig: Das AWS-Archiv hält GFS v16 ab 2021-
 | `predictiondb-data/gfs-0p25-silver` | Zarr-Store je Lauf, unverändert aus `wx-silver` | ~13 MB/Lauf, ~19 GB/Jahr | Pflicht |
 | `predictiondb-data/gfs-0p25-bronze` | zugeschnittene GRIB2 je Schritt plus `run.json`, `fSSS.json` | ~22 MB/Lauf, ~32 GB/Jahr | optional, später |
 | `predictiondb-data/feat-gfs` | Gold-Features als Parquet je Monat, nur zusammen mit `clustering_version` und `FEATURES_VERSION` | < 1 GB/Jahr | optional; nur nutzbar bei identischer Clusterung |
+| `predictiondb-data/gfs-0p25-gdex-idx:v1` | vollständige `.idx` zu allen GDEX-Dateien, ein Layer (`tar.gz`) je Monat und Laufzeit | einige hundert MB | umgesetzt; Hilfsmittel für den GDEX-Backfill |
 
 Nicht veröffentlicht werden Energie- und Marktdaten (ENTSO-E, SMARD, Energy-Charts, Netztransparenz): Sie sind klein, jede Instanz ruft sie per API selbst ab, und ihre Nutzungsbedingungen regeln die Weitergabe unterschiedlich. Ebenso wenig Prognosen und Modelle (Lizenz, 12.1), Geheimnisse oder Inhalte von `assets.*` zu Anlagen von Nutzern.
 
@@ -626,7 +644,7 @@ flowchart LR
     GHCR --> WI
 ```
 
-- **Herausgeber (`wx-publish`, neuer Compose-Dienst):** Lauscht auf `features_ready` bzw. pollt `meta.nwp_run`, packt den fertigen Silber-Store, schiebt den Layer und das neue Monatsmanifest und setzt `meta.nwp_run.published_at`. Er läuft auf der VM, weil dort die Daten liegen; das Schreibrecht auf GHCR kommt aus einem Token mit `write:packages` in OpenBao (8.3). Ein `backfill`-Modus veröffentlicht die Historie monatsweise.
+- **Herausgeber (`wx-publish`, neuer Compose-Dienst):** Lauscht auf `features_ready` bzw. pollt `meta.nwp_run`, packt den fertigen Silber-Store, schiebt den Layer und das neue Monatsmanifest und setzt `meta.nwp_run.published_at`. Er läuft auf der VM, weil dort die Daten liegen; das Schreibrecht auf GHCR kommt aus einem Token mit `write:packages` aus dem Secret-Store (8.3). Ein `backfill`-Modus veröffentlicht die Historie monatsweise.
 - **Importeur (`wx-import`, neuer Modus von `wx-ingest`):** Quelle `ghcr` in `config/sources/gfs_0p25.yaml` vor `nomads`/`aws`. Liest den Index, zieht fehlende Läufe, prüft Signatur und Digests, schreibt den Store nach `wx-silver` und setzt `meta.nwp_run` auf `silver_ready` mit `origin = ghcr`. `wx-process` rechnet danach wie gewohnt nur die Gold-Features, mit der lokalen Clusterung. Bronze bleibt leer; Jobs, die Bronze brauchen, erkennen das am Ursprung und überspringen den Lauf oder laden ihn gezielt nach.
 - **Aktualität:** Der Herausgeber veröffentlicht einen Lauf erst nach der Verarbeitung, also gut 5,5 h nach Laufzeit (GFS f384 kommt nach ~5:15 h). Für Backfill und Training spielt das keine Rolle. Für den Live-Betrieb einer importierenden Instanz gilt eine Frist (Vorschlag 7 h nach Laufzeit): Ist der Lauf bis dahin nicht in GHCR, lädt sie ihn selbst. Wer Day-Ahead mit dem 06Z-Teillauf rechnen will (3.1, Analyse `gfs-folgelauf`), lädt diesen Teil weiterhin selbst.
 
@@ -646,6 +664,93 @@ flowchart LR
 
   Jedes Manifest trägt den Quellenvermerk in `org.predictiondb.attribution`, zusätzlich liegt ein `ATTRIBUTION.md` als eigener Layer im Index-Artefakt. Weitere Modelle bekommen eigene Artefakt-Repositories (`ecmwf-ifs-0p25-silver` usw.), damit Lizenzen nicht gemischt werden.
 - **Lizenz der Daten selbst:** Die BSL 1.1 gilt für den Code. Die veröffentlichten Daten stehen unter **CC BY 4.0** (`org.opencontainers.image.licenses: CC-BY-4.0`), Namensnennung: „PredictionDB (the78mole)“ plus die Quellenvermerke der Tabelle oben (12.9).
+
+### 5.6 GEFS-Ensemble: Silber im Runner, je Region und Mitglied
+
+Für mehrtägige Prognosen (bis D+16) und deren Unsicherheit kommt das NOAA-Ensemble GEFS v12
+(0,5°, Kontrolle `gec00` plus `gep01` bis `gep30`) dazu. Die **Historie** (abgeschlossene Monate
+ab 2021-03) entsteht nur in GitHub Actions (`gefs-history.yml`) und liegt in GHCR; die VM
+importiert sie. Den **aktuellen Monat** baut immer die VM selbst: Sie lädt jeden neuen 00Z-Lauf,
+hält dessen Bronze (auf den Ausschnitt zugeschnitten) etwa 6 Monate und löscht sie erst, wenn
+das Silber des Laufs in GHCR und lokal vorliegt (Stufe 2). Ablauf je Lauf (nur 00Z,
+6-stündlich bis 384 h, 31 × 65 Mitglied-Schritte), in Actions wie auf der VM derselbe Code:
+
+1. Aus der `.idx` der Dateien `pgrb2a`/`pgrb2b` nur die Felder aus
+   `config/sources/gefs_0p5.yaml` per Byte-Bereich laden (TMP 2 m, UGRD/VGRD 10 m und 100 m,
+   APCP, TCDC, DSWRF; aneinander grenzende Nachrichten in einer Anfrage), ≈ 1,8 MB je
+   Mitglied-Schritt, ≈ 3,7 GB je Lauf.
+2. Auf das Verbundnetz (34,5–71,5° N, 10,5° W–45° O) zuschneiden und je Region verdichten.
+   Nichtlineare Größen (Wind in Nabenhöhe mit Hellmann-Exponent, Leistungskurve, PV-Modell)
+   werden wie in `wx_process.features` erst je Zelle gerechnet, dann gewichtet.
+3. Je Lauf ein reproduzierbarer Tar mit `meta.json` und `values.npy` (`float32`, Mitglied ×
+   Schritt × Region × Größe; Größen `t2m`, `wind_speed_100m`, `wind_cf`, `ghi`, `pv_cf`,
+   `cloud_cover`, `precip`), mit 55 Regionen ≈ 2,5 MB je Lauf, die Historie also ≈ 5 GB.
+4. Nach `ghcr.io/the78mole/predictiondb-data/gefs-0p5-silver`, ein Manifest je Monat (Tag
+   `JJJJ-MM-00z`) mit einem Layer je Lauf wie in 5.5.3, Layer-Typ
+   `application/vnd.predictiondb.gefs-silver.v1.tar+gzip`.
+
+**Regionen** (`config/gefs/regions_v2.json.gz`, im Repository, weil der Runner sie braucht):
+DE nach MaStR-Leistung je 0,5°-Zelle für Wind an Land, Wind auf See und PV (Abfrage
+`config/gefs/mastr_cells.sql`, leistungsgewichtete Nabenhöhe), dazu flächengewichtet alle
+Gebotszonen des Verbundnetzes aus Natural Earth (gemeinfrei): ENTSO-E mit Nordeuropa, GB und
+Irland (SEM), dazu Ukraine, Moldau und die Türkei; ohne Maghreb, Island und Zypern. Zonen
+innerhalb eines Landes (DK1/2, NO1–5, SE1–4, sieben italienische Zonen) sind aus
+Verwaltungsregionen zusammengesetzt (`wx_exchange.gefs_regions.ZONES`). Stufe 4 ergänzt
+Anlagengewichte aus den freien Registern der Nachbarn (7.5); eine neue Datei ändert den
+Fingerabdruck und baut die Historie neu.
+
+**Stand eines Laufs:** Fehlen mehr als 10 % der Mitglied-Schritte, gilt ein Lauf jünger als
+30 h als ausstehend (NOAA veröffentlicht noch) und danach als fehlend (Annotation `missing` im
+Manifest). Fehlende Felder bleiben NaN, ebenso Mittel und Summen in f000.
+
+**Laufzeit:** Ein ganzer Lauf braucht im Runner ≈ 100 s (Laden und Dekodieren). Ein Monatsjob
+dauert damit ≈ 50 min, die Historie mit acht Jobs parallel ≈ 7 h. Der Zeitplan in Actions füllt
+wöchentlich nur Lücken in abgeschlossenen Monaten.
+
+**VM (Dienst `wx-gefs`, `wx-exchange gefs vm`, alle 30 min):** Läufe des aktuellen Monats (und
+der letzten 3 Tage des Vormonats) baut sie selbst, sobald der letzte Schritt des letzten
+Mitglieds auf AWS liegt (≈ 3,7 GB Download, gemessen ≈ 21 min je Lauf), und schiebt das
+Silber nach GHCR. Die Bronze liegt auf den Ausschnitt zugeschnitten und verlustfrei nach CCSDS
+umgepackt in `wx-bronze` (≈ 140 MB je Lauf, 6 Monate ≈ 25 GB) und wird nach 183 Tagen nur
+gelöscht, wenn das Silber lokal und in GHCR denselben Inhalts-Hash hat. Abgeschlossene Monate
+importiert sie aus GHCR, als eigene Aufgabe neben Gold: in Portionen von 64 Läufen ohne Pause,
+solange dort mehr bereitliegt, sonst alle 30 min. Gold rechnet sie alle 5 min für Läufe mit
+fertigem Silber, jüngste zuerst, also auch während der Live-Aufbau noch läuft: je Lauf, Region, Größe und Schritt Mittel, Streuung, P10 und P90
+über die Mitglieder in `feat.nwp_value` (Merkmal `<größe>_<kennzahl>`, Aggregation `ensemble`,
+Region `gefs:<code>`, Quelle `gefs_0p5`), ≈ 96 000 Werte je Lauf.
+
+**Bestand:** `wx-gefs` meldet Bronze je Lauf nach `meta.bronze_run` (im Download, vorhanden,
+nach der Frist gelöscht) und Silber nach `meta.silver_run`. Das Wetter-Dashboard zeigt GEFS in
+den Bestandsbalken für Bronze, Silber und Gold als dritten Balken je Monat neben GFS DE und
+GFS Europa (5.7).
+
+**Weiter:** Merkmalsgruppe `ensemble` in `ml_train` mit Horizont D+16 und Backtest je
+Vorlauftag, Europa-Karte je Gebotszone. GEFS-Reforecasts (vor 2021-03) sind nicht vorgesehen.
+
+### 5.7 GFS Europa: 0,5° fürs ganze Verbundnetz
+
+Für Preise und Flüsse der Nachbarn braucht das Modell das Wetter im ganzen Verbundnetz, nicht
+nur in DE. Dafür gibt es eine zweite GFS-Quelle `gfs_0p5`: das NCEP-Produkt `pgrb2.0p50` im
+GEFS-Ausschnitt (34,5–71,5° N, 10,5° W–45° O, 75 × 112 = 8 400 Punkte, dasselbe Gitter wie
+GEFS). DE bleibt in `gfs_0p25` mit 0,25° und stündlich bis 120 h; außerhalb DE reicht 0,5°
+dreistündlich. Es gibt damit drei Datensätze: GFS DE, GFS Europa und GEFS.
+
+- **Quelle:** `config/sources/gfs_0p5.yaml`, Läufe 00/06/12/18Z, 0–384 h dreistündlich
+  (129 Schritte), dieselben Felder wie GFS DE. Nur aus den Archiven AWS und GCS (ab
+  2021-03-22 12Z mit `.idx`), damit NOMADS für GFS DE frei bleibt. Gemessen: ≈ 45 s Ingest,
+  ≈ 27 MB Bronze und ≈ 22 MB Silber je Lauf, die Historie also ≈ 180 GB Silber.
+- **VM:** `ingest-gfs-eu` und `wx-process-eu` wie `ingest-gfs`/`wx-process` mit den Konfigurationen
+  für `gfs_0p5`; `wx-import-eu` (Profil `history`) holt die Historie aus
+  `ghcr.io/the78mole/predictiondb-data/gfs-0p5-silver`.
+- **Historie:** `gfs-history.yml` mit `source: eu` (täglich 07:47 UTC als Lückenfüller), Silber
+  wie bei GFS DE (5.5) in eigenem Paket.
+- **Gold:** je Region aus derselben Datei wie GEFS (`regions:` in `config/process/gfs_0p5.yaml`,
+  `config/gefs/regions_v2.json.gz`), statt einer Clusterung aus `assets`. Die 50 Zonen der Art
+  `area` bekommen alle Features (Wind, PV, Niederschlag) über ihre Fläche, dazu DE Wind an
+  Land/See und PV nach MaStR; ohne Bestand also ohne `wind_power`/`pv_power`. Regionen unter
+  denselben Codes `gefs:<code>` wie GEFS, Stand in `meta.nwp_feature_run` als
+  `regions_v2`. `wx-process-backfill-eu` (Profil `history`) rechnet die Historie. Offen:
+  Europa-Karte je Gebotszone und Länderauswahl im Wetter-Dashboard (Standard DE).
 
 ---
 
@@ -681,6 +786,8 @@ PredictionDB/
 ├── docker/                     # ein gemeinsames Multi-Stage-Dockerfile mit Targets je Dienst
 └── tests/                      # inkl. aufgezeichneter .idx-/GRIB-Beispiele als Fixtures
 ```
+
+**Umsetzungsstand:** Pakete `packages/core` (`predictiondb_core`) und `packages/gribkit`; Dienste `services/wx_ingest`, `services/wx_process`, `services/wx_exchange` (GHCR-Austausch, 5.5), `services/energy_ingest`, `services/mastr_ingest` (MaStR getrennt vom Energie-Ingest) und `services/ml_train` (Training und Inferenz); dazu der schlanke Prognose-Stack `predict/` (7.11). Konfiguration unter `config/sources/`, `config/process/`, `config/ml/`, `config/grafana/` und `config/prometheus/`. Noch nicht vorhanden sind `packages/features`, `services/api` und `config/regions/`.
 
 ### 6.2 Bibliotheken
 
@@ -818,7 +925,10 @@ Kapazitätsfaktor, Preis relativ zum letzten bekannten Liefertag. Ohne Wetter sc
 Last bereits die ENTSO-E-Day-Ahead-Prognose (MAE D+1 1,73 gegen 1,98 GW, 2024–10/2026), beim
 Preis ab D+2 Vortag und Vorwoche. Die Variante mit GFS-Features wird nach dem Backfill bewertet.
 Backtest und Befunde: [`docs/analysen/prognose-de-lu-v1/`](analysen/prognose-de-lu-v1/README.md).
-Aufbau, technische Daten, Training und Optimierungsstrategien der Modelle im Einzelnen:
+Die zweite Konfiguration `de_lu_v2` ergänzt freie Reihen als Merkmalsgruppen (Nachbarpreise,
+ÜNB-Lastprognose, Brennstoffe, Marktwerte, EIA STEO, Grenzkostenindex aus SMARD); `ml-predict`
+rechnet beide Linien stündlich nebeneinander
+([`docs/analysen/prognose-de-lu-v2/`](analysen/prognose-de-lu-v2/README.md)). Aufbau, technische Daten, Training und Optimierungsstrategien der Modelle im Einzelnen:
 [PROGNOSEMODELLE.md](PROGNOSEMODELLE.md).
 
 Zweistufiger Aufbau:
@@ -874,7 +984,7 @@ flowchart LR
   ```
 - **Validierung:** rollierende Zeitreihen-Kreuzvalidierung (Expanding Window), Metriken MAE/RMSE je Horizont, Pinball-Loss, für Preis zusätzlich Rang-/Spread-Güte (wichtig für Lastverschiebung).
 - **Training** als portabler Container-Job (`docker compose run ml-train …` oder auf einer gemieteten GPU), auf der VM CPU-basiert machbar für Regionen-Features. Hardware, Laufzeiten und Ablauf in 7.7.
-- **Inferenz** (`ml-predict`): reagiert auf `NOTIFY features_ready`, lädt das in MLflow als `production` markierte Modell, schreibt Quantile nach `fcst.prediction`.
+- **Inferenz** (`ml-predict`): reagiert auf `NOTIFY features_ready`, lädt das in MLflow als `production` markierte Modell, schreibt Quantile nach `fcst.prediction`. Umgesetzt ist vorerst eine Datei-Registry in Garage (`s3://ml-artifacts/models`) und eine stündliche Inferenz aller aktiven Versionen (Champion, Challenger, Baseline, Vorgänger) mit Nachholen verpasster Stunden; neue Versionen rechnen die Vergleichszeitpunkte der letzten neun Tage nach (`--fill-new`), damit sie sofort im Dashboard stehen ([PROGNOSEMODELLE.md](PROGNOSEMODELLE.md) Kap. 8).
 - **Monitoring:** täglicher Abgleich Prognose ↔ Ist in Grafana; Drift-Alarm bei Fehleranstieg.
 
 ### 7.5 Anlagenverteilung aus dem MaStR und Gebietscluster
@@ -1318,7 +1428,25 @@ Analyse-Jobs sind bewusst einfach gehalten: eine YAML-Datei, ein Befehl, ein Ord
 
 ### 7.10 Prognose-Dashboard (Last und Preis DE-LU)
 
-Neben dem Status-Dashboard (`config/grafana/dashboards/status.json`) gibt es ein eigenes Grafana-Dashboard `prognose.json` für Netzlast und Day-Ahead-Preis der Gebotszone DE-LU. Es zeigt in zwei Diagrammen, was kommt und wie gut die Prognosen gestern waren. Alle Zeiten gelten in Europe/Berlin, Tagesgrenzen liegen auf Mitternacht (Sommer- und Winterzeittage haben 23 bzw. 25 Stunden).
+> **Stand der Umsetzung:** Ein eigenes `prognose.json` gibt es nicht. Die Modellübersicht steht
+> im Dashboard „Prognose und Energiedaten“ (`prognose-energiedaten.json`), Bereich
+> „Prognosemodelle“: Champion und Registry-Verlauf, Modellversionen mit Backtest-Kennzahlen,
+> laufende Trainings, Prognosefehler D+1 im Betrieb (aus der Sicht `fcst.prediction_error`) und
+> Last und Preis der eigenen Modelle gegen ÜNB-Prognose bzw. Day-Ahead-Preis (Lauf vom Vortag
+> 10 Uhr). Das Dashboard „Prognose aktuell“ (`prognose-aktuell.json`) hat einen festen
+> Zeitraum heute 00:00 bis Ende D+7 ohne Zeitauswahl (Panel-Zeitüberschreibungen ignoriert
+> Grafana bei absolutem Dashboard-Zeitraum, etwa nach Zoomen). Es zeigt Champion und einen
+> wählbaren Challenger: die Woche bis D+7 mit P50 und Band P10–P90, beim Preis je Tag das
+> H0-gewichtete Tagesmittel mit Fehlerbalken (lastgewichtet zuschaltbar, Profil in
+> `meta.slp_h0`), dazu den gestrigen Liefertag (beim Preis auch heute und morgen) mit den
+> Prognosen D+1 bis D+7. Der Ausblick −2 bis +7 Tage, der Fehlerschlauch, die Views
+> `fcst.v_outlook`/`fcst.v_yesterday_envelope`, `energy.forecast_vintage`, die
+> Week-Ahead-Lastprognose und `fcst.model_spread` (7.7) sind noch nicht umgesetzt; der Rest
+> dieses Abschnitts beschreibt sie als Plan. Die übrigen Status-Dashboards sind „Wetter“
+> (GFS-Läufe, Downloads, Bestand Bronze/Silber/Gold je Monat, CPU der Wetter-Dienste) und
+> „System“ (Auslastung, Speicher, Hypertables).
+
+Neben den Status-Dashboards (`config/grafana/dashboards/`: `prognose-energiedaten.json` „Prognose und Energiedaten“, `wetter.json` „Wetter“, `system.json` „System“, untereinander und mit der Karte verlinkt) gibt es ein eigenes Grafana-Dashboard `prognose.json` für Netzlast und Day-Ahead-Preis der Gebotszone DE-LU. Es zeigt in zwei Diagrammen, was kommt und wie gut die Prognosen gestern waren. Alle Zeiten gelten in Europe/Berlin, Tagesgrenzen liegen auf Mitternacht (Sommer- und Winterzeittage haben 23 bzw. 25 Stunden).
 
 **Diagramm 1: Ausblick von −2 bis +7 Tage.** Zeitachse fest von vorgestern 00:00 bis zum Ende des siebten Folgetags (Grafana `now-2d/d` bis `now+7d/d`), Last in GW auf der linken, Preis in €/MWh auf der rechten Achse, eine senkrechte Linie markiert „jetzt“.
 
@@ -1344,7 +1472,7 @@ Weitere Prognosequellen (z. B. Wind/PV der ÜNB oder Prognosen anderer Anbieter,
 - Abfragen als Views im Schema `fcst`: `fcst.v_outlook` (Diagramm 1) und `fcst.v_yesterday_envelope` (Diagramm 2, je Größe und Zeitpunkt Ist, Vortagesprognose, Min, Max, P10, P90 und Anzahl der Prognosen). Grafana liest sie mit dem Lesebenutzer wie das Status-Dashboard.
 - `energy.value` hält je Reihe und Zeitpunkt nur den letzten Wert (Upsert in `energy_ingest`). Damit der Fehlerschlauch auch frühere ENTSO-E-Stände einschließt, schreibt `energy_ingest` bei Prognosereihen zusätzlich jeden neuen Stand in `energy.forecast_vintage (series_id, ts, published, value)`, Hypertable mit Primärschlüssel `(series_id, ts, published)`. Ist-Reihen brauchen das nicht.
 - Die Week-Ahead-Lastprognose von ENTSO-E (Tagesminimum und -maximum je Tag) wird als zusätzliche Reihe geladen.
-- Das Dashboard liegt als JSON unter `config/grafana/dashboards/prognose.json` und wird wie das Status-Dashboard provisioniert. Quellenvermerke (ENTSO-E, SMARD) stehen im Panel-Text.
+- Das Dashboard liegt als JSON unter `config/grafana/dashboards/prognose.json` und wird wie die Status-Dashboards provisioniert. Quellenvermerke (ENTSO-E, SMARD) stehen im Panel-Text.
 
 ### 7.10.1 Karten-Dashboard (Cluster, Wetter, Erzeugung)
 
@@ -1565,36 +1693,52 @@ Bemerkungen:
 - **Ein Image für alle Python-Dienste** (Multi-Stage-Build mit `uv sync --frozen --no-dev`), unterschieden nur durch den Befehl. Das vereinfacht Updates; bei Bedarf später getrennte Images (z. B. ML-Image mit PyTorch ist groß).
 - Ingest je Quellfamilie als eigener Container: Ausfall oder Sperre einer Quelle betrifft die anderen nicht; einzeln skalier- und neu startbar.
 - Geheimnisse (ENTSO-E-Token, Garage-Keys, DB-Passwort) in `.env` bzw. Docker Secrets; nie im Repo. Ablage und Zugriff siehe 8.3.
-- Provisionierung der VM selbst: Cloud-Init-Template auf PVE oder Ansible-Rolle (Docker installieren, Repo/Compose-Datei ausrollen, `docker compose up -d`). Passt ggf. zu bestehenden Repos wie `it-infra` oder `portainers`, die ich nicht angesehen habe.
+- Provisionierung der VM selbst: Cloud-Init-Template auf PVE oder Ansible-Rolle (Docker installieren, Repo/Compose-Datei ausrollen, `docker compose up -d`).
 - Die Betriebsdoku der konkreten Installation (Adressen, Zugänge, Befehle) liegt bewusst nicht im Repository.
 
-### 8.3 Geheimnisse und OpenBao
+**Umsetzungsstand (`compose.yaml`):**
 
-Quelle der Wahrheit für alle Zugangsdaten des Stacks ist das selbst betriebene OpenBao
-(`https://openbao.intern.chaintronics.com/`), **Namespace `it-infra`**, KV v2 unter `secret/`.
-PredictionDB ist Eigeninfrastruktur, nicht Elektro-Glaser-Geschäft; die Namespaces
-`elektro-glaser`, `the78mole-private` und `mcp_tooling` sind tabu.
+| Dienst | Profil | Aufgabe |
+|---|---|---|
+| `postgres`, `garage` | – | TimescaleDB und Garage (Single Node) |
+| `garage-init`, `migrate` | – | einmalig: Garage-Layout, Schlüssel, Buckets; `alembic upgrade head` |
+| `ingest-gfs` | – | GFS-Live-Ingest alle 10 min (`wx-ingest gfs latest`) |
+| `wx-process` | – | Silber und Gold für die Läufe der letzten 48 h |
+| `energy-ingest`, `energy-revise` | – | Energiedaten alle 15 min; nachträgliche Korrekturen der Quellen (letzte 30 Tage, je Datensatz einmal täglich) |
+| `mastr-snapshot` | – | MaStR-Gesamtexport einmal je Quartal (7.5) |
+| `gfs-backfill` | `backfill` | GFS-Historie aus dem AWS-Archiv (Bronze) |
+| `wx-process-backfill` | `backfill`, `history` | Silber und Gold für nachgeladene bzw. importierte Läufe, Laufzeiten in Prioritätsreihenfolge (`GFS_PROCESS_RUNS`) |
+| `wx-import` | `history` | GFS-Silber aus GHCR (5.5) |
+| `ml-train`, `ml-predict` | `ml` | Trainingsjobs mit CPU-Grenze; stündliche Inferenz beider Modelllinien |
+| `grafana`, `prometheus`, `node-exporter`, `cadvisor` | – | Dashboards, Alarme per E-Mail, Metriken von VM und Containern |
+
+Noch nicht vorhanden sind `api`, `mlflow`, `maintenance` und die Ingest-Dienste für ECMWF, ICON, GEFS und GEM. Das Image baut die CI nach jeder grünen Pipeline auf `main`; ein systemd-Timer rollt neue Stände auf der VM aus (`deploy/systemd/`, `scripts/vm-update.sh`, README).
+
+### 8.3 Geheimnisse
+
+Zugangsdaten (DB-Passwort, Garage-Schlüssel, API-Token der Quellen, SMTP, GHCR-Token) gehören
+nie ins Repository. Empfohlen ist ein Secret-Store als Quelle der Wahrheit, z. B. OpenBao oder
+HashiCorp Vault (KV v2), ersatzweise ein Passwortmanager.
 
 | Ort | Inhalt | Zweck |
 |---|---|---|
-| OpenBao `it-infra`, `secret/predictiondb` | `postgres_password`, `garage_rpc_secret`, `garage_admin_token`, `s3_access_key_id`, `s3_secret_access_key`, `entsoe_token`, dazu `url`/`notes` | Quelle der Wahrheit, KeePass-artiger Datensatz |
-| `.env` auf der VM (`/opt/predictiondb`, chmod 600) | dieselben Werte als `POSTGRES_PASSWORD`, `GARAGE_*`, `PDB_S3_*`, `PDB_ENTSOE_TOKEN` | Laufzeit für Docker Compose; wird aus OpenBao erzeugt, nie von Hand gepflegt |
-| `.env.bao` im lokalen Checkout (chmod 600, gitignored) | `BAO_ADDR`, `BAO_NAMESPACE=it-infra`, `BAO_TOKEN` (scoped, `it-infra-rw`) | Zugriff von der Entwicklungsmaschine |
-| `.envrc` (im Repo) | lädt `.env.bao` per direnv | setzt das scoped Token, bevor das Root-Token aus `~/.vault-token` greifen kann |
+| Secret-Store | `postgres_password`, Garage-RPC-Secret und Admin-Token, S3-Schlüssel, Token der Quellen (ENTSO-E, EIA, GIE, Netztransparenz), SMTP-Passwort, GHCR-Token | Quelle der Wahrheit |
+| `.env` auf dem Host (chmod 600, gitignored) | dieselben Werte als `POSTGRES_PASSWORD`, `GARAGE_*`, `PDB_S3_*`, `PDB_ENTSOE_TOKEN`, `PDB_SMTP_PASSWORD`, `WX_EXCHANGE_TOKEN` … | Laufzeit für Docker Compose; aus dem Secret-Store erzeugt |
 
 Regeln:
 
-- Lokal immer über direnv arbeiten (`direnv allow` im Repo). Ohne `.envrc` fiele `bao` auf das
-  Root-Token zurück; `unset BAO_TOKEN` ist daher nie die Lösung für ein `403`.
-- Werte nur per stdin schreiben (`printf '%s' "$V" | bao kv patch secret/predictiondb feld=-`) und
-  nur als Variable lesen (`bao kv get -field=…`), nie ausgeben.
-- Neue Geheimnisse (z. B. der ENTSO-E-Token) zuerst in OpenBao, dann die `.env` der VM daraus
-  erzeugen und den betroffenen Dienst neu starten.
-- Die VM selbst bekommt vorerst kein OpenBao-Token; die `.env` wird von der Entwicklungsmaschine
-  aus geschrieben. Bei der Cloud-Migration (Kapitel 9) ersetzt ein Agent mit eigenem, nur
-  lesendem Token oder der Secret-Store des Anbieters diesen Schritt.
-- Die optionale Steuer-UI legt keine Geheimnisse im Klartext in der Datenbank ab; auf der VM
-  zeigt sie nur an, ob ein Wert per `.env` gesetzt ist ([STEUER-UI.md](STEUER-UI.md) Kap. 6).
+- Im Secret-Store stehen nur echte Geheimnisse (Passwörter, Token, ggf. Benutzernamen). Hosts,
+  URLs, Ports und Alarmadressen sind normale Werte in der `.env` (Vorlage `.env.example`).
+- Werte nur per stdin schreiben und nur als Variable lesen, nie ausgeben oder ins Log schreiben.
+- Neue Geheimnisse zuerst in den Secret-Store, dann die `.env` daraus erzeugen und den
+  betroffenen Dienst neu starten.
+- Der Host braucht kein Token für den Secret-Store, solange die `.env` von einem
+  Verwaltungsrechner aus geschrieben wird. Bei der Cloud-Migration (Kapitel 9) ersetzt ein Agent
+  mit eigenem, nur lesendem Token oder der Secret-Store des Anbieters diesen Schritt.
+- Welche Quellen einen Schlüssel brauchen und wie man ihn bekommt:
+  [DATENQUELLEN-ZUGANG.md](DATENQUELLEN-ZUGANG.md).
+- Die optionale Steuer-UI legt keine Geheimnisse im Klartext in der Datenbank ab; sie zeigt nur
+  an, ob ein Wert per `.env` gesetzt ist ([STEUER-UI.md](STEUER-UI.md) Kap. 6).
 
 ---
 
@@ -1635,7 +1779,7 @@ Datenabfluss beachten: Bei S3-Diensten mit Egress-Kosten (AWS) sollten Training 
 
 - **Logging:** JSON über stdout, gesammelt per Docker-Logtreiber bzw. Loki.
 - **Metriken:** Läufe pro Quelle vollständig/verspätet/fehlgeschlagen, Bytes je Lauf, Latenz zwischen Veröffentlichung und Ablage, Prognosefehler je Horizont.
-- **Alarme:** „Kein vollständiger GFS-Lauf seit 12 h“, „ENTSO-E-Daten älter als 2 h“, „Garage-Füllstand > 80 %“.
+- **Alarme:** „Kein vollständiger GFS-Lauf seit 12 h“, „ENTSO-E-Daten älter als 2 h“, „Garage-Füllstand > 80 %“. Umgesetzt sind Grafana-Alarme per E-Mail (`config/grafana/provisioning/alerting/`): Format einer Datenquelle geändert, Abruf scheitert seit 24 h, Reihe veraltet, Ist-Last korrigiert, Partition zu 90 % belegt.
 - **Tests:** Unit-Tests für `.idx`-Parser und Range-Merging mit aufgezeichneten Fixtures; Integrationstest gegen echte Endpunkte als separater, manuell ausgelöster CI-Job (nicht in jedem Lauf, wegen Rate-Limits).
 - **Prognose-Dashboard:** Ausblick Last und Preis DE-LU von −2 bis +7 Tage und Vortagesvergleich mit Fehlerschlauch (7.10).
 - **Monitoring bleibt Grafana.** Die optionale Steuer-UI dient nur dem Steuern (Quellen, Input-Sets, Trainingsläufe, Champion/Challenger) und verlinkt für Verläufe auf Grafana und MLflow ([STEUER-UI.md](STEUER-UI.md)).
@@ -1687,7 +1831,7 @@ flowchart LR
 3. **Kommerzielle Nutzung?** Entscheidet, ob Open-Meteo produktiv genutzt werden darf und ob bestimmte Lizenzauflagen (ENTSO-E-Bedingungen) relevant werden.
 4. **Zielauflösung des Preises:** 15 min (aktueller Markt) oder Stunde (einfacher, längere homogene Historie)? Vorschlag: 15 min als Ausgabe, Training mit Stundenmitteln vor Okt. 2025 und Upsampling-Kennzeichnung.
 5. **Ausschnitt:** Nur DE oder Mitteleuropa (Nachbarländer beeinflussen Preis über Kuppelflüsse)? Vorschlag: 44–58° N, 0–20° E.
-6. **GPU:** Steht auf einem PVE-Host eine GPU für Passthrough bereit (bekannt für PVE2: 12 Threads, 62 GB RAM, GPU unbekannt)? Ohne lokale GPU startet das Training auf CPU, Hyperparameter-Suchen laufen auf stundenweise gemieteten GPUs (7.7).
+6. **GPU:** Steht auf dem PVE-Host eine GPU für Passthrough bereit? Ohne lokale GPU startet das Training auf CPU, Hyperparameter-Suchen laufen auf stundenweise gemieteten GPUs (7.7).
 7. Zu verifizierende Detailwerte vor der Implementierung: exakte NOMADS-Rate-Limits, aktuelle Vorhaltezeiten auf opendata.dwd.de und data.ecmwf.int, Beginn der Archive auf AWS, aktuelle Garage- und TimescaleDB-Versionen, Zugang und Lizenz von GloFAS/EFAS sowie Schnittstellen der Pegelportale der Länder.
 8. **Anlagen-API (7.6):** Nur eigene Anlagen oder auch Anlagen weiterer Nutzer? Mehrere Nutzer bzw. fremde Anlagen fallen nicht unter den Additional Use Grant (nur intern). Lizenz der Turbinen-Leistungskurven (oedb) vor Übernahme prüfen.
 9. ~~Datenlizenz der GHCR-Artefakte~~ **Entschieden (2026-10-23):** Die aufbereiteten Daten in GHCR (Silber, Bronze, Features, 5.5) stehen unter CC BY 4.0, mit Weitergabe der Quellenvermerke; die BSL gilt nur für den Code. Namensraum: unter dem Konto `the78mole` (`ghcr.io/the78mole/predictiondb-data/*` und `…/predictiondb-models/<markt>`), nicht unter der Bizzmark UG.

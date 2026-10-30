@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 470" font-family="Helvetica, Arial, sans-serif" font-size="13">
+  <defs>
+    <marker id="pfeil" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#555"/>
+    </marker>
+  </defs>
+  <rect width="900" height="470" fill="#ffffff"/>
+  <text x="450" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#222">Ein Beispiel je Ausgabezeitpunkt (z. B. 08 UTC): Fenster rein, 192 Stunden Quantile raus</text>
+
+  <!-- Eingänge -->
+  <g>
+    <rect x="20" y="55" width="250" height="88" rx="6" fill="#e8f0fb" stroke="#4a78c2"/>
+    <text x="32" y="76" font-weight="bold" fill="#1f3f73">Vergangenheit (Lookback 7–14 Tage)</text>
+    <text x="32" y="96" fill="#222">Last, Wind, PV, Preis DE-LU,</text>
+    <text x="32" y="113" fill="#222">Nachbarpreise, Residuallast</text>
+    <text x="32" y="131" fill="#666" font-size="12">nur bis zum Ausgabezeitpunkt bekannt</text>
+
+    <rect x="20" y="158" width="250" height="106" rx="6" fill="#e9f6ec" stroke="#3c9a55"/>
+    <text x="32" y="179" font-weight="bold" fill="#1d5c2e">Zukunft (Horizont 192 h)</text>
+    <text x="32" y="199" fill="#222">GFS/GEFS-Gold je Cluster aus dem</text>
+    <text x="32" y="216" fill="#222">letzten fertigen Lauf, Kalender,</text>
+    <text x="32" y="233" fill="#222">ÜNB-Lastprognose (ab 10 Uhr)</text>
+    <text x="32" y="252" fill="#666" font-size="12">hängt vom Ausgabezeitpunkt ab</text>
+
+    <rect x="20" y="279" width="250" height="70" rx="6" fill="#fbf1e3" stroke="#c98a2b"/>
+    <text x="32" y="300" font-weight="bold" fill="#7a4d0b">Statisch und langsam</text>
+    <text x="32" y="320" fill="#222">Bestand (MaStR), Brennstoffe,</text>
+    <text x="32" y="337" fill="#222">Marktwerte, Grenzkostenindex</text>
+  </g>
+
+  <!-- Modellkern -->
+  <rect x="320" y="55" width="300" height="294" rx="8" fill="#f4f4f6" stroke="#777"/>
+  <text x="470" y="78" text-anchor="middle" font-weight="bold" fill="#222">Modellkern (eine Variante wählen)</text>
+
+  <rect x="338" y="92" width="264" height="70" rx="5" fill="#ffffff" stroke="#999"/>
+  <text x="350" y="112" font-weight="bold" fill="#222">N-HiTS</text>
+  <text x="350" y="130" fill="#333" font-size="12">MLP-Blöcke auf mehreren Zeitauflösungen,</text>
+  <text x="350" y="146" fill="#333" font-size="12">Tagesgang + Wochentrend getrennt; schnell</text>
+
+  <rect x="338" y="170" width="264" height="70" rx="5" fill="#ffffff" stroke="#999"/>
+  <text x="350" y="190" font-weight="bold" fill="#222">TiDE</text>
+  <text x="350" y="208" fill="#333" font-size="12">MLP-Encoder/-Decoder, Zukunftswerte je</text>
+  <text x="350" y="224" fill="#333" font-size="12">Stunde direkt in den Decoder; schnell</text>
+
+  <rect x="338" y="248" width="264" height="88" rx="5" fill="#ffffff" stroke="#999"/>
+  <text x="350" y="268" font-weight="bold" fill="#222">TFT (Temporal Fusion Transformer)</text>
+  <text x="350" y="286" fill="#333" font-size="12">Variablenauswahl → LSTM-Encoder/-Decoder</text>
+  <text x="350" y="302" fill="#333" font-size="12">→ Attention über alle Stunden;</text>
+  <text x="350" y="318" fill="#333" font-size="12">am genauesten möglich, aber 5–10× teurer</text>
+
+  <!-- Ausgang -->
+  <rect x="670" y="120" width="210" height="150" rx="6" fill="#f3e9f8" stroke="#8a4fb0"/>
+  <text x="682" y="142" font-weight="bold" fill="#4e2470">Ausgang</text>
+  <text x="682" y="164" fill="#222">192 h × 5 Ziele × 3 Quantile</text>
+  <text x="682" y="184" fill="#222">Last, Wind an Land/See, PV,</text>
+  <text x="682" y="201" fill="#222">Preis DE-LU</text>
+  <text x="682" y="222" fill="#222">P10 / P50 / P90</text>
+  <text x="682" y="244" fill="#666" font-size="12">Verlust: Pinball (Quantil)</text>
+  <text x="682" y="260" fill="#666" font-size="12">danach Kalibrierung wie heute</text>
+
+  <!-- Pfeile -->
+  <line x1="270" y1="99" x2="318" y2="150" stroke="#555" stroke-width="1.6" marker-end="url(#pfeil)"/>
+  <line x1="270" y1="211" x2="318" y2="205" stroke="#555" stroke-width="1.6" marker-end="url(#pfeil)"/>
+  <line x1="270" y1="314" x2="318" y2="260" stroke="#555" stroke-width="1.6" marker-end="url(#pfeil)"/>
+  <line x1="620" y1="200" x2="668" y2="195" stroke="#555" stroke-width="1.6" marker-end="url(#pfeil)"/>
+
+  <!-- Unterschied zu LightGBM -->
+  <rect x="20" y="372" width="860" height="82" rx="6" fill="#fffbe6" stroke="#c9b23b"/>
+  <text x="32" y="394" font-weight="bold" fill="#5c4f05">Unterschied zu LightGBM heute</text>
+  <text x="32" y="414" fill="#222">LightGBM sieht eine Tabellenzeile je (Ausgabezeit, Zielstunde) und lernt je Ziel und Quantil einen eigenen Baumwald,</text>
+  <text x="32" y="432" fill="#222">zweistufig (erst Last/Wind/PV, dann Preis). Das Netz sieht das ganze Fenster auf einmal und gibt alle Ziele und Stunden</text>
+  <text x="32" y="450" fill="#222">gemeinsam aus. Dieselben freien Eingänge, dieselben Bekanntheitsregeln (Leakage-Schutz) und dieselben Backtest-Folds.</text>
+</svg>

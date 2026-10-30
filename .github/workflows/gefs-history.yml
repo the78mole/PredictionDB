@@ -1,0 +1,100 @@
+name: GEFS-Ensemble
+
+# Baut das GEFS-Silber im Runner (nie auf der VM): je Job ein Monat der 00Z-Läufe, je Lauf
+# 31 Mitglieder × 65 Schritte per Byte-Bereich aus dem AWS-Archiv, je Region und Mitglied
+# verdichtet (config/sources/gefs_0p5.yaml, config/gefs/regions_v2.json.gz). Nach GHCR geht nur
+# das Silber: ghcr.io/the78mole/predictiondb-data/gefs-0p5-silver (Tag JJJJ-MM-00z). Die VM holt
+# es später per Import.
+#
+# Nur abgeschlossene Monate: Den aktuellen Monat baut die VM selbst (mit Bronze, ARCHITEKTUR.md
+# 5.6). Ohne Eingabe endet der Plan deshalb am letzten Lauf des Vormonats. Er liest den Stand aus
+# den Manifesten und nimmt nur Monate mit Lücken, jüngste zuerst; ein erneuter Start setzt also
+# fort. Der wöchentliche Zeitplan füllt Lücken, z. B. wenn die VM am Monatsende ausgefallen war.
+on:
+  schedule:
+    - cron: "40 7 * * 1"
+  workflow_dispatch:
+    inputs:
+      start:
+        description: Frühester Lauf (leer = Beginn der GFS-v16-Historie)
+        default: ""
+      end:
+        description: Spätester Lauf (leer = Ende des Vormonats)
+        default: ""
+      rebuild:
+        description: Vorhandene Läufe neu bauen, nur Änderungen hochladen
+        type: boolean
+        default: false
+
+concurrency:
+  group: gefs-history
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  WX_EXCHANGE_GEFS_REPOSITORY: the78mole/predictiondb-data/gefs-0p5-silver
+  PDB_LOG_JSON: "false"
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  plan:
+    name: Lücken planen
+    runs-on: ubuntu-26.04
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+          save-cache: false
+      - run: uv sync --locked --no-dev --package wx-exchange
+      - id: plan
+        env:
+          START: ${{ inputs.start || '2021-03-22T12' }}
+          END: ${{ inputs.end }}
+          REBUILD: ${{ inputs.rebuild == true }}
+        run: |
+          END=${END:-$(date -u -d "$(date -u +%Y-%m-01) -6 hours" +%Y-%m-%dT%H)}
+          args=(gefs plan "$START" "$END")
+          [ "$REBUILD" = "true" ] && args+=(--all)
+          uv run --no-sync wx-exchange "${args[@]}"
+
+  month:
+    needs: plan
+    if: needs.plan.outputs.matrix != '[]'
+    name: ${{ matrix.month }} ${{ matrix.hour }}Z
+    runs-on: ubuntu-26.04
+    timeout-minutes: 300
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      max-parallel: 8
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    env:
+      WX_EXCHANGE_USERNAME: ${{ github.actor }}
+      WX_EXCHANGE_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+          save-cache: false
+      - run: uv sync --locked --no-dev --package wx-exchange
+      - name: Monat laden, verdichten und nach GHCR
+        env:
+          MONTH: ${{ matrix.month }}
+          HOUR: ${{ matrix.hour }}
+          START: ${{ inputs.start || '2021-03-22T12' }}
+          END: ${{ inputs.end }}
+          REBUILD: ${{ inputs.rebuild == true }}
+        run: |
+          END=${END:-$(date -u -d "$(date -u +%Y-%m-01) -6 hours" +%Y-%m-%dT%H)}
+          args=(gefs publish "$MONTH" "$HOUR" --start "$START" --end "$END" --parallel-runs 2)
+          [ "$REBUILD" = "true" ] && args+=(--rebuild)
+          uv run --no-sync wx-exchange "${args[@]}"

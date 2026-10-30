@@ -17,6 +17,15 @@ Ausschnitt zugeschnittenen Schritte in Garage (Bucket `wx-bronze`) ab. Grundlage
    Damit die Köpfe nicht nacheinander gelesen werden, wird die Datei in bis zu 16 Abschnitte
    geteilt; an jedem Schnitt wird der nächste Nachrichtenanfang (`7777GRIB`) gesucht. Landet der
    Lauf über die Köpfe nicht genau am nächsten Anfang, wird die ganze Datei geladen.
+   Das vollständige Inventar eines Schritts dient als Vorlage für denselben Schritt späterer
+   Läufe (Reihenfolge innerhalb einer Modellversion fest): Die Lage der gewählten Nachrichten
+   wird aus der Vorlage geschätzt, dort angesprungen und nur über wenige Köpfe gelaufen, statt
+   alle Köpfe zu lesen. Passt die Vorlage nicht, entsteht ein neues vollständiges Inventar.
+   Die Vorlagen liegen fest im Repo (`templates` in der Konfiguration,
+   `config/sources/gfs_0p25_gdex.templates.json.gz`), je Schritt eine oder mehrere Varianten,
+   weil Modell-Updates die Nachrichtenfolge ändern; versucht wird die zuletzt passende zuerst.
+   Der Workflow `gfs-templates.yml` (`wx-exchange gfs templates`) prüft sie an je einem Lauf
+   pro Monat und ergänzt fehlende Schritte und neue Varianten (Artefakt oder Commit).
    NOMADS liefert Süd→Nord und einfache Packung; die Antwort wird auf Nord→Süd gedreht
    und verlustfrei mit CCSDS gepackt, damit Bronze unabhängig vom Endpunkt einheitlich ist.
    Der Filter kombiniert jede Variable mit jedem Level und liefert daher einzelne
@@ -51,7 +60,7 @@ abgebrochener Backfill wird mit demselben Aufruf fortgesetzt. Läufe, die im Arc
 bleiben `pending` und werden nicht als Fehler gewertet.
 
 Jeder Aufruf protokolliert sich in `meta.backfill_job` (Zeitraum, Läufe, Fortschritt, geladene
-Bytes, Status). Das Status-Dashboard zeigt daraus die laufenden und die letzten zehn beendeten
+Bytes, Status). Das Dashboard „Wetter“ zeigt daraus die laufenden und die letzten zehn beendeten
 Jobs. Ohne erreichbare Datenbank wird nur gewarnt und weitergeladen; `--no-job-log` schaltet das
 Protokoll ab. Ein Job, der ohne Abschluss endet (Container hart beendet), gilt beim nächsten Start
 nach einer Stunde ohne Lebenszeichen als abgebrochen.

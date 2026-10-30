@@ -7,13 +7,22 @@ Zeile wie in einer ``.idx`` (wgrib2-Namen), sodass Auswahl und Byte-Bereiche aus
 :mod:`gribkit.idx` unverändert gelten.
 
 Die Namen decken die Parameter ab, die die Quellen-Konfiguration anfragt, und einige
-Nachbarn; unbekannte Parameter heißen ``var<D>_<K>_<N>`` und werden nie ausgewählt.
+Nachbarn; unbekannte Parameter heißen ``var<D>_<K>_<N>`` und werden nie ausgewählt. Diese
+Schlüssel stecken auch in den Kopf-Vorlagen der Quellen und bleiben deshalb, wie sie sind.
+
+Mit ``complete=True`` entsteht dagegen eine Zeile wie von ``wgrib2 -s``: Name aus der ganzen
+NCEP-Tabelle 4.2 (``ncep_parameters.json``), alle Flächentypen der GFS-Dateien und das
+Bezugsdatum aus Sektion 1. Geprüft an den ``.idx`` von NOAA für GFS v15 (AWS, 2021-03-01).
+Damit lassen sich vollständige ``.idx`` für Archive ohne Inventar schreiben (:func:`idx_line`).
 """
 
 from __future__ import annotations
 
+import json
 import struct
 from dataclasses import dataclass
+from functools import cache
+from importlib import resources
 
 from gribkit.idx import IdxEntry
 
@@ -72,6 +81,58 @@ _SURFACES = {
     200: "entire atmosphere (considered as a single layer)",
 }
 
+#: ``complete``: Flächentypen ohne Höhenangabe, Namen wie bei wgrib2
+_SURFACES_COMPLETE = {
+    **_SURFACES,
+    2: "cloud base",
+    3: "cloud top",
+    4: "0C isotherm",
+    5: "adiabatic condensation lifted from the surface",
+    6: "max wind",
+    7: "tropopause",
+    9: "sea bottom",
+    11: "cumulonimbus base",
+    12: "cumulonimbus top",
+    14: "level of free convection",
+    204: "highest tropospheric freezing level",
+    206: "grid scale cloud bottom level",
+    207: "grid scale cloud top level",
+    209: "boundary layer cloud bottom level",
+    210: "boundary layer cloud top level",
+    211: "boundary layer cloud layer",
+    212: "low cloud bottom level",
+    213: "low cloud top level",
+    214: "low cloud layer",
+    215: "cloud ceiling",
+    220: "planetary boundary layer",
+    222: "middle cloud bottom level",
+    223: "middle cloud top level",
+    224: "middle cloud layer",
+    232: "high cloud bottom level",
+    233: "high cloud top level",
+    234: "high cloud layer",
+    242: "convective cloud bottom level",
+    243: "convective cloud top level",
+    244: "convective cloud layer",
+    248: "shallow convective cloud bottom level",
+    249: "shallow convective cloud top level",
+    251: "deep convective cloud bottom level",
+    252: "deep convective cloud top level",
+}
+
+#: ``complete``: Flächentypen mit Wert → (Einzelwert, Schicht), ``{a}``/``{b}`` mit ``%g``
+_VALUED = {
+    100: ("{a} mb", "{a}-{b} mb"),
+    102: ("{a} m above mean sea level", "{a}-{b} m above mean sea level"),
+    103: ("{a} m above ground", "{a}-{b} m above ground"),
+    104: ("{a} sigma level", "{a}-{b} sigma layer"),
+    105: ("{a} hybrid level", "{a}-{b} hybrid layer"),
+    106: ("{a} m below ground", "{a}-{b} m below ground"),
+    107: ("{a} K isentropic level", "{a}-{b} K isentropic layer"),
+    108: ("{a} mb above ground", "{a}-{b} mb above ground"),
+    109: ("PV={a} (Km^2/kg/s) surface", "PV={a}-{b} (Km^2/kg/s) layer"),
+}
+
 #: Statistische Verarbeitung (Code-Tabelle 4.10) → wgrib2-Kürzel
 _STATS = {0: "ave", 1: "acc", 2: "max", 3: "min"}
 
@@ -91,6 +152,8 @@ class Head:
     var: str
     level: str
     fcst: str
+    #: Bezugszeit ``JJJJMMTTHH`` aus Sektion 1, nur mit ``complete``
+    date: str = ""
 
 
 def _signed(b: int) -> int:
@@ -102,6 +165,31 @@ def _scaled(factor: int, value: int) -> float | None:
     if value == 0xFFFFFFFF:
         return None
     return value / 10.0 ** _signed(factor)
+
+
+def _scaled_signed(factor: int, value: int) -> float | None:
+    """Wie :func:`_scaled`, der Wert aber in Vorzeichen-Betrag-Kodierung (z. B. PV=-2e-06)."""
+    if value == 0xFFFFFFFF:
+        return None
+    magnitude = value & 0x7FFFFFFF
+    return (-magnitude if value & 0x80000000 else magnitude) / 10.0 ** _signed(factor)
+
+
+def _level_complete(sec4: bytes) -> str:
+    t1, f1, v1 = sec4[22], sec4[23], struct.unpack(">I", sec4[24:28])[0]
+    t2, f2, v2 = sec4[28], sec4[29], struct.unpack(">I", sec4[30:34])[0]
+    if t1 in _SURFACES_COMPLETE:
+        return _SURFACES_COMPLETE[t1]
+    a = _scaled_signed(f1, v1)
+    if t1 in _VALUED and a is not None:
+        single, layer = _VALUED[t1]
+        b = _scaled_signed(f2, v2) if t2 == t1 else None
+        if t1 in (100, 108):  # Druck in Pa, wgrib2 schreibt mb
+            a, b = a / 100, None if b is None else b / 100
+        if b is not None:
+            return layer.format(a=f"{a:g}", b=f"{b:g}")
+        return single.format(a=f"{a:g}")
+    return f"level type {t1}" + ("" if a is None else f" value {a:g}")
 
 
 def _level(sec4: bytes) -> str:
@@ -117,6 +205,12 @@ def _level(sec4: bytes) -> str:
         return f"{a:g}-{b:g} m below ground" if b is not None else f"{a:g} m below ground"
     if t1 == 100 and a is not None:
         return f"{a / 100:g} mb"
+    if t1 == 102 and a is not None:
+        return f"{a:g} m above mean sea level"
+    if t1 == 108 and a is not None:
+        b = _scaled(f2, v2) if t2 == 108 else None
+        if b is not None:
+            return f"{a / 100:g}-{b / 100:g} mb above ground"
     return f"surface{t1}"
 
 
@@ -146,8 +240,29 @@ def _fcst(sec4: bytes, template: int) -> str:
     return f"template4.{template}"
 
 
-def parse_head(data: bytes) -> Head:
-    """Liest Sektion 0 bis 4 vom Anfang einer GRIB2-Nachricht (mindestens bis Sektion 4)."""
+@cache
+def ncep_parameters() -> dict[tuple[int, int, int], str]:
+    """NCEP-Tabelle 4.2 (Disziplin, Kategorie, Parameter) → wgrib2-Kürzel."""
+    raw = resources.files("gribkit").joinpath("ncep_parameters.json").read_text("utf-8")
+    table: dict[str, str] = json.loads(raw)["parameters"]
+    out = {}
+    for key, name in table.items():
+        d, c, n = (int(x) for x in key.split("."))
+        out[d, c, n] = name
+    return out
+
+
+def _date(sec1: bytes) -> str:
+    year = struct.unpack(">H", sec1[12:14])[0]
+    return f"{year:04d}{sec1[14]:02d}{sec1[15]:02d}{sec1[16]:02d}"
+
+
+def parse_head(data: bytes, *, complete: bool = False) -> Head:
+    """Liest Sektion 0 bis 4 vom Anfang einer GRIB2-Nachricht (mindestens bis Sektion 4).
+
+    ``complete``: Namen wie ``wgrib2 -s`` für alle Nachrichten und Bezugsdatum (``.idx``
+    schreiben); sonst die festen Schlüssel der Kopf-Vorlagen.
+    """
     if len(data) < 16 or data[:4] != b"GRIB":
         raise HeaderError("keine GRIB-Kennung")
     if data[7] != 2:
@@ -155,19 +270,32 @@ def parse_head(data: bytes) -> Head:
     discipline = data[6]
     (length,) = struct.unpack(">Q", data[8:16])
     pos = 16
+    sec1 = b""
     while pos + 5 <= len(data):
         (sec_len,) = struct.unpack(">I", data[pos : pos + 4])
         number = data[pos + 4]
         if sec_len < 5:
             raise HeaderError(f"Sektion {number} mit Länge {sec_len}")
+        if number == 1:
+            sec1 = data[pos : pos + sec_len]
         if number == 4:
             sec4 = data[pos : pos + sec_len]
             if len(sec4) < sec_len or sec_len < 34:
                 break
             (template,) = struct.unpack(">H", sec4[7:9])
-            var = PARAMETERS.get((discipline, sec4[9], sec4[10]))
-            name = var or f"var{discipline}_{sec4[9]}_{sec4[10]}"
-            return Head(length, name, _level(sec4), _fcst(sec4, template))
+            code = (discipline, sec4[9], sec4[10])
+            fcst = _fcst(sec4, template)
+            if not complete:
+                name = PARAMETERS.get(code) or f"var{discipline}_{sec4[9]}_{sec4[10]}"
+                return Head(length, name, _level(sec4), fcst)
+            if len(sec1) < 17:
+                raise HeaderError("Sektion 1 fehlt oder ist zu kurz")
+            # Unbekannte Parameter schreibt wgrib2 so aus
+            name = ncep_parameters().get(code) or (
+                f"var discipline={discipline} master_table={sec1[9]}"
+                f" parmcat={sec4[9]} parm={sec4[10]}"
+            )
+            return Head(length, name, _level_complete(sec4), fcst, _date(sec1))
         if number > 4:
             raise HeaderError("Sektion 4 fehlt")
         pos += sec_len
@@ -195,4 +323,15 @@ def find_boundary(chunk: bytes, size_left: int) -> int | None:
 
 def entry(number: int, offset: int, head: Head, date: str = "") -> IdxEntry:
     """Zeile wie aus einer ``.idx`` für die Nachricht an ``offset``."""
+    date = date or head.date
     return IdxEntry(str(number), offset, head.length, date, head.var, head.level, head.fcst)
+
+
+def idx_line(e: IdxEntry) -> str:
+    """Zeile im Format von ``wgrib2 -s``, z. B. ``581:415092545:d=2019070100:TMP:…:``."""
+    return f"{e.number}:{e.offset}:d={e.date}:{e.var}:{e.level}:{e.fcst}:"
+
+
+def is_known(e: IdxEntry) -> bool:
+    """``False``, wenn Name oder Fläche nicht aus den Tabellen kam (Platzhalter)."""
+    return not (e.var.startswith("var ") or e.level.startswith("level type "))

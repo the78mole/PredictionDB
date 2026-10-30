@@ -74,6 +74,40 @@ NEIGHBOUR_ZONES: dict[str, str] = {
     "SI": "si",
 }
 
+#: Grenzpartner in Energy-Charts ``/cbet`` und ``/cbpf``: Name -> Kürzel im Reihen-Code
+#: ``xb_trade_<kürzel>`` (Handel) bzw. ``xb_flow_<kürzel>`` (physikalischer Fluss); ``net`` ist
+#: die Summe über alle Grenzen. Positiv heißt Import nach Deutschland.
+XB_PARTNERS: dict[str, str] = {
+    "Austria": "at",
+    "Belgium": "be",
+    "Czech Republic": "cz",
+    "Denmark": "dk",
+    "France": "fr",
+    "Luxembourg": "lu",
+    "Netherlands": "nl",
+    "Norway": "no",
+    "Poland": "pl",
+    "Sweden": "se",
+    "Switzerland": "ch",
+    "sum": "net",
+}
+
+#: Nachbarzonen mit Day-Ahead-Lastprognose (ENTSO-E 6.1.b, Freigabeliste), Reihen-Code
+#: ``load_da_forecast_<kürzel>`` mit den Kürzeln aus ``NEIGHBOUR_ZONES``
+LOAD_FORECAST_ZONES: tuple[str, ...] = (
+    "at",
+    "be",
+    "ch",
+    "cz",
+    "dk1",
+    "dk2",
+    "fr",
+    "nl",
+    "no2",
+    "pl",
+    "se4",
+)
+
 #: Gebiete der Gasspeicher-Reihen: Kürzel im Reihen-Code -> AGSI-Parameter bzw. Eurostat-Geo.
 #: Neben DE die Nachbarn mit Speichern, die (auch) am deutschen Markt hängen (Haidach und
 #: 7Fields in AT, Grijpskerk/Norg in NL, Dolní Bojanovice in CZ), und die EU.
@@ -230,6 +264,17 @@ SERIES: dict[str, SeriesInfo] = {
         SeriesInfo("residual_load", Kind.ACTUAL, UNIT_MW),
         SeriesInfo("load_da_forecast", Kind.LOAD_DA_FORECAST, UNIT_MW),
         SeriesInfo("residual_load_da_forecast", Kind.LOAD_DA_FORECAST, UNIT_MW),
+        # Day-Ahead-Lastprognosen der Nachbarzonen (ENTSO-E 6.1.b, CC BY 4.0)
+        *(
+            SeriesInfo(f"load_da_forecast_{z}", Kind.LOAD_DA_FORECAST, UNIT_MW)
+            for z in LOAD_FORECAST_ZONES
+        ),
+        # Grenzüberschreitender Handel und physikalische Flüsse (Energy-Charts), + = Import
+        *(
+            SeriesInfo(f"xb_{kind}_{p}", Kind.ACTUAL, UNIT_MW)
+            for kind in ("trade", "flow")
+            for p in XB_PARTNERS.values()
+        ),
         *(
             SeriesInfo(f"gen_{t}", Kind.ACTUAL, UNIT_MW)
             for t in [

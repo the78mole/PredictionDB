@@ -8,7 +8,10 @@ quantiles: [0.1, 0.5, 0.9]
 
 issue:
   hour_utc: 8                  # vor Gebotsschluss (12 Uhr Ortszeit = 10/11 UTC)
-  lead_days: [1, 2, 3, 4, 5, 6, 7]
+  # Training reihum zu vier Tageszeiten: ml-predict rechnet stündlich, gelernt war bisher nur
+  # 08 UTC (nach 13 Uhr ist der Preis des Folgetags bekannt und wird übernommen, nicht gelernt)
+  hours_utc: [2, 8, 14, 20]
+  lead_days: [0, 1, 2, 3, 4, 5, 6, 7]   # 0 = Rest des Ausgabetags
   actual_delay_h: 2            # Ist-Werte ab Intervallende + 2 h bekannt
   price_known_local_hour: 13   # Auktionsergebnis D+1 ab 13 Uhr am Vortag
   nwp_delay_h: 6               # GFS-Lauf vollständig verarbeitet ca. 5,5 h nach Laufzeit
@@ -77,6 +80,14 @@ series_groups:
     mode: outlook
     codes: [steo_brent, steo_henry_hub]
     horizons: [1, 2, 3]
+  # Implizites Brennstoff- und CO2-Niveau aus SMARD: Preis in Stunden hoher Residuallast (Gas,
+  # Steinkohle preissetzend) und in Braunkohle-Stunden (folgt dem CO2-Preis), je 14/28/56 Tage.
+  # Täglich und frei statt TTF/EUA (unfrei); docs/analysen/eua-rueckrechnung,
+  # docs/analysen/preisabweichung-2026-10-29
+  grenzkosten:
+    mode: grenzkosten
+    codes: [da_price_de_lu]
+    windows: [14, 28, 56]
   # Marktwerte nach EEG, selbst aus SMARD berechnet (Quelle pdb_marktwert)
   marktwerte:
     mode: asof
@@ -123,6 +134,18 @@ variants:
     groups: [calendar, lags, capacity, nachbarn, lastprognose, brennstoffe, marktwerte,
              preisniveau, steo, stage1]
     train_from: 2018-10-08
+  # Grenzkostenindex als Merkmal, und zusätzlich der Preis relativ zu diesem Niveau gelernt
+  # (Abweichung vom Vortagesmittel geteilt durch gk_niveau): Bäume extrapolieren nicht über das
+  # Preisniveau der Trainingszeit hinaus
+  - name: frei_gk
+    groups: [calendar, lags, capacity, nachbarn, lastprognose, brennstoffe, marktwerte,
+             grenzkosten, stage1]
+    train_from: 2018-10-08
+  - name: frei_gk_skaliert
+    groups: [calendar, lags, capacity, nachbarn, lastprognose, brennstoffe, marktwerte,
+             grenzkosten, stage1]
+    scale: {da_price_de_lu: gk_niveau}
+    train_from: 2018-10-08
   # mit GFS-Features je Technologie, nur Ausgabezeitpunkte mit Wetterlauf
   - name: wetter
     groups: [calendar, lags, capacity, weather, stage1]
@@ -131,6 +154,12 @@ variants:
   - name: wetter_frei
     groups: [calendar, lags, capacity, weather, nachbarn, lastprognose, brennstoffe, marktwerte,
              stage1]
+    requires_weather: true
+    train_from: 2021-03-23
+  - name: wetter_frei_gk_skaliert
+    groups: [calendar, lags, capacity, weather, nachbarn, lastprognose, brennstoffe, marktwerte,
+             grenzkosten, stage1]
+    scale: {da_price_de_lu: gk_niveau}
     requires_weather: true
     train_from: 2021-03-23
 
@@ -143,6 +172,11 @@ lgbm:
   subsample_freq: 1
   colsample_bytree: 0.8
   reg_lambda: 1.0
+
+# Quantile je Ziel und Vorlauftag nachkalibrieren: P10–P90 enthielt im Backtest nur 55–70 %
+# statt 80 % der Ist-Werte (docs/analysen/prognose-de-lu-v2)
+calibration:
+  months: 12
 
 backtest:
   test_from: 2024-01-01

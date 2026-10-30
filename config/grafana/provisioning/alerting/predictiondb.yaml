@@ -205,7 +205,7 @@ groups:
     interval: 5m
     rules:
       # Partition der VM zu mehr als 90 % belegt (wie df, node-exporter). Gleiche Auswahl der
-      # Dateisysteme wie im Status-Dashboard (Abschnitt Speicher).
+      # Dateisysteme wie im Dashboard „System“ (Abschnitt Speicher).
       - uid: pdb-disk-full
         title: System - Partition zu 90 % belegt
         condition: B

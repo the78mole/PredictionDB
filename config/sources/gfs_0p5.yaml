@@ -1,0 +1,58 @@
+# NOAA GFS 0,5° für das ganze Verbundnetz (ENTSO-E mit Nordics, GB, IE, dazu UA, MD, TR),
+# derselbe Ausschnitt und dasselbe Gitter wie GEFS (config/sources/gefs_0p5.yaml). DE bleibt
+# zusätzlich mit 0,25° in gfs_0p25. Siehe docs/ARCHITEKTUR.md 5.7.
+code: gfs_0p5
+model: gfs
+resolution: 0p5
+# eigenes 0,5°-Produkt von NCEP (dreistündlich), im AWS-Archiv ab GFS v16 vollständig
+product: pgrb2.0p50
+runs: [0, 6, 12, 18]
+steps:
+  - [0, 384, 3]
+# 75 × 112 = 8 400 Gitterpunkte
+bbox: {north: 71.5, south: 34.5, west: -10.5, east: 45}
+lookback_hours: 30
+step_concurrency: 4
+
+# Nur das Archiv: Die VM holt die Live-Läufe per Byte-Bereich von AWS (globale 0,5°-Felder sind
+# klein), NOMADS bleibt für gfs_0p25 frei.
+endpoints:
+  - name: aws
+    kind: idx_range
+    url: https://noaa-gfs-bdp-pds.s3.amazonaws.com
+    archive: true
+    concurrency: 8
+  - name: gcs
+    kind: idx_range
+    url: https://storage.googleapis.com/global-forecast-system
+    archive: true
+    concurrency: 8
+
+# Auswahl nach ARCHITEKTUR.md 4.3. Ohne fcst werden alle passenden Nachrichten
+# übernommen, bei TCDC/CSNOW also Momentanwert und Intervallmittel.
+# DSWRF und APCP fehlen im Analyse-Schritt f000; das Manifest führt sie unter "absent".
+messages:
+  - {var: TMP,   level: 2 m above ground}
+  - {var: DPT,   level: 2 m above ground}
+  - {var: RH,    level: 2 m above ground}
+  - {var: UGRD,  level: 10 m above ground}
+  - {var: VGRD,  level: 10 m above ground}
+  - {var: UGRD,  level: 100 m above ground}
+  - {var: VGRD,  level: 100 m above ground}
+  - {var: GUST,  level: surface}
+  - {var: DSWRF, level: surface}
+  - {var: TCDC,  level: entire atmosphere}
+  - {var: APCP,  level: surface}
+  - {var: CSNOW, level: surface}
+  - {var: PRMSL, level: mean sea level}
+  # Ergänzt 2026-10-21 für Anlagenprognosen (ARCHITEKTUR.md 7.6) und Wärme/Kälte (7.8),
+  # damit die Historie ab jetzt mitläuft.
+  - {var: PRES,  level: surface}                  # Luftdichte (Wind), Enthalpie (Kühlung)
+  - {var: DLWRF, level: surface}                  # langwellige Gegenstrahlung: Gebäude-Wärmeverlust, Nachtauskühlung
+  - {var: SUNSD, level: surface}                  # Sonnenscheindauer
+  - {var: WEASD, level: surface}                  # Schnee-Wasseräquivalent (Wasserkraft, PV)
+  - {var: SNOD,  level: surface}                  # Schneehöhe
+  - {var: TSOIL, level: 0-0.1 m below ground}     # Bodentemperatur: Sole-WP, Netzverluste
+  - {var: TSOIL, level: 0.1-0.4 m below ground}
+  - {var: SOILW, level: 0-0.1 m below ground}     # Bodenfeuchte (Wasserkraft)
+  - {var: SOILW, level: 0.1-0.4 m below ground}

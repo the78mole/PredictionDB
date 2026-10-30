@@ -12,6 +12,7 @@ REPO = Path(__file__).resolve().parents[3]
 
 
 def test_repo_config_matches_architecture() -> None:
+    """@relation(SWR-WXI-001, scope=function)"""
     cfg = GfsConfig.from_yaml(REPO / "config/sources/gfs_0p25.yaml")
     steps = cfg.step_list()
     assert (
@@ -28,7 +29,24 @@ def test_repo_config_matches_architecture() -> None:
     assert len(cfg.specs()) == 22
 
 
+def test_europe_config_matches_architecture() -> None:
+    """GFS Europa (Kap. 5.7): 0,5° dreistündlich bis 384 h im GEFS-Ausschnitt, nur Archive.
+
+    @relation(SWR-WXI-005, scope=function)
+    """
+    cfg = GfsConfig.from_yaml(REPO / "config/sources/gfs_0p5.yaml")
+    de = GfsConfig.from_yaml(REPO / "config/sources/gfs_0p25.yaml")
+    steps = cfg.step_list()
+    assert (cfg.code, cfg.resolution) == ("gfs_0p5", "0p5")
+    assert len(steps) == 129 and steps[1] == 3 and steps[-1] == 384
+    assert [e.name for e in cfg.endpoints] == ["aws", "gcs"]
+    b = cfg.bbox.bbox()
+    assert (b.north, b.south, b.west, b.east) == (71.5, 34.5, -10.5, 45)
+    assert cfg.specs() == de.specs()
+
+
 def test_runs_between_and_recent() -> None:
+    """@relation(SWR-WXI-002, SWR-WXI-030, scope=function)"""
     cfg = make_config(runs=[0, 12])
     runs = cfg.runs_between(
         datetime(2026, 10, 19, 5, tzinfo=UTC), datetime(2026, 10, 20, 12, tzinfo=UTC)
@@ -52,5 +70,6 @@ def test_runs_between_and_recent() -> None:
     ],
 )
 def test_invalid_config(over: dict[str, Any]) -> None:
+    """@relation(SWR-WXI-001, scope=function)"""
     with pytest.raises((ValidationError, ValueError)):
         GfsConfig.model_validate(config_dict(**over))

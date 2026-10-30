@@ -1,6 +1,8 @@
 """Quellen-Konfiguration (``config/sources/*.yaml``).
 
 S3-Zugang und Logging kommen aus ``predictiondb_core`` (Umgebungsvariablen ``PDB_*``).
+
+@relation(SWA-WXI-CONFIG, scope=file)
 """
 
 from __future__ import annotations
@@ -77,16 +79,21 @@ class GfsConfig(BaseModel):
     lookback_hours: int = 30
     #: Schritte gleichzeitig je Lauf.
     step_concurrency: int = Field(default=4, ge=1)
+    #: ``header_scan``: Kopf-Inventare je Schritt (JSON, gern ``.json.gz``) als Vorlagen,
+    #: relativ zur Konfigurationsdatei; fehlende Schritte baut der Endpunkt im ersten Lauf
+    templates: Path | None = None
 
     @field_validator("runs")
     @classmethod
     def _runs(cls, v: list[int]) -> list[int]:
+        """@relation(SWR-WXI-001, scope=function)"""
         if not v or any(h not in (0, 6, 12, 18) for h in v):
             raise ValueError("GFS-Läufe nur 0, 6, 12, 18 UTC")
         return sorted(set(v))
 
     @model_validator(mode="after")
     def _check(self) -> GfsConfig:
+        """@relation(SWR-WXI-001, scope=function)"""
         self.bbox.bbox()
         if not self.endpoints:
             raise ValueError("mindestens ein Endpunkt nötig")
@@ -104,6 +111,7 @@ class GfsConfig(BaseModel):
         return [m.spec() for m in self.messages]
 
     def endpoints_for(self, archive_only: bool) -> list[EndpointConfig]:
+        """@relation(SWR-WXI-030, scope=function)"""
         return [e for e in self.endpoints if e.archive or not archive_only]
 
     def runs_between(
@@ -112,6 +120,8 @@ class GfsConfig(BaseModel):
         """Alle konfigurierten Läufe im Intervall ``[start, end]`` (UTC).
 
         ``hours`` schränkt auf eine Teilmenge der konfigurierten Laufzeiten ein (z. B. 0, 12).
+
+        @relation(SWR-WXI-030, scope=function)
         """
         wanted = set(self.runs) if hours is None else set(self.runs) & set(hours)
         t = start.astimezone(UTC).replace(minute=0, second=0, microsecond=0)
@@ -124,8 +134,13 @@ class GfsConfig(BaseModel):
         return out
 
     def recent_runs(self, now: datetime) -> list[datetime]:
+        """@relation(SWR-WXI-002, scope=function)"""
         return self.runs_between(now - timedelta(hours=self.lookback_hours), now)
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> GfsConfig:
-        return cls.model_validate(yaml.safe_load(Path(path).read_text()))
+        """@relation(SWR-WXI-001, scope=function)"""
+        config = cls.model_validate(yaml.safe_load(Path(path).read_text()))
+        if config.templates and not config.templates.is_absolute():
+            config.templates = Path(path).parent / config.templates
+        return config
