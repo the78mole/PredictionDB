@@ -30,6 +30,9 @@ _LOG_REVISIONS = """
       FROM _energy_in i
       JOIN energy.value v USING (series_id, ts)
      WHERE v.value IS DISTINCT FROM i.value
+       -- feste Grenzen: Timescale schließt Chunks schon beim Planen aus; ohne sie lief der
+       -- Join über die ganze Hypertabelle und schrieb auf der VM 36 min Temp-Dateien
+       AND v.ts BETWEEN :lo AND :hi AND v.series_id = ANY(:sids)
 """
 
 # Werte innerhalb der gelieferten Spanne einer Reihe, die die Quelle nicht mehr liefert
@@ -178,7 +181,15 @@ class EnergyStore:
             ):
                 for (sid, ts), (value, pub) in rows.items():
                     cp.write_row((sid, ts, value, pub))
-            conn.execute(text(_LOG_REVISIONS))
+            # Temp-Tabelle ohne Statistik: der Planer schätzte sonst eine Handvoll Zeilen
+            conn.execute(text("ANALYZE _energy_in"))
+            keys = rows.keys()
+            bounds = {
+                "lo": min(ts for _, ts in keys),
+                "hi": max(ts for _, ts in keys),
+                "sids": sorted({sid for sid, _ in keys}),
+            }
+            conn.execute(text(_LOG_REVISIONS), bounds)
             conn.execute(text(_UPSERT))
             if prune:
                 self._prune(conn, source_id, len(rows))
