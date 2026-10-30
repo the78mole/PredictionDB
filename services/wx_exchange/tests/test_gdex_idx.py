@@ -49,6 +49,7 @@ async def build(
 
 
 def test_pack_is_reproducible() -> None:
+    """@relation(SWR-WXX-030, scope=function)"""
     files = {"b/x.idx": b"2:9:d=1:B:s:anl:\n", "a/x.idx": b"1:0:d=1:A:s:anl:\n"}
     data = idx.pack(files)
     assert data == idx.pack(dict(reversed(files.items())))
@@ -56,6 +57,7 @@ def test_pack_is_reproducible() -> None:
 
 
 async def test_failed_months_are_completed_by_a_follow_up() -> None:
+    """@relation(SWR-WXX-031, scope=function)"""
     fake = FakeRegistry()
     reg = registry(fake)
     host = FakeGfsHost("gdex.test", AVAILABLE, index=False)
@@ -92,6 +94,7 @@ async def test_failed_months_are_completed_by_a_follow_up() -> None:
 
 
 async def test_follow_up_keeps_built_files_and_other_layers() -> None:
+    """@relation(SWR-WXX-031, scope=function)"""
     fake = FakeRegistry()
     reg = registry(fake)
     host = FakeGfsHost("gdex.test", AVAILABLE, index=False)
@@ -129,6 +132,7 @@ async def test_follow_up_keeps_built_files_and_other_layers() -> None:
 
 
 async def test_manifest_skips_layers_without_blob() -> None:
+    """@relation(SWR-WXX-031, scope=function)"""
     fake = FakeRegistry()
     reg = registry(fake)
     ghost = idx.IdxLayer(month=MONTH, hour=0, digest="sha256:" + "0" * 64, size=1, runs=1)
@@ -137,6 +141,7 @@ async def test_manifest_skips_layers_without_blob() -> None:
 
 
 async def test_failed_files_are_retried_in_the_same_job() -> None:
+    """@relation(SWR-WXX-030, scope=function)"""
     reg = registry(FakeRegistry())
     # Je Datei scheitern erst alle Wiederholungen der ersten Anfrage
     layer = await build(reg, Flaky(FakeGfsHost("gdex.test", AVAILABLE, index=False), 40))
@@ -148,6 +153,8 @@ async def test_workers_split_files_and_load(monkeypatch) -> None:  # type: ignor
 
     Statt Prozessen laufen Threads mit eigener Ereignisschleife (der Testspiegel lebt nur im
     Testprozess); geprüft wird Aufteilen und Zusammenführen.
+
+    @relation(SWR-WXX-030, scope=function)
     """
     from concurrent.futures import ThreadPoolExecutor
 
@@ -189,6 +196,7 @@ async def test_workers_split_files_and_load(monkeypatch) -> None:  # type: ignor
 
 
 async def test_backfill_reads_idx_instead_of_headers() -> None:
+    """@relation(SWR-WXX-032, scope=function)"""
     reg = registry(FakeRegistry())
     host = FakeGfsHost("gdex.test", AVAILABLE, index=False)
     idx.merge_manifest(reg, [await build(reg, host)], SOURCE)
@@ -213,6 +221,7 @@ async def test_backfill_reads_idx_instead_of_headers() -> None:
 
 
 async def test_stale_idx_falls_back_to_headers() -> None:
+    """@relation(SWR-WXX-032, scope=function)"""
     host = FakeGfsHost("gdex.test", AVAILABLE, index=False)
     # .idx passt nicht zur Datei: Offsets mitten in den Nachrichten
     (text,) = FakeGfsHost("aws.test", {3}).idx.values()
@@ -228,7 +237,10 @@ async def test_stale_idx_falls_back_to_headers() -> None:
 
 
 async def test_broken_archive_files_are_not_retried() -> None:
-    """Leere (HTTP 416) und abgeschnittene Dateien gelten als ``broken``, nicht ``failed``."""
+    """Leere (HTTP 416) und abgeschnittene Dateien gelten als ``broken``, nicht ``failed``.
+
+    @relation(SWR-WXX-030, scope=function)
+    """
     reg = registry(FakeRegistry())
     host = FakeGfsHost("gdex.test", AVAILABLE, index=False)
     empty, cut = ("/" + GDEX_PATH.format(run=RUN, step=s) for s in (3, 6))

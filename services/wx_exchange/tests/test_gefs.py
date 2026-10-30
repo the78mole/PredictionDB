@@ -165,6 +165,7 @@ IDX = """1:0:d=2099010200:HGT:500 mb:6 hour fcst:ENS=+1
 
 
 def test_select_and_ranges() -> None:
+    """@relation(SWR-WXX-041, scope=function)"""
     wanted = {
         "t2m": FieldSpec(product="a", param="TMP", level="2 m above ground"),
         "v10": FieldSpec(product="a", param="VGRD", level="10 m above ground"),
@@ -186,6 +187,7 @@ def test_select_and_ranges() -> None:
 
 
 def test_config_members_urls_and_runs(tmp_path: Path) -> None:
+    """@relation(SWR-WXX-040, scope=function)"""
     cfg = make_config(tmp_path)
     assert cfg.members == ["gec00", "gep01"]
     assert cfg.url(RUN, "gep01", 6, "b") == (
@@ -198,6 +200,7 @@ def test_config_members_urls_and_runs(tmp_path: Path) -> None:
 
 
 def test_repository_config_loads() -> None:
+    """@relation(SWR-WXX-040, scope=function)"""
     root = Path(__file__).resolve().parents[3]
     cfg = GefsConfig.from_yaml(root / "config/sources/gefs_0p5.yaml")
     assert len(cfg.members) == 31 and len(cfg.steps.list()) == 65
@@ -219,7 +222,10 @@ def test_repository_config_loads() -> None:
 
 
 async def test_build_keeps_default_executor_free_for_dns(tmp_path: Path) -> None:
-    """Bronze-PUTs laufen nicht im Pool, über den asyncio DNS auflöst."""
+    """Bronze-PUTs laufen nicht im Pool, über den asyncio DNS auflöst.
+
+    @relation(SWR-WXX-042, scope=function)
+    """
     cfg = make_config(tmp_path)
     regions = Regions.load(cfg.regions)
     archive = FakeArchive(cfg, [RUN])
@@ -240,6 +246,7 @@ async def test_build_keeps_default_executor_free_for_dns(tmp_path: Path) -> None
 
 
 async def test_build_run_aggregates_per_region_and_member(tmp_path: Path) -> None:
+    """@relation(SWR-WXX-042, scope=function)"""
     cfg = make_config(tmp_path)
     regions = Regions.load(cfg.regions)
     archive = FakeArchive(cfg, [RUN], gone=frozenset({(RUN, "gep01", 12)}))
@@ -267,6 +274,7 @@ async def test_build_run_aggregates_per_region_and_member(tmp_path: Path) -> Non
 
 
 def test_pack_is_reproducible() -> None:
+    """@relation(SWR-WXX-043, scope=function)"""
     values = np.arange(24, dtype=np.float32).reshape(1, 2, 3, 4)
     values[0, 0, 0, 0] = np.nan
     meta = {"run": RUN.isoformat(), "b": 1, "a": [1, 2]}
@@ -280,6 +288,7 @@ def test_pack_is_reproducible() -> None:
 
 
 def test_fingerprint_changes_with_inputs(tmp_path: Path) -> None:
+    """@relation(SWR-WXX-043, scope=function)"""
     cfg = make_config(tmp_path)
     regions = Regions.load(cfg.regions)
     fp = fingerprint(cfg, regions)
@@ -290,6 +299,7 @@ def test_fingerprint_changes_with_inputs(tmp_path: Path) -> None:
 
 
 async def test_publish_month_uploads_skips_and_records_missing(tmp_path: Path) -> None:
+    """@relation(SWR-WXX-043, scope=function)"""
     cfg = make_config(tmp_path)
     regions = Regions.load(cfg.regions)
     d1, d2, d3 = (datetime(2099, 1, d, tzinfo=UTC) for d in (1, 2, 3))
@@ -344,6 +354,7 @@ async def test_publish_month_uploads_skips_and_records_missing(tmp_path: Path) -
 
 
 def test_inside_and_area_cells() -> None:
+    """@relation(SWR-WXX-044, scope=function)"""
     square = [np.array([[5.0, 47.0], [7.0, 47.0], [7.0, 49.0], [5.0, 49.0], [5.0, 47.0]])]
     lon, lat = np.array([6.0, 8.0, 5.5]), np.array([48.0, 48.0, 50.0])
     assert inside(lon, lat, square).tolist() == [True, False, False]
@@ -358,6 +369,7 @@ def test_inside_and_area_cells() -> None:
 
 
 def test_mastr_regions(tmp_path: Path) -> None:
+    """@relation(SWR-WXX-044, scope=function)"""
     path = tmp_path / "cap.csv"
     path.write_text(
         "technology,lat,lon,mw,hub_m,units,export_date\n"
@@ -400,6 +412,7 @@ def vm_for(
 
 
 async def test_vm_builds_current_month_with_bronze_and_imports_history(tmp_path: Path) -> None:
+    """@relation(SWR-WXX-045, SWR-WXX-046, scope=function)"""
     cfg = make_config(tmp_path)
     jan = [datetime(2099, 1, d, tzinfo=UTC) for d in (30, 31)]
     feb = [datetime(2099, 2, d, tzinfo=UTC) for d in (1, 2)]
@@ -458,6 +471,7 @@ async def test_vm_builds_current_month_with_bronze_and_imports_history(tmp_path:
 
 
 async def test_vm_pending_run_is_not_requested(tmp_path: Path) -> None:
+    """@relation(SWR-WXX-045, scope=function)"""
     cfg = make_config(tmp_path)
     archive = FakeArchive(cfg, [])
     async with client(archive) as c:
@@ -470,6 +484,7 @@ async def test_vm_pending_run_is_not_requested(tmp_path: Path) -> None:
 
 
 async def test_clean_bronze_only_when_silver_matches(tmp_path: Path) -> None:
+    """@relation(SWR-WXX-048, scope=function)"""
     cfg = make_config(tmp_path)
     runs = [datetime(2099, 2, d, tzinfo=UTC) for d in (1, 2)]
     archive = FakeArchive(cfg, runs)
@@ -487,6 +502,7 @@ async def test_clean_bronze_only_when_silver_matches(tmp_path: Path) -> None:
 
 
 def test_ensemble_stats() -> None:
+    """@relation(SWR-WXX-047, scope=function)"""
     rng = np.random.default_rng(0)
     values = rng.normal(10, 2, size=(31, 3, 2, 1)).astype(np.float32)
     values[:, 0, 1, 0] = np.nan  # f000 ohne Mittel
@@ -498,7 +514,10 @@ def test_ensemble_stats() -> None:
 
 
 def test_local_runs_reads_only_new_or_changed_info() -> None:
-    """runs() läuft jede Runde; die .json je Lauf nur beim ersten Mal oder nach Änderung lesen."""
+    """runs() läuft jede Runde; die .json je Lauf nur beim ersten Mal oder nach Änderung lesen.
+
+    @relation(SWR-WXX-046, scope=function)
+    """
     local = gefs_vm.GefsLocal(MemoryStore())
     a, b = datetime(2099, 1, 1, tzinfo=UTC), datetime(2099, 1, 2, tzinfo=UTC)
     info = gefs_vm.LocalInfo(digest="d", content="c", fingerprint="f", origin="ghcr")
@@ -521,6 +540,7 @@ def test_local_runs_reads_only_new_or_changed_info() -> None:
 
 
 def test_nan_percentiles_match_numpy() -> None:
+    """@relation(SWR-WXX-047, scope=function)"""
     rng = np.random.default_rng(1)
     values = rng.random((31, 4, 3, 2)).astype(np.float32)
     values[rng.random(values.shape) < 0.2] = np.nan
@@ -534,7 +554,10 @@ def test_nan_percentiles_match_numpy() -> None:
 
 
 async def test_vm_cycle_gold_without_pause_while_backlog(tmp_path: Path) -> None:
-    """Liegt mehr als eine Runde an, folgt die nächste sofort statt nach ``gold_every``."""
+    """Liegt mehr als eine Runde an, folgt die nächste sofort statt nach ``gold_every``.
+
+    @relation(SWR-WXX-047, scope=function)
+    """
     cfg = make_config(tmp_path)
     archive = FakeArchive(cfg, [])
     now = datetime(2099, 2, 2, 12, tzinfo=UTC)
@@ -570,7 +593,10 @@ async def test_vm_cycle_gold_without_pause_while_backlog(tmp_path: Path) -> None
 
 
 async def test_vm_cycle_works_off_gold_backlog_when_live_is_idle(tmp_path: Path) -> None:
-    """Live und Import sofort fertig: der Rückstand an Gold läuft trotzdem im selben Durchgang."""
+    """Live und Import sofort fertig: der Rückstand an Gold läuft trotzdem im selben Durchgang.
+
+    @relation(SWR-WXX-047, scope=function)
+    """
     cfg = make_config(tmp_path)
     archive = FakeArchive(cfg, [])
     now = datetime(2099, 2, 2, 12, tzinfo=UTC)
@@ -596,7 +622,10 @@ async def test_vm_cycle_works_off_gold_backlog_when_live_is_idle(tmp_path: Path)
 
 
 async def test_vm_cycle_imports_history_while_live_runs(tmp_path: Path) -> None:
-    """Der erste Aufbau des laufenden Monats dauert Stunden, die Historie soll nicht warten."""
+    """Der erste Aufbau des laufenden Monats dauert Stunden, die Historie soll nicht warten.
+
+    @relation(SWR-WXX-046, SWR-WXX-047, scope=function)
+    """
     cfg = make_config(tmp_path)
     archive = FakeArchive(cfg, [])
     now = datetime(2099, 2, 2, 12, tzinfo=UTC)
@@ -626,7 +655,10 @@ async def test_vm_cycle_imports_history_while_live_runs(tmp_path: Path) -> None:
 
 
 async def test_vm_cycle_gold_while_live_runs(tmp_path: Path) -> None:
-    """Gold für selbst gebaute Läufe nicht erst nach dem ganzen Monat, Import seltener."""
+    """Gold für selbst gebaute Läufe nicht erst nach dem ganzen Monat, Import seltener.
+
+    @relation(SWR-WXX-047, scope=function)
+    """
     cfg = make_config(tmp_path)
     archive = FakeArchive(cfg, [])
     now = datetime(2099, 2, 2, 12, tzinfo=UTC)
@@ -664,7 +696,10 @@ async def test_vm_cycle_gold_while_live_runs(tmp_path: Path) -> None:
 
 
 async def test_vm_import_history_in_portions(tmp_path: Path) -> None:
-    """Import in Portionen: ``more`` meldet, dass GHCR noch Läufe bereithält."""
+    """Import in Portionen: ``more`` meldet, dass GHCR noch Läufe bereithält.
+
+    @relation(SWR-WXX-046, scope=function)
+    """
     cfg = make_config(tmp_path)
     jan = [datetime(2099, 1, d, tzinfo=UTC) for d in (30, 31)]
     archive = FakeArchive(cfg, jan)
@@ -688,7 +723,10 @@ async def test_vm_import_history_in_portions(tmp_path: Path) -> None:
 
 
 async def test_vm_cycle_import_does_not_wait_for_gold(tmp_path: Path) -> None:
-    """Gold kann je Runde eine Stunde dauern; der Import holt derweil weiter Portionen."""
+    """Gold kann je Runde eine Stunde dauern; der Import holt derweil weiter Portionen.
+
+    @relation(SWR-WXX-047, scope=function)
+    """
     cfg = make_config(tmp_path)
     archive = FakeArchive(cfg, [])
     now = datetime(2099, 2, 2, 12, tzinfo=UTC)
@@ -720,7 +758,10 @@ async def test_vm_cycle_import_does_not_wait_for_gold(tmp_path: Path) -> None:
 
 
 async def test_vm_import_remarks_local_runs_missing_in_ledger(tmp_path: Path) -> None:
-    """Neustart zwischen Speichern und Melden: der nächste Import meldet den Lauf nach."""
+    """Neustart zwischen Speichern und Melden: der nächste Import meldet den Lauf nach.
+
+    @relation(SWR-WXX-046, scope=function)
+    """
     cfg = make_config(tmp_path)
     jan = [datetime(2099, 1, d, tzinfo=UTC) for d in (30, 31)]
     archive = FakeArchive(cfg, jan)

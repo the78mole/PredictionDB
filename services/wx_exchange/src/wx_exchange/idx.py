@@ -23,6 +23,8 @@ eines unvollständigen Layers.
 Der Silber-Backfill (``publish``) lädt den passenden Layer mit :func:`load_layer` und liest die
 gewählten Nachrichten direkt über die ``.idx``; nur Dateien ohne ``.idx`` (``failed``) laufen
 weiter über Vorlagen und Köpfe.
+
+@relation(SWA-WXX-IDX, scope=file)
 """
 
 from __future__ import annotations
@@ -195,6 +197,8 @@ def plan(
     Zeitraum. Reihenfolge erst alle Monate der ersten Laufzeit in ``hours`` (jüngste zuerst),
     dann der nächsten; höchstens ``limit`` Einträge (Matrix-Grenze von Actions), den Rest
     nimmt der nächste Start.
+
+    @relation(SWR-WXX-031, scope=function)
     """
     layers = {} if rebuild else read_layers(registry)
     out = []
@@ -427,6 +431,8 @@ async def _scan_workers(
     Ein Prozess schafft nur einen Kern; Anfragen, TLS und Ereignisschleife kosten mehr Rechenzeit
     als das Lesen der Köpfe. Gleichzeitige Anfragen und Dateien werden aufgeteilt, die Last
     auf das Archiv bleibt also dieselbe.
+
+    @relation(SWR-WXX-030, scope=function)
     """
     share = config.model_copy(deep=True)
     for ep in share.endpoints:
@@ -490,6 +496,8 @@ async def build_layer(
     versucht. Mit ``workers > 1`` lesen so viele Prozesse (je mit eigenem Client aus
     ``config``) statt ``endpoints``.
     Das Manifest schreibt erst :func:`merge_manifest`.
+
+    @relation(SWR-WXX-030, SWR-WXX-031, scope=function)
     """
     runs = _runs(config, month, hour, start, end)
     files: dict[str, bytes] = {}
@@ -598,6 +606,8 @@ def merge_manifest(registry: Registry, new: Iterable[IdxLayer], source: str) -> 
 
     Neue Layer, deren Blob die Registry nicht kennt, bleiben draußen (der Monat wird dann neu
     geplant). Liefert eine Zusammenfassung.
+
+    @relation(SWR-WXX-031, scope=function)
     """
     layers = read_layers(registry)
     replaced, skipped = [], []

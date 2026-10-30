@@ -13,6 +13,8 @@ Tag-Liste der Registry reicht.
 Der Tar eines Laufs ist reproduzierbar (sortiert, ohne Zeitstempel und Besitzer). Weil Silber
 aber den Zeitpunkt des Bronze-Abschlusses trägt, unterscheiden sich zwei Bauten desselben Laufs
 trotzdem; verglichen wird deshalb der Inhalts-Hash (``content``), der dieses Attribut auslässt.
+
+@relation(SWA-WXX-ARTIFACT, scope=file)
 """
 
 from __future__ import annotations
@@ -51,7 +53,10 @@ VOLATILE = ("bronze_completed_at",)
 
 
 def tag(month: str, hour: int) -> str:
-    """``2026-10`` + 0 → ``2026-10-00z``."""
+    """``2026-10`` + 0 → ``2026-10-00z``.
+
+    @relation(SWR-WXX-002, scope=function)
+    """
     return f"{month}-{hour:02d}z"
 
 
@@ -75,7 +80,10 @@ def month_bounds(month: str) -> tuple[datetime, datetime]:
 
 
 def fingerprint(config: GfsConfig) -> str:
-    """Hash der Eingaben eines Silber-Baus: gleiche Eingaben ergeben denselben Inhalt."""
+    """Hash der Eingaben eines Silber-Baus: gleiche Eingaben ergeben denselben Inhalt.
+
+    @relation(SWR-WXX-002, scope=function)
+    """
     data = {
         "silver_version": SILVER_VERSION,
         "product": config.product,
@@ -100,7 +108,10 @@ def read_files(store: ObjectStore, prefix: str) -> dict[str, bytes]:
 
 
 def content_hash(files: dict[str, bytes]) -> str:
-    """Hash über alle Dateien des Stores, im Wurzel-``zarr.json`` ohne ``VOLATILE``."""
+    """Hash über alle Dateien des Stores, im Wurzel-``zarr.json`` ohne ``VOLATILE``.
+
+    @relation(SWR-WXX-003, scope=function)
+    """
     h = hashlib.sha256()
     for name in sorted(files):
         data = files[name]
@@ -124,7 +135,10 @@ def files_from_tar(data: bytes) -> dict[str, bytes]:
 
 
 def compare(local: dict[str, bytes], remote: dict[str, bytes]) -> dict[str, Any]:
-    """Unterschiede zweier Stores: fehlende und abweichende Dateien, abweichende Attribute."""
+    """Unterschiede zweier Stores: fehlende und abweichende Dateien, abweichende Attribute.
+
+    @relation(SWR-WXX-022, scope=function)
+    """
 
     def attrs(files: dict[str, bytes]) -> dict[str, Any]:
         meta = json.loads(files.get("zarr.json", b"{}"))
@@ -152,7 +166,10 @@ def compare(local: dict[str, bytes], remote: dict[str, bytes]) -> dict[str, Any]
 
 
 def pack(store: ObjectStore, prefix: str) -> tuple[bytes, str]:
-    """Silber-Store unter ``prefix`` als reproduzierbarer Tar plus Inhalts-Hash."""
+    """Silber-Store unter ``prefix`` als reproduzierbarer Tar plus Inhalts-Hash.
+
+    @relation(SWR-WXX-003, scope=function)
+    """
     files = read_files(store, prefix)
     if "zarr.json" not in files:
         raise FileNotFoundError(f"kein Silber unter {prefix}")
@@ -206,6 +223,7 @@ class Layer:
     steps: int = 0
 
     def descriptor(self) -> dict[str, Any]:
+        """@relation(SWR-WXX-002, scope=function)"""
         return {
             "mediaType": LAYER_TYPE,
             "digest": self.digest,
@@ -255,6 +273,7 @@ class MonthArtifact:
         return {r for r, layer in self.layers.items() if layer.fingerprint == fp} | self.missing
 
     def manifest(self, source: str) -> dict[str, Any]:
+        """@relation(SWR-WXX-002, scope=function)"""
         layers = [self.layers[r].descriptor() for r in sorted(self.layers)]
         return {
             "schemaVersion": 2,

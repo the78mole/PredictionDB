@@ -11,6 +11,8 @@ abgelaufenen Stände mit Link, damit man Prognosen später mit dem Eingetretenen
 
 Panels mit eigener Zeitüberschreibung (Gestern, Heute, Morgen) bleiben draußen: Ein Snapshot
 hat einen absoluten Zeitraum, und dann ignoriert Grafana relative Panel-Zeiträume.
+
+@relation(SWA-WXX-SNAPSHOT, scope=file)
 """
 
 from __future__ import annotations
@@ -40,7 +42,10 @@ FIXED_VARS = {"tagesmittel_last": "aus"}
 
 
 def week_range(now: datetime) -> tuple[datetime, datetime]:
-    """Heute 00:00 bis Ende D+7 in Ortszeit (Sommer-/Winterzeit beachtet)."""
+    """Heute 00:00 bis Ende D+7 in Ortszeit (Sommer-/Winterzeit beachtet).
+
+    @relation(SWR-WXX-050, scope=function)
+    """
     local = now.astimezone(TZ)
     start = datetime(local.year, local.month, local.day, tzinfo=TZ)
     # Rechnen mit ZoneInfo geht über die Wanduhr: +8 Tage ist wieder 00:00 Ortszeit
@@ -167,7 +172,10 @@ def _parse(t: str) -> datetime:
 
 
 def history(grafana: Grafana, now: datetime) -> str:
-    """Markdown-Liste der früheren, noch gültigen öffentlichen Stände (neueste zuerst)."""
+    """Markdown-Liste der früheren, noch gültigen öffentlichen Stände (neueste zuerst).
+
+    @relation(SWR-WXX-050, scope=function)
+    """
     rows = []
     for s in grafana.snapshots():
         url, name, expires = s.get("externalUrl"), s.get("name", ""), s.get("expires", "")
@@ -220,6 +228,8 @@ def build_snapshot(grafana: Grafana, now: datetime) -> dict[str, Any]:
     schickt das Schema v2, in dem jedes Panel eine Abfrage ``queryType: snapshot`` der
     Datenquelle ``grafana`` mit den Frames trägt. Das Schema v2 liefert Grafana selbst
     (``/apis/dashboard.grafana.app/v2beta1``), die Abfragen kommen aus dem alten Schema.
+
+    @relation(SWR-WXX-050, scope=function)
     """
     v1 = grafana.dashboard(DASHBOARD_UID)
     spec = copy.deepcopy(grafana.dashboard_v2(DASHBOARD_UID))
@@ -318,6 +328,7 @@ class ShortIo:
     path: str
 
     def point_to(self, url: str) -> None:
+        """@relation(SWR-WXX-051, scope=function)"""
         api = "https://api.short.io/links"
         headers = {"authorization": self.api_key}
         r = self.client.get(
@@ -344,6 +355,7 @@ class Shlink:
     short_code: str
 
     def point_to(self, url: str) -> None:
+        """@relation(SWR-WXX-051, scope=function)"""
         r = self.client.patch(
             f"{self.base_url.rstrip('/')}/rest/v3/short-urls/{self.short_code}",
             headers={"X-Api-Key": self.api_key},
@@ -355,7 +367,10 @@ class Shlink:
 def publish(
     grafana: Grafana, shortlink: Shortlink | None, expires: int, now: datetime | None = None
 ) -> dict[str, Any]:
-    """Ein Durchgang: Snapshot bauen, hochladen, Kurzlink umbiegen."""
+    """Ein Durchgang: Snapshot bauen, hochladen, Kurzlink umbiegen.
+
+    @relation(SWR-WXX-050, SWR-WXX-051, scope=function)
+    """
     now = now or datetime.now(UTC)
     dash = build_snapshot(grafana, now)
     res = grafana.snapshot(dash, dash["title"], expires)
@@ -367,7 +382,10 @@ def publish(
 
 
 def next_run(now: datetime, at: str) -> datetime:
-    """Nächster Zeitpunkt ``HH:MM`` Ortszeit nach ``now``."""
+    """Nächster Zeitpunkt ``HH:MM`` Ortszeit nach ``now``.
+
+    @relation(SWR-WXX-050, scope=function)
+    """
     hour, minute = (int(x) for x in at.split(":"))
     local = now.astimezone(TZ)
     run = datetime(local.year, local.month, local.day, hour, minute, tzinfo=TZ)
