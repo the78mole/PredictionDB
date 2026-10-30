@@ -41,6 +41,7 @@ def handler(seen: list[str]) -> Callable[[httpx.Request], httpx.Response]:
 
 
 def test_quarterhour_with_hourly_fallback(make_http: Callable[..., Http]) -> None:
+    """@relation(SWR-ENI-040, scope=function)"""
     seen: list[str] = []
     smard = Smard(make_http(handler(seen)))
     out = smard.fetch("load_actual", Q - timedelta(hours=2), Q + timedelta(hours=2))
@@ -63,6 +64,8 @@ def test_quarterhour_with_hourly_fallback(make_http: Callable[..., Http]) -> Non
 
 
 def test_price_is_not_scaled(make_http: Callable[..., Http]) -> None:
+    """@relation(SWR-ENI-040, SWR-ENI-020, scope=function)"""
+
     def h(req: httpx.Request) -> httpx.Response:
         path = req.url.path
         if path.endswith("/4169/DE-LU/index_quarterhour.json"):
@@ -79,5 +82,6 @@ def test_price_is_not_scaled(make_http: Callable[..., Http]) -> None:
 
 
 def test_empty_index(make_http: Callable[..., Http]) -> None:
+    """@relation(SWR-ENI-040, scope=function)"""
     out = Smard(make_http(lambda r: httpx.Response(404))).fetch("gen_solar", Q, Q + timedelta(1))
     assert out == []

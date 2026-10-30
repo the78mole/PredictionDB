@@ -16,6 +16,8 @@ sie einige Stunden im Speicher.
 
 Tageswerte stehen am Beginn des Handelstags (00:00 Ortszeit Berlin, als UTC), in der
 Notierungseinheit der EIA (USD/bbl, USD/gal, USD/MMBtu).
+
+@relation(SWA-ENI-SRC-EIA, scope=file)
 """
 
 from __future__ import annotations
@@ -74,7 +76,10 @@ def _date(text: str) -> date:
 
 
 def parse_bulk(raw: bytes, wanted: dict[str, EiaSeries]) -> dict[str, list[tuple[datetime, float]]]:
-    """Gesuchte Tagesreihen aus einer Bulk-Datei (ZIP mit einer JSON-Zeile je Reihe)."""
+    """Gesuchte Tagesreihen aus einer Bulk-Datei (ZIP mit einer JSON-Zeile je Reihe).
+
+    @relation(SWR-ENI-045, SWR-ENI-030, scope=function)
+    """
     try:
         zf = zipfile.ZipFile(io.BytesIO(raw))
     except zipfile.BadZipFile as exc:
@@ -97,7 +102,10 @@ def parse_bulk(raw: bytes, wanted: dict[str, EiaSeries]) -> dict[str, list[tuple
 
 
 def parse_api(body: Any, s: EiaSeries) -> tuple[int, list[tuple[datetime, float]]]:
-    """Eine Seite der API v2; gibt die Gesamtzahl der Zeilen und die Punkte zurück."""
+    """Eine Seite der API v2; gibt die Gesamtzahl der Zeilen und die Punkte zurück.
+
+    @relation(SWR-ENI-045, SWR-ENI-030, scope=function)
+    """
     if not isinstance(body, dict) or "response" not in body:
         raise FormatError(f"EIA-API: unerwartete Antwort {str(body)[:200]!r}")
     resp = body["response"]
@@ -137,6 +145,8 @@ class EiaBulk:
 
 
 class Eia:
+    """@relation(SWR-ENI-045, SWR-ENI-004, scope=class)"""
+
     code = "eia"
     license = "Public Domain, U.S. Energy Information Administration (EIA)"
     priority = 10
@@ -200,6 +210,8 @@ class Eia:
 
 
 class EiaReuters(Eia):
+    """@relation(SWR-ENI-045, SWR-ENI-003, scope=class)"""
+
     code = "eia_reuters"
     license = "Thomson Reuters über EIA, urheberrechtlich geschützt (nur mit Freigabe)"
     priority = 10

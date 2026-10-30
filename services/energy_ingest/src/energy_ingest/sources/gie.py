@@ -25,6 +25,8 @@ lädt deshalb 14 Tage zurück neu. Werte stehen am Beginn des Gastags (06:00 Ort
   (LNG in den Tanks am Ende des Gastags, GWh), ``lng_sendout_<gebiet>`` (Ausspeisung ins Netz,
   GWh/d), ``lng_dtmi_<gebiet>`` (erklärte Tankkapazität, GWh), ``lng_dtrs_<gebiet>`` (erklärte
   Ausspeisekapazität, GWh/d).
+
+@relation(SWA-ENI-SRC-GIE, scope=file)
 """
 
 from __future__ import annotations
@@ -86,7 +88,10 @@ def _field(row: dict[str, Any], path: str) -> Any:
 def parse_page(
     body: Any, fields: dict[str, str] = AGSI_FIELDS
 ) -> tuple[int, dict[str, list[tuple[datetime, float]]]]:
-    """Eine Seite der API; gibt die letzte Seite und die Punkte je Reihen-Präfix zurück."""
+    """Eine Seite der API; gibt die letzte Seite und die Punkte je Reihen-Präfix zurück.
+
+    @relation(SWR-ENI-051, SWR-ENI-030, scope=function)
+    """
     if not isinstance(body, dict) or not isinstance(body.get("data"), list):
         raise FormatError(f"GIE: unerwartete Antwort {str(body)[:200]!r}")
     if body.get("error"):
@@ -129,6 +134,7 @@ class _Gie:
         return [f"{self.prefix}_{a}" for a in self.areas]
 
     def _redact(self, text: str) -> str:
+        """@relation(SWR-ENI-031, scope=function)"""
         return text.replace(self.api_key, "***") if self.api_key else text
 
     def max_chunk(self, dataset: str) -> timedelta:
@@ -170,6 +176,8 @@ class _Gie:
 
 
 class GieAgsi(_Gie):
+    """@relation(SWR-ENI-051, scope=class)"""
+
     code = "gie_agsi"
     url = AGSI_URL
     prefix = "storage"
@@ -180,6 +188,8 @@ class GieAgsi(_Gie):
 
 
 class GieAlsi(_Gie):
+    """@relation(SWR-ENI-051, scope=class)"""
+
     code = "gie_alsi"
     url = ALSI_URL
     prefix = "lng"

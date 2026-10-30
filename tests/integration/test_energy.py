@@ -65,6 +65,7 @@ def load(values: list[float]) -> SeriesData:
 
 
 def test_upsert_keeps_earliest_published(engine: Engine) -> None:
+    """@relation(SWR-ENI-020, SWR-ENI-021, scope=function)"""
     store = EnergyStore(engine)
     src = Src(priority=5)
     sid = store.source_id(src)
@@ -102,6 +103,7 @@ def revisions(engine: Engine, sid: int) -> list[tuple[datetime, float | None, fl
 
 
 def test_corrections_are_logged(engine: Engine) -> None:
+    """@relation(SWR-ENI-022, scope=function)"""
     store = EnergyStore(engine)
     sid = store.source_id(Src(priority=5))
     fetched = T0 + timedelta(days=1)
@@ -113,6 +115,7 @@ def test_corrections_are_logged(engine: Engine) -> None:
 
 
 def test_prune_clears_removed_values(engine: Engine) -> None:
+    """@relation(SWR-ENI-012, scope=function)"""
     store = EnergyStore(engine)
     sid = store.source_id(Src(priority=5))
     fetched = T0 + timedelta(days=1)
@@ -143,6 +146,7 @@ def test_prune_clears_removed_values(engine: Engine) -> None:
 
 
 def test_value_best_and_compare(engine: Engine) -> None:
+    """@relation(SWR-ENI-023, SWR-ENI-015, scope=function)"""
     store = EnergyStore(engine)
     a, b = Src(priority=1), Src(priority=2)
     fetched = T0 + timedelta(days=1)
@@ -169,6 +173,7 @@ def test_value_best_and_compare(engine: Engine) -> None:
 
 
 def test_value_best_skips_disabled_sources(engine: Engine) -> None:
+    """@relation(SWR-ENI-023, SWR-ENI-003, scope=function)"""
     store = EnergyStore(engine)
     a, b = Src(priority=1), Src(priority=2)
     fetched = T0 + timedelta(days=1)
@@ -187,6 +192,7 @@ def test_value_best_skips_disabled_sources(engine: Engine) -> None:
 
 
 def test_fetch_log(engine: Engine) -> None:
+    """@relation(SWR-ENI-013, scope=function)"""
     store = EnergyStore(engine)
     sid = store.source_id(Src(priority=3))
     store.mark_chunk(sid, "x", T0, T0 + timedelta(days=10), 5)
@@ -207,6 +213,7 @@ def test_fetch_log(engine: Engine) -> None:
 
 
 def test_revise_log(engine: Engine) -> None:
+    """@relation(SWR-ENI-012, scope=function)"""
     store = EnergyStore(engine)
     sid = store.source_id(Src(priority=3))
     assert store.revised_at(sid, "x") is None

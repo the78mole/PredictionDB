@@ -15,6 +15,8 @@ derselben Tabelle stammen von Thomson Reuters (vgl. Quelle ``eia_reuters``); sie
 Je Ausgabe und Vorlauf k entsteht ein Wert der Reihe ``steo_<brent|henry_hub>_h<kk>`` mit dem
 Zeitstempel des Ausgabemonats (Monatsbeginn, 00:00 Ortszeit, als UTC) und der Prognose für den
 Monat Ausgabemonat + k. ``h00`` ist die Schätzung für den laufenden Monat.
+
+@relation(SWA-ENI-SRC-STEO, scope=file)
 """
 
 from __future__ import annotations
@@ -85,7 +87,10 @@ def _value(cell: Any) -> float | None:
 
 
 def parse_xlsx(raw: bytes, year: int, month: int) -> list[SeriesData]:
-    """Prognosen einer Ausgabe als Reihen je Vorlauf (je ein Wert am Ausgabemonat)."""
+    """Prognosen einer Ausgabe als Reihen je Vorlauf (je ein Wert am Ausgabemonat).
+
+    @relation(SWR-ENI-046, SWR-ENI-030, scope=function)
+    """
     try:
         wb = load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
     except Exception as exc:
@@ -164,6 +169,8 @@ def parse_xlsx(raw: bytes, year: int, month: int) -> list[SeriesData]:
 
 
 class EiaSteo:
+    """@relation(SWR-ENI-046, scope=class)"""
+
     code = "eia_steo"
     license = (
         "Public Domain, U.S. Energy Information Administration (EIA), Short-Term Energy Outlook"

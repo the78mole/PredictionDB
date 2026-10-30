@@ -12,6 +12,8 @@ Die ÜNB gewichten mit ihrer Online-Hochrechnung und rechnen seit Oktober 2025 m
 Viertelstundenpreisen; die Werte hier sind daher Schätzungen auf Stundenbasis. Eine Periode
 wird erst nach ihrem Ende und nur bei ausreichender Abdeckung (``MIN_COVERAGE``) geschrieben,
 damit ein Block ohne vollständige Grunddaten leer bleibt und später erneut gerechnet wird.
+
+@relation(SWA-ENI-SRC-MW, scope=file)
 """
 
 from __future__ import annotations
@@ -46,7 +48,10 @@ Row = tuple[datetime, str, float]
 
 
 def period_starts(start: datetime, end: datetime, months: int) -> list[datetime]:
-    """Beginn aller Perioden (``months`` = 1 oder 12, Ortszeit) mit Beginn in ``[start, end)``."""
+    """Beginn aller Perioden (``months`` = 1 oder 12, Ortszeit) mit Beginn in ``[start, end)``.
+
+    @relation(SWR-ENI-044, scope=function)
+    """
     local = start.astimezone(BERLIN)
     first_month = 1 if months == 12 else local.month
     p = datetime(local.year, first_month, 1, tzinfo=BERLIN).astimezone(UTC)
@@ -60,7 +65,10 @@ def period_starts(start: datetime, end: datetime, months: int) -> list[datetime]
 
 
 def market_values(rows: Iterable[Row], periods: list[datetime], months: int) -> list[SeriesData]:
-    """Marktwerte je Periode aus Stundenwerten ``(stunde, code, wert)``."""
+    """Marktwerte je Periode aus Stundenwerten ``(stunde, code, wert)``.
+
+    @relation(SWR-ENI-044, scope=function)
+    """
     if not periods:
         return []
     bounds = [*periods, next_period(periods[-1], months)]
@@ -89,6 +97,8 @@ def market_values(rows: Iterable[Row], periods: list[datetime], months: int) -> 
 
 
 class Marktwert:
+    """@relation(SWR-ENI-044, scope=class)"""
+
     code = "pdb_marktwert"
     license = (
         "Eigene Berechnung nach Anlage 1 EEG aus freien Quellen "

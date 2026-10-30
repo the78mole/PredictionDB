@@ -56,6 +56,7 @@ def _xlsx_without(raw: bytes, sheet: str, row: int, col: int) -> bytes:
 
 
 def test_eia_bulk_free_series() -> None:
+    """@relation(SWR-ENI-045, scope=function)"""
     out = parse_bulk(_bytes("eia_bulk_PET.zip"), FREE_SERIES)
     assert set(out) == {"oil_ulsd_nyh", "oil_ulsd_usgc"}
     nyh = dict(out["oil_ulsd_nyh"])
@@ -64,6 +65,7 @@ def test_eia_bulk_free_series() -> None:
 
 
 def test_eia_bulk_unit_change_is_format_error() -> None:
+    """@relation(SWR-ENI-045, SWR-ENI-030, scope=function)"""
     wanted = {"oil_brent": REUTERS_SERIES["oil_brent"]}
     wanted["oil_brent"] = type(wanted["oil_brent"])("petroleum/pri/spt", "PET", "RBRTE", "$/gal")
     with pytest.raises(FormatError, match="Einheit"):
@@ -71,6 +73,7 @@ def test_eia_bulk_unit_change_is_format_error() -> None:
 
 
 def test_eia_without_key_uses_bulk(make_http: MakeHttp) -> None:
+    """@relation(SWR-ENI-045, SWR-ENI-004, scope=function)"""
     calls: list[str] = []
 
     def handler(req: httpx.Request) -> httpx.Response:
@@ -94,6 +97,8 @@ def test_eia_without_key_uses_bulk(make_http: MakeHttp) -> None:
 
 
 def test_eia_api_pages(make_http: MakeHttp) -> None:
+    """@relation(SWR-ENI-045, scope=function)"""
+
     def row(day: str, value: float) -> dict[str, object]:
         return {
             "period": day,
@@ -125,6 +130,7 @@ def test_eia_api_pages(make_http: MakeHttp) -> None:
 
 
 def test_eia_api_error_body_is_format_error() -> None:
+    """@relation(SWR-ENI-045, SWR-ENI-030, scope=function)"""
     with pytest.raises(FormatError):
         parse_api({"error": "x"}, FREE_SERIES["oil_ulsd_nyh"])
 
@@ -133,6 +139,7 @@ def test_eia_api_error_body_is_format_error() -> None:
 
 
 def test_ecb_parse() -> None:
+    """@relation(SWR-ENI-047, scope=function)"""
     pts = dict(parse_csv((FIXTURES / "ecb_usd_eur.csv").read_text()))
     assert pts[datetime(2026, 10, 14, 22, 0, tzinfo=UTC)] == pytest.approx(1.1208)
     assert parse_csv("") == []
@@ -141,6 +148,7 @@ def test_ecb_parse() -> None:
 
 
 def test_ecb_fetch(make_http: MakeHttp) -> None:
+    """@relation(SWR-ENI-047, scope=function)"""
     body = (FIXTURES / "ecb_usd_eur.csv").read_text()
     src = Ecb(make_http(lambda req: httpx.Response(200, text=body)))
     out = src.fetch("fx", OCT_20 - 7 * DAY, OCT_20)
@@ -153,6 +161,7 @@ def test_ecb_fetch(make_http: MakeHttp) -> None:
 
 
 def test_worldbank_parse() -> None:
+    """@relation(SWR-ENI-048, scope=function)"""
     out = {d.code: d for d in parse_worldbank(_bytes("worldbank_monthly.xlsx"))}
     assert set(out) == {
         "oil_brent_m",
@@ -171,6 +180,7 @@ def test_worldbank_parse() -> None:
 
 
 def test_worldbank_format_change() -> None:
+    """@relation(SWR-ENI-048, SWR-ENI-030, scope=function)"""
     raw = _worldbank_header_changed()
     with pytest.raises(FormatError, match="Natural gas, Europe"):
         parse_worldbank(raw)
@@ -191,6 +201,7 @@ def _worldbank_header_changed() -> bytes:
 
 
 def test_worldbank_downloads_once(make_http: MakeHttp) -> None:
+    """@relation(SWR-ENI-048, scope=function)"""
     calls = []
 
     def handler(req: httpx.Request) -> httpx.Response:
@@ -208,6 +219,7 @@ def test_worldbank_downloads_once(make_http: MakeHttp) -> None:
 
 
 def test_oil_bulletin_parse() -> None:
+    """@relation(SWR-ENI-049, scope=function)"""
     out = {d.code: d for d in parse_oil_bulletin(_bytes("oil_bulletin_history.xlsx"))}
     assert set(out) == {
         f"retail_de_{p}{n}"
@@ -222,6 +234,7 @@ def test_oil_bulletin_parse() -> None:
 
 
 def test_oil_bulletin_format_change() -> None:
+    """@relation(SWR-ENI-049, SWR-ENI-030, scope=function)"""
     raw = _bytes("oil_bulletin_history.xlsx")
     # Einheitenzeile der DE-Dieselspalte (Zeile 3, Spalte 56)
     with pytest.raises(FormatError, match="Einheit"):
@@ -232,6 +245,7 @@ def test_oil_bulletin_format_change() -> None:
 
 
 def test_oil_bulletin_http_error(make_http: MakeHttp) -> None:
+    """@relation(SWR-ENI-049, SWR-ENI-031, scope=function)"""
     src = OilBulletin(make_http(lambda req: httpx.Response(404)))
     with pytest.raises(Exception, match="404"):
         src.fetch("retail_de", OCT_20 - 30 * DAY, OCT_20)
@@ -241,6 +255,7 @@ def test_oil_bulletin_http_error(make_http: MakeHttp) -> None:
 
 
 def test_the_parse() -> None:
+    """@relation(SWR-ENI-050, scope=function)"""
     out = {d.code: d for d in parse_prices(_bytes("the_prices.xml"))}
     assert set(out) == {"gas_the_vtp", "gas_the_imbalance_pos", "gas_the_imbalance_neg"}
     day = datetime(2026, 10, 22, 4, 0, tzinfo=UTC)  # Gastag 22.10. ab 06:00 MESZ
@@ -251,6 +266,7 @@ def test_the_parse() -> None:
 
 
 def test_the_format_change() -> None:
+    """@relation(SWR-ENI-050, SWR-ENI-030, scope=function)"""
     body = _bytes("the_prices.xml").replace(b"VTPDailyAveragePrice>", b"VTPPrice>")
     with pytest.raises(FormatError, match="VTPDailyAveragePrice"):
         parse_prices(body)
@@ -259,6 +275,7 @@ def test_the_format_change() -> None:
 
 
 def test_the_fetch_window(make_http: MakeHttp) -> None:
+    """@relation(SWR-ENI-050, scope=function)"""
     seen: list[dict[str, str]] = []
 
     def handler(req: httpx.Request) -> httpx.Response:
@@ -280,6 +297,7 @@ def test_the_fetch_window(make_http: MakeHttp) -> None:
 
 
 def test_unfree_fuel_sources_need_permission(monkeypatch: pytest.MonkeyPatch) -> None:
+    """@relation(SWR-ENI-003, scope=function)"""
     for name in ["ALLOW_EIA_REUTERS", "ALLOW_THE"]:
         monkeypatch.delenv(f"PDB_{name}", raising=False)
         monkeypatch.delenv(name, raising=False)
@@ -290,6 +308,7 @@ def test_unfree_fuel_sources_need_permission(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_published_estimates() -> None:
+    """@relation(SWR-ENI-021, scope=function)"""
     assert estimate_published(Kind.PRICE_DAILY, OCT_20, DAY) == OCT_20 + 2 * DAY
     assert estimate_published(Kind.PRICE_WEEKLY, OCT_20, WEEK) == OCT_20 + WEEK
     sep = datetime(2026, 8, 31, 22, 0, tzinfo=UTC)

@@ -15,6 +15,8 @@ Genutzte Endpunkte (Antwort CSV, Semikolon, Dezimalkomma, Werte in ct/kWh)::
 
 Monatswerte stehen am Monatsbeginn, Jahreswerte am Jahresbeginn (jeweils 00:00 Ortszeit,
 als UTC). Umgerechnet in EUR/MWh.
+
+@relation(SWA-ENI-SRC-NT, scope=file)
 """
 
 from __future__ import annotations
@@ -70,6 +72,7 @@ def _rows(body: str) -> list[list[str]]:
 
 
 def parse_months(body: str) -> list[SeriesData]:
+    """@relation(SWR-ENI-043, SWR-ENI-030, scope=function)"""
     rows = _rows(body)
     if not rows or rows[0][0].strip() != "Monat":
         raise SourceError(f"Netztransparenz: unerwartete Monatsmarktwerte {body[:80]!r}")
@@ -87,6 +90,7 @@ def parse_months(body: str) -> list[SeriesData]:
 
 
 def parse_years(body: str) -> list[SeriesData]:
+    """@relation(SWR-ENI-043, scope=function)"""
     rows = _rows(body)
     if not rows or not rows[0][0].startswith("Alle Werte"):
         raise SourceError(f"Netztransparenz: unerwartete Jahresmarktwerte {body[:80]!r}")
@@ -107,6 +111,8 @@ def parse_years(body: str) -> list[SeriesData]:
 
 
 class Netztransparenz:
+    """@relation(SWR-ENI-043, scope=class)"""
+
     code = "netztransparenz"
     license = "Netztransparenz.de (50Hertz, Amprion, TenneT, TransnetBW), Nutzungsbedingungen"
     priority = 15

@@ -33,6 +33,7 @@ def month_rows(price: float, solar: float, start: datetime = MAR, end: datetime 
 
 
 def test_period_starts_local_time() -> None:
+    """@relation(SWR-ENI-044, scope=function)"""
     start = datetime(2025, 2, 15, tzinfo=UTC)
     end = datetime(2025, 5, 1, tzinfo=UTC)
     assert period_starts(start, end, 1) == [
@@ -49,6 +50,7 @@ def test_period_starts_local_time() -> None:
 
 
 def test_market_values_month() -> None:
+    """@relation(SWR-ENI-044, scope=function)"""
     out = {d.code: d for d in market_values(month_rows(50.0, 1000.0), [MAR], 1)}
     assert set(out) == {"mw_base", "mw_solar"}
     assert out["mw_solar"].resolution == MONTH
@@ -63,11 +65,13 @@ def test_market_values_month() -> None:
 
 
 def test_market_values_skip_incomplete_period() -> None:
+    """@relation(SWR-ENI-044, scope=function)"""
     rows = month_rows(50.0, 1000.0, end=APR - timedelta(days=2))
     assert market_values(rows, [MAR], 1) == []
 
 
 def test_market_values_year_resolution() -> None:
+    """@relation(SWR-ENI-044, scope=function)"""
     jan = datetime(2025, 1, 1, tzinfo=BERLIN).astimezone(UTC)
     nxt = datetime(2026, 1, 1, tzinfo=BERLIN).astimezone(UTC)
     out = {d.code: d for d in market_values(month_rows(40.0, 10.0, jan, nxt), [jan], 12)}
@@ -76,6 +80,7 @@ def test_market_values_year_resolution() -> None:
 
 
 def test_fetch_only_finished_periods() -> None:
+    """@relation(SWR-ENI-044, scope=function)"""
     src = Marktwert(create_engine("sqlite://"), clock=lambda: APR + timedelta(days=3))
     src._hourly = lambda a, b: month_rows(50.0, 1000.0, a, b)  # type: ignore[method-assign,assignment]
     out = src.fetch("market_value_month", MAR - timedelta(days=1), APR + timedelta(days=1))
@@ -91,6 +96,7 @@ def _codes(settings: EnergySettings) -> list[str]:
 
 
 def test_unfree_sources_need_allow(monkeypatch: pytest.MonkeyPatch) -> None:
+    """@relation(SWR-ENI-003, SWR-ENI-044, scope=function)"""
     for name in [
         "ALLOW_ENTSO_E",
         "ALLOW_ENERGY_CHARTS",

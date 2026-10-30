@@ -11,6 +11,8 @@ Mengen liefert SMARD als Energie je Intervall (MWh); daraus wird mittlere Leistu
 Viertelstundenwerte gibt es nicht für alle Reihen und Zeiträume (Preis erst seit der
 Umstellung der SDAC im Oktober 2025). Vor dem ersten Viertelstundenblock wird deshalb auf
 Stundenwerte ausgewichen. Lizenz: CC BY 4.0, Quelle Bundesnetzagentur | SMARD.de.
+
+@relation(SWA-ENI-SRC-SMARD, scope=file)
 """
 
 from __future__ import annotations
@@ -78,6 +80,8 @@ def _from_ms(ms: int) -> datetime:
 
 
 class Smard:
+    """@relation(SWR-ENI-040, scope=class)"""
+
     code = "smard"
     license = "CC BY 4.0, Bundesnetzagentur | SMARD.de"
     priority = 10

@@ -16,6 +16,7 @@ DAY = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0) - tim
 @pytest.mark.network
 @pytest.mark.parametrize("dataset", ["da_price_de_lu", "load_actual", "gen_solar"])
 def test_smard(dataset: str) -> None:
+    """@relation(SWR-ENI-040, scope=function)"""
     with httpx.Client(timeout=60) as client:
         (data,) = Smard(Http(client)).fetch(dataset, DAY, DAY + timedelta(days=1))
     assert len(data.points) >= 24
@@ -24,6 +25,7 @@ def test_smard(dataset: str) -> None:
 @pytest.mark.network
 @pytest.mark.parametrize("dataset", ["price", "public_power"])
 def test_energy_charts(dataset: str) -> None:
+    """@relation(SWR-ENI-041, scope=function)"""
     with httpx.Client(timeout=60) as client:
         out = EnergyCharts(Http(client)).fetch(dataset, DAY, DAY + timedelta(days=1))
     codes = {d.code for d in out}
@@ -33,7 +35,10 @@ def test_energy_charts(dataset: str) -> None:
 
 @pytest.mark.network
 def test_eia_steo() -> None:
-    """Die beiden letzten Ausgaben (die laufende fehlt bis zur Veröffentlichung)."""
+    """Die beiden letzten Ausgaben (die laufende fehlt bis zur Veröffentlichung).
+
+    @relation(SWR-ENI-046, scope=function)
+    """
     now = datetime.now(UTC)
     with httpx.Client(timeout=120, follow_redirects=True) as client:
         out = EiaSteo(Http(client)).fetch("outlook", now - timedelta(days=62), now)

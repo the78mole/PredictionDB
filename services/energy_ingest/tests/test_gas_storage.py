@@ -45,6 +45,7 @@ def _json(name: str) -> Any:
 
 
 def test_agsi_parse_page() -> None:
+    """@relation(SWR-ENI-051, scope=function)"""
     last, out = parse_page(_json("agsi_de.json"))
     assert last == 1
     storage = dict(out["gas_storage"])
@@ -57,6 +58,7 @@ def test_agsi_parse_page() -> None:
 
 
 def test_agsi_missing_values_and_status_n() -> None:
+    """@relation(SWR-ENI-051, scope=function)"""
     body = _json("agsi_de.json")
     body["data"][0]["status"] = "N"  # 24.10. ohne Daten
     body["data"][2]["injection"] = "-"  # 22.10. ohne Einspeisung
@@ -67,6 +69,7 @@ def test_agsi_missing_values_and_status_n() -> None:
 
 
 def test_agsi_format_errors() -> None:
+    """@relation(SWR-ENI-051, SWR-ENI-030, scope=function)"""
     body = _json("agsi_de.json")
     del body["data"][0]["gasInStorage"]
     with pytest.raises(FormatError, match="gasInStorage"):
@@ -82,6 +85,7 @@ def test_agsi_format_errors() -> None:
 
 
 def test_agsi_bad_key_is_source_error() -> None:
+    """@relation(SWR-ENI-051, SWR-ENI-031, scope=function)"""
     body = {
         "last_page": 0,
         "total": 0,
@@ -95,6 +99,7 @@ def test_agsi_bad_key_is_source_error() -> None:
 
 
 def test_agsi_fetch_pages_and_params(make_http: MakeHttp) -> None:
+    """@relation(SWR-ENI-051, scope=function)"""
     seen: list[httpx.Request] = []
     body = _json("agsi_de.json")
 
@@ -125,6 +130,7 @@ def test_agsi_fetch_pages_and_params(make_http: MakeHttp) -> None:
 
 
 def test_agsi_eu_uses_type(make_http: MakeHttp) -> None:
+    """@relation(SWR-ENI-051, scope=function)"""
     seen: list[httpx.Request] = []
 
     def handler(req: httpx.Request) -> httpx.Response:
@@ -139,6 +145,7 @@ def test_agsi_eu_uses_type(make_http: MakeHttp) -> None:
 
 def test_agsi_published() -> None:
     # Gastag 22.10. (Beginn 06:00) erscheint am 23.10. um 19:30, angenommen 20:00 MESZ
+    """@relation(SWR-ENI-021, scope=function)"""
     info = series("gas_storage_de")
     assert info.kind is Kind.GAS_DAY
     assert estimate_published(info.kind, GAS_DAY_22, DAY) == datetime(
@@ -147,6 +154,7 @@ def test_agsi_published() -> None:
 
 
 def test_agsi_needs_key() -> None:
+    """@relation(SWR-ENI-004, scope=function)"""
     assert "gie_agsi" in EnergySettings().sources
     assert EnergySettings().allowed("gie_agsi")
     assert GieAgsi.free and GieAgsi.datasets(GieAgsi.__new__(GieAgsi)) == [
@@ -162,6 +170,7 @@ def test_agsi_needs_key() -> None:
 
 
 def test_alsi_parse_page() -> None:
+    """@relation(SWR-ENI-051, scope=function)"""
     last, out = parse_page(_json("alsi_de.json"), ALSI_FIELDS)
     assert last == 1
     inventory = dict(out["lng_inventory"])
@@ -173,11 +182,13 @@ def test_alsi_parse_page() -> None:
 
 
 def test_alsi_no_data_days() -> None:
+    """@relation(SWR-ENI-051, scope=function)"""
     _, out = parse_page(_json("alsi_de_2022.json"), ALSI_FIELDS)
     assert all(not pts for pts in out.values())
 
 
 def test_alsi_nested_field_missing() -> None:
+    """@relation(SWR-ENI-051, SWR-ENI-030, scope=function)"""
     body = _json("alsi_de.json")
     del body["data"][0]["inventory"]["gwh"]
     with pytest.raises(FormatError, match=r"inventory\.gwh"):
@@ -185,6 +196,7 @@ def test_alsi_nested_field_missing() -> None:
 
 
 def test_alsi_fetch(make_http: MakeHttp) -> None:
+    """@relation(SWR-ENI-051, scope=function)"""
     seen: list[httpx.Request] = []
 
     def handler(req: httpx.Request) -> httpx.Response:
@@ -211,6 +223,7 @@ def test_alsi_fetch(make_http: MakeHttp) -> None:
 
 
 def test_eurostat_parse() -> None:
+    """@relation(SWR-ENI-052, scope=function)"""
     out = parse_eurostat(_json("eurostat_nrg_stk_gasm.json"), TABLES["gas_stock"])
     assert {geo for geo, _ in out} == {"DE", "AT", "NL", "CZ", "EU27_2020"}
     de = dict(out[("DE", "STKCL_NAT")])
@@ -221,6 +234,7 @@ def test_eurostat_parse() -> None:
 
 
 def test_eurostat_format_errors() -> None:
+    """@relation(SWR-ENI-052, SWR-ENI-030, scope=function)"""
     body = _json("eurostat_nrg_stk_gasm.json")
     body["dimension"]["unit"]["category"]["index"] = {"MIO_M3": 0}
     with pytest.raises(FormatError, match="unit"):
@@ -232,6 +246,7 @@ def test_eurostat_format_errors() -> None:
 
 
 def test_eurostat_fetch(make_http: MakeHttp) -> None:
+    """@relation(SWR-ENI-052, scope=function)"""
     seen: list[httpx.Request] = []
 
     def handler(req: httpx.Request) -> httpx.Response:
@@ -253,6 +268,7 @@ def test_eurostat_fetch(make_http: MakeHttp) -> None:
 
 
 def test_eurostat_published() -> None:
+    """@relation(SWR-ENI-021, scope=function)"""
     info = SERIES["gas_storage_de_m"]
     assert info.kind is Kind.STOCK_MONTHLY
     ts = datetime(2026, 9, 30, 22, 0, tzinfo=UTC)
@@ -260,6 +276,7 @@ def test_eurostat_published() -> None:
 
 
 def test_eurostat_balance() -> None:
+    """@relation(SWR-ENI-052, scope=function)"""
     table = TABLES["gas_balance"]
     out = parse_eurostat(_json("eurostat_nrg_cb_gasm.json"), table)
     june = datetime(2026, 5, 31, 22, 0, tzinfo=UTC)  # Juni 2026, Monatsbeginn
@@ -271,6 +288,7 @@ def test_eurostat_balance() -> None:
 
 
 def test_eurostat_import_origin_fetch(make_http: MakeHttp) -> None:
+    """@relation(SWR-ENI-052, scope=function)"""
     seen: list[httpx.Request] = []
 
     def handler(req: httpx.Request) -> httpx.Response:
@@ -292,12 +310,14 @@ def test_eurostat_import_origin_fetch(make_http: MakeHttp) -> None:
 
 
 def test_eurostat_flow_published() -> None:
+    """@relation(SWR-ENI-021, scope=function)"""
     may = datetime(2026, 4, 30, 22, 0, tzinfo=UTC)
     june = datetime(2026, 5, 31, 22, 0, tzinfo=UTC)
     assert estimate_published(Kind.FLOW_MONTHLY, may, MONTH) == june + timedelta(days=90)
 
 
 def test_eurostat_unknown_partner() -> None:
+    """@relation(SWR-ENI-052, scope=function)"""
     body = _json("eurostat_nrg_ti_gasm.json")
     idx = body["dimension"]["partner"]["category"]["index"]
     idx["XX"] = idx.pop("NO")
@@ -309,6 +329,7 @@ def test_eurostat_unknown_partner() -> None:
 
 
 def test_eurostat_crude_import_price(make_http: MakeHttp) -> None:
+    """@relation(SWR-ENI-052, scope=function)"""
     seen: list[httpx.Request] = []
 
     def handler(req: httpx.Request) -> httpx.Response:
@@ -334,6 +355,7 @@ def test_eurostat_crude_import_price(make_http: MakeHttp) -> None:
 
 
 def test_eurostat_crude_balance_matches_stock() -> None:
+    """@relation(SWR-ENI-052, scope=function)"""
     bal = parse_eurostat(_json("eurostat_nrg_cb_oilm.json"), TABLES["oil_crude_balance"])
     stk = parse_eurostat(_json("eurostat_nrg_stk_oilm.json"), TABLES["oil_stock"])
     change = dict(bal[("DE", "STK_CHG")])
@@ -345,6 +367,7 @@ def test_eurostat_crude_balance_matches_stock() -> None:
 
 
 def test_eurostat_oil_kinds() -> None:
+    """@relation(SWR-ENI-052, scope=function)"""
     assert SERIES["oil_crude_import_de_m"].kind is Kind.FLOW_MONTHLY
     assert SERIES["oil_crude_import_eu_m"].kind is Kind.FLOW_MONTHLY_SLOW
     assert SERIES["oil_stock_products_de_m"].kind is Kind.STOCK_MONTHLY
@@ -358,6 +381,8 @@ def test_eurostat_oil_kinds() -> None:
 
 
 def test_eurostat_oil_import_origin(make_http: MakeHttp) -> None:
+    """@relation(SWR-ENI-052, scope=function)"""
+
     def handler(req: httpx.Request) -> httpx.Response:
         assert req.url.params["siec"] == "O4100_TOT"
         return httpx.Response(200, json=_json("eurostat_nrg_ti_oilm.json"))
@@ -372,6 +397,8 @@ def test_eurostat_oil_import_origin(make_http: MakeHttp) -> None:
 
 
 def test_eurostat_coal(make_http: MakeHttp) -> None:
+    """@relation(SWR-ENI-052, scope=function)"""
+
     def handler(req: httpx.Request) -> httpx.Response:
         stock = req.url.params.get_list("nrg_bal") == ["STKCL_NAT"]
         name = "eurostat_nrg_cb_sffm_stock.json" if stock else "eurostat_nrg_cb_sffm.json"
@@ -392,6 +419,7 @@ def test_eurostat_coal(make_http: MakeHttp) -> None:
 
 @pytest.mark.parametrize("status", [200, 403])
 def test_gie_error_hides_key(make_http: MakeHttp, status: int) -> None:
+    """@relation(SWR-ENI-031, scope=function)"""
     key = "0123456789abcdef0123456789abcdef"
 
     def handler(req: httpx.Request) -> httpx.Response:

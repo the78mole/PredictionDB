@@ -91,6 +91,7 @@ class FakeStore:
 
 
 def test_chunks_follow_fixed_grid() -> None:
+    """@relation(SWR-ENI-013, scope=function)"""
     size = timedelta(days=10)
     out = chunks(size, ANCHOR + timedelta(days=15), ANCHOR + timedelta(days=31))
     assert out == [
@@ -101,6 +102,7 @@ def test_chunks_follow_fixed_grid() -> None:
 
 
 def test_day_window() -> None:
+    """@relation(SWR-ENI-010, scope=function)"""
     assert day_window(NOW, 3, 2) == (
         datetime(2026, 10, 17, tzinfo=UTC),
         datetime(2026, 10, 22, tzinfo=UTC),
@@ -108,6 +110,7 @@ def test_day_window() -> None:
 
 
 def test_sync_isolates_failures() -> None:
+    """@relation(SWR-ENI-010, scope=function)"""
     good, bad = FakeSource("good"), FakeSource("bad", fail=True)
     ing = EnergyIngestor([bad, good], FakeStore(), EnergySettings())
     results = ing.sync(NOW)
@@ -121,6 +124,7 @@ def test_sync_isolates_failures() -> None:
 
 
 def test_sync_lookback_per_dataset() -> None:
+    """@relation(SWR-ENI-011, scope=function)"""
     src = FakeSource("monthly")
     src.sync_lookback = {"b": timedelta(days=95)}  # type: ignore[attr-defined]
     EnergyIngestor([src], FakeStore(), EnergySettings()).sync(NOW)
@@ -129,6 +133,7 @@ def test_sync_lookback_per_dataset() -> None:
 
 
 def test_revise_covers_days_before_sync_window() -> None:
+    """@relation(SWR-ENI-012, scope=function)"""
     src = FakeSource("s")
     src.sync_lookback = {"b": timedelta(days=95)}  # type: ignore[attr-defined]
     store = FakeStore()
@@ -148,6 +153,7 @@ def test_revise_covers_days_before_sync_window() -> None:
 
 
 def test_revise_due_only_resumes_after_restart() -> None:
+    """@relation(SWR-ENI-012, scope=function)"""
     a, b = FakeSource("a"), FakeSource("b", fail=True)
     store = FakeStore()
     EnergyIngestor([a, b], store, EnergySettings()).revise(NOW, due_only=True)
@@ -164,12 +170,14 @@ def test_revise_due_only_resumes_after_restart() -> None:
 
 
 def test_sync_does_not_prune() -> None:
+    """@relation(SWR-ENI-012, scope=function)"""
     store = FakeStore()
     EnergyIngestor([FakeSource("s")], store, EnergySettings()).sync(NOW)
     assert store.pruned and not any(store.pruned)
 
 
 def test_backfill_marks_loaded_until_final() -> None:
+    """@relation(SWR-ENI-013, scope=function)"""
     src = FakeSource("s")
     store = FakeStore()
     ing = EnergyIngestor([src], store, EnergySettings())
@@ -192,7 +200,10 @@ def test_backfill_marks_loaded_until_final() -> None:
 
 def test_backfill_step_closes_gap_before_sync_window() -> None:
     """Der jüngste, noch nicht endgültige Block wird bis zur Grenze geladen und am Folgetag
-    ab dort fortgesetzt; ohne das bliebe eine Lücke bis zu einer Blocklänge."""
+    ab dort fortgesetzt; ohne das bliebe eine Lücke bis zu einer Blocklänge.
+
+    @relation(SWR-ENI-014, scope=function)
+    """
     src = FakeSource("s")
     src.max_chunk = lambda dataset: timedelta(days=91)  # type: ignore[method-assign]
     store = FakeStore()
@@ -215,6 +226,7 @@ def test_backfill_step_closes_gap_before_sync_window() -> None:
 
 
 def test_backfill_step_newest_first_round_robin() -> None:
+    """@relation(SWR-ENI-014, scope=function)"""
     a, b = FakeSource("a"), FakeSource("b")
     settings = EnergySettings(backfill_from=NOW - timedelta(days=100), backfill_chunks_per_cycle=4)
     ing = EnergyIngestor([a, b], FakeStore(), settings)
@@ -227,7 +239,10 @@ def test_backfill_step_newest_first_round_robin() -> None:
 
 def test_backfill_step_stops_at_deadline() -> None:
     """Der Backfill hält den nächsten Abgleich nicht auf: Nach Ablauf der Frist ist Schluss,
-    ein Block wird aber immer geladen, damit die Historie vorankommt."""
+    ein Block wird aber immer geladen, damit die Historie vorankommt.
+
+    @relation(SWR-ENI-014, scope=function)
+    """
     src = FakeSource("a")
     settings = EnergySettings(backfill_from=NOW - timedelta(days=100), backfill_chunks_per_cycle=4)
     ing = EnergyIngestor([src], FakeStore(), settings)
@@ -236,6 +251,7 @@ def test_backfill_step_stops_at_deadline() -> None:
 
 
 def test_failed_chunk_not_marked() -> None:
+    """@relation(SWR-ENI-013, scope=function)"""
     src = FakeSource("x", fail=True)
     store = FakeStore()
     EnergyIngestor([src], store, EnergySettings()).backfill(
@@ -245,6 +261,7 @@ def test_failed_chunk_not_marked() -> None:
 
 
 def test_check_returns_deviations() -> None:
+    """@relation(SWR-ENI-015, scope=function)"""
     store = FakeStore()
     store.deviations = [Deviation("load_actual", "smard", "entsoe", 48, 900.0, 0.02)]
     devs = EnergyIngestor([], store, EnergySettings()).check(NOW)
@@ -252,6 +269,7 @@ def test_check_returns_deviations() -> None:
 
 
 def test_status_recorded_per_dataset() -> None:
+    """@relation(SWR-ENI-030, scope=function)"""
     good, bad = FakeSource("good"), FakeSource("bad", fail=True)
     store = FakeStore()
     EnergyIngestor([good, bad], store, EnergySettings()).sync(NOW)
@@ -261,6 +279,7 @@ def test_status_recorded_per_dataset() -> None:
 
 
 def test_format_error_reported_and_chunk_not_marked() -> None:
+    """@relation(SWR-ENI-030, scope=function)"""
     src = FakeSource("x", bad_format=True)
     store = FakeStore()
     results = EnergyIngestor([src], store, EnergySettings()).backfill(
@@ -272,7 +291,10 @@ def test_format_error_reported_and_chunk_not_marked() -> None:
 
 
 def test_price_sources_come_before_slow_entsoe_in_sync() -> None:
-    """Der Day-Ahead-Preis darf im Abgleich nicht hinter den langsamen ENTSO-E-Abrufen warten."""
+    """Der Day-Ahead-Preis darf im Abgleich nicht hinter den langsamen ENTSO-E-Abrufen warten.
+
+    @relation(SWR-ENI-005, scope=function)
+    """
     for fast in ("smard", "energy_charts"):
         for slow in ("entsoe", "entsoe_last"):
             assert ALL_SOURCES.index(fast) < ALL_SOURCES.index(slow)
@@ -280,6 +302,8 @@ def test_price_sources_come_before_slow_entsoe_in_sync() -> None:
 
 
 def test_sync_fetches_day_ahead_prices_first() -> None:
+    """@relation(SWR-ENI-005, scope=function)"""
+
     class PriceSource(FakeSource):
         def datasets(self) -> list[str]:
             return ["load_actual", "da_price_de_lu"]
