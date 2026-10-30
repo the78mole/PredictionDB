@@ -301,6 +301,16 @@ services:
       garage-init: {condition: service_completed_successfully}
       migrate: {condition: service_completed_successfully}
 
+  # Speicherbelegung je Wettergruppe (GFS DE, GFS Europa, GEFS) in wx-bronze, wx-silver und
+  # feat.nwp_value nach meta.storage_usage, fürs Wetter-Dashboard. Listet beide Buckets
+  # vollständig (≈ 2,3 Mio. Objekte, ≈ 2300 List-Anfragen), daher nur alle 6 h.
+  wx-storage:
+    <<: *app
+    command: ["wx-process", "storage", "--watch", "${WX_STORAGE_INTERVAL:-21600}"]
+    depends_on:
+      garage-init: {condition: service_completed_successfully}
+      migrate: {condition: service_completed_successfully}
+
   # Prognosemodell Last/Preis DE-LU (services/ml_train, config/ml/de_lu_v1.yaml). Einmalige Jobs:
   #   docker compose --profile ml run --rm ml-train snapshot --out /data/snap
   #   docker compose --profile ml run --rm ml-train backtest --snapshot /data/snap --out /data/bt

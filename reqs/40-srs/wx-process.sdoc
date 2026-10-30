@@ -374,3 +374,28 @@ RELATIONS:
   VALUE: SYSR-QA-001
 
 [[/SECTION]]
+
+[[SECTION]]
+TITLE: Betrieb
+
+[REQUIREMENT]
+UID: SWR-WXP-050
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Speicherbelegung je Gruppe
+STATEMENT: >>>
+Mit ``storage`` muss wx-process Größe und Zahl der Objekte in Bronze und Silber je Gruppe (GFS DE
+``gfs/0p25``, GFS Europa ``gfs/0p5``, GEFS ``gefs/0p5``, sonst ``sonstige``) sowie den Anteil
+jeder Quelle an ``feat.nwp_value`` messen und je Messung in ``meta.storage_usage`` ablegen, damit
+das Wetter-Dashboard die Belegung aufgeschlüsselt zeigt.
+<<<
+RATIONALE: >>>
+Grafana sieht Garage nicht, und die Chunks von ``feat.nwp_value`` mischen alle Quellen. Der Anteil
+in PostgreSQL ist daher nach der Zahl der Feature-Werte geschätzt.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-OPS-003
+
+[[/SECTION]]

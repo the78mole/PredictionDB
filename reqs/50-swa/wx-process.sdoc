@@ -23,7 +23,7 @@ ART: Komponente
 STATUS: Umgesetzt
 TITLE: Kommandozeile
 STATEMENT: >>>
-Befehle ``gfs latest``, ``gfs run``, ``gfs backfill`` und ``gfs prune-bronze``, Wiederholung mit ``--watch``.
+Befehle ``gfs latest``, ``gfs run``, ``gfs backfill``, ``gfs prune-bronze`` und ``storage``, Wiederholung mit ``--watch``.
 <<<
 ORT: services/wx_process/src/wx_process/cli.py
 RELATIONS:
@@ -35,6 +35,8 @@ RELATIONS:
   VALUE: SWR-WXP-024
 - TYPE: Parent
   VALUE: SWR-WXP-040
+- TYPE: Parent
+  VALUE: SWR-WXP-050
 
 [ELEMENT]
 UID: SWA-WXP-CONFIG
@@ -175,6 +177,19 @@ RELATIONS:
   VALUE: SWR-WXP-036
 - TYPE: Parent
   VALUE: SWR-WXP-041
+
+[ELEMENT]
+UID: SWA-WXP-STORAGE
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Speicherbelegung
+STATEMENT: >>>
+Bronze und Silber vollständig auflisten und je Gruppe summieren, Anteil je Quelle an ``feat.nwp_value`` schätzen, Messung in ``meta.storage_usage`` ablegen.
+<<<
+ORT: services/wx_process/src/wx_process/storage.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXP-050
 
 [ELEMENT]
 UID: SWA-WXP-TESTING

@@ -724,6 +724,12 @@ nach der Frist gelöscht) und Silber nach `meta.silver_run`. Das Wetter-Dashboar
 den Bestandsbalken für Bronze, Silber und Gold als dritten Balken je Monat neben GFS DE und
 GFS Europa (5.7).
 
+**Speicherbelegung:** Der Dienst `wx-storage` (`wx-process storage`, alle 6 h) listet `wx-bronze`
+und `wx-silver` vollständig, summiert Bytes und Objekte je Gruppe (`gfs/0p25` GFS DE, `gfs/0p5`
+GFS Europa, `gefs/0p5` GEFS) und schätzt den Anteil jeder Quelle an `feat.nwp_value` nach der Zahl
+der Feature-Werte (die Chunks mischen alle Quellen). Die Messungen landen in `meta.storage_usage`;
+das Wetter-Dashboard zeigt die jüngste als Tabelle je Gruppe und Ablage.
+
 **Weiter:** Merkmalsgruppe `ensemble` in `ml_train` mit Horizont D+16 und Backtest je
 Vorlauftag, Europa-Karte je Gebotszone. GEFS-Reforecasts (vor 2021-03) sind nicht vorgesehen.
 

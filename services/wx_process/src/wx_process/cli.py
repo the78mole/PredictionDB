@@ -10,6 +10,7 @@ Beispiele::
     wx-process gfs run 2026102012 --silver-only    # nur Silber, ohne Datenbank
     wx-process gfs prune-bronze --keep-days 92     # Bronze älter als 92 Tage löschen (mit Silber)
     wx-process gfs latest --watch 600 --bronze-days 92   # dazu laufend aufräumen
+    wx-process storage --watch 21600               # Speicherbelegung je Gruppe, alle 6 h
 
 @relation(SWA-WXP-CLI, scope=file)
 """
@@ -31,6 +32,7 @@ from wx_ingest.config import GfsConfig
 from wx_process.config import ProcessConfig, WxProcessSettings
 from wx_process.pipeline import RunOutcome, WxPipeline
 from wx_process.silver import Silver
+from wx_process.storage import measure
 from wx_process.store import Store
 
 log = get_logger(__name__)
@@ -44,6 +46,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-v", "--verbose", action="store_true")
     p.add_argument("--config", type=Path, help="Standard: PDB_WX_PROCESS_CONFIG")
     sub = p.add_subparsers(dest="model", required=True)
+    storage = sub.add_parser(
+        "storage", help="Speicherbelegung je Gruppe in Garage und PostgreSQL messen"
+    )
+    storage.add_argument(
+        "--watch", type=int, metavar="SEK", help="wiederholen im Abstand von SEK Sekunden"
+    )
     gfs = sub.add_parser("gfs", help="NOAA GFS 0,25°")
     cmd = gfs.add_subparsers(dest="cmd", required=True)
 
@@ -93,11 +101,34 @@ def _print(results: list[RunOutcome], indent: int | None = 1) -> None:
     print(json.dumps([r.as_dict() for r in results], indent=indent), flush=True)
 
 
+def _storage(watch: int | None) -> int:
+    """@relation(SWR-WXP-050, scope=function)"""
+    settings = get_settings()
+    engine = create_db_engine(settings)
+    buckets = {
+        "bronze": s3_store(settings.buckets.bronze, settings),
+        "silver": s3_store(settings.buckets.silver, settings),
+    }
+    while True:
+        try:
+            rows = measure(engine, buckets)
+            print(json.dumps([r._asdict() for r in rows]), flush=True)
+        except Exception:  # eine fehlgeschlagene Messung darf den Dienst nicht beenden
+            if not watch:
+                raise
+            log.exception("storage.measure_failed")
+        if not watch:
+            return 0
+        time.sleep(watch)
+
+
 def main(argv: list[str] | None = None) -> int:
     """@relation(SWR-WXP-002, scope=function)"""
     args = build_parser().parse_args(argv)
     settings = get_settings()
     configure_logging("DEBUG" if args.verbose else settings.log_level, settings.log_json)
+    if args.model == "storage":
+        return _storage(args.watch)
 
     config = ProcessConfig.from_yaml(args.config or WxProcessSettings().config)
     source = GfsConfig.from_yaml(config.source_config)

@@ -1703,6 +1703,163 @@
     },
     {
       "type": "row",
+      "title": "Speicherbelegung je Gruppe",
+      "id": 56,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 56
+      },
+      "panels": []
+    },
+    {
+      "type": "table",
+      "title": "Speicherbelegung je Gruppe (Garage S3 und PostgreSQL)",
+      "id": 57,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "description": "Belegung je Wettergruppe aus der jüngsten Messung von wx-storage (wx-process storage, alle 6 h, Tabelle meta.storage_usage). Bronze und Silber: Garage-Buckets wx-bronze und wx-silver vollständig aufgelistet und nach Präfix summiert (GFS DE gfs/0p25, GFS Europa gfs/0p5, GEFS gefs/0p5; andere Präfixe als „sonstige“). Gold: Anteil der Quelle an feat.nwp_value in PostgreSQL. Die Chunks mischen alle Quellen, daher ist die Größe nach der Zahl der Feature-Werte (je Lauf die jüngste Verarbeitung in meta.nwp_feature_run) geschätzt, einschließlich Indizes und Komprimierung. Nicht enthalten: Garage-Metadaten (LMDB), Metatabellen und die übrigen Buckets. Gesamt = Bronze + Silber + Gold.",
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 57
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "table",
+          "rawSql": "-- jüngste Messung von wx-storage (wx-process storage, alle 6 h), je Gruppe und als Summe\nWITH u AS (\n  SELECT * FROM meta.storage_usage\n   WHERE measured_at = (SELECT max(measured_at) FROM meta.storage_usage))\nSELECT CASE WHEN grouping(grp) = 1 THEN 'Summe'\n            WHEN grp = 'gfs_0p25' THEN 'GFS DE (gfs/0p25)'\n            WHEN grp = 'gfs_0p5' THEN 'GFS Europa (gfs/0p5)'\n            WHEN grp = 'gefs_0p5' THEN 'GEFS (gefs/0p5)'\n            ELSE grp END AS \"Gruppe\",\n       sum(bytes) FILTER (WHERE store = 'bronze') AS \"Bronze (S3)\",\n       sum(bytes) FILTER (WHERE store = 'silver') AS \"Silber (S3)\",\n       sum(bytes) FILTER (WHERE store = 'postgres') AS \"Gold (Postgres, geschätzt)\",\n       sum(bytes) AS \"Gesamt\",\n       sum(objects) FILTER (WHERE store = 'bronze') AS \"Objekte Bronze\",\n       sum(objects) FILTER (WHERE store = 'silver') AS \"Objekte Silber\",\n       sum(objects) FILTER (WHERE store = 'postgres') AS \"Werte Gold\",\n       max(measured_at) AS \"Gemessen\"\n  FROM u\n GROUP BY GROUPING SETS ((grp), ())\n ORDER BY grouping(grp), CASE grp WHEN 'gfs_0p25' THEN 1 WHEN 'gfs_0p5' THEN 2\n                                  WHEN 'gefs_0p5' THEN 3 ELSE 4 END, grp"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decbytes",
+          "decimals": 1,
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Gesamt"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "decbytes"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Objekte Bronze"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "locale"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Objekte Silber"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "locale"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Werte Gold"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "locale"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Gemessen"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeAsLocal"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Gruppe"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 200
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "type": "row",
       "title": "Rechenlast der Wetter-Dienste",
       "id": 53,
       "collapsed": false,
@@ -1710,7 +1867,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 56
+        "y": 64
       },
       "panels": []
     },
@@ -1726,7 +1883,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 57
+        "y": 65
       },
       "targets": [
         {
