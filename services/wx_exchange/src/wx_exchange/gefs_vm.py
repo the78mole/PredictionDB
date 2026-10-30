@@ -603,12 +603,13 @@ class GefsVm:
             counts = await asyncio.to_thread(self.process_gold, gold_limit)
             more = bool(counts.pop("more", 0))
             result.gold.update(counts)
+            if more:
+                # Rückstand: gleich die nächste Runde, die Liste kommt dabei neu (jüngste zuerst),
+                # auch wenn Live-Aufbau und Import schon fertig sind
+                continue
             pending = {t for t in (live, imports) if not t.done()}
             if not pending:
                 break
-            if more:
-                # Rückstand: gleich die nächste Runde, die Liste kommt dabei neu (jüngste zuerst)
-                continue
             await asyncio.wait(pending, timeout=gold_every, return_when=asyncio.FIRST_COMPLETED)
         await imports
         result.live = await live
