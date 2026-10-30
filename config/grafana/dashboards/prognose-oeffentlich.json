@@ -1,0 +1,1112 @@
+{
+  "uid": "pdb-prognose-oeffentlich",
+  "title": "PredictionDB Prognose öffentlich",
+  "description": "Vorlage für den öffentlichen Snapshot auf snapshots.raintank.io (Dienst grafana-snapshot): nur Standard-Panels, da raintank keine Zusatz-Plugins kennt. Zum Ansehen „Prognose aktuell“ nehmen.",
+  "tags": [
+    "predictiondb"
+  ],
+  "timezone": "",
+  "schemaVersion": 41,
+  "version": 1,
+  "editable": false,
+  "refresh": "5m",
+  "time": {
+    "from": "now/d",
+    "to": "now+7d/d"
+  },
+  "timepicker": {
+    "hidden": true
+  },
+  "annotations": {
+    "list": []
+  },
+  "links": [
+    {
+      "type": "link",
+      "title": "Prognose aktuell",
+      "url": "/d/pdb-prognose-aktuell/predictiondb-prognose-aktuell",
+      "icon": "dashboard",
+      "tooltip": "Interne Ansicht mit beschrifteten Tagesmitteln",
+      "targetBlank": false,
+      "includeVars": false,
+      "keepTime": false,
+      "asDropdown": false,
+      "tags": []
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "type": "query",
+        "name": "challenger",
+        "label": "Challenger",
+        "hide": 0,
+        "skipUrlSync": false,
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "pdb-postgres"
+        },
+        "query": "-- Aktive Challenger, jüngster zuerst\nSELECT v.config || ' ' || v.variant || ' ' || to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS __text,\n       v.version AS __value\n  FROM meta.model_version v\n WHERE v.role = 'challenger'\n ORDER BY v.created DESC",
+        "definition": "-- Aktive Challenger, jüngster zuerst\nSELECT v.config || ' ' || v.variant || ' ' || to_char(v.created AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI') AS __text,\n       v.version AS __value\n  FROM meta.model_version v\n WHERE v.role = 'challenger'\n ORDER BY v.created DESC",
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false,
+        "options": [],
+        "current": {}
+      },
+      {
+        "type": "query",
+        "name": "lauf_last_champion",
+        "label": "lauf_last_champion",
+        "hide": 2,
+        "skipUrlSync": true,
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "pdb-postgres"
+        },
+        "query": "-- Erstellzeitpunkt des jüngsten gültigen Laufs (Titel der Wochenpanels)\nSELECT coalesce(to_char(max(issue_time) AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI'),\n                'kein Lauf')\n  FROM fcst.prediction\n WHERE target = 'load_actual' AND quantile = 0.5 AND value <> 'NaN'\n   AND model_version = (SELECT version FROM meta.model_version WHERE role = 'champion'\n                   ORDER BY created DESC LIMIT 1)\n   AND issue_time >= now() - interval '9 days'",
+        "definition": "-- Erstellzeitpunkt des jüngsten gültigen Laufs (Titel der Wochenpanels)\nSELECT coalesce(to_char(max(issue_time) AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI'),\n                'kein Lauf')\n  FROM fcst.prediction\n WHERE target = 'load_actual' AND quantile = 0.5 AND value <> 'NaN'\n   AND model_version = (SELECT version FROM meta.model_version WHERE role = 'champion'\n                   ORDER BY created DESC LIMIT 1)\n   AND issue_time >= now() - interval '9 days'",
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false,
+        "options": [],
+        "current": {}
+      },
+      {
+        "type": "query",
+        "name": "lauf_preis_champion",
+        "label": "lauf_preis_champion",
+        "hide": 2,
+        "skipUrlSync": true,
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "pdb-postgres"
+        },
+        "query": "-- Erstellzeitpunkt des jüngsten gültigen Laufs (Titel der Wochenpanels)\nSELECT coalesce(to_char(max(issue_time) AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI'),\n                'kein Lauf')\n  FROM fcst.prediction\n WHERE target = 'da_price_de_lu' AND quantile = 0.5 AND value <> 'NaN'\n   AND model_version = (SELECT version FROM meta.model_version WHERE role = 'champion'\n                   ORDER BY created DESC LIMIT 1)\n   AND issue_time >= now() - interval '9 days'",
+        "definition": "-- Erstellzeitpunkt des jüngsten gültigen Laufs (Titel der Wochenpanels)\nSELECT coalesce(to_char(max(issue_time) AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI'),\n                'kein Lauf')\n  FROM fcst.prediction\n WHERE target = 'da_price_de_lu' AND quantile = 0.5 AND value <> 'NaN'\n   AND model_version = (SELECT version FROM meta.model_version WHERE role = 'champion'\n                   ORDER BY created DESC LIMIT 1)\n   AND issue_time >= now() - interval '9 days'",
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false,
+        "options": [],
+        "current": {}
+      },
+      {
+        "type": "query",
+        "name": "lauf_last_challenger",
+        "label": "lauf_last_challenger",
+        "hide": 2,
+        "skipUrlSync": true,
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "pdb-postgres"
+        },
+        "query": "-- Erstellzeitpunkt des jüngsten gültigen Laufs (Titel der Wochenpanels)\nSELECT coalesce(to_char(max(issue_time) AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI'),\n                'kein Lauf')\n  FROM fcst.prediction\n WHERE target = 'load_actual' AND quantile = 0.5 AND value <> 'NaN'\n   AND model_version = '${challenger}'\n   AND issue_time >= now() - interval '9 days'",
+        "definition": "-- Erstellzeitpunkt des jüngsten gültigen Laufs (Titel der Wochenpanels)\nSELECT coalesce(to_char(max(issue_time) AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI'),\n                'kein Lauf')\n  FROM fcst.prediction\n WHERE target = 'load_actual' AND quantile = 0.5 AND value <> 'NaN'\n   AND model_version = '${challenger}'\n   AND issue_time >= now() - interval '9 days'",
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false,
+        "options": [],
+        "current": {}
+      },
+      {
+        "type": "query",
+        "name": "lauf_preis_challenger",
+        "label": "lauf_preis_challenger",
+        "hide": 2,
+        "skipUrlSync": true,
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "pdb-postgres"
+        },
+        "query": "-- Erstellzeitpunkt des jüngsten gültigen Laufs (Titel der Wochenpanels)\nSELECT coalesce(to_char(max(issue_time) AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI'),\n                'kein Lauf')\n  FROM fcst.prediction\n WHERE target = 'da_price_de_lu' AND quantile = 0.5 AND value <> 'NaN'\n   AND model_version = '${challenger}'\n   AND issue_time >= now() - interval '9 days'",
+        "definition": "-- Erstellzeitpunkt des jüngsten gültigen Laufs (Titel der Wochenpanels)\nSELECT coalesce(to_char(max(issue_time) AT TIME ZONE 'Europe/Berlin', 'DD.MM. HH24:MI'),\n                'kein Lauf')\n  FROM fcst.prediction\n WHERE target = 'da_price_de_lu' AND quantile = 0.5 AND value <> 'NaN'\n   AND model_version = '${challenger}'\n   AND issue_time >= now() - interval '9 days'",
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false,
+        "options": [],
+        "current": {}
+      },
+      {
+        "type": "custom",
+        "name": "tagesmittel_last",
+        "label": "Tagesmittel lastgewichtet",
+        "query": "aus,an",
+        "hide": 0,
+        "skipUrlSync": false,
+        "includeAll": false,
+        "multi": false,
+        "current": {
+          "text": "aus",
+          "value": "aus"
+        },
+        "options": [
+          {
+            "text": "aus",
+            "value": "aus",
+            "selected": true
+          },
+          {
+            "text": "an",
+            "value": "an",
+            "selected": false
+          }
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Woche: Lastprognose bis D+7 · Champion · erstellt ${lauf_last_champion}",
+      "id": 67,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT ts AS time, code AS metric, value\n  FROM energy.value_best\n WHERE code IN ('load_actual', 'load_da_forecast') AND $__timeFilter(ts)\n ORDER BY 1"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "-- Je Stunde der jüngste Lauf, der sie abdeckt (heute vergangene Stunden also aus\n-- früheren Läufen), mit P10, P50 und P90 desselben Laufs. Läufe reichen höchstens\n-- 9 Tage voraus, daher die Untergrenze für issue_time (Index statt Vollscan).\nWITH lauf AS (\n  SELECT DISTINCT ON (p.valid_time) p.valid_time, p.issue_time\n    FROM fcst.prediction p\n   WHERE p.target = 'load_actual' AND p.quantile = 0.5\n     AND p.value <> 'NaN'\n     AND p.model_version = (SELECT version FROM meta.model_version WHERE role = 'champion'\n                  ORDER BY created DESC LIMIT 1)\n     AND p.issue_time >= $__timeFrom()::timestamptz - interval '9 days'\n     AND $__timeFilter(p.valid_time)\n   ORDER BY p.valid_time, p.issue_time DESC)\nSELECT p.valid_time AS time,\n       CASE round(p.quantile::numeric, 2) WHEN 0.10 THEN 'P10' WHEN 0.50 THEN 'P50'\n                                          ELSE 'P90' END AS metric, p.value\n  FROM lauf l JOIN fcst.prediction p\n    ON p.valid_time = l.valid_time AND p.issue_time = l.issue_time\n WHERE p.target = 'load_actual' AND p.model_version = (SELECT version FROM meta.model_version WHERE role = 'champion'\n                  ORDER BY created DESC LIMIT 1)\n   AND round(p.quantile::numeric, 2) IN (0.10, 0.50, 0.90)\n ORDER BY 1, 2"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "megwatt",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "load_actual"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Last"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "load_da_forecast"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Lastprognose (ÜNB)"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    6,
+                    4
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P50"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Prognose P50"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P90"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Band P10–P90"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#9ca3af"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 0
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 35
+              },
+              {
+                "id": "custom.fillBelowTo",
+                "value": "P10"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P10"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#9ca3af"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 0
+              },
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": true,
+                  "tooltip": false,
+                  "viz": false
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "description": "Zeitraum des Dashboards (Standard heute 00:00 bis Ende D+7, Ortszeit) mit der Prognose des aktuellen Champions: Median P50 als Linie, das Band P10–P90 (nominell 80 %) als grauer Schlauch. Je Stunde gilt der jüngste Lauf, der sie abdeckt; vergangene Stunden von heute stammen daher aus früheren Läufen. Zum Vergleich die Last (gelb) und die Day-Ahead-Lastprognose der ÜNB (gelb gestrichelt), soweit vorhanden.",
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Woche: Preisprognose bis D+7 · Champion · erstellt ${lauf_preis_champion}",
+      "id": 68,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT ts AS time, code AS metric, value\n  FROM energy.value_best\n WHERE code IN ('da_price_de_lu') AND $__timeFilter(ts)\n ORDER BY 1"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "-- Je Stunde der jüngste Lauf, der sie abdeckt (heute vergangene Stunden also aus\n-- früheren Läufen), mit P10, P50 und P90 desselben Laufs. Läufe reichen höchstens\n-- 9 Tage voraus, daher die Untergrenze für issue_time (Index statt Vollscan).\nWITH lauf AS (\n  SELECT DISTINCT ON (p.valid_time) p.valid_time, p.issue_time\n    FROM fcst.prediction p\n   WHERE p.target = 'da_price_de_lu' AND p.quantile = 0.5\n     AND p.value <> 'NaN'\n     AND p.model_version = (SELECT version FROM meta.model_version WHERE role = 'champion'\n                  ORDER BY created DESC LIMIT 1)\n     AND p.issue_time >= $__timeFrom()::timestamptz - interval '9 days'\n     AND $__timeFilter(p.valid_time)\n   ORDER BY p.valid_time, p.issue_time DESC)\nSELECT p.valid_time AS time,\n       CASE round(p.quantile::numeric, 2) WHEN 0.10 THEN 'P10' WHEN 0.50 THEN 'P50'\n                                          ELSE 'P90' END AS metric, p.value\n  FROM lauf l JOIN fcst.prediction p\n    ON p.valid_time = l.valid_time AND p.issue_time = l.issue_time\n WHERE p.target = 'da_price_de_lu' AND p.model_version = (SELECT version FROM meta.model_version WHERE role = 'champion'\n                  ORDER BY created DESC LIMIT 1)\n   AND round(p.quantile::numeric, 2) IN (0.10, 0.50, 0.90)\n ORDER BY 1, 2"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "-- Tagesmittel je Liefertag (Ortszeit), als Punkt um 12:00: Preis gewichtet mit dem\n-- H0-Profil (meta.slp_h0_gewicht), Fehlerbalken aus P10 und P90 gleich gewichtet, auf Wunsch\n-- zusätzlich lastgewichtet. Bekannte Stunden nehmen den Day-Ahead-Preis (und die Ist-Last bzw.\n-- ÜNB-Lastprognose), die übrigen die Prognose wie in refId B (jüngster Lauf je Stunde).\n-- Fehlerbalken: je Tag eigene Reihen (senkrechter Strich, Kappe unten, Kappe oben), da\n-- jede Reihe nur ihre eigenen Punkte verbindet (spanNulls über die Lücken aus dem Join).\nWITH lauf AS (\n  SELECT DISTINCT ON (p.valid_time) p.valid_time, p.issue_time\n    FROM fcst.prediction p\n   WHERE p.target = 'da_price_de_lu' AND p.quantile = 0.5\n     AND p.value <> 'NaN'\n     AND p.model_version = (SELECT version FROM meta.model_version WHERE role = 'champion'\n                  ORDER BY created DESC LIMIT 1)\n     AND p.issue_time >= $__timeFrom()::timestamptz - interval '9 days'\n     AND $__timeFilter(p.valid_time)\n   ORDER BY p.valid_time, p.issue_time DESC),\nlauf_last AS (\n  SELECT DISTINCT ON (p.valid_time) p.valid_time, p.issue_time\n    FROM fcst.prediction p\n   WHERE p.target = 'load_actual' AND p.quantile = 0.5\n     AND p.value <> 'NaN'\n     AND p.model_version = (SELECT version FROM meta.model_version WHERE role = 'champion'\n                  ORDER BY created DESC LIMIT 1)\n     AND p.issue_time >= $__timeFrom()::timestamptz - interval '9 days'\n     AND $__timeFilter(p.valid_time)\n   ORDER BY p.valid_time, p.issue_time DESC),\npq AS (\n  SELECT p.valid_time AS t,\n         max(p.value) FILTER (WHERE round(p.quantile::numeric, 2) = 0.10) AS p10,\n         max(p.value) FILTER (WHERE round(p.quantile::numeric, 2) = 0.50) AS p50,\n         max(p.value) FILTER (WHERE round(p.quantile::numeric, 2) = 0.90) AS p90\n    FROM lauf l JOIN fcst.prediction p\n      ON p.valid_time = l.valid_time AND p.issue_time = l.issue_time\n   WHERE p.target = 'da_price_de_lu' AND p.model_version = (SELECT version FROM meta.model_version WHERE role = 'champion'\n                  ORDER BY created DESC LIMIT 1)\n   GROUP BY 1),\nlp AS (\n  SELECT p.valid_time AS t, p.value\n    FROM lauf_last l JOIN fcst.prediction p\n      ON p.valid_time = l.valid_time AND p.issue_time = l.issue_time\n   WHERE p.target = 'load_actual' AND p.model_version = (SELECT version FROM meta.model_version WHERE role = 'champion'\n                  ORDER BY created DESC LIMIT 1) AND p.quantile = 0.5),\nist AS (\n  SELECT date_trunc('hour', ts) AS t,\n         avg(value) FILTER (WHERE code = 'da_price_de_lu') AS preis,\n         avg(value) FILTER (WHERE code = 'load_actual') AS last,\n         avg(value) FILTER (WHERE code = 'load_da_forecast') AS last_uenb\n    FROM energy.value_best\n   WHERE code IN ('da_price_de_lu', 'load_actual', 'load_da_forecast') AND $__timeFilter(ts)\n   GROUP BY 1),\nh AS (\n  SELECT (pq.t AT TIME ZONE 'Europe/Berlin')::date AS d,\n         meta.slp_h0_gewicht(pq.t AT TIME ZONE 'Europe/Berlin') AS w,\n         coalesce(i.preis, pq.p50) AS m, coalesce(i.preis, pq.p10) AS lo,\n         coalesce(i.preis, pq.p90) AS hi, coalesce(i.last, i.last_uenb, lp.value) AS last\n    FROM pq LEFT JOIN ist i USING (t) LEFT JOIN lp USING (t)),\ntag AS (\n  SELECT (d + time '12:00') AT TIME ZONE 'Europe/Berlin' AS t,\n         sum(m * w) / sum(w) AS h0, sum(lo * w) / sum(w) AS h0_lo, sum(hi * w) / sum(w) AS h0_hi,\n         sum(m * last) / sum(last) AS lastw\n    FROM h GROUP BY d HAVING count(m) >= 23)\nSELECT t AS time, 'Tagesmittel H0' AS metric, h0 AS value FROM tag\nUNION ALL SELECT t + z, 'FB ' || to_char(t, 'YYYY-MM-DD') || k, v\n  FROM tag, LATERAL (VALUES (interval '0', '', h0_lo), (interval '1 second', '', h0_hi),\n    (interval '-40 minutes', ' unten', h0_lo), (interval '40 minutes', ' unten', h0_lo),\n    (interval '-40 minutes', ' oben', h0_hi), (interval '40 minutes', ' oben', h0_hi)) f(z, k, v)\n WHERE h0_hi > h0_lo\nUNION ALL SELECT t, 'Tagesmittel Last', lastw FROM tag WHERE '${tagesmittel_last}' = 'an'\n ORDER BY 1, 2"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix:€/MWh",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "da_price_de_lu"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Day-Ahead-Preis"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P50"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Prognose P50"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P90"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Band P10–P90"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#9ca3af"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 0
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 35
+              },
+              {
+                "id": "custom.fillBelowTo",
+                "value": "P10"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P10"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#9ca3af"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 0
+              },
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": true,
+                  "tooltip": false,
+                  "viz": false
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Tagesmittel H0"
+            },
+            "properties": [
+              {
+                "id": "custom.drawStyle",
+                "value": "points"
+              },
+              {
+                "id": "custom.pointSize",
+                "value": 10
+              },
+              {
+                "id": "custom.showValues",
+                "value": true
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^FB .*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              },
+              {
+                "id": "custom.showPoints",
+                "value": "never"
+              },
+              {
+                "id": "custom.spanNulls",
+                "value": true
+              },
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": true,
+                  "tooltip": true,
+                  "viz": false
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Tagesmittel Last"
+            },
+            "properties": [
+              {
+                "id": "custom.drawStyle",
+                "value": "points"
+              },
+              {
+                "id": "custom.pointSize",
+                "value": 10
+              },
+              {
+                "id": "custom.showValues",
+                "value": true
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "description": "Zeitraum des Dashboards (Standard heute 00:00 bis Ende D+7, Ortszeit) mit der Prognose des aktuellen Champions: Median P50 als Linie, das Band P10–P90 (nominell 80 %) als grauer Schlauch. Je Stunde gilt der jüngste Lauf, der sie abdeckt; vergangene Stunden von heute stammen daher aus früheren Läufen. Zum Vergleich der Day-Ahead-Preis (sobald veröffentlicht, auch für morgen). Je Tag um 12:00 das Tagesmittel des Preises, gewichtet mit dem BDEW-Haushaltsprofil H0 (orange, roter Strich = H0-gewichtetes P10 bis P90); mit dem Schalter „Tagesmittel lastgewichtet“ oben zusätzlich mit der Last gewichtet (Ist-Last, sonst ÜNB-Prognose, sonst Lastprognose desselben Modells). Stunden mit bekanntem Day-Ahead-Preis gehen mit diesem ein.",
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Woche: Lastprognose bis D+7 · Challenger ${challenger:text} · erstellt ${lauf_last_challenger}",
+      "id": 69,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 20
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT ts AS time, code AS metric, value\n  FROM energy.value_best\n WHERE code IN ('load_actual', 'load_da_forecast') AND $__timeFilter(ts)\n ORDER BY 1"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "-- Je Stunde der jüngste Lauf, der sie abdeckt (heute vergangene Stunden also aus\n-- früheren Läufen), mit P10, P50 und P90 desselben Laufs. Läufe reichen höchstens\n-- 9 Tage voraus, daher die Untergrenze für issue_time (Index statt Vollscan).\nWITH lauf AS (\n  SELECT DISTINCT ON (p.valid_time) p.valid_time, p.issue_time\n    FROM fcst.prediction p\n   WHERE p.target = 'load_actual' AND p.quantile = 0.5\n     AND p.value <> 'NaN'\n     AND p.model_version = '${challenger}'\n     AND p.issue_time >= $__timeFrom()::timestamptz - interval '9 days'\n     AND $__timeFilter(p.valid_time)\n   ORDER BY p.valid_time, p.issue_time DESC)\nSELECT p.valid_time AS time,\n       CASE round(p.quantile::numeric, 2) WHEN 0.10 THEN 'P10' WHEN 0.50 THEN 'P50'\n                                          ELSE 'P90' END AS metric, p.value\n  FROM lauf l JOIN fcst.prediction p\n    ON p.valid_time = l.valid_time AND p.issue_time = l.issue_time\n WHERE p.target = 'load_actual' AND p.model_version = '${challenger}'\n   AND round(p.quantile::numeric, 2) IN (0.10, 0.50, 0.90)\n ORDER BY 1, 2"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "megwatt",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "load_actual"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Last"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "load_da_forecast"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Lastprognose (ÜNB)"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    6,
+                    4
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P50"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Prognose P50"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P90"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Band P10–P90"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#9ca3af"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 0
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 35
+              },
+              {
+                "id": "custom.fillBelowTo",
+                "value": "P10"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P10"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#9ca3af"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 0
+              },
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": true,
+                  "tooltip": false,
+                  "viz": false
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "description": "Zeitraum des Dashboards (Standard heute 00:00 bis Ende D+7, Ortszeit) mit der Prognose des oben gewählten Challengers (Variable Challenger): Median P50 als Linie, das Band P10–P90 (nominell 80 %) als grauer Schlauch. Je Stunde gilt der jüngste Lauf, der sie abdeckt; vergangene Stunden von heute stammen daher aus früheren Läufen. Zum Vergleich die Last (gelb) und die Day-Ahead-Lastprognose der ÜNB (gelb gestrichelt), soweit vorhanden.",
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Woche: Preisprognose bis D+7 · Challenger ${challenger:text} · erstellt ${lauf_preis_challenger}",
+      "id": 70,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "pdb-postgres"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "SELECT ts AS time, code AS metric, value\n  FROM energy.value_best\n WHERE code IN ('da_price_de_lu') AND $__timeFilter(ts)\n ORDER BY 1"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "-- Je Stunde der jüngste Lauf, der sie abdeckt (heute vergangene Stunden also aus\n-- früheren Läufen), mit P10, P50 und P90 desselben Laufs. Läufe reichen höchstens\n-- 9 Tage voraus, daher die Untergrenze für issue_time (Index statt Vollscan).\nWITH lauf AS (\n  SELECT DISTINCT ON (p.valid_time) p.valid_time, p.issue_time\n    FROM fcst.prediction p\n   WHERE p.target = 'da_price_de_lu' AND p.quantile = 0.5\n     AND p.value <> 'NaN'\n     AND p.model_version = '${challenger}'\n     AND p.issue_time >= $__timeFrom()::timestamptz - interval '9 days'\n     AND $__timeFilter(p.valid_time)\n   ORDER BY p.valid_time, p.issue_time DESC)\nSELECT p.valid_time AS time,\n       CASE round(p.quantile::numeric, 2) WHEN 0.10 THEN 'P10' WHEN 0.50 THEN 'P50'\n                                          ELSE 'P90' END AS metric, p.value\n  FROM lauf l JOIN fcst.prediction p\n    ON p.valid_time = l.valid_time AND p.issue_time = l.issue_time\n WHERE p.target = 'da_price_de_lu' AND p.model_version = '${challenger}'\n   AND round(p.quantile::numeric, 2) IN (0.10, 0.50, 0.90)\n ORDER BY 1, 2"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "-- Tagesmittel je Liefertag (Ortszeit), als Punkt um 12:00: Preis gewichtet mit dem\n-- H0-Profil (meta.slp_h0_gewicht), Fehlerbalken aus P10 und P90 gleich gewichtet, auf Wunsch\n-- zusätzlich lastgewichtet. Bekannte Stunden nehmen den Day-Ahead-Preis (und die Ist-Last bzw.\n-- ÜNB-Lastprognose), die übrigen die Prognose wie in refId B (jüngster Lauf je Stunde).\n-- Fehlerbalken: je Tag eigene Reihen (senkrechter Strich, Kappe unten, Kappe oben), da\n-- jede Reihe nur ihre eigenen Punkte verbindet (spanNulls über die Lücken aus dem Join).\nWITH lauf AS (\n  SELECT DISTINCT ON (p.valid_time) p.valid_time, p.issue_time\n    FROM fcst.prediction p\n   WHERE p.target = 'da_price_de_lu' AND p.quantile = 0.5\n     AND p.value <> 'NaN'\n     AND p.model_version = '${challenger}'\n     AND p.issue_time >= $__timeFrom()::timestamptz - interval '9 days'\n     AND $__timeFilter(p.valid_time)\n   ORDER BY p.valid_time, p.issue_time DESC),\nlauf_last AS (\n  SELECT DISTINCT ON (p.valid_time) p.valid_time, p.issue_time\n    FROM fcst.prediction p\n   WHERE p.target = 'load_actual' AND p.quantile = 0.5\n     AND p.value <> 'NaN'\n     AND p.model_version = '${challenger}'\n     AND p.issue_time >= $__timeFrom()::timestamptz - interval '9 days'\n     AND $__timeFilter(p.valid_time)\n   ORDER BY p.valid_time, p.issue_time DESC),\npq AS (\n  SELECT p.valid_time AS t,\n         max(p.value) FILTER (WHERE round(p.quantile::numeric, 2) = 0.10) AS p10,\n         max(p.value) FILTER (WHERE round(p.quantile::numeric, 2) = 0.50) AS p50,\n         max(p.value) FILTER (WHERE round(p.quantile::numeric, 2) = 0.90) AS p90\n    FROM lauf l JOIN fcst.prediction p\n      ON p.valid_time = l.valid_time AND p.issue_time = l.issue_time\n   WHERE p.target = 'da_price_de_lu' AND p.model_version = '${challenger}'\n   GROUP BY 1),\nlp AS (\n  SELECT p.valid_time AS t, p.value\n    FROM lauf_last l JOIN fcst.prediction p\n      ON p.valid_time = l.valid_time AND p.issue_time = l.issue_time\n   WHERE p.target = 'load_actual' AND p.model_version = '${challenger}' AND p.quantile = 0.5),\nist AS (\n  SELECT date_trunc('hour', ts) AS t,\n         avg(value) FILTER (WHERE code = 'da_price_de_lu') AS preis,\n         avg(value) FILTER (WHERE code = 'load_actual') AS last,\n         avg(value) FILTER (WHERE code = 'load_da_forecast') AS last_uenb\n    FROM energy.value_best\n   WHERE code IN ('da_price_de_lu', 'load_actual', 'load_da_forecast') AND $__timeFilter(ts)\n   GROUP BY 1),\nh AS (\n  SELECT (pq.t AT TIME ZONE 'Europe/Berlin')::date AS d,\n         meta.slp_h0_gewicht(pq.t AT TIME ZONE 'Europe/Berlin') AS w,\n         coalesce(i.preis, pq.p50) AS m, coalesce(i.preis, pq.p10) AS lo,\n         coalesce(i.preis, pq.p90) AS hi, coalesce(i.last, i.last_uenb, lp.value) AS last\n    FROM pq LEFT JOIN ist i USING (t) LEFT JOIN lp USING (t)),\ntag AS (\n  SELECT (d + time '12:00') AT TIME ZONE 'Europe/Berlin' AS t,\n         sum(m * w) / sum(w) AS h0, sum(lo * w) / sum(w) AS h0_lo, sum(hi * w) / sum(w) AS h0_hi,\n         sum(m * last) / sum(last) AS lastw\n    FROM h GROUP BY d HAVING count(m) >= 23)\nSELECT t AS time, 'Tagesmittel H0' AS metric, h0 AS value FROM tag\nUNION ALL SELECT t + z, 'FB ' || to_char(t, 'YYYY-MM-DD') || k, v\n  FROM tag, LATERAL (VALUES (interval '0', '', h0_lo), (interval '1 second', '', h0_hi),\n    (interval '-40 minutes', ' unten', h0_lo), (interval '40 minutes', ' unten', h0_lo),\n    (interval '-40 minutes', ' oben', h0_hi), (interval '40 minutes', ' oben', h0_hi)) f(z, k, v)\n WHERE h0_hi > h0_lo\nUNION ALL SELECT t, 'Tagesmittel Last', lastw FROM tag WHERE '${tagesmittel_last}' = 'an'\n ORDER BY 1, 2"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix:€/MWh",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "da_price_de_lu"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Day-Ahead-Preis"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P50"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Prognose P50"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P90"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Band P10–P90"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#9ca3af"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 0
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 35
+              },
+              {
+                "id": "custom.fillBelowTo",
+                "value": "P10"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P10"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#9ca3af"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 0
+              },
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": true,
+                  "tooltip": false,
+                  "viz": false
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Tagesmittel H0"
+            },
+            "properties": [
+              {
+                "id": "custom.drawStyle",
+                "value": "points"
+              },
+              {
+                "id": "custom.pointSize",
+                "value": 10
+              },
+              {
+                "id": "custom.showValues",
+                "value": true
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^FB .*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              },
+              {
+                "id": "custom.showPoints",
+                "value": "never"
+              },
+              {
+                "id": "custom.spanNulls",
+                "value": true
+              },
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": true,
+                  "tooltip": true,
+                  "viz": false
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Tagesmittel Last"
+            },
+            "properties": [
+              {
+                "id": "custom.drawStyle",
+                "value": "points"
+              },
+              {
+                "id": "custom.pointSize",
+                "value": 10
+              },
+              {
+                "id": "custom.showValues",
+                "value": true
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "description": "Zeitraum des Dashboards (Standard heute 00:00 bis Ende D+7, Ortszeit) mit der Prognose des oben gewählten Challengers (Variable Challenger): Median P50 als Linie, das Band P10–P90 (nominell 80 %) als grauer Schlauch. Je Stunde gilt der jüngste Lauf, der sie abdeckt; vergangene Stunden von heute stammen daher aus früheren Läufen. Zum Vergleich der Day-Ahead-Preis (sobald veröffentlicht, auch für morgen). Je Tag um 12:00 das Tagesmittel des Preises, gewichtet mit dem BDEW-Haushaltsprofil H0 (orange, roter Strich = H0-gewichtetes P10 bis P90); mit dem Schalter „Tagesmittel lastgewichtet“ oben zusätzlich mit der Last gewichtet (Ist-Last, sonst ÜNB-Prognose, sonst Lastprognose desselben Modells). Stunden mit bekanntem Day-Ahead-Preis gehen mit diesem ein.",
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "type": "text",
+      "title": "Quellen",
+      "id": 71,
+      "gridPos": {
+        "h": 5,
+        "w": 24,
+        "x": 0,
+        "y": 40
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**Prognose:** eigene Modelle von [PredictionDB](https://github.com/the78mole/PredictionDB) (Champion und ein Challenger), Median P50 mit Band P10–P90. Tagesmittel gewichtet mit dem BDEW-Standardlastprofil H0 (Werte über [demandlib](https://github.com/oemof/demandlib), MIT).\n\n**Daten:** Day-Ahead-Preis DE-LU und Netzlast: Bundesnetzagentur | [SMARD.de](https://www.smard.de) (CC BY 4.0), [Energy-Charts](https://www.energy-charts.info) (Fraunhofer ISE, CC BY 4.0), ENTSO-E Transparency Platform. Wetter: NOAA/NCEP GFS und GEFS (gemeinfrei). Anlagenbestand: Marktstammdatenregister (DL-DE BY 2.0). Keine Gewähr."
+      }
+    }
+  ]
+}

@@ -31,6 +31,8 @@ DASHBOARDS = [
     ROOT / "config/grafana/dashboards/prognose-energiedaten.json",
     ROOT / "config/grafana/dashboards/prognose-aktuell.json",
 ]
+#: Vorlage für den öffentlichen Snapshot (Standard-Panels mit denselben IDs wie intern)
+PUBLIC = ROOT / "config/grafana/dashboards/prognose-oeffentlich.json"
 CONFIG = "it_ml_dash"
 TARGETS = {"load_actual": 50_000.0, "da_price_de_lu": 80.0}
 
@@ -275,10 +277,25 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
                 if ref == 1:
                     assert got and {r["metric"] for r in got} == {"P50"}
                     assert len({r["time"] for r in got}) == len(got)
-        # Tagesmittel H0 (und lastgewichtet) in den Preis-Panels
+        # Tagesmittel H0 (und lastgewichtet): intern eine Zeile je Tag für das ECharts-Panel,
+        # in der öffentlichen Vorlage Punkte und Fehlerbalken als Zeitreihen
+        public = {p["id"]: p for p in json.loads(PUBLIC.read_text())["panels"]}
         for pid, version in ((68, versions[0]), (70, versions[1])):
             sql = _sql(panels[pid], 2).replace("${challenger}", version)
+            got = c.execute(text(sql.replace("${tagesmittel_last}", "an"))).mappings().all()
+            assert all({"h0", "h0_lo", "h0_hi", "lastw", "ist"} <= set(r) for r in got)
+            sql = _sql(public[pid], 2).replace("${challenger}", version)
             c.execute(text(sql.replace("${tagesmittel_last}", "an"))).all()
+            # Last, Band und Ist-Preis gleich wie intern
+            for ref in (0, 1):
+                assert public[pid]["targets"][ref] == panels[pid]["targets"][ref]
+        assert public[67] == panels[67] and public[69] == panels[69]
+        # Erstellzeitpunkt je Modell und Ziel (Titel bzw. Box oben rechts)
+        dash = json.loads(DASHBOARDS[1].read_text())
+        for v in dash["templating"]["list"]:
+            if v["name"].startswith("lauf_"):
+                sql = v["query"].replace("${challenger}", versions[1])
+                assert c.execute(text(sql)).scalar_one() != "kein Lauf"
 
 
 def test_slp_h0(engine: Engine) -> None:

@@ -1,11 +1,13 @@
 """Öffentlicher Grafana-Snapshot der Wochenprognose mit festem Kurzlink.
 
-Ablauf je Durchgang: Dashboard „Prognose aktuell“ aus der eigenen Grafana holen, die Abfragen
-der Wochenpanels für heute 00:00 bis Ende D+7 (Europe/Berlin) über ``/api/ds/query``
-ausführen und als ``snapshotData`` einbetten, mit ``external: true`` als Snapshot hochladen
-(Grafana reicht ihn an ``snapshots.raintank.io`` weiter) und das Ziel eines Kurzlinks auf die
-neue Snapshot-Adresse umbiegen. Ein Snapshot ist ein interaktives Standbild (Tooltips, Zoom,
-Legende), aktualisiert sich aber nicht; jeder hat eine neue Adresse, daher der Kurzlink.
+Ablauf je Durchgang: Dashboard „Prognose öffentlich“ aus der eigenen Grafana holen (nur
+Standard-Panels, raintank kennt keine Zusatz-Plugins), die Abfragen der Wochenpanels für heute
+00:00 bis Ende D+7 (Europe/Berlin) über ``/api/ds/query`` ausführen und einbetten, mit
+``external: true`` als Snapshot hochladen (Grafana reicht ihn an ``snapshots.raintank.io``
+weiter) und das Ziel eines Kurzlinks auf die neue Snapshot-Adresse umbiegen. Ein Snapshot ist
+ein interaktives Standbild (Tooltips, Zoom, Legende), aktualisiert sich aber nicht; jeder hat
+eine neue Adresse, daher der Kurzlink. Jeder Snapshot listet die früheren, noch nicht
+abgelaufenen Stände mit Link, damit man Prognosen später mit dem Eingetretenen vergleichen kann.
 
 Panels mit eigener Zeitüberschreibung (Gestern, Heute, Morgen) bleiben draußen: Ein Snapshot
 hat einen absoluten Zeitraum, und dann ignoriert Grafana relative Panel-Zeiträume.
@@ -26,11 +28,14 @@ from predictiondb_core.log import get_logger
 
 log = get_logger(__name__)
 
-DASHBOARD_UID = "pdb-prognose-aktuell"
+DASHBOARD_UID = "pdb-prognose-oeffentlich"
 #: Wochenpanels (Last und Preis, Champion und Challenger) und das Quellen-Panel
 PANELS = (67, 68, 69, 70, 71)
 TZ = ZoneInfo("Europe/Berlin")
-#: Standardwerte der Dashboard-Variablen im Snapshot (challenger kommt aus seiner Abfrage)
+#: Namensanfang aller veröffentlichten Stände (Titel und Name des Snapshots)
+TITLE = "Strompreis- und Lastprognose DE-LU · Stand"
+WOCHENTAG = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
+#: Standardwerte der Dashboard-Variablen im Snapshot (die übrigen kommen aus ihren Abfragen)
 FIXED_VARS = {"tagesmittel_last": "aus"}
 
 
@@ -87,6 +92,10 @@ class Grafana:
         }
         return dict(self._req("POST", "/api/ds/query", json=body)["results"])
 
+    def snapshots(self) -> list[dict[str, Any]]:
+        """Snapshots dieser Grafana, auch die extern hochgeladenen (mit ``externalUrl``)."""
+        return list(self._req("GET", "/api/dashboard/snapshots", params={"limit": 1000}))
+
     def snapshot(self, dashboard: dict[str, Any], name: str, expires: int) -> dict[str, Any]:
         body = {"dashboard": dashboard, "name": name, "expires": expires, "external": True}
         return dict(self._req("POST", "/api/snapshots", json=body))
@@ -95,16 +104,20 @@ class Grafana:
 def _variable_values(
     grafana: Grafana, dash: dict[str, Any], start: datetime, end: datetime
 ) -> dict[str, tuple[str, str]]:
+    """Abfrage-Variablen in Listenreihenfolge auflösen (erster Wert, wie beim Laden).
+
+    Spätere Variablen dürfen frühere verwenden (``lauf_*_challenger`` nutzt ``challenger``).
+    """
     values = {k: (v, v) for k, v in FIXED_VARS.items()}
     for var in dash.get("templating", {}).get("list", []):
-        if var["name"] != "challenger":
+        if var.get("type") != "query" or var["name"] in values:
             continue
         res = grafana.query(
             [
                 {
                     "refId": "V",
                     "datasource": var["datasource"],
-                    "rawSql": var["query"],
+                    "rawSql": interpolate(var["query"], values),
                     "rawQuery": True,
                     "format": "table",
                 }
@@ -114,11 +127,13 @@ def _variable_values(
         )
         frames = res["V"].get("frames", [])
         if not frames or not frames[0]["data"]["values"][0]:
-            values["challenger"] = ("", "keiner")
+            values[var["name"]] = ("", "keiner")
             continue
         names = [f["name"] for f in frames[0]["schema"]["fields"]]
         cols = dict(zip(names, frames[0]["data"]["values"], strict=True))
-        values["challenger"] = (str(cols["__value"][0]), str(cols["__text"][0]))
+        first = frames[0]["data"]["values"][0][0]
+        value = cols.get("__value", [first])[0]
+        values[var["name"]] = (str(value), str(cols.get("__text", [value])[0]))
     return values
 
 
@@ -147,8 +162,59 @@ def _frames(
     return frames
 
 
+def _parse(t: str) -> datetime:
+    return datetime.fromisoformat(t.replace("Z", "+00:00"))
+
+
+def history(grafana: Grafana, now: datetime) -> str:
+    """Markdown-Liste der früheren, noch gültigen öffentlichen Stände (neueste zuerst)."""
+    rows = []
+    for s in grafana.snapshots():
+        url, name, expires = s.get("externalUrl"), s.get("name", ""), s.get("expires", "")
+        if not (s.get("external") and url and name.startswith(TITLE)):
+            continue
+        # Grafana meldet „läuft nie ab“ als Jahr 2100 oder später
+        if expires and _parse(expires) <= now:
+            continue
+        rows.append((_parse(s["created"]), url, expires))
+    if not rows:
+        return "Noch keine früheren Stände."
+    lines = ["| Stand | läuft ab |", "| --- | --- |"]
+    for created, url, expires in sorted(rows, reverse=True):
+        end = _parse(expires).astimezone(TZ).strftime("%d.%m.%Y") if expires else "nie"
+        local = created.astimezone(TZ)
+        day = WOCHENTAG[local.weekday()]
+        lines.append(f"| [{day} {local:%d.%m.%Y %H:%M}]({url}) | {end} |")
+    return "\n".join(lines)
+
+
+def _history_element(content: str) -> dict[str, Any]:
+    return {
+        "kind": "Panel",
+        "spec": {
+            "id": 999,
+            "title": "Frühere Prognosestände (zum Vergleich mit dem Eingetretenen)",
+            "description": "",
+            "links": [],
+            "data": {
+                "kind": "QueryGroup",
+                "spec": {"queries": [], "transformations": [], "queryOptions": {}},
+            },
+            "vizConfig": {
+                "kind": "VizConfig",
+                "group": "text",
+                "version": "",
+                "spec": {
+                    "options": {"mode": "markdown", "content": content},
+                    "fieldConfig": {"defaults": {}, "overrides": []},
+                },
+            },
+        },
+    }
+
+
 def build_snapshot(grafana: Grafana, now: datetime) -> dict[str, Any]:
-    """Dashboard „Prognose aktuell“ (Schema v2) mit eingebetteten Daten der Wochenpanels.
+    """Dashboard „Prognose öffentlich“ (Schema v2) mit eingebetteten Daten der Wochenpanels.
 
     Grafana 13 lädt Snapshots im alten Schema mit ``snapshotData`` nicht mehr; die Oberfläche
     schickt das Schema v2, in dem jedes Panel eine Abfrage ``queryType: snapshot`` der
@@ -195,10 +261,26 @@ def build_snapshot(grafana: Grafana, now: datetime) -> dict[str, Any]:
         elements[name] = el
     spec["elements"] = elements
     items = spec["layout"]["spec"]["items"]
-    spec["layout"]["spec"]["items"] = [i for i in items if i["spec"]["element"]["name"] in elements]
+    items = [i for i in items if i["spec"]["element"]["name"] in elements]
+    content = history(grafana, now)
+    elements["panel-staende"] = _history_element(content)
+    bottom = max((i["spec"].get("y", 0) + i["spec"].get("height", 0) for i in items), default=0)
+    items.append(
+        {
+            "kind": "GridLayoutItem",
+            "spec": {
+                "x": 0,
+                "y": bottom,
+                "width": 24,
+                "height": min(4 + content.count("\n"), 20),
+                "element": {"kind": "ElementReference", "name": "panel-staende"},
+            },
+        }
+    )
+    spec["layout"]["spec"]["items"] = items
     stamp = now.astimezone(TZ)
     spec.update(
-        title=f"Strompreis- und Lastprognose DE-LU · Stand {stamp:%d.%m.%Y %H:%M}",
+        title=f"{TITLE} {stamp:%d.%m.%Y %H:%M}",
         links=[],
         variables=[],
         editable=False,
