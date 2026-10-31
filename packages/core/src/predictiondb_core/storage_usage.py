@@ -79,22 +79,6 @@ META_TABLES = {
 }
 
 
-def month_prefixes(store: ObjectStore, prefix: str) -> list[tuple[date, str]]:
-    """Monatspräfixe ``<prefix>/JJJJ/MM/`` unter einem Gruppenpräfix (zwei Delimiter-Listings)."""
-    out: list[tuple[date, str]] = []
-    years = obstore.list_with_delimiter(store, prefix=prefix + "/")["common_prefixes"]
-    for y in years:
-        y = y.rstrip("/")
-        for m in obstore.list_with_delimiter(store, prefix=y + "/")["common_prefixes"]:
-            m = m.rstrip("/")
-            try:
-                month = date(int(y.rsplit("/", 1)[1]), int(m.rsplit("/", 1)[1]), 1)
-            except ValueError:
-                continue
-            out.append((month, m + "/"))
-    return sorted(out)
-
-
 def list_size(store: ObjectStore, prefix: str) -> tuple[int, int]:
     """Summe der Objektgrößen und Anzahl unter einem Präfix (vollständiges Listing)."""
     size = n = 0
@@ -113,6 +97,43 @@ class Usage:
         self.pending = False
 
     # --- Garage je Monat -----------------------------------------------------------------------
+
+    def _known_months(self, bucket: str, group: Group) -> list[tuple[date, str]]:
+        """Monatspräfixe ``<prefix>/JJJJ/MM/``, in denen laut Datenbank Objekte liegen können.
+
+        Kommt aus den Bestandstabellen der Dienste statt aus Delimiter-Listings: Die brauchen
+        in wx-silver mit über einer Million Objekten mehrere Minuten. Dazu kommen der laufende
+        und vorige Monat sowie alle schon gemessenen Monate (leere fallen beim Listing raus).
+        """
+        if bucket == self.settings.buckets.silver:
+            sql = """SELECT DISTINCT date_trunc('month', r.run_time AT TIME ZONE 'UTC')::date AS m
+                       FROM meta.silver_run r JOIN meta.source s USING (source_id)
+                      WHERE s.code = :q"""
+        else:
+            sql = """SELECT date_trunc('month', r.run_time AT TIME ZONE 'UTC')::date AS m
+                       FROM meta.bronze_run r JOIN meta.source s USING (source_id)
+                      WHERE s.code = :q AND r.status <> 'deleted'
+                     UNION
+                     SELECT date_trunc('month', r.run_time AT TIME ZONE 'UTC')::date
+                       FROM meta.backfill_run r JOIN meta.backfill_job j USING (job_id)
+                       JOIN meta.source s USING (source_id)
+                      WHERE s.code = :q AND r.status IN ('complete', 'skipped', 'running')
+                     UNION
+                     SELECT date_trunc('month', r.run_time AT TIME ZONE 'UTC')::date
+                       FROM meta.silver_run r JOIN meta.source s USING (source_id)
+                      WHERE s.code = :q AND r.origin = 'bronze'"""
+        today = datetime.now(UTC).date().replace(day=1)
+        months = {today, (today - timedelta(days=1)).replace(day=1)}
+        with self.engine.connect() as c:
+            months |= {r.m for r in c.execute(text(sql), {"q": group.source})}
+            months |= {
+                r.month
+                for r in c.execute(
+                    text("SELECT month FROM meta.storage_s3_month WHERE bucket = :b AND grp = :g"),
+                    {"b": bucket, "g": group.name},
+                )
+            }
+        return [(m, f"{group.prefix}/{m:%Y/%m}/") for m in sorted(months)]
 
     def _due_months(
         self, bucket: str, group: Group, months: list[tuple[date, str]], max_age: timedelta
@@ -170,22 +191,15 @@ class Usage:
         früh dran, und laufend geänderte Bronze-Monate (Löschen nach Frist) halten Silber
         nicht auf. ``parallel`` Monate werden gleichzeitig gelistet.
         """
-        deadline = time.monotonic() + budget_s
         never = datetime.min.replace(tzinfo=UTC)
         tasks: list[tuple[int, int, datetime, int, str, Group, date, str]] = []
         stores: dict[str, ObjectStore] = {}
         rank = {self.settings.buckets.silver: 0, self.settings.buckets.bronze: 1}
         for bucket in (self.settings.buckets.silver, self.settings.buckets.bronze):
-            store = stores[bucket] = s3_store(bucket, self.settings)
+            stores[bucket] = s3_store(bucket, self.settings)
             for group in GROUPS:
-                months = month_prefixes(store, group.prefix)
-                with self.engine.begin() as c:
-                    # Monate, die es im Bucket nicht mehr gibt (z. B. Bronze gelöscht)
-                    c.execute(
-                        text("""DELETE FROM meta.storage_s3_month
-                                 WHERE bucket = :b AND grp = :g AND NOT (month = ANY(:m))"""),
-                        {"b": bucket, "g": group.name, "m": [m for m, _ in months]},
-                    )
+                months = self._known_months(bucket, group)
+                with self.engine.connect() as c:
                     scanned = {
                         r.month
                         for r in c.execute(
@@ -202,11 +216,21 @@ class Usage:
                         (first, rank[bucket], last or never, i, bucket, group, month, prefix)
                     )
         tasks.sort(key=lambda t: t[:4])
+        # Das Budget zählt erst ab hier: Die Monatsliste kommt aus der Datenbank
+        deadline = time.monotonic() + budget_s
 
         def work(bucket: str, group: Group, month: date, prefix: str) -> None:
             t0 = time.monotonic()
             size, objects = list_size(stores[bucket], prefix)
             with self.engine.begin() as c:
+                if objects == 0:
+                    # Monat leer (z. B. Bronze nach Frist gelöscht)
+                    c.execute(
+                        text("""DELETE FROM meta.storage_s3_month
+                                 WHERE bucket = :b AND grp = :g AND month = :m"""),
+                        {"b": bucket, "g": group.name, "m": month},
+                    )
+                    return
                 c.execute(
                     text("""
                     INSERT INTO meta.storage_s3_month
