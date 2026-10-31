@@ -7,6 +7,8 @@ Cluster übernimmt ``wx-process`` unverändert; die Gitter-Gewichte und die Leis
 kommen aus dem Modellpaket, also mit der Clusterung des Trainings. Zusammengefasst wird wie in
 ``ml_train.snapshot.WEATHER_SQL``: ``*_power`` als Summe, alles andere nach Clusterleistung
 gewichtet. Je Lauf bleibt eine kleine Parquet-Datei im Cache (``cache/weather``).
+
+@relation(SWA-PRD-WEATHER, scope=file)
 """
 
 from __future__ import annotations
@@ -56,7 +58,10 @@ KEEP_RUNS = 4
 def cluster_weights(
     clusters: pd.DataFrame,
 ) -> tuple[list[ClusterWeights], dict[tuple[str, int], float]]:
-    """Gewichte je Cluster und Clusterleistung (Summe der Zellen) für die Zusammenfassung."""
+    """Gewichte je Cluster und Clusterleistung (Summe der Zellen) für die Zusammenfassung.
+
+    @relation(SWR-PRD-023, scope=function)
+    """
     out = []
     caps: dict[tuple[str, int], float] = {}
     for i, ((tech, no), g) in enumerate(clusters.groupby(["technology", "cluster_no"], sort=True)):
@@ -83,7 +88,10 @@ def technology_features(
     wx_process: dict[str, Any],
 ) -> pd.DataFrame:
     """Features je Technologie in Langform wie im Snapshot (``run_time, valid_time, feature,
-    value``)."""
+    value``).
+
+    @relation(SWR-PRD-023, scope=function)
+    """
     techs = {k: TechnologyFeatures.model_validate(v) for k, v in wx_process["technologies"].items()}
     builder = FeatureBuilder(techs, PvModel.model_validate(wx_process.get("pv") or {}))
     weights, caps = cluster_weights(clusters)
@@ -129,6 +137,8 @@ def technology_features(
 
 
 class WeatherCache:
+    """@relation(SWR-PRD-023, scope=class)"""
+
     def __init__(
         self,
         root: Path,

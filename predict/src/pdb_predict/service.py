@@ -7,6 +7,8 @@ Ausgabe in ``out/`` (Begründung im README):
 - ``archive/<JJJJMMTTThhZ>.json``: jede Ausgabe, ``keep_days`` Tage lang
 
 Dateien werden über eine temporäre Datei ersetzt, damit Leser nie eine halbe Datei sehen.
+
+@relation(SWA-PRD-SERVICE, scope=file)
 """
 
 from __future__ import annotations
@@ -36,7 +38,10 @@ SCHEMA = "predictiondb.forecast.v1"
 
 def needs(pkg: ModelPackage, issue: datetime) -> dict[str, Window]:
     """Zeitfenster je Reihe: Lags 45 Tage, Reihen der ``asof``- und ``outlook``-Gruppen so weit
-    wie nötig."""
+    wie nötig.
+
+    @relation(SWR-PRD-021, scope=function)
+    """
     cfg = pkg.cfg
     end = issue + timedelta(days=max(cfg.issue.lead_days) + 2)
     lag_start = issue - timedelta(days=45)
@@ -63,6 +68,7 @@ def to_document(
     missing: dict[str, str],
     weather_run: datetime | None,
 ) -> dict[str, Any]:
+    """@relation(SWR-PRD-030, SWR-PRD-032, scope=function)"""
     targets: dict[str, list[dict[str, Any]]] = {}
     if not df.empty:
         wide = df.pivot_table(
@@ -99,6 +105,7 @@ def _write(path: Path, data: bytes) -> None:
 
 
 def write_outputs(doc: dict[str, Any], out: Path, keep_days: int) -> Path:
+    """@relation(SWR-PRD-030, scope=function)"""
     body = json.dumps(doc, indent=1, ensure_ascii=False).encode()
     stamp = doc["issue_time"].replace("-", "").replace(":", "")[:12] + "Z"
     archive = out / "archive" / f"{stamp}.json"
@@ -113,6 +120,7 @@ def write_outputs(doc: dict[str, Any], out: Path, keep_days: int) -> Path:
 
 
 def to_csv(doc: dict[str, Any], target: str | None = None) -> str:
+    """@relation(SWR-PRD-030, scope=function)"""
     lines = ["target,valid_time,p10,p50,p90"]
     for t, rows in doc["targets"].items():
         if target and t != target:
@@ -137,6 +145,7 @@ class Predictor:
         self._weather: WeatherCache | None = None
 
     def run(self, issue: datetime | None = None) -> dict[str, Any]:
+        """@relation(SWR-PRD-024, SWR-PRD-020, scope=function)"""
         issue = issue or datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
         pkg = self.package()
         need = needs(pkg, issue)

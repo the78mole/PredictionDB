@@ -10,6 +10,8 @@ Der Cache (``cache/energy/<code>.parquet``) hält Werte in der Auflösung der Qu
 Zeitpunkt). Je Lauf werden nur das Fenster um heute (je nach Art der Reihe einige Tage bis
 Wochen) und fehlende Historie geladen. Die Marktwerte nach EEG rechnet der Dienst wie
 ``pdb_marktwert`` aus den SMARD-Stundenwerten.
+
+@relation(SWA-PRD-ENERGY, scope=file)
 """
 
 from __future__ import annotations
@@ -71,7 +73,10 @@ REFRESH: dict[Kind, timedelta] = {
 
 
 def routes() -> dict[str, list[tuple[str, str]]]:
-    """Reihen-Code -> ``(quelle, datensatz)`` in der Rangfolge von ``energy.value_best``."""
+    """Reihen-Code -> ``(quelle, datensatz)`` in der Rangfolge von ``energy.value_best``.
+
+    @relation(SWR-PRD-020, scope=function)
+    """
     out: dict[str, list[tuple[str, str]]] = {}
 
     def add(code: str, source: str, dataset: str) -> None:
@@ -105,6 +110,7 @@ def is_market_value(code: str) -> bool:
 
 
 def build_sources(http: Http, settings: EnergySettings | None = None) -> dict[str, Source]:
+    """@relation(SWR-PRD-020, scope=function)"""
     s = settings or EnergySettings()
     sources: list[Source] = [
         Smard(http),
@@ -149,6 +155,7 @@ class EnergyCache:
         return pd.read_parquet(p)
 
     def merge(self, code: str, new: pd.DataFrame) -> None:
+        """@relation(SWR-PRD-021, scope=function)"""
         old = self.read(code)
         if new.empty:
             return
@@ -219,7 +226,10 @@ class EnergyCache:
         return got
 
     def update(self, needs: Mapping[str, Window], now: datetime | None = None) -> dict[str, str]:
-        """Lädt fehlende und frische Werte; Ergebnis: Code -> Fehlertext für nicht abrufbare."""
+        """Lädt fehlende und frische Werte; Ergebnis: Code -> Fehlertext für nicht abrufbare.
+
+        @relation(SWR-PRD-020, SWR-PRD-021, scope=function)
+        """
         now = now or datetime.now(UTC)
         errors: dict[str, str] = {}
         plain = {c: w for c, w in needs.items() if not is_market_value(c)}
@@ -309,6 +319,7 @@ class EnergyCache:
         return rows
 
     def _market_value(self, code: str, start: datetime, now: datetime) -> None:
+        """@relation(SWR-PRD-022, scope=function)"""
         months = 1 if code.startswith("mw_") else 12
         periods = [p for p in period_starts(start, now, months) if next_period(p, months) <= now]
         rows = self._hourly([PRICE, *WEIGHTS])
@@ -339,7 +350,10 @@ class EnergyCache:
         return out
 
     def sources_used(self, codes: Iterable[str]) -> dict[str, str]:
-        """Quelle -> Lizenz der Werte, die in die Prognose eingehen."""
+        """Quelle -> Lizenz der Werte, die in die Prognose eingehen.
+
+        @relation(SWR-PRD-032, scope=function)
+        """
         used: dict[str, str] = {}
         for code in codes:
             df = self.read(code)

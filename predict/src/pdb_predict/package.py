@@ -4,6 +4,8 @@ Ein Paket ist ein Ordner mit ``package.json``. Eine OCI-Referenz (``ghcr.io/…:
 als ORAS-Artefakt geholt: jede Schicht ist eine Datei, ihr Name steht in der Annotation
 ``org.opencontainers.image.title``. Öffentliche Pakete in GHCR brauchen keinen Login; das
 Token holt der Dienst anonym über den ``WWW-Authenticate``-Hinweis der Registry.
+
+@relation(SWA-PRD-PACKAGE, scope=file)
 """
 
 from __future__ import annotations
@@ -38,6 +40,8 @@ REF = re.compile(r"^(?:oci://)?(?P<host>[^/]+\.[^/]+)/(?P<name>[^:@]+)(?::(?P<ta
 
 @dataclass
 class ModelPackage:
+    """@relation(SWR-PRD-010, scope=class)"""
+
     path: Path
     info: dict[str, Any]
     cfg: ModelConfig
@@ -80,6 +84,7 @@ class ModelPackage:
 
 
 def load_package(path: Path, source: str = "", digest: str | None = None) -> ModelPackage:
+    """@relation(SWR-PRD-010, scope=function)"""
     info = json.loads((path / "package.json").read_text())
     if info.get("format") != FORMAT:
         raise ValueError(f"{path}: unbekanntes Paketformat {info.get('format')!r}")
@@ -114,7 +119,10 @@ def load_package(path: Path, source: str = "", digest: str | None = None) -> Mod
 
 
 def parse_ref(ref: str) -> tuple[str, str, str] | None:
-    """``(host, name, tag)`` einer OCI-Referenz, ``None`` für einen lokalen Pfad."""
+    """``(host, name, tag)`` einer OCI-Referenz, ``None`` für einen lokalen Pfad.
+
+    @relation(SWR-PRD-011, scope=function)
+    """
     if ref.startswith(("/", ".")):
         return None
     m = REF.match(ref)
@@ -124,7 +132,10 @@ def parse_ref(ref: str) -> tuple[str, str, str] | None:
 
 
 class OciClient:
-    """Minimaler, anonymer Lesezugriff auf eine OCI-Registry (Distribution Spec v2)."""
+    """Minimaler, anonymer Lesezugriff auf eine OCI-Registry (Distribution Spec v2).
+
+    @relation(SWR-PRD-011, scope=class)
+    """
 
     def __init__(self, client: httpx.Client) -> None:
         self.client = client
@@ -179,7 +190,10 @@ class OciClient:
 
 
 class PackageSource:
-    """Hält das aktuelle Paket; wandernde Tags werden alle ``refresh_h`` Stunden neu aufgelöst."""
+    """Hält das aktuelle Paket; wandernde Tags werden alle ``refresh_h`` Stunden neu aufgelöst.
+
+    @relation(SWR-PRD-011, scope=class)
+    """
 
     def __init__(self, ref: str, cache: Path, client: httpx.Client, refresh_h: float) -> None:
         self.ref = ref

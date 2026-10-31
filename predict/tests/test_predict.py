@@ -92,7 +92,7 @@ class FakeSource:
 
 
 def test_package_contents(package: Path) -> None:
-    """@relation(SWR-MLT-070, scope=function)"""
+    """@relation(SWR-MLT-070, SWR-PRD-010, scope=function)"""
     info = json.loads((package / "package.json").read_text())
     assert info["variant"] == "kalender"
     assert not info["requires_weather"]
@@ -105,6 +105,7 @@ def test_package_contents(package: Path) -> None:
 
 
 def test_predict_from_package(package: Path, snap, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-PRD-024, SWR-PRD-030, SWR-PRD-031, SWR-PRD-032, scope=function)"""
     smard = FakeSource("smard", snap.energy)
     cache = EnergyCache(tmp_path, {"smard": smard})
     pkg = load_package(package)
@@ -133,6 +134,7 @@ def test_predict_from_package(package: Path, snap, tmp_path: Path) -> None:  # t
 
 
 def test_fallback_to_next_source(snap, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-PRD-020, scope=function)"""
     smard = FakeSource("smard", snap.energy, broken={"da_price_de_lu"})
     ec = FakeSource("energy_charts", snap.energy)
     cache = EnergyCache(tmp_path, {"smard": smard, "energy_charts": ec})
@@ -143,6 +145,7 @@ def test_fallback_to_next_source(snap, tmp_path: Path) -> None:  # type: ignore[
 
 
 def test_published_keeps_earliest(tmp_path: Path) -> None:
+    """@relation(SWR-PRD-021, scope=function)"""
     cache = EnergyCache(tmp_path, {})
     ts = pd.Timestamp("2026-10-01", tz="UTC")
     early = pd.DataFrame({"ts": [ts], "value": [1.0], "published": [ts], "source": "x"})
@@ -154,6 +157,7 @@ def test_published_keeps_earliest(tmp_path: Path) -> None:
 
 
 def test_market_values_from_hourly(tmp_path: Path) -> None:
+    """@relation(SWR-PRD-022, scope=function)"""
     hours = pd.date_range("2025-01-01", "2026-10-01", freq="h", tz="UTC", inclusive="left")
     rng = np.random.default_rng(1)
     energy = pd.concat(
@@ -177,6 +181,7 @@ def test_market_values_from_hourly(tmp_path: Path) -> None:
 
 
 def test_weather_features_per_technology() -> None:
+    """@relation(SWR-PRD-023, scope=function)"""
     lat, lon = grid()
     steps = list(range(0, 7))
     decoded = {s: decode_step(make_step(s, lat, lon), s) for s in steps}
@@ -214,6 +219,7 @@ def test_weather_features_per_technology() -> None:
 
 
 def test_oci_pull_and_refresh(package: Path, tmp_path: Path) -> None:
+    """@relation(SWR-PRD-011, scope=function)"""
     files = {f.name: f.read_bytes() for f in package.iterdir()}
     blobs = {"sha256:" + hashlib.sha256(b).hexdigest(): b for b in files.values()}
     layers: list[dict[str, Any]] = [
@@ -264,6 +270,7 @@ def test_oci_pull_and_refresh(package: Path, tmp_path: Path) -> None:
 
 
 def test_next_slot() -> None:
+    """@relation(SWR-PRD-003, scope=function)"""
     now = datetime(2026, 10, 24, 18, 25, tzinfo=UTC)
     assert next_slot(now, 60, 20) == datetime(2026, 10, 24, 19, 20, tzinfo=UTC)
     assert next_slot(now.replace(minute=5), 60, 20) == datetime(2026, 10, 24, 18, 20, tzinfo=UTC)

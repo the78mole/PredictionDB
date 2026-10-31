@@ -2,6 +2,8 @@
 
 Schlüssel braucht der Dienst keine. ``PDB_EIA_API_KEY`` ist optional: Ohne ihn lädt die
 EIA-Quelle die Bulk-Dateien (rund 60 MB, alle sechs Stunden).
+
+@relation(SWA-PRD-SETTINGS, scope=file)
 """
 
 from __future__ import annotations
@@ -13,6 +15,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class PredictSettings(BaseSettings):
+    """@relation(SWR-PRD-002, scope=class)"""
+
     model_config = SettingsConfigDict(
         env_prefix="PDB_PREDICT_", env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )

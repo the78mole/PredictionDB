@@ -10,6 +10,8 @@
 
 Die Schnittstelle liest bei jeder Anfrage ``latest.json``; der Prognoselauf ersetzt die Datei
 atomar. So bleiben Datei und HTTP immer gleich, und ein Neustart verliert nichts.
+
+@relation(SWA-PRD-SERVER, scope=file)
 """
 
 from __future__ import annotations
@@ -26,6 +28,8 @@ from pdb_predict.service import to_csv
 
 
 class Api:
+    """@relation(SWR-PRD-031, scope=class)"""
+
     def __init__(self, out: Path, stale_after_h: float) -> None:
         self.out = out
         self.stale = timedelta(hours=stale_after_h)
@@ -86,7 +90,10 @@ def _json(status: int, body: Any) -> tuple[int, str, bytes]:
 
 
 def serve(api: Api, host: str, port: int) -> ThreadingHTTPServer:
-    """Startet den Server in einem Hintergrund-Thread und gibt ihn zurück."""
+    """Startet den Server in einem Hintergrund-Thread und gibt ihn zurück.
+
+    @relation(SWR-PRD-031, scope=function)
+    """
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
