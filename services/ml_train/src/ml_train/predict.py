@@ -13,6 +13,8 @@ Kommt eine Version neu hinzu (``--fill-new``), rechnet sie rückwirkend die Ausg
 der Vergleichsgrafiken (08 UTC, 10 Uhr Ortszeit) im Fenster nach. Sie erscheint so sofort neben
 Champion und Challengern, mit demselben Veröffentlichungsstand der Eingänge wie diese, und mit
 einem Fenster von acht Tagen zeigt sie für gestern alle Vorlauftage D+1 bis D+7.
+
+@relation(SWA-MLT-PREDICT, scope=file)
 """
 
 from __future__ import annotations
@@ -55,7 +57,10 @@ def lookback_days(cfg: ModelConfig, variant: Variant) -> int:
 
 
 def due_issues(now: pd.Timestamp, last: pd.Timestamp | None, catch_up_h: int) -> list[pd.Timestamp]:
-    """Volle Stunden seit ``last`` bis ``now``, höchstens ``catch_up_h`` Stunden zurück."""
+    """Volle Stunden seit ``last`` bis ``now``, höchstens ``catch_up_h`` Stunden zurück.
+
+    @relation(SWR-MLT-061, scope=function)
+    """
     cur = now.floor("h")
     first = cur if last is None else last + pd.Timedelta(hours=1)
     first = max(first, cur - pd.Timedelta(hours=catch_up_h))
@@ -63,13 +68,19 @@ def due_issues(now: pd.Timestamp, last: pd.Timestamp | None, catch_up_h: int) ->
 
 
 def next_wake(now: pd.Timestamp, every_s: int, delay_s: int = 60) -> pd.Timestamp:
-    """Nächster Weckzeitpunkt auf dem Raster ``every_s`` (ab Epoche) plus ``delay_s``."""
+    """Nächster Weckzeitpunkt auf dem Raster ``every_s`` (ab Epoche) plus ``delay_s``.
+
+    @relation(SWR-MLT-061, scope=function)
+    """
     step = pd.Timedelta(seconds=every_s)
     return (now - pd.Timedelta(seconds=delay_s)).floor(step) + step + pd.Timedelta(seconds=delay_s)
 
 
 def last_issue(engine: Engine, versions: list[str]) -> pd.Timestamp | None:
-    """Jüngster bereits geschriebener Ausgabezeitpunkt dieser Versionen."""
+    """Jüngster bereits geschriebener Ausgabezeitpunkt dieser Versionen.
+
+    @relation(SWR-MLT-061, scope=function)
+    """
     with engine.connect() as c:
         t = c.execute(
             text("SELECT max(issue_time) FROM fcst.prediction WHERE model_version = ANY(:v)"),
@@ -86,7 +97,10 @@ OWN_ISSUES = text("""
 def missing_compare_issues(
     engine: Engine, version: str, since: pd.Timestamp, until: pd.Timestamp
 ) -> list[pd.Timestamp]:
-    """Ausgabezeitpunkte der Vergleichsgrafiken im Fenster, die ``version`` noch nicht hat."""
+    """Ausgabezeitpunkte der Vergleichsgrafiken im Fenster, die ``version`` noch nicht hat.
+
+    @relation(SWR-MLT-062, scope=function)
+    """
     with engine.connect() as c:
         rows = c.execute(
             OWN_ISSUES,
@@ -99,12 +113,18 @@ def missing_compare_issues(
 
 def compare_issue(issue: pd.Timestamp) -> bool:
     """Ausgabezeitpunkt, den die Vergleichsgrafiken zeigen: 08 UTC (Fehler D+1, Tabelle) oder
-    10 Uhr Ortszeit (Vortag 10 Uhr, zeitgleich mit der ÜNB-Prognose)."""
+    10 Uhr Ortszeit (Vortag 10 Uhr, zeitgleich mit der ÜNB-Prognose).
+
+    @relation(SWR-MLT-062, scope=function)
+    """
     return bool(issue.hour == 8 or issue.tz_convert("Europe/Berlin").hour == 10)
 
 
 def needs_weather(cfg: ModelConfig, registry: Registry, versions: list[str]) -> bool:
-    """Ob eine der Versionen Wetter braucht (sonst bleibt der langsame Wetterteil weg)."""
+    """Ob eine der Versionen Wetter braucht (sonst bleibt der langsame Wetterteil weg).
+
+    @relation(SWR-MLT-063, scope=function)
+    """
     for version in versions:
         try:
             if cfg.variant(registry.manifest(version)["variant"]["name"]).requires_weather:
@@ -116,7 +136,10 @@ def needs_weather(cfg: ModelConfig, registry: Registry, versions: list[str]) -> 
 
 def by_issue(missing: dict[str, list[pd.Timestamp]]) -> dict[pd.Timestamp, list[str]]:
     """Fehlende Ausgabezeitpunkte je Version zu Versionen je Ausgabezeitpunkt (aufsteigend),
-    damit jeder Zeitpunkt nur einen Snapshot braucht."""
+    damit jeder Zeitpunkt nur einen Snapshot braucht.
+
+    @relation(SWR-MLT-060, scope=function)
+    """
     out: dict[pd.Timestamp, list[str]] = {}
     for version, issues in missing.items():
         for issue in issues:
@@ -128,7 +151,10 @@ def live_snapshot(
     engine: Engine, cfg: ModelConfig, issue: pd.Timestamp, *, weather: bool = True
 ) -> Snapshot:
     """Kleiner Snapshot um ``issue``. Wetterläufe nur bis zum Ausgabezeitpunkt: spätere
-    nutzt die Merkmalsbildung ohnehin nicht, beim Nachrechnen gibt es sie aber schon."""
+    nutzt die Merkmalsbildung ohnehin nicht, beim Nachrechnen gibt es sie aber schon.
+
+    @relation(SWR-MLT-063, scope=function)
+    """
     codes = list(dict.fromkeys(cfg.targets + cfg.lag_series + cfg.series_codes))
     back = max(lookback_days(cfg, v) for v in cfg.variants)
     start = (issue - timedelta(days=back)).to_pydatetime()
@@ -152,6 +178,8 @@ def predict_model(
 
     Fehlt eine Merkmalsspalte ganz (Reihe zum Ausgabezeitpunkt nicht abrufbar), bleibt sie leer;
     LightGBM behandelt das wie im Training als fehlenden Wert.
+
+    @relation(SWR-MLT-063, scope=function)
     """
     # nur die Vorlauftage, die die Version gelernt hat (ältere Versionen ohne Resttag D+0)
     f = frame.subset(frame.meta["lead_day"].isin(model.lead_days).to_numpy())
@@ -214,7 +242,10 @@ def predict_versions(
     issue: pd.Timestamp,
     cache: Path,
 ) -> pd.DataFrame:
-    """Prognosen in Langform: ``model_version, target, issue_time, valid_time, quantile, value``."""
+    """Prognosen in Langform: ``model_version, target, issue_time, valid_time, quantile, value``.
+
+    @relation(SWR-MLT-060, scope=function)
+    """
     fb = FeatureBuilder(snap, cfg)
     frame = fb.build_at([issue])
     parts = [
@@ -232,6 +263,7 @@ UPSERT = text("""
 
 
 def write_predictions(engine: Engine, df: pd.DataFrame) -> int:
+    """@relation(SWR-MLT-060, scope=function)"""
     if df.empty:
         return 0
     recs = df.assign(

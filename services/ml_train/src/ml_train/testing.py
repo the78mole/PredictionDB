@@ -4,6 +4,8 @@ Die Last folgt Tagesgang, Wochenende, Feiertagen und Temperatur, Wind und PV hä
 Wetterreihen und wachsendem Bestand, der Preis an der Residuallast. Wetterläufe (00Z) haben
 GFS-Schritte (stündlich bis 120 h, dann dreistündlich) und einen mit dem Vorlauf wachsenden
 Fehler.
+
+@relation(SWA-MLT-TESTING, scope=file)
 """
 
 from __future__ import annotations

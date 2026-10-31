@@ -3,6 +3,8 @@
 Feiertage zählen als Anteil der Bevölkerung, für die der Tag ein Feiertag ist (gesetzliche
 Feiertage je Land aus dem Paket ``holidays``, Bevölkerung 2023 nach Destatis, gerundet).
 Brückentage sind Werktage zwischen einem Feiertag und dem Wochenende. Schulferien fehlen noch.
+
+@relation(SWA-MLT-CALENDAR, scope=file)
 """
 
 from __future__ import annotations
@@ -63,6 +65,7 @@ def _holiday_share_year(year: int) -> dict[date, float]:
 
 
 def holiday_share(days: pd.DatetimeIndex) -> np.ndarray:
+    """@relation(SWR-MLT-024, scope=function)"""
     out = np.zeros(len(days))
     for i, d in enumerate(days.date):
         out[i] = _holiday_share_year(d.year).get(d, 0.0)
@@ -70,7 +73,10 @@ def holiday_share(days: pd.DatetimeIndex) -> np.ndarray:
 
 
 def daily_calendar(start: date, end: date) -> pd.DataFrame:
-    """Tagesmerkmale von ``start`` bis ``end`` (je einschließlich), Index Ortsdatum."""
+    """Tagesmerkmale von ``start`` bis ``end`` (je einschließlich), Index Ortsdatum.
+
+    @relation(SWR-MLT-024, scope=function)
+    """
     days = pd.date_range(start - timedelta(days=3), end + timedelta(days=3), freq="D")
     hs = holiday_share(days)
     dow = days.dayofweek.to_numpy()
@@ -96,7 +102,10 @@ def daily_calendar(start: date, end: date) -> pd.DataFrame:
 
 
 def calendar_features(ts_utc: pd.DatetimeIndex | pd.Series) -> pd.DataFrame:
-    """Merkmale je Zeitpunkt (UTC, Stundenbeginn); Ergebnis in derselben Reihenfolge."""
+    """Merkmale je Zeitpunkt (UTC, Stundenbeginn); Ergebnis in derselben Reihenfolge.
+
+    @relation(SWR-MLT-024, scope=function)
+    """
     idx = pd.DatetimeIndex(ts_utc)
     local = idx.tz_convert(BERLIN)
     local_days = pd.DatetimeIndex(local.normalize().tz_localize(None))

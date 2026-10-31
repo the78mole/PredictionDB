@@ -3,6 +3,8 @@
 Die Registry-Dateien bleiben die Quelle; der Spiegel wird bei jedem Abgleich aus ihnen neu
 geschrieben. Backtest-Kennzahlen entstehen einmal je Version aus ``backtest.parquet`` (eine
 Version ändert sich nach dem Ablegen nicht mehr).
+
+@relation(SWA-MLT-DBSYNC, scope=file)
 """
 
 from __future__ import annotations
@@ -62,6 +64,7 @@ def _day(s: Any) -> date | None:
 
 
 def version_row(version: str, role: str, man: dict[str, Any], config: str) -> dict[str, Any]:
+    """@relation(SWR-MLT-053, scope=function)"""
     days = man.get("train_issue_days") or [None, None]
     return {
         "version": version,
@@ -82,7 +85,10 @@ def version_row(version: str, role: str, man: dict[str, Any], config: str) -> di
 
 def metric_rows(version: str, bt: pd.DataFrame) -> list[dict[str, Any]]:
     """Kennzahlen je Ziel und Vorlauftag sowie über alle Vorlauftage (``lead_day`` -1; 0 ist
-    der Rest des Ausgabetags)."""
+    der Rest des Ausgabetags).
+
+    @relation(SWR-MLT-053, scope=function)
+    """
     ctx = add_context(bt)
     parts = [score(ctx, ["target", "lead_day"]), score(ctx, ["target"]).assign(lead_day=-1)]
     m = pd.concat(parts, ignore_index=True)
@@ -101,7 +107,10 @@ def metric_rows(version: str, bt: pd.DataFrame) -> list[dict[str, Any]]:
 
 
 def sync_registry(engine: Engine, registry: Registry) -> int:
-    """Schreibt Versionen, Rollen, Verlauf und Kennzahlen; gibt die Zahl der Versionen zurück."""
+    """Schreibt Versionen, Rollen, Verlauf und Kennzahlen; gibt die Zahl der Versionen zurück.
+
+    @relation(SWR-MLT-053, scope=function)
+    """
     st = registry.state()
     config = registry.cfg.name
     by_role = roles(st)

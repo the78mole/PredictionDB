@@ -13,6 +13,8 @@ Beispiele::
     ml-train predict                                           # aktive Versionen, jetzt
     ml-train predict --watch 3600 --catch-up 24                # stündlich, Lücken nachholen
     ml-train bundle de_lu_v2-frei-202610241200-ab12cd --out /data/pakete/de_lu_v2-frei
+
+@relation(SWA-MLT-CLI, scope=file)
 """
 
 from __future__ import annotations
@@ -66,6 +68,7 @@ def git_commit() -> str | None:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """@relation(SWR-MLT-001, scope=function)"""
     p = argparse.ArgumentParser(prog="ml-train", description="Last- und Preisprognose DE-LU")
     p.add_argument("-v", "--verbose", action="store_true")
     p.add_argument("--config", default=DEFAULT_CONFIG, help="Modellkonfiguration (YAML)")
@@ -155,6 +158,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def cmd_snapshot(cfg: ModelConfig, a: argparse.Namespace, job: JobLog) -> int:
+    """@relation(SWR-MLT-010, scope=function)"""
     from predictiondb_core.db import create_db_engine
 
     end = a.end or (datetime.now(UTC).date() + timedelta(days=2))
@@ -210,6 +214,7 @@ def write_backtest(res: BacktestResult, cfg: ModelConfig, out: Path, extra: dict
 
 
 def cmd_backtest(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: JobLog) -> int:
+    """@relation(SWR-MLT-040, scope=function)"""
     if a.test_from:
         cfg.backtest.test_from = a.test_from
     if a.test_to:
@@ -236,6 +241,7 @@ def cmd_backtest(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: Job
 
 
 def cmd_fit(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: JobLog) -> int:
+    """@relation(SWR-MLT-050, scope=function)"""
     v = cfg.variant(a.variant)
     model = TwoStageModel(cfg, v)
     # Schritte: Snapshot laden, Merkmale, Training je Stufe und Ziel, Registrieren
@@ -288,7 +294,10 @@ def backtest_for(folder: Path, variant: str) -> tuple[pd.DataFrame, dict[str, An
 
 
 def try_sync(reg: Registry, engine: Engine | None = None) -> None:
-    """Spiegel aktualisieren, wo eine Datenbank erreichbar ist (Training läuft auch ohne)."""
+    """Spiegel aktualisieren, wo eine Datenbank erreichbar ist (Training läuft auch ohne).
+
+    @relation(SWR-MLT-053, scope=function)
+    """
     from ml_train.dbsync import sync_registry
     from predictiondb_core.db import create_db_engine
 
@@ -299,6 +308,7 @@ def try_sync(reg: Registry, engine: Engine | None = None) -> None:
 
 
 def cmd_registry(cfg: ModelConfig, a: argparse.Namespace) -> int:
+    """@relation(SWR-MLT-051, SWR-MLT-052, SWR-MLT-053, scope=function)"""
     reg = Registry(a.registry, cfg)
     if a.action == "sync":
         from ml_train.dbsync import sync_registry
@@ -332,6 +342,7 @@ def cmd_registry(cfg: ModelConfig, a: argparse.Namespace) -> int:
 
 
 def cmd_predict(cfg: ModelConfig, a: argparse.Namespace) -> int:
+    """@relation(SWR-MLT-060, SWR-MLT-061, scope=function)"""
     from ml_train.predict import (
         due_issues,
         last_issue,
@@ -407,7 +418,10 @@ def fill_new(
     hours: int,
 ) -> None:
     """Neue Versionen einer Linie rechnen die Ausgabezeitpunkte der Vergleichsgrafiken nach
-    (08 UTC und 10 Uhr Ortszeit), die ihnen im Fenster fehlen."""
+    (08 UTC und 10 Uhr Ortszeit), die ihnen im Fenster fehlen.
+
+    @relation(SWR-MLT-062, scope=function)
+    """
     from ml_train.predict import (
         by_issue,
         live_snapshot,
@@ -435,6 +449,7 @@ def fill_new(
 
 
 def cmd_bundle(cfg: ModelConfig, a: argparse.Namespace) -> int:
+    """@relation(SWR-MLT-070, scope=function)"""
     from ml_train.bundle import export_package
 
     reg = Registry(a.registry, cfg)
@@ -453,11 +468,15 @@ def cmd_bundle(cfg: ModelConfig, a: argparse.Namespace) -> int:
 
 
 def _terminate(signum: int, _: object) -> None:
+    """@relation(SWR-MLT-003, scope=function)"""
     raise SystemExit(128 + signum)
 
 
 def run_job(cfg: ModelConfig, sha: str, a: argparse.Namespace) -> int:
-    """Snapshot, Backtest oder Training mit Fortschritt in ``meta.ml_job``."""
+    """Snapshot, Backtest oder Training mit Fortschritt in ``meta.ml_job``.
+
+    @relation(SWR-MLT-003, scope=function)
+    """
     # nur der Eintrag des laufenden Befehls: snapshot hat kein --variant
     variants: list[str] = []
     if a.cmd == "backtest":
@@ -488,6 +507,7 @@ def run_job(cfg: ModelConfig, sha: str, a: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """@relation(SWR-MLT-001, scope=function)"""
     a = build_parser().parse_args(argv)
     configure_logging()
     cfg, sha = load_config(a.config)

@@ -1,0 +1,456 @@
+[DOCUMENT]
+TITLE: Softwareanforderungen ml-train (SRS)
+PREFIX: SWR-MLT-
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @anforderung
+
+[TEXT]
+STATEMENT: >>>
+Softwareanforderungen nach ISO/IEC/IEEE 29148 an das Softwareelement SYSA-SW-MLT
+(``services/ml_train``). Der Dienst exportiert Trainings-Snapshots, bildet Merkmale streng mit
+dem Wissen zum Ausgabezeitpunkt, trainiert zweistufige Quantilmodelle (LightGBM) für Netzlast
+DE und Day-Ahead-Preis DE-LU, rechnet sie rollierend zurück, verwaltet Versionen mit
+Champion/Challenger und schreibt die Prognosen aller aktiven Versionen nach ``fcst.prediction``.
+<<<
+
+[[SECTION]]
+TITLE: Steuerung und Konfiguration
+
+[REQUIREMENT]
+UID: SWR-MLT-001
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Inspektion, Demonstration
+TITLE: Befehle
+STATEMENT: >>>
+Der Dienst muss die Befehle ``snapshot``, ``backtest``, ``fit``, ``registry`` (``list``,
+``sync``, ``evaluate``, ``promote``, ``attach-backtest``), ``predict`` und ``bundle``
+bereitstellen. ``predict`` muss mit ``--watch`` dauerhaft laufen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-TR-001
+- TYPE: Parent
+  VALUE: SYSR-PR-002
+
+[REQUIREMENT]
+UID: SWR-MLT-002
+ART: Randbedingung
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Modellkonfiguration
+STATEMENT: >>>
+Ausgabe, Ziele, Stufen, Merkmalsgruppen, Varianten, LightGBM-Parameter, Backtest,
+Kalibrierung und Freigaberegel müssen aus ``config/ml/*.yaml`` kommen und beim Laden geprüft
+werden; unbekannte Merkmalsgruppen sind ein Fehler. Datenbank, S3, Registry und Cache kommen aus
+Variablen mit Präfix ``PDB_``.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-QA-003
+
+[REQUIREMENT]
+UID: SWR-MLT-003
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Fortschritt laufender Jobs
+STATEMENT: >>>
+``snapshot``, ``backtest`` und ``fit`` müssen sich in ``meta.ml_job`` eintragen, jeden Schritt
+mit Zählerstand melden und je Minute ein Lebenszeichen schreiben. SIGTERM wird als Fehler
+eingetragen, Jobs ohne Lebenszeichen seit 15 Minuten markiert der nächste Start als abgebrochen.
+Ohne Datenbank laufen die Befehle unverändert.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-OPS-003
+- TYPE: Parent
+  VALUE: SYSR-OPS-005
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Snapshot
+
+[REQUIREMENT]
+UID: SWR-MLT-010
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Trainings-Snapshot
+STATEMENT: >>>
+``snapshot`` muss Energiereihen aus ``energy.value_best``, Wetter-Features aus
+``feat.nwp_value`` und den Bestand aus ``assets.capacity_daily`` für einen Zeitraum als Parquet
+mit ``manifest.json`` (Inhalt, Hash) exportieren. Backtest und Training dürfen nur den Snapshot
+brauchen; beim Laden muss der Hash geprüft werden.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-TR-001
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Merkmale
+
+[REQUIREMENT]
+UID: SWR-MLT-020
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Ausgabe und Liefertage
+STATEMENT: >>>
+Ziele müssen ganze Liefertage in Ortszeit sein (23 bis 25 Stunden). Ausgegeben wird je Tag zur
+konfigurierten Stunde (Vorgabe 08 UTC, vor dem Gebotsschluss); mit mehreren Trainingsstunden
+reihum nach Datum, jeweils mit dem Rest des Ausgabetags.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-001
+
+[REQUIREMENT]
+UID: SWR-MLT-021
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Nur bekannte Messwerte
+STATEMENT: >>>
+Merkmale dürfen nur Werte nutzen, die zum Ausgabezeitpunkt veröffentlicht waren: Ist-Werte ab
+Intervallende + 2 h, Preise eines Liefertags ab 13 Uhr am Vortag, höchstens bis zum Ende der
+vorhandenen Daten; für Merkmalsgruppen gilt der Veröffentlichungszeitpunkt je Wert.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-003
+
+[REQUIREMENT]
+UID: SWR-MLT-022
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Nur verfügbare Wetterläufe
+STATEMENT: >>>
+Je Ausgabezeitpunkt muss der jüngste Wetterlauf mit ``run_time`` + 6 h ≤ Ausgabezeitpunkt
+genutzt werden.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-003
+
+[REQUIREMENT]
+UID: SWR-MLT-023
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Wetter auf Stunden ausrichten
+STATEMENT: >>>
+Wetter-Features müssen auf Energiestunden ausgerichtet werden: Momentanwerte linear,
+Intervallwerte über ihr Intervall verteilt; aufgefüllte Stunden (dreistündliche Schritte ab
+120 h) werden mit ``wx_interp`` markiert. Die GFS-Hauptversion je Lauf ist ein Merkmal.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-001
+
+[REQUIREMENT]
+UID: SWR-MLT-024
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Kalendermerkmale
+STATEMENT: >>>
+Der Dienst muss je Stunde Kalendermerkmale in Ortszeit bilden: Stunde, Wochentag,
+Feiertagsanteil nach Bevölkerung der Länder, Brückentage, Weihnachten, Sommerzeit, Tageslänge.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-001
+
+[REQUIREMENT]
+UID: SWR-MLT-025
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Lags in Ortszeit
+STATEMENT: >>>
+Lags auf Vortag und Vorwoche müssen über die Zeitumstellung dieselbe Ortsuhrzeit treffen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-001
+
+[REQUIREMENT]
+UID: SWR-MLT-026
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Merkmalsgruppen
+STATEMENT: >>>
+Weitere freie Reihen müssen als Merkmalsgruppen konfigurierbar sein (Nachbarpreise,
+ÜNB-Lastprognose nur für D+1 und erst nach ihrer Veröffentlichung, Brennstoffe, Marktwerte,
+Preisniveau, Erwartung aus der jüngsten STEO-Ausgabe, Grenzkostenindex aus SMARD) und in Training
+und Inferenz gleich gebildet werden.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-001
+- TYPE: Parent
+  VALUE: SYSR-PR-003
+
+[REQUIREMENT]
+UID: SWR-MLT-027
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Normierte Ziele
+STATEMENT: >>>
+Wind und PV müssen als Kapazitätsfaktor (geteilt durch die installierte Leistung) gelernt
+werden, der Preis relativ zum Tagesmittel des letzten bekannten Liefertags bzw. mit ``scale``
+relativ zum Preisniveau; die Prognose wird zurückgerechnet.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-001
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Modell
+
+[REQUIREMENT]
+UID: SWR-MLT-030
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Zweistufiges Quantilmodell
+STATEMENT: >>>
+Eine Variante muss in Stufe 1 Last, Wind an Land, Wind auf See und PV und in Stufe 2 den Preis
+als Quantile P10, P50 und P90 je Stunde für D+1 bis D+7 lernen. Stufe 2 erhält P50 und
+Residuallast aus Stufe 1, im Training out-of-fold aus zeitlich zusammenhängenden Blöcken.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-001
+
+[REQUIREMENT]
+UID: SWR-MLT-031
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Kalibrierung je Vorlauftag
+STATEMENT: >>>
+Die äußeren Quantile müssen je Ziel und Vorlauftag auf zurückgehaltenen letzten Monaten so
+verschoben werden, dass ihre Abdeckung dem Sollwert entspricht.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-001
+
+[REQUIREMENT]
+UID: SWR-MLT-032
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Unvollständige Zeilen
+STATEMENT: >>>
+Zielstunden ohne nötige Merkmale dürfen keine Prognose erhalten.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-001
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Backtest
+
+[REQUIREMENT]
+UID: SWR-MLT-040
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Rollierender Backtest
+STATEMENT: >>>
+``backtest`` muss jede Variante in Faltungen mit wachsendem Trainingsfenster zurückrechnen
+(Monate je Faltung, Ausgabestunde und Schrittweite einstellbar) und gegen Vortag, Vorwoche und
+die Prognosen der Netzbetreiber stellen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-004
+
+[REQUIREMENT]
+UID: SWR-MLT-041
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Gütemaße
+STATEMENT: >>>
+Der Backtest muss MAE, RMSE, Bias, Pinball-Loss und Abdeckung P10–P90 je Ziel, Vorlauftag und
+Jahreszeit auf den gemeinsamen Zeilen aller Verfahren ausgeben, dazu die Rangkorrelation der
+Stunden je Liefertag.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-004
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Registry
+
+[REQUIREMENT]
+UID: SWR-MLT-050
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Versionen in der Registry
+STATEMENT: >>>
+``fit`` muss eine Variante mit allen Daten trainieren und als Version in der Registry
+(``PDB_ML_REGISTRY``, Ordner oder ``s3://``) ablegen: Modelle, ``manifest.json`` mit Konfig-Hash,
+Snapshot-ID, Git-Commit, Laufzeiten und Backtest-Kennzahlen, Backtest-Prognosen. Rollen sind
+``champion``, ``challengers``, ``baseline`` und ``previous``.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-TR-002
+- TYPE: Parent
+  VALUE: SYSR-PUB-003
+
+[REQUIREMENT]
+UID: SWR-MLT-051
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Champion/Challenger
+STATEMENT: >>>
+``promote`` darf einen Challenger nur zum Champion machen, wenn er auf den gemeinsamen
+Backtest-Zeilen je Ziel im Mittel (Pinball über P10/P50/P90) besser ist und in keiner Gruppe aus
+Ziel, Vorlauftag und Jahreszeit mit mindestens 200 Werten mehr als 5 % schlechter; ``--force``
+übergeht die Prüfung.
+<<<
+QUELLE: ARCHITEKTUR.md 7.7
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-TR-002
+
+[REQUIREMENT]
+UID: SWR-MLT-052
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Backtest nachreichen
+STATEMENT: >>>
+``registry attach-backtest`` muss die Prognosen eines Backtests derselben Konfiguration und
+Variante zu einer registrierten Version legen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-TR-002
+
+[REQUIREMENT]
+UID: SWR-MLT-053
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Spiegel in der Datenbank
+STATEMENT: >>>
+Versionen mit Rolle, Verlauf und Backtest-Kennzahlen je Ziel und Vorlauftag müssen nach
+``meta.model_version``, ``meta.model_event`` und ``meta.model_metric`` gespiegelt werden; ``fit``,
+``promote`` und ``predict`` gleichen selbst ab. Ohne Datenbank wird der Abgleich übersprungen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-OPS-003
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Inferenz
+
+[REQUIREMENT]
+UID: SWR-MLT-060
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Alle aktiven Versionen
+STATEMENT: >>>
+``predict`` muss je Ausgabezeitpunkt alle aktiven Versionen (auch weiterer Konfigurationen mit
+``--also-config``) inferieren und nach ``fcst.prediction`` mit eigenem ``model_version``
+schreiben.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-002
+- TYPE: Parent
+  VALUE: SYSR-TR-002
+
+[REQUIREMENT]
+UID: SWR-MLT-061
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Stündlich mit Nachholen
+STATEMENT: >>>
+Im Dauerbetrieb muss ``predict`` zu jeder vollen Stunde laufen und verpasste volle Stunden bis
+``--catch-up`` Stunden zurück nachholen, auch nach einem Neustart.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-002
+- TYPE: Parent
+  VALUE: SYSR-OPS-001
+
+[REQUIREMENT]
+UID: SWR-MLT-062
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Neue Versionen sofort vergleichbar
+STATEMENT: >>>
+Mit ``--fill-new`` muss ``predict`` für neu aktive Versionen die Ausgabezeitpunkte der
+Vergleichsgrafiken im angegebenen Fenster nachrechnen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-002
+
+[REQUIREMENT]
+UID: SWR-MLT-063
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Eingänge der Inferenz
+STATEMENT: >>>
+Die Inferenz muss Eingänge nur bis zum Ausgabezeitpunkt lesen, Wetter nur laden, wenn eine
+Version es braucht, und eine Version auslassen, wenn ihr nötiger Wetterlauf fehlt.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-002
+- TYPE: Parent
+  VALUE: SYSR-PR-003
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Veröffentlichung
+
+[REQUIREMENT]
+UID: SWR-MLT-070
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Prognosepaket
+STATEMENT: >>>
+``bundle`` muss für eine Version ein Paket mit Modellen, Konfiguration, benötigten
+Energiereihen, Bestand und Gitter-Gewichten der Cluster schreiben, mit dem der Stack
+``predict/`` ohne Datenbank inferieren kann.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-004
+
+[[/SECTION]]
+

@@ -15,6 +15,8 @@ Modell Abweichungen relativ zum Brennstoff- und CO2-Niveau statt in EUR/MWh.
 Mit ``calibration.months`` werden die äußeren Quantile je Vorlauftag nachkalibriert
 (``CalibrationConfig``): Quantil-Bäume sind auf den Trainingsdaten zu sicher, das Band P10-P90
 enthielt im Backtest nur 55-70 % statt 80 % der Ist-Werte.
+
+@relation(SWA-MLT-MODELS, scope=file)
 """
 
 from __future__ import annotations
@@ -57,6 +59,8 @@ def qname(q: float) -> str:
 
 @dataclass
 class QuantileModel:
+    """@relation(SWR-MLT-030, scope=class)"""
+
     target: str
     quantiles: list[float]
     features: list[str]
@@ -118,7 +122,10 @@ class QuantileModel:
         self, X: pd.DataFrame, y: pd.Series | np.ndarray, cal: CalibrationConfig
     ) -> dict[int, dict[str, float]]:
         """Verschiebung je Vorlauftag, damit jedes äußere Quantil q auf ``X``/``y`` (Daten, die
-        dieses Modell nicht gesehen hat) wirklich den Anteil q der Ist-Werte unterschreitet."""
+        dieses Modell nicht gesehen hat) wirklich den Anteil q der Ist-Werte unterschreitet.
+
+        @relation(SWR-MLT-031, scope=function)
+        """
         r = (np.asarray(y, dtype=np.float64) - self._offset(X)) / self._scale(X)
         raw = self._raw(X)
         ok = np.isfinite(r) & np.isfinite(raw).all(axis=1)
@@ -176,7 +183,10 @@ class QuantileModel:
 
 
 def blocked_folds(issue_times: pd.Series, k: int) -> np.ndarray:
-    """Blocknummer 0..k-1 je Zeile nach Ausgabezeitpunkt (zeitlich zusammenhängend)."""
+    """Blocknummer 0..k-1 je Zeile nach Ausgabezeitpunkt (zeitlich zusammenhängend).
+
+    @relation(SWR-MLT-030, scope=function)
+    """
     uniq = np.sort(issue_times.unique())
     edges = np.array_split(np.arange(len(uniq)), k)
     block = {}
@@ -188,7 +198,10 @@ def blocked_folds(issue_times: pd.Series, k: int) -> np.ndarray:
 
 
 class TwoStageModel:
-    """Eine Modellvariante: Stufe-1- und Stufe-2-Modelle mit gemeinsamer Merkmalsauswahl."""
+    """Eine Modellvariante: Stufe-1- und Stufe-2-Modelle mit gemeinsamer Merkmalsauswahl.
+
+    @relation(SWR-MLT-030, scope=class)
+    """
 
     def __init__(self, cfg: ModelConfig, variant: Variant) -> None:
         self.cfg = cfg
@@ -217,6 +230,7 @@ class TwoStageModel:
         )
 
     def _scale_column(self, t: StageTarget, frame: FeatureFrame) -> str | None:
+        """@relation(SWR-MLT-027, scope=function)"""
         col = self.variant.scale.get(t.code)
         if col is not None and col not in frame.X.columns:
             raise ValueError(f"Variante {self.variant.name!r}: Bezugsspalte {col!r} fehlt")
@@ -260,7 +274,10 @@ class TwoStageModel:
     def _calibrate(
         self, frame: FeatureFrame, progress: Progress
     ) -> dict[str, dict[int, dict[str, float]]]:
-        """Verschiebungen je Ziel aus einem Modell ohne die letzten ``months`` Monate."""
+        """Verschiebungen je Ziel aus einem Modell ohne die letzten ``months`` Monate.
+
+        @relation(SWR-MLT-031, scope=function)
+        """
         cal = self.cfg.calibration
         issues = frame.meta["issue_time"]
         cut = issues.max() - pd.DateOffset(months=cal.months)
@@ -301,6 +318,7 @@ class TwoStageModel:
         return self
 
     def _oof(self, t: StageTarget, base: list[str], frame: FeatureFrame) -> np.ndarray:
+        """@relation(SWR-MLT-030, scope=function)"""
         k = self.cfg.backtest.oof_folds
         blocks = blocked_folds(frame.meta["issue_time"], k)
         out = np.full(len(frame), np.nan)
@@ -337,7 +355,10 @@ class TwoStageModel:
 
     def predict(self, frame: FeatureFrame) -> dict[str, pd.DataFrame]:
         """Quantile je Ziel; zum Ausgabezeitpunkt schon bekannte Ist-Werte (``frame.known``)
-        ersetzen die Prognose in allen Quantilen."""
+        ersetzen die Prognose in allen Quantilen.
+
+        @relation(SWR-MLT-027, SWR-MLT-032, scope=function)
+        """
         res = self._predict(frame)
         if frame.known is not None:
             for code, p in res.items():
@@ -386,7 +407,10 @@ class TwoStageModel:
 
 
 def baselines(frame: FeatureFrame, cfg: ModelConfig) -> dict[str, dict[str, np.ndarray]]:
-    """P50 je Verfahren und Ziel: Vortag bzw. letzter bekannter Tag, Vorwoche, Benchmarks."""
+    """P50 je Verfahren und Ziel: Vortag bzw. letzter bekannter Tag, Vorwoche, Benchmarks.
+
+    @relation(SWR-MLT-040, scope=function)
+    """
     out: dict[str, dict[str, np.ndarray]] = {}
     day1 = (frame.meta["lead_day"] == 1).to_numpy()
     for t in cfg.stage1 + cfg.stage2:

@@ -1,4 +1,7 @@
-"""Fehlermaße für Punkt- und Quantilprognosen, gruppiert nach Horizont und Lage."""
+"""Fehlermaße für Punkt- und Quantilprognosen, gruppiert nach Horizont und Lage.
+
+@relation(SWA-MLT-METRICS, scope=file)
+"""
 
 from __future__ import annotations
 
@@ -26,6 +29,7 @@ SEASONS = {
 
 
 def pinball(y: np.ndarray, pred: np.ndarray, q: float) -> np.ndarray:
+    """@relation(SWR-MLT-041, scope=function)"""
     d = y - pred
     out: np.ndarray = np.maximum(q * d, (q - 1) * d)
     return out
@@ -42,7 +46,10 @@ def add_context(pred: pd.DataFrame) -> pd.DataFrame:
 
 
 def score(pred: pd.DataFrame, by: Sequence[str]) -> pd.DataFrame:
-    """Kennzahlen je Gruppe. Erwartet ``actual``, ``q50`` und optional ``q10``/``q90``."""
+    """Kennzahlen je Gruppe. Erwartet ``actual``, ``q50`` und optional ``q10``/``q90``.
+
+    @relation(SWR-MLT-041, scope=function)
+    """
     p = pred[np.isfinite(pred["actual"]) & np.isfinite(pred["q50"])].copy()
     p["err"] = p["q50"] - p["actual"]
     p["abs"] = p["err"].abs()
@@ -79,7 +86,10 @@ def score(pred: pd.DataFrame, by: Sequence[str]) -> pd.DataFrame:
 
 
 def daily_rank_corr(pred: pd.DataFrame, by: Sequence[str]) -> pd.DataFrame:
-    """Mittlere Rangkorrelation (Spearman) der Stunden je Liefertag, z. B. für Lastverschiebung."""
+    """Mittlere Rangkorrelation (Spearman) der Stunden je Liefertag, z. B. für Lastverschiebung.
+
+    @relation(SWR-MLT-041, scope=function)
+    """
     p = pred[np.isfinite(pred["actual"]) & np.isfinite(pred["q50"])]
     keys = [*by, "issue_time", "day"]
 
@@ -96,6 +106,8 @@ def common_rows(pred: pd.DataFrame, methods: Sequence[str]) -> pd.DataFrame:
     """Nur Zeilen (Ziel, Ausgabe, Stunde), für die alle ``methods`` eine Prognose haben.
 
     Je Ziel zählen nur die Verfahren, die es für dieses Ziel überhaupt gibt.
+
+    @relation(SWR-MLT-041, scope=function)
     """
     p = pred[pred["method"].isin(methods) & np.isfinite(pred["q50"])]
     parts = []

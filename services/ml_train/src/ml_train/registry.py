@@ -14,6 +14,8 @@ inferiert werden Champion, Challenger, Baseline und der letzte Vorgänger.
 
 Ein Challenger wird nur Champion, wenn er auf denselben Backtest-Zeilen im Mittel besser ist
 und in keiner Gruppe (Ziel, Vorlauftag und Jahreszeit) mit genug Werten deutlich schlechter.
+
+@relation(SWA-MLT-REGISTRY, scope=file)
 """
 
 from __future__ import annotations
@@ -34,7 +36,10 @@ from ml_train.models import TwoStageModel
 
 
 class Storage:
-    """Minimaler Dateizugriff auf ein lokales Verzeichnis oder ``s3://bucket/prefix``."""
+    """Minimaler Dateizugriff auf ein lokales Verzeichnis oder ``s3://bucket/prefix``.
+
+    @relation(SWR-MLT-050, scope=class)
+    """
 
     def __init__(self, root: str) -> None:
         self.root = root.rstrip("/")
@@ -94,7 +99,10 @@ class Decision:
 
 
 def compare(champion: pd.DataFrame, challenger: pd.DataFrame, rule: PromotionRule) -> Decision:
-    """Vergleicht zwei Backtest-Prognosesätze (Langform) auf ihren gemeinsamen Zeilen."""
+    """Vergleicht zwei Backtest-Prognosesätze (Langform) auf ihren gemeinsamen Zeilen.
+
+    @relation(SWR-MLT-051, scope=function)
+    """
     a = champion.assign(method="champion")
     b = challenger.assign(method="challenger")
     both = common_rows(pd.concat([a, b], ignore_index=True), ["champion", "challenger"])
@@ -162,6 +170,7 @@ class Registry:
         )
 
     def active(self) -> list[str]:
+        """@relation(SWR-MLT-060, scope=function)"""
         st = self.state()
         out = [st["champion"], *st["challengers"], st["baseline"], *st["previous"][:1]]
         return [v for v in dict.fromkeys(out) if v]
@@ -180,6 +189,8 @@ class Registry:
         Für Versionen, die ohne ``--backtest`` trainiert wurden. Der Backtest muss mit derselben
         Konfiguration und Variante gerechnet sein; der Registry-Spiegel liest daraus beim
         nächsten Abgleich die Kennzahlen.
+
+        @relation(SWR-MLT-052, scope=function)
         """
         man = self.manifest(version)
         buf = io.BytesIO()
@@ -205,6 +216,7 @@ class Registry:
         backtest: pd.DataFrame | None,
         role: str = "challenger",
     ) -> str:
+        """@relation(SWR-MLT-050, scope=function)"""
         stamp = datetime.now(UTC).strftime("%Y%m%d%H%M")
         version = f"{self.cfg.name}-{model.variant.name}-{stamp}-{manifest['snapshot_id'][:6]}"
         with tempfile.TemporaryDirectory() as tmp:
@@ -255,6 +267,7 @@ class Registry:
     # Champion/Challenger --------------------------------------------------------------------
 
     def evaluate(self, challenger: str) -> Decision:
+        """@relation(SWR-MLT-051, scope=function)"""
         st = self.state()
         if not st["champion"]:
             return Decision(True, [], pd.DataFrame())
@@ -264,6 +277,7 @@ class Registry:
         return compare(a, b, self.cfg.promotion)
 
     def promote(self, challenger: str, force: bool = False) -> Decision:
+        """@relation(SWR-MLT-051, scope=function)"""
         d = self.evaluate(challenger)
         if d.promote or force:
             st = self.state()

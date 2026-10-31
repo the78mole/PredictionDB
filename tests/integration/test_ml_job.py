@@ -51,6 +51,7 @@ def _panel_rows(eng: Engine) -> list[dict[str, object]]:
 
 
 def test_job_lifecycle_and_panel(engine: Engine) -> None:
+    """@relation(SWR-MLT-003, scope=function)"""
     job = JobLog(engine, heartbeat_s=0.2)
     job.start("backtest", CONFIG, ["kalender", "frei"], {"fold_months": 3})
     assert job.job_id is not None
@@ -83,6 +84,7 @@ def test_job_lifecycle_and_panel(engine: Engine) -> None:
 
 
 def test_failed_and_stale_jobs(engine: Engine) -> None:
+    """@relation(SWR-MLT-003, scope=function)"""
     failed = JobLog(engine, heartbeat_s=0)
     failed.start("fit", CONFIG, ["frei"])
     failed.total(4)
@@ -118,6 +120,7 @@ def test_failed_and_stale_jobs(engine: Engine) -> None:
 
 
 def test_without_database_nothing_breaks() -> None:
+    """@relation(SWR-MLT-003, scope=function)"""
     job = JobLog(None)
     job.start("fit", CONFIG)
     job.total(3)

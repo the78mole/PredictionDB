@@ -25,6 +25,8 @@ Die Dateien liegen flach nebeneinander, damit sie später 1:1 Layer des Artefakt
 
 Backtest-Prognosen (``backtest.parquet``) gehören nicht ins Paket, weil sie Ist-Preise enthalten
 (7.11.1, Regel 2); die Kennzahlen stehen im Manifest.
+
+@relation(SWA-MLT-BUNDLE, scope=file)
 """
 
 from __future__ import annotations
@@ -53,7 +55,10 @@ CAPACITY_DAYS = 400
 
 
 def required_codes(cfg: ModelConfig, variant: Variant) -> list[str]:
-    """Energiereihen, die die Merkmale der Variante brauchen (ohne Benchmarks)."""
+    """Energiereihen, die die Merkmale der Variante brauchen (ohne Benchmarks).
+
+    @relation(SWR-MLT-070, scope=function)
+    """
     codes = [*cfg.targets, *cfg.lag_series]
     for name in variant.groups:
         g = cfg.series_groups.get(name)
@@ -75,7 +80,10 @@ def write_package(
     wx_process: dict[str, Any] | None = None,
     run_hours: list[int] | None = None,
 ) -> dict[str, Any]:
-    """Schreibt das Paket nach ``out`` und gibt ``package.json`` zurück."""
+    """Schreibt das Paket nach ``out`` und gibt ``package.json`` zurück.
+
+    @relation(SWR-MLT-070, scope=function)
+    """
     out.mkdir(parents=True, exist_ok=True)
     spec = json.loads((model_dir / "model.json").read_text())
     variant = Variant.model_validate(spec["variant"])
@@ -163,7 +171,10 @@ def export_package(
     cache: Path = Path("/tmp/ml-train-cache"),
 ) -> dict[str, Any]:
     """Paket einer Registry-Version; Bestand aus dem Snapshot oder der Datenbank, Gitter-Gewichte
-    (nur Wetter-Varianten) aus der Datenbank mit der Clusterung der Version."""
+    (nur Wetter-Varianten) aus der Datenbank mit der Clusterung der Version.
+
+    @relation(SWR-MLT-070, scope=function)
+    """
     cfg = registry.cfg
     manifest = registry.manifest(version)
     model = registry.load(version, cache)

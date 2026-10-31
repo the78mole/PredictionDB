@@ -92,6 +92,7 @@ class FakeSource:
 
 
 def test_package_contents(package: Path) -> None:
+    """@relation(SWR-MLT-070, scope=function)"""
     info = json.loads((package / "package.json").read_text())
     assert info["variant"] == "kalender"
     assert not info["requires_weather"]

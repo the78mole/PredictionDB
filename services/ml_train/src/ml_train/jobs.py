@@ -3,6 +3,8 @@
 Die Datenbank ist für Training und Backtest nicht nötig: Ist sie nicht erreichbar, wird einmal
 gewarnt und ohne Protokoll weitergerechnet. Ein Lebenszeichen-Thread hält ``updated_at`` auch in
 langen Schritten frisch, damit das Dashboard hängende von langsamen Jobs unterscheiden kann.
+
+@relation(SWA-MLT-JOBS, scope=file)
 """
 
 from __future__ import annotations
@@ -38,6 +40,8 @@ class JobLog:
 
     ``step(label)`` schließt den vorigen Schritt ab und beginnt den nächsten; ``total`` lässt
     sich nachreichen, sobald die Zahl der Schritte bekannt ist (z. B. erst nach den Faltungen).
+
+    @relation(SWR-MLT-003, scope=class)
     """
 
     def __init__(self, engine: Engine | None, heartbeat_s: float = HEARTBEAT_S) -> None:
@@ -148,7 +152,10 @@ class JobLog:
 
 
 def open_job_log() -> JobLog:
-    """``JobLog`` mit der Datenbank aus den Einstellungen, ohne sie, wenn keine konfiguriert ist."""
+    """``JobLog`` mit der Datenbank aus den Einstellungen, ohne sie, wenn keine konfiguriert ist.
+
+    @relation(SWR-MLT-003, scope=function)
+    """
     try:
         from predictiondb_core.db import create_db_engine
 
