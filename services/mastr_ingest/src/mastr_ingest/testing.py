@@ -1,4 +1,7 @@
-"""Hilfen für Tests: synthetischer Gesamtdatenexport im Format des MaStR (UTF-16-XML im ZIP)."""
+"""Hilfen für Tests: synthetischer Gesamtdatenexport im Format des MaStR (UTF-16-XML im ZIP).
+
+@relation(SWA-MAI-TESTING, scope=file)
+"""
 
 from __future__ import annotations
 

@@ -15,6 +15,7 @@ from mastr_ingest.units import (
 
 
 def test_members_sorted_and_filtered(tmp_path: Path) -> None:
+    """@relation(SWR-MAI-020, scope=function)"""
     path = make_export(
         tmp_path,
         {
@@ -34,6 +35,7 @@ def test_members_sorted_and_filtered(tmp_path: Path) -> None:
 
 
 def test_catalog_utf16(tmp_path: Path) -> None:
+    """@relation(SWR-MAI-020, scope=function)"""
     with zipfile.ZipFile(make_export(tmp_path, {})) as zf:
         cat = read_catalog(zf)
     assert cat["1416"] == "Ausschließliche Wirtschaftszone"
@@ -41,6 +43,8 @@ def test_catalog_utf16(tmp_path: Path) -> None:
 
 
 def test_classify_solar_by_catalog_text() -> None:
+    """@relation(SWR-MAI-021, scope=function)"""
+
     def tech(**f: str) -> str | None:
         return classify("EinheitenSolar", unit("SEE1", 50, **f), CATALOG)
 
@@ -54,6 +58,7 @@ def test_classify_solar_by_catalog_text() -> None:
 
 
 def test_classify_wind_offshore() -> None:
+    """@relation(SWR-MAI-021, scope=function)"""
     assert classify("EinheitenWind", unit("A", 3000, WindAnLandOderAufSee="888"), CATALOG) == (
         "wind_on"
     )
@@ -65,6 +70,7 @@ def test_classify_wind_offshore() -> None:
 
 
 def test_to_unit_fields() -> None:
+    """@relation(SWR-MAI-022, scope=function)"""
     rec = unit(
         "SEE1",
         5230,
@@ -90,6 +96,7 @@ def test_to_unit_fields() -> None:
 
 
 def test_status_dates() -> None:
+    """@relation(SWR-MAI-022, scope=function)"""
     gone = to_unit("EinheitenBiomasse", unit("A", 500, EinheitBetriebsstatus="38"), CATALOG)
     assert gone is not None and gone.status == "decommissioned"
     assert gone.decommissioned == date(2026, 1, 15)  # ohne Datum: letzte Aktualisierung
@@ -131,6 +138,7 @@ def test_status_dates() -> None:
 
 
 def test_invalid_units_skipped() -> None:
+    """@relation(SWR-MAI-022, scope=function)"""
     assert to_unit("EinheitenWasser", unit("A", 0), CATALOG) is None
     assert to_unit("EinheitenWasser", {"Bruttoleistung": "5"}, CATALOG) is None
     planned = to_unit("EinheitenWind", unit("B", 3000, None, EinheitBetriebsstatus="31"), CATALOG)
@@ -138,6 +146,7 @@ def test_invalid_units_skipped() -> None:
 
 
 def test_iter_units_over_split_files(tmp_path: Path) -> None:
+    """@relation(SWR-MAI-020, scope=function)"""
     path = make_export(
         tmp_path,
         {
@@ -157,6 +166,7 @@ def test_iter_units_over_split_files(tmp_path: Path) -> None:
 
 
 def test_regelzone_from_catalog_text() -> None:
+    """@relation(SWR-MAI-023, scope=function)"""
     assert [regelzone(CATALOG[i]) for i in ("1000001", "1000010", "1001564", "1001572")] == [
         "50hertz",
         "amprion",
@@ -168,6 +178,7 @@ def test_regelzone_from_catalog_text() -> None:
 
 
 def test_grid_connections_and_unit_lokation(tmp_path: Path) -> None:
+    """@relation(SWR-MAI-023, scope=function)"""
     path = make_export(
         tmp_path,
         {

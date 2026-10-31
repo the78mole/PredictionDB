@@ -8,6 +8,8 @@ Solar-Tabellen (Millionen Einheiten) mit wenig Speicher durchlaufen.
 
 Die Zuordnung zur Technologie geht über den Katalogtext, nicht über die Id, damit sie
 neue Releases mit verschobenen Ids übersteht.
+
+@relation(SWA-MAI-UNITS, scope=file)
 """
 
 from __future__ import annotations
@@ -91,7 +93,10 @@ class GridConnection:
 
 
 def unit_members(zf: zipfile.ZipFile) -> list[tuple[str, str]]:
-    """Einheitendateien im Export als ``(Dateiname, Elementname)``, in stabiler Reihenfolge."""
+    """Einheitendateien im Export als ``(Dateiname, Elementname)``, in stabiler Reihenfolge.
+
+    @relation(SWR-MAI-020, scope=function)
+    """
     out = []
     for name in zf.namelist():
         m = _MEMBER.match(name.rsplit("/", 1)[-1])
@@ -124,6 +129,7 @@ def _iter_records(source: IO[bytes], tag: str) -> Iterator[dict[str, str]]:
 
 
 def read_catalog(zf: zipfile.ZipFile) -> Catalog:
+    """@relation(SWR-MAI-020, scope=function)"""
     name = next(n for n in zf.namelist() if n.rsplit("/", 1)[-1] == "Katalogwerte.xml")
     with zf.open(name) as f:
         return {r["Id"]: r.get("Wert", "") for r in _iter_records(f, "Katalogwert") if "Id" in r}
@@ -154,7 +160,10 @@ def _text(catalog: Catalog, v: str | None) -> str | None:
 
 
 def classify(table: str, rec: dict[str, str], catalog: Catalog) -> str | None:
-    """Technologie-Code aus ``TECHNOLOGIES`` oder ``None`` (nicht betrachtet)."""
+    """Technologie-Code aus ``TECHNOLOGIES`` oder ``None`` (nicht betrachtet).
+
+    @relation(SWR-MAI-021, scope=function)
+    """
     if table == "EinheitenWind":
         lage = (_text(catalog, rec.get("WindAnLandOderAufSee")) or "").lower()
         land = (_text(catalog, rec.get("Bundesland")) or "").lower()
@@ -179,6 +188,7 @@ def classify(table: str, rec: dict[str, str], catalog: Catalog) -> str | None:
 
 
 def to_unit(table: str, rec: dict[str, str], catalog: Catalog) -> Unit | None:
+    """@relation(SWR-MAI-022, scope=function)"""
     nr = rec.get("EinheitMastrNummer")
     capacity = _float(rec.get("Bruttoleistung"))
     technology = classify(table, rec, catalog)
@@ -225,7 +235,10 @@ def to_unit(table: str, rec: dict[str, str], catalog: Catalog) -> Unit | None:
 
 
 def iter_units(zf: zipfile.ZipFile, catalog: Catalog | None = None) -> Iterator[Unit]:
-    """Alle betrachteten Einheiten des Exports (``TECHNOLOGIES``), Datei für Datei."""
+    """Alle betrachteten Einheiten des Exports (``TECHNOLOGIES``), Datei für Datei.
+
+    @relation(SWR-MAI-020, scope=function)
+    """
     catalog = read_catalog(zf) if catalog is None else catalog
     for name, tag in unit_members(zf):
         table = _MEMBER.match(name.rsplit("/", 1)[-1])["table"]  # type: ignore[index]
@@ -242,7 +255,10 @@ def iter_units(zf: zipfile.ZipFile, catalog: Catalog | None = None) -> Iterator[
 
 
 def regelzone(text: str | None) -> str | None:
-    """Code der Regelzone aus dem Katalogtext (``TenneT`` → ``tennet``)."""
+    """Code der Regelzone aus dem Katalogtext (``TenneT`` → ``tennet``).
+
+    @relation(SWR-MAI-023, scope=function)
+    """
     low = (text or "").lower().replace(" ", "")
     return next((code for key, code in REGELZONEN.items() if key in low), None)
 
@@ -255,6 +271,8 @@ def iter_grid_connections(
     Strom-Netzanschlusspunkte tragen die Regelzone des ÜNB (``RegelzoneNetzanschlusspunkt``)
     und die MaStR-Nummer des Netzbetreibers; Einheiten verweisen über
     ``LokationMaStRNummer`` darauf. Punkte ohne beides (Gas) werden übersprungen.
+
+    @relation(SWR-MAI-023, scope=function)
     """
     catalog = read_catalog(zf) if catalog is None else catalog
     for name in table_members(zf, "Netzanschlusspunkte"):

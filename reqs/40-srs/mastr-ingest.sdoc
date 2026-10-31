@@ -1,0 +1,302 @@
+[DOCUMENT]
+TITLE: Softwareanforderungen mastr-ingest (SRS)
+PREFIX: SWR-MAI-
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @anforderung
+
+[TEXT]
+STATEMENT: >>>
+Softwareanforderungen nach ISO/IEC/IEEE 29148 an das Softwareelement SYSA-SW-MAI
+(``services/mastr_ingest``). Der Dienst sichert quartalsweise den Gesamtdatenexport des
+Marktstammdatenregisters (Lizenz DL-DE BY 2.0), verortet die Einheiten, bildet Gebietscluster
+je Technologie passend zu den Wettergittern und rekonstruiert die installierte Leistung je
+Cluster und Tag im Schema ``assets``.
+<<<
+
+[[SECTION]]
+TITLE: Steuerung und Konfiguration
+
+[REQUIREMENT]
+UID: SWR-MAI-001
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Inspektion, Demonstration
+TITLE: Befehle
+STATEMENT: >>>
+Der Dienst muss die Befehle ``snapshot`` (Export eines Tages laden und verarbeiten, mit
+``--date``, ``--if-due``, ``--watch``, ``--new-clustering``, ``--keep-local``), ``import``
+(lokal vorliegendes ZIP), ``cluster`` (Cluster, Gewichte und Bestand neu rechnen, ``--new`` für
+eine neue Version) und ``gemeinden`` (Referenzpunkte je Gemeinde) bereitstellen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-004
+
+[REQUIREMENT]
+UID: SWR-MAI-002
+ART: Randbedingung
+STATUS: Umgesetzt
+NACHWEIS: Inspektion
+TITLE: Konfiguration
+STATEMENT: >>>
+Quelle, Technologien, Clusterzahlen, Gitter und Fristen müssen aus
+``config/sources/mastr.yaml`` kommen (Pfad über ``PDB_MASTR_CONFIG`` oder ``--config``),
+Datenbank, S3, Bucket und Arbeitsverzeichnis aus Variablen mit Präfix ``PDB_``.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-QA-003
+
+[REQUIREMENT]
+UID: SWR-MAI-003
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Einmal je Quartal
+STATEMENT: >>>
+Mit ``--if-due`` muss ``snapshot`` nur laufen, wenn für das Quartal des Tages noch kein
+importierter Snapshot vorliegt. Der erneute Import desselben Exports muss denselben Snapshot
+ergeben.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-004
+- TYPE: Parent
+  VALUE: SYSR-OPS-001
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Export sichern
+
+[REQUIREMENT]
+UID: SWR-MAI-010
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Export finden
+STATEMENT: >>>
+Der Dienst muss den Export eines Tages über den Link der Datendownload-Seite finden und
+sonst über das Namensschema ``Gesamtdatenexport_JJJJMMTT_<Release>.zip`` mit dem zum Datum
+gehörenden Release (Wechsel am 1. April und 1. Oktober) und dessen Nachbarn per HEAD prüfen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-004
+
+[REQUIREMENT]
+UID: SWR-MAI-011
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Download mit Fortsetzen
+STATEMENT: >>>
+Der Download des ZIP (einige GB) muss nach einem Abbruch an der erreichten Stelle fortsetzen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-004
+- TYPE: Parent
+  VALUE: SYSR-OPS-001
+
+[REQUIREMENT]
+UID: SWR-MAI-012
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Unveränderte Ablage
+STATEMENT: >>>
+Das ZIP muss unverändert nach ``PDB_BUCKET_ASSETS_BRONZE`` unter ``mastr/JJJJ-MM-TT/``
+geschrieben werden, danach ein ``manifest.json`` mit URL, Release, SHA-256 und Größe. Das ZIP
+bleibt dauerhaft erhalten, weil der Export eines Tages nur an diesem Tag abrufbar ist.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-004
+- TYPE: Parent
+  VALUE: SYSR-OPS-006
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Einheiten importieren und verorten
+
+[REQUIREMENT]
+UID: SWR-MAI-020
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Einheiten streamen
+STATEMENT: >>>
+Die Einheitentabellen für Solar, Wind, Biomasse und Wasser (auch auf mehrere Dateien
+verteilt) müssen als UTF-16-XML gestreamt und per ``COPY`` nach ``assets.unit`` geschrieben
+werden; Aufzählungen werden über ``Katalogwerte.xml`` als Text ausgewertet.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-004
+
+[REQUIREMENT]
+UID: SWR-MAI-021
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Technologie zuordnen
+STATEMENT: >>>
+Jede Einheit muss einer Technologie ``wind_on``, ``wind_off``, ``pv_ground``, ``pv_roof``,
+``biomass`` oder ``hydro`` zugeordnet werden: Offshore über ``WindAnLandOderAufSee`` bzw. die
+Ausschließliche Wirtschaftszone, Freifläche nach Art der Solaranlage (ohne Angabe ab 1 MW).
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-004
+
+[REQUIREMENT]
+UID: SWR-MAI-022
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Betriebsstatus und Daten
+STATEMENT: >>>
+Aus Inbetriebnahme, Stilllegung und Unterbrechung müssen die Zeitpunkte für den Bestand
+abgeleitet werden: endgültig stillgelegt ohne Datum ab der letzten Aktualisierung, vorübergehend
+stillgelegt ab Beginn der Stilllegung. Ungültige Einheiten werden übersprungen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-004
+
+[REQUIREMENT]
+UID: SWR-MAI-023
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Regelzone und Netzbetreiber
+STATEMENT: >>>
+Jede Einheit muss Regelzone und Netzbetreiber über ihren Netzanschlusspunkt erhalten. Ohne
+Netzanschlusspunkt gilt die nach Leistung häufigste Regelzone direkt zugeordneter Einheiten
+derselben Gemeinde, sonst PLZ, Kreis, Seegebiet, Bundesland; die Herkunft steht in
+``regelzone_source``.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-004
+
+[REQUIREMENT]
+UID: SWR-MAI-024
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Verorten
+STATEMENT: >>>
+Jede Einheit muss verortet werden, in dieser Reihenfolge: eigene Koordinaten (vertauschte
+korrigiert), Seegebiet für Offshore, Gemeinde (Referenzpunkt aus ``assets.gemeinde``, sonst Mittel
+der verorteten Einheiten), PLZ, Kreis, Bundesland. Die Stufe steht in ``geo_precision``.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-004
+
+[REQUIREMENT]
+UID: SWR-MAI-025
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Kennzahlen und Unterschied zum Vorgänger
+STATEMENT: >>>
+Je Technologie müssen Anzahl, aktive Leistung, Leistung je Verortungsstufe und je Regelzone
+sowie neue, entfallene und nachgemeldete Einheiten gegenüber dem Vorgänger in
+``assets.snapshot.stats`` und im Protokoll stehen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-004
+- TYPE: Parent
+  VALUE: SYSR-OPS-005
+
+[REQUIREMENT]
+UID: SWR-MAI-026
+ART: Randbedingung
+STATUS: Umgesetzt
+NACHWEIS: Inspektion
+TITLE: Alte Einheiten löschen
+STATEMENT: >>>
+Einheiten von Snapshots jenseits von ``keep_snapshots`` müssen gelöscht werden; Snapshot-Zeile
+und ZIP bleiben. Das lokale Arbeitsverzeichnis wird nach dem Import geleert.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-004
+- TYPE: Parent
+  VALUE: SYSR-QA-001
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Cluster und Bestand
+
+[REQUIREMENT]
+UID: SWR-MAI-030
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Leistungsgewichtetes k-Means
+STATEMENT: >>>
+Je Technologie muss die Leistung je Zelle des 0,25°-Gitters zu Clustern gebündelt werden
+(leistungsgewichtetes k-Means, Zahl je Technologie aus der YAML, höchstens so viele wie Zellen,
+deterministisch). Cluster 0 ist der mit der meisten Leistung.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-004
+
+[REQUIREMENT]
+UID: SWR-MAI-031
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Versionierte Clusterung
+STATEMENT: >>>
+Eine Clusterung muss als Version ``vJJJJQn`` mit Region-Codes wie ``wind_on:v2026Q4:c07`` in
+``meta.region`` geführt werden und ``recluster_after_days`` (365) lang bestehen bleiben. Neue
+Zellen kommen zum nächstgelegenen Zentrum; ein älterer Export ändert die Clusterung nicht.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-004
+
+[REQUIREMENT]
+UID: SWR-MAI-032
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Gitter- und Regelzonen-Gewichte
+STATEMENT: >>>
+Für jedes Gitter aus ``weight_grids`` müssen Leistung und Anteil je Zelle und Cluster in
+``assets.grid_weight`` stehen; die Anteile eines Clusters summieren sich zu 1. Die Leistung je
+Cluster, Zelle und Regelzone steht in ``assets.zone_weight``.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-004
+
+[REQUIREMENT]
+UID: SWR-MAI-033
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Bestand je Tag
+STATEMENT: >>>
+``assets.capacity_daily`` muss die installierte Leistung je Cluster und Tag von
+``history_start`` bis zum Exportdatum aus Inbetriebnahme, Stilllegung und Wiederaufnahme
+enthalten.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-004
+- TYPE: Parent
+  VALUE: SYSR-PR-003
+
+[[/SECTION]]
+

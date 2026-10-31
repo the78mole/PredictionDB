@@ -13,6 +13,7 @@ def _blob(lat: float, lon: float, n: int, rng: np.random.Generator) -> np.ndarra
 
 
 def test_kmeans_separates_regions_and_orders_by_capacity() -> None:
+    """@relation(SWR-MAI-030, scope=function)"""
     rng = np.random.default_rng(1)
     north, south = _blob(54.0, 9.0, 40, rng), _blob(48.0, 11.5, 40, rng)
     pts = np.vstack((north, south))
@@ -25,12 +26,14 @@ def test_kmeans_separates_regions_and_orders_by_capacity() -> None:
 
 
 def test_kmeans_weighted_centroid() -> None:
+    """@relation(SWR-MAI-030, scope=function)"""
     lat, lon = np.array([50.0, 52.0]), np.array([10.0, 10.0])
     cl = weighted_kmeans(lat, lon, np.array([3.0, 1.0]), 1)
     assert cl.centroid_lat[0] == pytest.approx(50.5)
 
 
 def test_kmeans_deterministic_and_k_capped() -> None:
+    """@relation(SWR-MAI-030, scope=function)"""
     rng = np.random.default_rng(2)
     pts = _blob(51, 10, 30, rng)
     w = rng.uniform(1, 10, 30)
@@ -42,6 +45,7 @@ def test_kmeans_deterministic_and_k_capped() -> None:
 
 
 def test_nearest() -> None:
+    """@relation(SWR-MAI-031, scope=function)"""
     idx = nearest(
         np.array([54.1, 47.9]), np.array([9.0, 11.0]), np.array([48.0, 54.0]), np.array([11.5, 9.0])
     )
@@ -49,6 +53,7 @@ def test_nearest() -> None:
 
 
 def test_daily_capacity_events() -> None:
+    """@relation(SWR-MAI-033, scope=function)"""
     start, end = date(2020, 1, 1), date(2020, 1, 10)
     events = [
         (date(2019, 6, 1), 100.0),  # vor Beginn → Anfangsbestand
@@ -75,6 +80,7 @@ def test_daily_capacity_events() -> None:
 
 
 def test_quarters_and_versions() -> None:
+    """@relation(SWR-MAI-003, SWR-MAI-031, scope=function)"""
     assert quarter_bounds(date(2026, 10, 20)) == (date(2026, 10, 1), date(2026, 12, 31))
     assert quarter_bounds(date(2026, 2, 28)) == (date(2026, 1, 1), date(2026, 3, 31))
     assert version_name(date(2026, 10, 1), set()) == "v2026Q4"

@@ -5,6 +5,8 @@ Geclustert wird nicht über Einzelanlagen, sondern über die je Gitterzelle summ
 tausend Punkte statt Millionen Anlagen), und jede Zelle gehört genau einem Cluster, sodass die
 Gewichtsmatrix je Cluster disjunkt ist. Abstände werden in einer flächentreuen Näherung
 (Längengrade mit cos(Breite) gestaucht) gerechnet.
+
+@relation(SWA-MAI-CLUSTER, scope=file)
 """
 
 from __future__ import annotations
@@ -59,6 +61,8 @@ def weighted_kmeans(
 
     Aus ``n_init`` Starts gewinnt die kleinste gewichtete Quadratsumme. Ist ``k`` größer als
     die Zahl der Punkte mit Gewicht, wird es auf diese begrenzt.
+
+    @relation(SWR-MAI-030, scope=function)
     """
     if not (len(lat) == len(lon) == len(weight)) or len(lat) == 0:
         raise ValueError("lat, lon und weight brauchen dieselbe Länge > 0")
@@ -120,7 +124,10 @@ def nearest(
     centroid_lat: NDArray[np.float64],
     centroid_lon: NDArray[np.float64],
 ) -> NDArray[np.int64]:
-    """Index des nächstgelegenen Zentrums je Punkt (für neue Zellen bestehender Clusterungen)."""
+    """Index des nächstgelegenen Zentrums je Punkt (für neue Zellen bestehender Clusterungen).
+
+    @relation(SWR-MAI-031, scope=function)
+    """
     centers = _xy(np.asarray(centroid_lat, float), np.asarray(centroid_lon, float))
     pts = _xy(np.asarray(lat, float), np.asarray(lon, float))
     out: NDArray[np.int64] = _sq_dist(pts, centers).argmin(axis=1)
