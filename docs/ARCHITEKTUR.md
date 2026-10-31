@@ -334,7 +334,7 @@ stateDiagram-v2
 | Bodendruck | `PRMSL:mean sea level` | `msl` | `pmsl` |
 | Druck am Boden (Luftdichte für Wind 7.6, Enthalpie 7.8) | `PRES:surface` | `sp` | `ps` |
 
-Alle GFS-Felder dieser Tabelle stehen in `config/sources/gfs_0p25.yaml` (22 Felder) und werden seit 2026-10-21 gesammelt. Die ECMWF- und ICON-Spalten gelten, sobald diese Quellen dazukommen; die Namen dort vor der Umsetzung prüfen.
+Alle GFS-Felder dieser Tabelle stehen in `config/sources/gfs_0p25.yaml` (22 Felder) und werden seit 2026-10-21 gesammelt. Welche Datenpunkte je Modell (GFS DE, GFS Europa, GEFS) tatsächlich in Bronze, Silber und Gold landen, listet [WETTERDATEN.md](WETTERDATEN.md). Die ECMWF- und ICON-Spalten gelten, sobald diese Quellen dazukommen; die Namen dort vor der Umsetzung prüfen.
 
 Ausschnitt: **44–58° N, 0–20° E** (DE plus Nachbarn, relevant für Kuppelflüsse und Wetterlagen). Bei GFS 0,25° sind das 57 × 81 = 4 617 Gitterpunkte.
 
@@ -360,6 +360,8 @@ flowchart LR
 ```
 
 Umgesetzt in `services/wx_process` (Revision `0003_wx_features`): Silber liegt als ein Store je Lauf unter `wx-silver/gfs/0p25/JJJJ/MM/TT/HH.zarr` (statt eines wachsenden Stores je Modell), damit Neuberechnung und Aufräumen auf einen Lauf beschränkt bleiben; Int16 mit CF-Attributen `scale_factor`/`add_offset`, lesbar mit `xarray.open_zarr`. Mittel und Summen stehen dort als Werte für das Intervall seit dem vorherigen Schritt (die 6-h-Eimer von GFS sind zurückgerechnet). Einen vollständigen Lauf erkennt `wx-process` vorerst am Laufmanifest `run.json` in Bronze (Abfrage alle 10 min), nicht über `NOTIFY nwp_run_complete`; danach setzt es `meta.nwp_run` auf `processed` und sendet `NOTIFY features_ready`.
+
+Variablen, Einheiten und Ablage-Auflösung je Modell: [WETTERDATEN.md](WETTERDATEN.md).
 
 **Zeitachse:** Bronze und Silber halten die Zeitschritte der Quelle unverändert (GFS: stündlich bis 120 h, danach dreistündlich). Zeitliche Interpolation geschieht erst beim Lesen und nur auf Anforderung (7.9).
 
