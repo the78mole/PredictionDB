@@ -32,10 +32,12 @@ PAGE = "https://www.test/MaStR/Datendownload"
     ],
 )
 def test_release(day: date, version: str) -> None:
+    """@relation(SWR-MAI-010, scope=function)"""
     assert mastr_release(day) == version
 
 
 def test_candidates_and_names() -> None:
+    """@relation(SWR-MAI-010, scope=function)"""
     assert candidate_urls(TEMPLATE, date(2026, 10, 20)) == [
         "https://download.test/Gesamtdatenexport_20261020_26.2.zip",
         "https://download.test/Gesamtdatenexport_20261020_27.1.zip",
@@ -53,6 +55,8 @@ def _client(handler: httpx.MockTransport) -> httpx.Client:
 
 
 def test_discover_prefers_page_link() -> None:
+    """@relation(SWR-MAI-010, scope=function)"""
+
     def handle(r: httpx.Request) -> httpx.Response:
         if str(r.url) == PAGE:
             return httpx.Response(200, text='href="/x/Gesamtdatenexport_20261020_27.1.zip"')
@@ -66,6 +70,8 @@ def test_discover_prefers_page_link() -> None:
 
 
 def test_discover_falls_back_to_head() -> None:
+    """@relation(SWR-MAI-010, scope=function)"""
+
     def handle(r: httpx.Request) -> httpx.Response:
         if str(r.url) == PAGE:
             return httpx.Response(403)
@@ -83,6 +89,7 @@ def test_discover_falls_back_to_head() -> None:
 
 
 def test_download_resumes(tmp_path: Path) -> None:
+    """@relation(SWR-MAI-011, scope=function)"""
     payload = bytes(range(256)) * 100
 
     def handle(r: httpx.Request) -> httpx.Response:
@@ -99,6 +106,7 @@ def test_download_resumes(tmp_path: Path) -> None:
 
 
 def test_bronze_roundtrip(tmp_path: Path) -> None:
+    """@relation(SWR-MAI-012, scope=function)"""
     bronze = Bronze(MemoryStore())
     day = date(2026, 10, 1)
     src = tmp_path / "export.zip"

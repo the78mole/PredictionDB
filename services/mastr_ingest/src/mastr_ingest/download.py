@@ -6,6 +6,8 @@ Schlüssel::
     mastr/2026-10-01/manifest.json        # URL, Release, SHA-256, Größe; erst nach dem ZIP
 
 Ein Export gilt nur als gesichert, wenn sein Manifest existiert.
+
+@relation(SWA-MAI-DOWNLOAD, scope=file)
 """
 
 from __future__ import annotations
@@ -40,6 +42,8 @@ def mastr_release(day: date) -> str:
 
     Releases wechseln am 1. April und 1. Oktober; der Export dieses Tages entsteht nachts
     und hat noch das alte Format. 2026-04-01 → 25.2, 2026-04-02 → 26.1, 2026-10-02 → 26.2.
+
+    @relation(SWR-MAI-010, scope=function)
     """
     year, release = day.year, 1
     if (day.month, day.day) <= (4, 1):
@@ -57,13 +61,17 @@ def _neighbours(version: str) -> list[str]:
 
 
 def candidate_urls(template: str, day: date) -> list[str]:
+    """@relation(SWR-MAI-010, scope=function)"""
     return [
         template.format(date=f"{day:%Y%m%d}", version=v) for v in _neighbours(mastr_release(day))
     ]
 
 
 def links_in_page(html: str) -> list[tuple[date, str]]:
-    """Export-Links der Datendownload-Seite als ``(Exportdatum, Release)``."""
+    """Export-Links der Datendownload-Seite als ``(Exportdatum, Release)``.
+
+    @relation(SWR-MAI-010, scope=function)
+    """
     return sorted({parse_export_name(m[0]) for m in _LINK.finditer(html)}, reverse=True)
 
 
@@ -77,6 +85,8 @@ def parse_export_name(name: str) -> tuple[date, str]:
 
 @dataclass
 class ExportManifest:
+    """@relation(SWR-MAI-012, scope=class)"""
+
     export_date: str
     version: str
     url: str
@@ -87,6 +97,8 @@ class ExportManifest:
 
 
 class Bronze:
+    """@relation(SWR-MAI-012, scope=class)"""
+
     def __init__(self, store: ObjectStore, prefix: str = "mastr") -> None:
         self.store = store
         self.prefix = prefix
@@ -131,6 +143,7 @@ class Bronze:
 
 
 def sha256_file(path: Path) -> str:
+    """@relation(SWR-MAI-012, scope=function)"""
     h = hashlib.sha256()
     with path.open("rb") as f:
         while chunk := f.read(1 << 20):
@@ -145,7 +158,10 @@ class Downloader:
         self.template = template
 
     def discover(self, day: date) -> tuple[str, str]:
-        """URL und Release des Exports von ``day``: erst Link der Seite, dann Namensschema."""
+        """URL und Release des Exports von ``day``: erst Link der Seite, dann Namensschema.
+
+        @relation(SWR-MAI-010, scope=function)
+        """
         try:
             page = self.client.get(self.page_url, headers={"User-Agent": USER_AGENT})
             page.raise_for_status()
@@ -170,7 +186,10 @@ class Downloader:
         reraise=True,
     )
     def download(self, url: str, path: Path) -> Path:
-        """Lädt nach ``path`` (setzt einen abgebrochenen Download per Range fort)."""
+        """Lädt nach ``path`` (setzt einen abgebrochenen Download per Range fort).
+
+        @relation(SWR-MAI-011, scope=function)
+        """
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(".part")
         offset = tmp.stat().st_size if tmp.exists() else 0

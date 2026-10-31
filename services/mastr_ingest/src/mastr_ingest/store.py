@@ -4,6 +4,8 @@ Massendaten (Einheiten, Tagesbestand) gehen per ``COPY`` hinein; Verortung und A
 auf Gitterzellen laufen als SQL in der Datenbank, nur die kleinen Zellsummen kommen für das
 Clustering nach Python. Gitterzellen werden über ganzzahlige Indizes ``floor(x / res + 0.5)``
 verglichen, damit es keine Gleitkomma-Gleichheit zwischen ``real`` und ``double`` braucht.
+
+@relation(SWA-MAI-STORE, scope=file)
 """
 
 from __future__ import annotations
@@ -62,6 +64,7 @@ class Store:
         size: int,
         status: str = "stored",
     ) -> int:
+        """@relation(SWR-MAI-003, scope=function)"""
         with self.engine.begin() as c:
             sid: int = c.execute(
                 text("""
@@ -125,6 +128,7 @@ class Store:
         return dict(row) if row else None
 
     def has_snapshot_between(self, start: date, end: date) -> bool:
+        """@relation(SWR-MAI-003, scope=function)"""
         with self.engine.connect() as c:
             return bool(
                 c.execute(
@@ -139,7 +143,10 @@ class Store:
     # --- Einheiten -------------------------------------------------------------------------
 
     def load_units(self, snapshot_id: int, units: Iterable[Unit]) -> int:
-        """Ersetzt die Einheiten eines Snapshots (idempotent bei wiederholtem Import)."""
+        """Ersetzt die Einheiten eines Snapshots (idempotent bei wiederholtem Import).
+
+        @relation(SWR-MAI-020, scope=function)
+        """
         cols = ", ".join(["snapshot_id", *UNIT_COLUMNS])
         n = 0
         with self.engine.begin() as c:
@@ -157,6 +164,8 @@ class Store:
         Reihenfolge: eigene Koordinaten → Seegebiet (Offshore) → Gemeinde (Referenztabelle
         ``assets.gemeinde``, sonst Mittel der Einheiten mit Koordinaten derselben Gemeinde) →
         Postleitzahl → Kreis (AGS-Präfix) → Bundesland.
+
+        @relation(SWR-MAI-024, scope=function)
         """
         p = {"id": snapshot_id}
         steps = [
@@ -214,6 +223,8 @@ class Store:
         Regelzone). Einheiten ohne Netzanschlusspunkt übernehmen die nach Leistung häufigste
         Regelzone direkt zugeordneter Einheiten derselben Gemeinde → PLZ → Kreis → Seegebiet →
         Bundesland. Gibt die Zahl der gelesenen Netzanschlusspunkte zurück.
+
+        @relation(SWR-MAI-023, scope=function)
         """
         p = {"id": snapshot_id}
         n = 0
@@ -271,7 +282,10 @@ class Store:
         return n
 
     def unit_stats(self, snapshot_id: int, export_date: date) -> dict[str, Any]:
-        """Kennzahlen je Technologie: Anzahl, aktive Leistung, Verortungsgüte."""
+        """Kennzahlen je Technologie: Anzahl, aktive Leistung, Verortungsgüte.
+
+        @relation(SWR-MAI-025, scope=function)
+        """
         with self.engine.connect() as c:
             rows = (
                 c.execute(
@@ -307,7 +321,10 @@ class Store:
         return out
 
     def zone_stats(self, snapshot_id: int, export_date: date) -> dict[str, Any]:
-        """Aktive Leistung (MW) je Technologie, Regelzone und Herkunft der Zuordnung."""
+        """Aktive Leistung (MW) je Technologie, Regelzone und Herkunft der Zuordnung.
+
+        @relation(SWR-MAI-025, scope=function)
+        """
         with self.engine.connect() as c:
             rows = c.execute(
                 text(f"""
@@ -326,7 +343,10 @@ class Store:
         return out
 
     def snapshot_diff(self, new_id: int, old_id: int, old_date: date) -> dict[str, Any]:
-        """Unterschiede zum Vorgänger: neue, entfallene und nachgemeldete Einheiten."""
+        """Unterschiede zum Vorgänger: neue, entfallene und nachgemeldete Einheiten.
+
+        @relation(SWR-MAI-025, scope=function)
+        """
         with self.engine.connect() as c:
             rows = (
                 c.execute(
@@ -360,7 +380,10 @@ class Store:
         }
 
     def prune(self, keep: int) -> list[int]:
-        """Löscht Einheiten älterer Snapshots; die Snapshot-Zeile und das ZIP bleiben."""
+        """Löscht Einheiten älterer Snapshots; die Snapshot-Zeile und das ZIP bleiben.
+
+        @relation(SWR-MAI-026, scope=function)
+        """
         with self.engine.begin() as c:
             ids = list(
                 c.execute(
@@ -384,7 +407,10 @@ class Store:
     def cell_capacity(
         self, snapshot_id: int, technology: str, res: float, at: date
     ) -> tuple[NDArray[np.int64], NDArray[np.int64], NDArray[np.float64]]:
-        """Zellindizes aller Zellen mit Einheiten und deren aktive Leistung (kW) am Tag ``at``."""
+        """Zellindizes aller Zellen mit Einheiten und deren aktive Leistung (kW) am Tag ``at``.
+
+        @relation(SWR-MAI-030, scope=function)
+        """
         with self.engine.connect() as c:
             rows = c.execute(
                 text(f"""
@@ -424,6 +450,7 @@ class Store:
     def create_clustering(
         self, version: str, snapshot_id: int, grid: str, res: float, params: dict[str, Any]
     ) -> None:
+        """@relation(SWR-MAI-031, scope=function)"""
         with self.engine.begin() as c:
             c.execute(
                 text("""
@@ -483,6 +510,7 @@ class Store:
     def add_cells(
         self, version: str, technology: str, cells: Iterable[tuple[float, float, int]]
     ) -> None:
+        """@relation(SWR-MAI-031, scope=function)"""
         with self.engine.begin() as c:
             self._insert_cells(c, version, technology, cells)
 
@@ -520,7 +548,10 @@ class Store:
     def write_grid_weights(
         self, version: str, snapshot_id: int, res: float, grid: str, wres: float, at: date
     ) -> int:
-        """Leistung je Zelle des Gitters ``grid`` (Auflösung ``wres``) und Cluster am Tag ``at``."""
+        """Leistung je Zelle des Gitters ``grid`` (Auflösung ``wres``) und Cluster am Tag ``at``.
+
+        @relation(SWR-MAI-032, scope=function)
+        """
         with self.engine.begin() as c:
             c.execute(
                 text("""DELETE FROM assets.grid_weight
@@ -543,7 +574,10 @@ class Store:
         return int(n)
 
     def write_zone_weights(self, version: str, snapshot_id: int, res: float, at: date) -> int:
-        """Leistung je Cluster, Regelzone und Zelle des Clustergitters am Tag ``at``."""
+        """Leistung je Cluster, Regelzone und Zelle des Clustergitters am Tag ``at``.
+
+        @relation(SWR-MAI-032, scope=function)
+        """
         with self.engine.begin() as c:
             c.execute(
                 text("DELETE FROM assets.zone_weight WHERE clustering_version = :v"), {"v": version}
@@ -594,7 +628,10 @@ class Store:
         snapshot_id: int,
         series: Iterable[tuple[str, int, date, NDArray[np.float64]]],
     ) -> int:
-        """Ersetzt den Tagesbestand einer Clusterung: je Cluster eine Reihe ab Starttag (MW)."""
+        """Ersetzt den Tagesbestand einer Clusterung: je Cluster eine Reihe ab Starttag (MW).
+
+        @relation(SWR-MAI-033, scope=function)
+        """
         n = 0
         with self.engine.begin() as c:
             c.execute(

@@ -2,6 +2,8 @@
 
 Pfade kommen aus ``PDB_MASTR_*``; S3-Zugang, Datenbank und Logging aus ``predictiondb_core``
 (Umgebungsvariablen ``PDB_*``).
+
+@relation(SWA-MAI-CONFIG, scope=file)
 """
 
 from __future__ import annotations
@@ -18,6 +20,8 @@ from mastr_ingest.units import TECHNOLOGIES
 
 
 class MastrSettings(BaseSettings):
+    """@relation(SWR-MAI-002, scope=class)"""
+
     model_config = SettingsConfigDict(
         env_prefix="PDB_MASTR_", env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
@@ -68,4 +72,5 @@ class MastrConfig(BaseModel):
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> MastrConfig:
+        """@relation(SWR-MAI-002, scope=function)"""
         return cls.model_validate(yaml.safe_load(Path(path).read_text()))

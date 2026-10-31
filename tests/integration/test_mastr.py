@@ -155,6 +155,7 @@ def _q(eng: Engine, sql: str, **p: Any) -> list[Any]:
 
 
 def test_snapshot_cluster_capacity(engine: Engine, tmp_path: Path) -> None:
+    """@relation(SWR-MAI-003, SWR-MAI-024, SWR-MAI-025, SWR-MAI-032, SWR-MAI-033, scope=function)"""
     config = MastrConfig.model_validate(CONFIG)
     pipeline = MastrPipeline(config, Store(engine), Bronze(MemoryStore()), tmp_path / "work")
     first = make_export(tmp_path, tables(), export_date="20990115", version="00.2")
