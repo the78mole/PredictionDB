@@ -51,6 +51,7 @@ def _rows(version: str, issues: list[pd.Timestamp]) -> pd.DataFrame:
 
 def test_missing_compare_issues_in_window(engine: Engine) -> None:
     # Winterzeit: 08 UTC (Fehler D+1) und 09 UTC = 10 Uhr Ortszeit (ÜNB-Vergleich) je Tag
+    """@relation(SWR-MLT-062, scope=function)"""
     day1 = [pd.Timestamp("2099-01-05T08", tz="UTC"), pd.Timestamp("2099-01-05T09", tz="UTC")]
     day2 = [t + pd.Timedelta(days=1) for t in day1]
     write_predictions(engine, _rows(NEW, [day1[1], day1[1] + pd.Timedelta(hours=3)]))

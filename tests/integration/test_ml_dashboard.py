@@ -166,6 +166,7 @@ def _sql(panel: dict, ref: int = 0) -> str:  # type: ignore[type-arg]
 
 
 def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
+    """@relation(SWR-MLT-053, scope=function)"""
     now = pd.Timestamp.now(tz="UTC").floor("h")
     reg, versions = _registry(tmp_path, now)
     with engine.connect() as c:

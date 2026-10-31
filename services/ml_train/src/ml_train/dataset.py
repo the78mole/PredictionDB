@@ -27,6 +27,8 @@ Momentanwerte linear, Intervallgrößen (Strahlung, PV, Niederschlag, Schneeante
 das ganze Intervall bis zum Schritt. Auf die Energiestunde ``[ts, ts+1h)`` passen Intervallwerte
 mit Gültigkeit ``ts+1h`` und das Mittel der Momentanwerte bei ``ts`` und ``ts+1h``.
 ``wx_interp`` markiert interpolierte Stunden.
+
+@relation(SWA-MLT-DATASET, scope=file)
 """
 
 from __future__ import annotations
@@ -71,11 +73,15 @@ META_COLUMNS = ["issue_time", "ts", "lead_day", "lead_h"]
 
 
 def is_interval_feature(name: str) -> bool:
+    """@relation(SWR-MLT-023, scope=function)"""
     return name.endswith(INTERVAL_SUFFIXES)
 
 
 def local_day_hours(day: date) -> pd.DatetimeIndex:
-    """Stundenbeginne (UTC) des Liefertags ``day`` in Ortszeit, 23 bis 25 Stunden."""
+    """Stundenbeginne (UTC) des Liefertags ``day`` in Ortszeit, 23 bis 25 Stunden.
+
+    @relation(SWR-MLT-020, scope=function)
+    """
     start = pd.Timestamp(day).tz_localize(BERLIN)
     end = pd.Timestamp(day + timedelta(days=1)).tz_localize(BERLIN)
     return pd.date_range(start.tz_convert("UTC"), end.tz_convert("UTC"), freq="h", inclusive="left")
@@ -86,6 +92,8 @@ def same_local_time(ts: pd.DatetimeIndex, days: np.ndarray) -> tuple[pd.Datetime
 
     Gibt es die Uhrzeit am Bezugstag doppelt (Oktober, 02 Uhr), kommen beide Stunden zurück
     (erste und zweite); sonst sind beide gleich. Fehlt sie (März, 02 Uhr), gilt 03 Uhr.
+
+    @relation(SWR-MLT-025, scope=function)
     """
     wall = ts.tz_convert(BERLIN).tz_localize(None) - pd.to_timedelta(np.asarray(days), unit="D")
     n = len(wall)
@@ -95,6 +103,7 @@ def same_local_time(ts: pd.DatetimeIndex, days: np.ndarray) -> tuple[pd.Datetime
 
 
 def issue_time(day: date, hour_utc: int) -> pd.Timestamp:
+    """@relation(SWR-MLT-020, scope=function)"""
     return pd.Timestamp(day).tz_localize("UTC") + pd.Timedelta(hours=hour_utc)
 
 
@@ -123,6 +132,7 @@ class WeatherTable:
 
     @staticmethod
     def _align(run: pd.Timestamp, g: pd.DataFrame) -> pd.DataFrame:
+        """@relation(SWR-MLT-023, scope=function)"""
         g = g.sort_index()
         native = g.index
         hourly = pd.date_range(native.min(), native.max(), freq="h")
@@ -149,7 +159,10 @@ class WeatherTable:
         return out.astype(np.float32)
 
     def run_for(self, issue: pd.Timestamp, delay_h: float) -> pd.Timestamp | None:
-        """Jüngster Lauf, der zum Ausgabezeitpunkt verarbeitet vorlag."""
+        """Jüngster Lauf, der zum Ausgabezeitpunkt verarbeitet vorlag.
+
+        @relation(SWR-MLT-022, scope=function)
+        """
         if len(self.runs) == 0:
             return None
         pos = self.runs.searchsorted(issue - pd.Timedelta(hours=delay_h), side="right") - 1
@@ -203,7 +216,10 @@ class FeatureBuilder:
     # --- Wissen zum Ausgabezeitpunkt ---------------------------------------------------------
 
     def _known_until(self, code: str, issue: pd.Timestamp) -> pd.Timestamp:
-        """Erste Stunde (Beginn), die zum Ausgabezeitpunkt noch nicht bekannt ist."""
+        """Erste Stunde (Beginn), die zum Ausgabezeitpunkt noch nicht bekannt ist.
+
+        @relation(SWR-MLT-021, scope=function)
+        """
         if code.startswith(PRICE_PREFIX):
             local = issue.tz_convert(BERLIN)
             last_day = local.date() + timedelta(
@@ -254,7 +270,10 @@ class FeatureBuilder:
     # --- Merkmale ----------------------------------------------------------------------------
 
     def issues(self, issue_days: Sequence[date]) -> list[pd.Timestamp]:
-        """Ein Ausgabezeitpunkt je Tag; mit mehreren ``train_hours`` reihum nach Datum."""
+        """Ein Ausgabezeitpunkt je Tag; mit mehreren ``train_hours`` reihum nach Datum.
+
+        @relation(SWR-MLT-020, scope=function)
+        """
         hours = self.cfg.issue.train_hours
         return [issue_time(d, hours[d.toordinal() % len(hours)]) for d in issue_days]
 
@@ -311,7 +330,10 @@ class FeatureBuilder:
         return frame
 
     def _known_mask(self, code: str, meta: pd.DataFrame) -> np.ndarray:
-        """Zielstunden, deren Ist-Wert zum Ausgabezeitpunkt schon veröffentlicht ist."""
+        """Zielstunden, deren Ist-Wert zum Ausgabezeitpunkt schon veröffentlicht ist.
+
+        @relation(SWR-MLT-021, scope=function)
+        """
         issues = pd.DatetimeIndex(meta["issue_time"])
         uniq = issues.unique()
         until = pd.Series([self._known_until(code, i) for i in uniq], index=uniq)
@@ -343,6 +365,7 @@ class FeatureBuilder:
         return [c for c in dict.fromkeys(codes + self.cfg.lag_series) if c in self.energy.columns]
 
     def _lags(self, meta: pd.DataFrame) -> pd.DataFrame:
+        """@relation(SWR-MLT-021, SWR-MLT-025, scope=function)"""
         return self._lag_block(self.lag_codes(), LAG_KINDS, meta)
 
     def _lag_block(
@@ -396,7 +419,10 @@ class FeatureBuilder:
 
     @staticmethod
     def _back(s: pd.Series, ts: pd.DatetimeIndex, days: np.ndarray, local: bool) -> np.ndarray:
-        """Wert ``days`` Tage vor ``ts``: feste 24 h je Tag oder dieselbe Ortsuhrzeit."""
+        """Wert ``days`` Tage vor ``ts``: feste 24 h je Tag oder dieselbe Ortsuhrzeit.
+
+        @relation(SWR-MLT-025, scope=function)
+        """
         out: np.ndarray
         if not local:
             out = s.reindex(ts - days * DAY).to_numpy()
@@ -411,6 +437,7 @@ class FeatureBuilder:
     # --- Reihengruppen -----------------------------------------------------------------------
 
     def _series_group(self, sg: SeriesGroup, meta: pd.DataFrame) -> pd.DataFrame:
+        """@relation(SWR-MLT-026, scope=function)"""
         if sg.mode == "lags":
             return self._lag_block(sg.codes, sg.lags, meta)
         if sg.mode == "forecast":
@@ -422,7 +449,10 @@ class FeatureBuilder:
         return self._asof(sg, meta)
 
     def _forecast(self, sg: SeriesGroup, meta: pd.DataFrame) -> pd.DataFrame:
-        """Wert der Zielstunde, wenn die Prognose ihres Liefertags schon veröffentlicht war."""
+        """Wert der Zielstunde, wenn die Prognose ihres Liefertags schon veröffentlicht war.
+
+        @relation(SWR-MLT-021, SWR-MLT-026, scope=function)
+        """
         ts = pd.DatetimeIndex(meta["ts"])
         day = ts.tz_convert(BERLIN).normalize().tz_localize(None)
         published = {
@@ -440,7 +470,10 @@ class FeatureBuilder:
         return pd.DataFrame(out, index=meta.index).astype(np.float32)
 
     def _asof(self, sg: SeriesGroup, meta: pd.DataFrame) -> pd.DataFrame:
-        """Letzter veröffentlichter Wert je Ausgabezeitpunkt und Änderung über ``change_days``."""
+        """Letzter veröffentlichter Wert je Ausgabezeitpunkt und Änderung über ``change_days``.
+
+        @relation(SWR-MLT-021, SWR-MLT-026, scope=function)
+        """
         e = self.energy_long
         if "published" not in e.columns:
             raise ValueError(
@@ -471,6 +504,8 @@ class FeatureBuilder:
 
         Eine Ausgabe gilt erst als bekannt, wenn alle ihre Werte veröffentlicht sind; Vorlauf und
         Bezugswert (laufender Monat) stammen immer aus derselben Ausgabe.
+
+        @relation(SWR-MLT-026, scope=function)
         """
         e = self.energy_long
         if "published" not in e.columns:
@@ -533,7 +568,10 @@ class FeatureBuilder:
         return out
 
     def _grenzkosten(self, sg: SeriesGroup, meta: pd.DataFrame) -> pd.DataFrame:
-        """Preisniveau in Stunden hoher Residuallast und in Braunkohle-Stunden je Fenster."""
+        """Preisniveau in Stunden hoher Residuallast und in Braunkohle-Stunden je Fenster.
+
+        @relation(SWR-MLT-026, scope=function)
+        """
         cls = self._gk_classes(sg)
         issues = pd.DatetimeIndex(meta["issue_time"])
         uniq = issues.unique()
@@ -581,7 +619,10 @@ class FeatureBuilder:
         return out.astype(np.float32)
 
     def _weather_runs(self, meta: pd.DataFrame) -> pd.Series:
-        """Wetterlauf je Zeile: der jüngste, der zum Ausgabezeitpunkt verarbeitet vorlag."""
+        """Wetterlauf je Zeile: der jüngste, der zum Ausgabezeitpunkt verarbeitet vorlag.
+
+        @relation(SWR-MLT-022, scope=function)
+        """
         issues = meta["issue_time"]
         run_of = {
             i: self.weather.run_for(pd.Timestamp(i), self.cfg.issue.nwp_delay_h)
@@ -606,7 +647,10 @@ class FeatureBuilder:
 
 
 def gfs_version(runs: pd.Series) -> np.ndarray:
-    """GFS-Hauptversion je Lauf (NaN ohne Lauf), siehe ``GFS_VERSIONS``."""
+    """GFS-Hauptversion je Lauf (NaN ohne Lauf), siehe ``GFS_VERSIONS``.
+
+    @relation(SWR-MLT-023, scope=function)
+    """
     out = np.full(len(runs), np.nan, dtype=np.float32)
     t = pd.DatetimeIndex(runs)
     if t.tz is None:

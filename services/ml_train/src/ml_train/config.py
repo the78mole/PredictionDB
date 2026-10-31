@@ -3,6 +3,8 @@
 Eine Datei beschreibt den Ausgabezeitpunkt, die Horizonte, die Zielgrößen beider Stufen, die
 Feature-Gruppen je Modellvariante und die Backtest-Faltungen. Der Hash der Datei geht in jede
 Modellversion ein, damit sich ein Modell genau einer Konfiguration zuordnen lässt.
+
+@relation(SWA-MLT-CONFIG, scope=file)
 """
 
 from __future__ import annotations
@@ -21,7 +23,10 @@ FeatureGroup = str
 
 
 class IssueConfig(BaseModel):
-    """Wann eine Prognose ausgegeben wird und was zu diesem Zeitpunkt bekannt ist."""
+    """Wann eine Prognose ausgegeben wird und was zu diesem Zeitpunkt bekannt ist.
+
+    @relation(SWR-MLT-020, scope=class)
+    """
 
     #: Ausgabezeitpunkt je Tag (UTC); 08 UTC liegt vor dem Gebotsschluss (12 Uhr Ortszeit)
     hour_utc: int = Field(default=8, ge=0, le=23)
@@ -92,6 +97,8 @@ class SeriesGroup(BaseModel):
       Monatsprognose (EIA STEO). ``codes`` sind die Stämme (``steo_brent``), gespeichert je
       Vorlauf k als ``<stamm>_h<kk>``; Merkmal ``ol_<stamm>_h<k>`` = log(Prognose Vorlauf k /
       Prognose laufender Monat) für jedes k in ``horizons``.
+
+    @relation(SWR-MLT-026, scope=class)
     """
 
     mode: Literal["lags", "forecast", "asof", "outlook", "grenzkosten"]
@@ -169,6 +176,8 @@ class CalibrationConfig(BaseModel):
     Aus den Abweichungen ergibt sich je Ziel, Vorlauftag und Quantil eine Verschiebung im
     Lernraum (nach Kapazitäts- und Niveau-Normierung), sodass z. B. P10 dort wirklich 10 % der
     Ist-Werte unterschreiten. Der Median bleibt unverändert. Kostet eine zweite Anpassung.
+
+    @relation(SWR-MLT-031, scope=class)
     """
 
     #: Länge des Kalibrierzeitraums am Ende der Trainingsdaten; 0 = aus
@@ -178,7 +187,10 @@ class CalibrationConfig(BaseModel):
 
 
 class PromotionRule(BaseModel):
-    """Champion/Challenger (ARCHITEKTUR.md 7.7)."""
+    """Champion/Challenger (ARCHITEKTUR.md 7.7).
+
+    @relation(SWR-MLT-051, scope=class)
+    """
 
     #: Challenger muss im Mittel über alle Horizonte mindestens so viel besser sein (relativ)
     min_gain: float = 0.0
@@ -188,6 +200,8 @@ class PromotionRule(BaseModel):
 
 
 class ModelConfig(BaseModel):
+    """@relation(SWR-MLT-002, scope=class)"""
+
     name: str
     title: str = ""
     quantiles: list[float] = Field(default_factory=lambda: [0.1, 0.5, 0.9])
@@ -241,6 +255,9 @@ class ModelConfig(BaseModel):
 
 
 def load_config(path: str | Path) -> tuple[ModelConfig, str]:
-    """Konfiguration und SHA-256 der Datei."""
+    """Konfiguration und SHA-256 der Datei.
+
+    @relation(SWR-MLT-002, scope=function)
+    """
     raw = Path(path).read_bytes()
     return ModelConfig.model_validate(yaml.safe_load(raw)), hashlib.sha256(raw).hexdigest()

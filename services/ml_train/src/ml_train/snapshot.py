@@ -14,6 +14,8 @@ werden (lokal, im LAN oder auf einer Miet-GPU).
 ``capacity.parquet``      ``day``, ``technology``, ``capacity_mw``: installierte Leistung DE
 ``manifest.json``         Zeiträume, Clusterung, Zeilenzahlen, SHA-256 je Datei, ``snapshot_id``
 ========================= ===================================================================
+
+@relation(SWA-MLT-SNAPSHOT, scope=file)
 """
 
 from __future__ import annotations
@@ -71,6 +73,7 @@ class Snapshot:
         return wide.sort_index()
 
     def save(self, out_dir: str | Path) -> str:
+        """@relation(SWR-MLT-010, scope=function)"""
         out = Path(out_dir)
         out.mkdir(parents=True, exist_ok=True)
         hashes: dict[str, str] = {}
@@ -94,6 +97,7 @@ class Snapshot:
 
 
 def load_snapshot(path: str | Path) -> Snapshot:
+    """@relation(SWR-MLT-010, scope=function)"""
     p = Path(path)
     manifest = json.loads((p / "manifest.json").read_text())
     for name, digest in manifest.get("files", {}).items():
@@ -193,6 +197,8 @@ def export_snapshot(
 
     Wetterläufe nur mit ``run_time`` in ``[weather_from, weather_to)`` (Vorgabe: ``start``,
     ``end``); ``weather_to <= weather_from`` lässt das Wetter ganz weg.
+
+    @relation(SWR-MLT-010, scope=function)
     """
     cv = clustering_version or latest_clustering(engine)
     hours = run_hours or [0, 12]

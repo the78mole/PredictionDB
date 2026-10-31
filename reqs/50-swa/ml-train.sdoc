@@ -1,0 +1,321 @@
+[DOCUMENT]
+TITLE: Softwarearchitektur ml-train (SWA)
+PREFIX: SWA-MLT-
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @architektur
+
+[TEXT]
+STATEMENT: >>>
+Softwarearchitektur nach ISO/IEC/IEEE 12207 für das Softwareelement SYSA-SW-MLT. Jede Komponente
+entspricht einem Modul unter ``services/ml_train/src/ml_train`` und nennt die
+Softwareanforderungen, die sie umsetzt (``Parent``). Das Modul selbst verweist mit
+``@relation(SWA-MLT-…, scope=file)`` im Modul-Docstring zurück.
+
+Abhängigkeiten: ``predictiondb_core`` (Einstellungen, Logging, S3, DB), LightGBM, pandas.
+Abnehmer: Grafana (``fcst.*``, ``meta.model_*``, ``meta.ml_job``) und der Stack ``predict/``
+(Prognosepaket).
+<<<
+
+[[SECTION]]
+TITLE: Komponenten
+
+[ELEMENT]
+UID: SWA-MLT-CLI
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Kommandozeile
+STATEMENT: >>>
+Befehle, Jobrahmen mit Signalbehandlung, Dauerbetrieb der Inferenz.
+<<<
+ORT: services/ml_train/src/ml_train/cli.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MLT-001
+- TYPE: Parent
+  VALUE: SWR-MLT-003
+- TYPE: Parent
+  VALUE: SWR-MLT-061
+- TYPE: Parent
+  VALUE: SWR-MLT-062
+
+[ELEMENT]
+UID: SWA-MLT-CONFIG
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Modellkonfiguration
+STATEMENT: >>>
+Pydantic-Modelle der YAML mit Ausgabe, Stufen, Gruppen, Varianten, Backtest, Kalibrierung, Freigaberegel.
+<<<
+ORT: services/ml_train/src/ml_train/config.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MLT-002
+- TYPE: Parent
+  VALUE: SWR-MLT-020
+
+[ELEMENT]
+UID: SWA-MLT-SNAPSHOT
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Trainings-Snapshot
+STATEMENT: >>>
+Export aus der Datenbank, Speichern und Laden mit Hash.
+<<<
+ORT: services/ml_train/src/ml_train/snapshot.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MLT-010
+
+[ELEMENT]
+UID: SWA-MLT-CALENDAR
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Kalender
+STATEMENT: >>>
+Kalendermerkmale je Stunde in Ortszeit.
+<<<
+ORT: services/ml_train/src/ml_train/calendar.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MLT-024
+
+[ELEMENT]
+UID: SWA-MLT-DATASET
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Merkmalsbildung
+STATEMENT: >>>
+Ausgabezeitpunkte, Bekanntheit, Lags, Merkmalsgruppen, Wetterlauf und -ausrichtung.
+<<<
+ORT: services/ml_train/src/ml_train/dataset.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MLT-020
+- TYPE: Parent
+  VALUE: SWR-MLT-021
+- TYPE: Parent
+  VALUE: SWR-MLT-022
+- TYPE: Parent
+  VALUE: SWR-MLT-023
+- TYPE: Parent
+  VALUE: SWR-MLT-025
+- TYPE: Parent
+  VALUE: SWR-MLT-026
+
+[ELEMENT]
+UID: SWA-MLT-MODELS
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Modelle
+STATEMENT: >>>
+Quantilmodell, Zweistufenmodell mit Out-of-Fold und Kalibrierung, Vergleichsverfahren.
+<<<
+ORT: services/ml_train/src/ml_train/models.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MLT-027
+- TYPE: Parent
+  VALUE: SWR-MLT-030
+- TYPE: Parent
+  VALUE: SWR-MLT-031
+- TYPE: Parent
+  VALUE: SWR-MLT-032
+- TYPE: Parent
+  VALUE: SWR-MLT-040
+
+[ELEMENT]
+UID: SWA-MLT-METRICS
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Gütemaße
+STATEMENT: >>>
+Pinball-Loss, Kennzahlen je Gruppe, gemeinsame Zeilen, Rangkorrelation.
+<<<
+ORT: services/ml_train/src/ml_train/metrics.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MLT-041
+
+[ELEMENT]
+UID: SWA-MLT-BACKTEST
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Backtest
+STATEMENT: >>>
+Faltungen und rollierender Backtest aller Varianten.
+<<<
+ORT: services/ml_train/src/ml_train/backtest.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MLT-040
+- TYPE: Parent
+  VALUE: SWR-MLT-041
+
+[ELEMENT]
+UID: SWA-MLT-REGISTRY
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Registry
+STATEMENT: >>>
+Dateiablage lokal oder S3, Versionen, Rollen, Vergleich und Freigabe.
+<<<
+ORT: services/ml_train/src/ml_train/registry.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MLT-050
+- TYPE: Parent
+  VALUE: SWR-MLT-051
+- TYPE: Parent
+  VALUE: SWR-MLT-052
+
+[ELEMENT]
+UID: SWA-MLT-DBSYNC
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Datenbankspiegel
+STATEMENT: >>>
+Abgleich der Registry nach ``meta.model_*``.
+<<<
+ORT: services/ml_train/src/ml_train/dbsync.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MLT-053
+
+[ELEMENT]
+UID: SWA-MLT-JOBS
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Job-Protokoll
+STATEMENT: >>>
+Fortschritt und Lebenszeichen in ``meta.ml_job``.
+<<<
+ORT: services/ml_train/src/ml_train/jobs.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MLT-003
+
+[ELEMENT]
+UID: SWA-MLT-PREDICT
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Inferenz
+STATEMENT: >>>
+Fällige Ausgabezeitpunkte, Live-Snapshot, Inferenz aller aktiven Versionen, Schreiben nach ``fcst.prediction``.
+<<<
+ORT: services/ml_train/src/ml_train/predict.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MLT-060
+- TYPE: Parent
+  VALUE: SWR-MLT-061
+- TYPE: Parent
+  VALUE: SWR-MLT-062
+- TYPE: Parent
+  VALUE: SWR-MLT-063
+
+[ELEMENT]
+UID: SWA-MLT-BUNDLE
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Prognosepaket
+STATEMENT: >>>
+Paket einer Version für den Stack ``predict/``.
+<<<
+ORT: services/ml_train/src/ml_train/bundle.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MLT-070
+
+[ELEMENT]
+UID: SWA-MLT-TESTING
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Testhilfen
+STATEMENT: >>>
+Synthetischer Snapshot mit bekanntem Zusammenhang. Nur für Tests.
+<<<
+ORT: services/ml_train/src/ml_train/testing.py
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Schnittstellen
+
+[ELEMENT]
+UID: SWA-MLT-IF-SNAPSHOT
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: Snapshot-Format
+STATEMENT: >>>
+Snapshot → Backtest und Training, auch auf fremder Hardware. Parquet-Dateien und ``manifest.json``.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MLT-010
+
+[ELEMENT]
+UID: SWA-MLT-IF-REGISTRY
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: Registry
+STATEMENT: >>>
+ml-train → ml-train (Inferenz), Veröffentlichung. ``registry.json`` je Konfiguration, Ordner je Version mit Modellen, ``manifest.json``, ``backtest.parquet``.
+<<<
+QUELLE: ARCHITEKTUR.md 7.7
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MLT-050
+
+[ELEMENT]
+UID: SWA-MLT-IF-FCST
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: Prognosetabellen
+STATEMENT: >>>
+ml-train → Grafana. ``fcst.prediction`` (Langform je Version, Ziel, Ausgabe, Zielstunde, Quantil), Sicht ``fcst.prediction_error``.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MLT-060
+
+[ELEMENT]
+UID: SWA-MLT-IF-META
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: Modell- und Jobspiegel
+STATEMENT: >>>
+ml-train → Grafana. ``meta.model_version``, ``meta.model_event``, ``meta.model_metric``, ``meta.ml_job``.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MLT-003
+- TYPE: Parent
+  VALUE: SWR-MLT-053
+
+[ELEMENT]
+UID: SWA-MLT-IF-PACKAGE
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: Prognosepaket
+STATEMENT: >>>
+ml-train → pdb-predict. Ordner mit ``package.json``, Modellen und Gewichten.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MLT-070
+
+[ELEMENT]
+UID: SWA-MLT-IF-CONFIG
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: Modellkonfiguration
+STATEMENT: >>>
+Betreiber → ml-train. ``config/ml/*.yaml``, Pfad über ``PDB_ML_CONFIG`` oder ``--config``.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MLT-002
+
+[[/SECTION]]
+

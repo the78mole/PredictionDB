@@ -21,7 +21,7 @@ der Art `Schnittstelle` in SYSA (extern) bzw. SWA (intern).
 
 Kürzel der Softwareelemente: `WXI` wx-ingest, `WXP` wx-process, `WXX` wx-exchange, `ENI`
 energy-ingest, `MAI` mastr-ingest, `MLT` ml-train, `PRD` pdb-predict, `CORE` core, `GRIB`
-gribkit. Ausgearbeitet sind bisher wx-ingest, wx-process, wx-exchange, energy-ingest und mastr-ingest; die übrigen Dienste folgen.
+gribkit. Ausgearbeitet sind bisher wx-ingest, wx-process, wx-exchange, energy-ingest, mastr-ingest und ml-train; die übrigen Dienste folgen.
 
 ## Felder
 

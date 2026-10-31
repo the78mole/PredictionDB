@@ -4,6 +4,8 @@ Je Faltung wird jede Variante mit allen Ausgabetagen bis ``gap_days`` vor Faltun
 trainiert und auf den Ausgabetagen der Faltung geprüft. Vergleichsverfahren (Vortag, Vorwoche,
 ENTSO-E-Prognosen) laufen auf denselben Zeilen mit. Ergebnis: Prognosen aller Verfahren in
 Langform und Kennzahlen je Verfahren, Ziel und Gruppe.
+
+@relation(SWA-MLT-BACKTEST, scope=file)
 """
 
 from __future__ import annotations
@@ -68,6 +70,7 @@ def data_days(fb: FeatureBuilder, cfg: ModelConfig) -> tuple[date, date]:
 
 
 def make_folds(cfg: ModelConfig, last_issue: date) -> list[Fold]:
+    """@relation(SWR-MLT-040, scope=function)"""
     bt = cfg.backtest
     end = min(bt.test_to or last_issue, last_issue)
     folds, start, no = [], bt.test_from, 0
@@ -126,6 +129,7 @@ def run_backtest(
     variants: Sequence[str] | None = None,
     job: JobLog | None = None,
 ) -> BacktestResult:
+    """@relation(SWR-MLT-040, SWR-MLT-041, scope=function)"""
     job = job or JobLog(None)
     first, last = data_days(fb, cfg)
     folds = make_folds(cfg, last)

@@ -50,12 +50,14 @@ def cfg() -> ModelConfig:
 
 
 def test_local_days_have_23_to_25_hours() -> None:
+    """@relation(SWR-MLT-020, scope=function)"""
     assert len(local_day_hours(date(2026, 3, 29))) == 23
     assert len(local_day_hours(date(2026, 10, 25))) == 25
     assert len(local_day_hours(date(2026, 10, 26))) == 24
 
 
 def test_calendar_holidays_and_bridge_days() -> None:
+    """@relation(SWR-MLT-024, scope=function)"""
     ts = pd.DatetimeIndex(["2026-12-25 11:00", "2026-10-31 11:00", "2026-05-15 11:00"], tz="UTC")
     cal = calendar_features(ts)
     assert cal["holiday_national"].iloc[0] == 1
@@ -64,6 +66,7 @@ def test_calendar_holidays_and_bridge_days() -> None:
 
 
 def test_lags_only_use_known_values(snap, cfg) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-021, scope=function)"""
     fb = FeatureBuilder(snap, cfg)
     frame = fb.build([date(2023, 5, 10)])
     issue = frame.meta["issue_time"].iloc[0]
@@ -96,6 +99,7 @@ def test_lags_only_use_known_values(snap, cfg) -> None:  # type: ignore[no-untyp
 def test_price_known_until_capped_at_present_data(snap, cfg) -> None:  # type: ignore[no-untyped-def]
     # Lauf 14 Uhr Ortszeit: per Uhrzeitregel gilt der Preis für morgen (12.5.) schon als
     # bekannt, abgerufen ist er aber noch nicht. Dann zählt der 11.5. als letzter voller Tag.
+    """@relation(SWR-MLT-021, scope=function)"""
     cut = pd.Timestamp("2023-05-11 22:00", tz="UTC")  # 12.5. 00:00 Ortszeit
     e = snap.energy
     late = (e["code"] == "da_price_de_lu") & (e["ts"] >= cut)
@@ -116,6 +120,7 @@ def test_price_known_until_capped_at_present_data(snap, cfg) -> None:  # type: i
 
 
 def test_predict_drops_nan_rows(snap, cfg) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-032, scope=function)"""
     from types import SimpleNamespace
 
     from ml_train.predict import predict_model
@@ -137,6 +142,7 @@ def test_predict_drops_nan_rows(snap, cfg) -> None:  # type: ignore[no-untyped-d
 
 
 def test_same_local_time_across_dst() -> None:
+    """@relation(SWR-MLT-025, scope=function)"""
     ts = pd.DatetimeIndex(
         ["2026-10-26 04:00", "2026-10-25 01:00", "2026-03-30 01:00"], tz="UTC"
     )  # Mo 05 Uhr MEZ, So 02 Uhr MEZ (zweite), Mo 03 Uhr MESZ
@@ -155,6 +161,7 @@ def test_same_local_time_across_dst() -> None:
 
 
 def test_load_lags_keep_local_time_across_dst(snap, cfg) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-025, scope=function)"""
     assert cfg.lag_local_time == ["load_actual"]
     fb = FeatureBuilder(snap, cfg)
     frame = fb.build([date(2022, 10, 31)])  # Montag nach der Umstellung am 30.10.
@@ -193,6 +200,7 @@ def cfg_v2() -> ModelConfig:
 
 
 def test_v2_config_groups_are_known() -> None:
+    """@relation(SWR-MLT-002, SWR-MLT-026, scope=function)"""
     c, _ = load_config(ROOT / "config/ml/de_lu_v2.yaml")
     assert {"nachbarn", "lastprognose", "brennstoffe", "marktwerte"} <= set(c.series_groups)
     assert "da_price_fr" in c.series_codes
@@ -203,6 +211,7 @@ def test_v2_config_groups_are_known() -> None:
 
 
 def test_series_groups_only_use_known_values(snap, cfg_v2) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-021, SWR-MLT-026, scope=function)"""
     fb = FeatureBuilder(snap, cfg_v2)
     frame = fb.build([date(2023, 5, 10), date(2023, 1, 10)])
     X, meta = frame.X, frame.meta
@@ -235,6 +244,7 @@ def test_series_groups_only_use_known_values(snap, cfg_v2) -> None:  # type: ign
 
 
 def test_outlook_uses_latest_published_issue(snap, cfg_v2) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-021, SWR-MLT-026, scope=function)"""
     assert cfg_v2.series_groups["steo"].stored_codes[:2] == ["steo_brent_h00", "steo_brent_h01"]
     assert "steo_henry_hub_h03" in cfg_v2.series_codes
     fb = FeatureBuilder(snap, cfg_v2)
@@ -251,6 +261,7 @@ def test_outlook_uses_latest_published_issue(snap, cfg_v2) -> None:  # type: ign
 
 
 def test_series_groups_train_and_predict(snap, cfg_v2) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-026, scope=function)"""
     cfg_v2.lgbm.n_estimators = 30
     fb = FeatureBuilder(snap, cfg_v2)
     frame = fb.build([date(2022, 9, 1) + pd.Timedelta(days=i) for i in range(0, 200, 4)])
@@ -265,6 +276,7 @@ def test_series_groups_train_and_predict(snap, cfg_v2) -> None:  # type: ignore[
 
 
 def test_weather_uses_run_available_at_issue(snap, cfg) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-022, scope=function)"""
     fb = FeatureBuilder(snap, cfg)
     frame = fb.build([date(2023, 5, 10)])
     # 00Z-Lauf vom 10.5. ist um 06 UTC verarbeitet, also bei Ausgabe 08 UTC verwendbar
@@ -278,6 +290,7 @@ def test_weather_uses_run_available_at_issue(snap, cfg) -> None:  # type: ignore
 
 
 def test_gfs_version_by_run(snap, cfg) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-023, scope=function)"""
     runs = pd.Series(
         pd.to_datetime(
             ["2019-06-12 06:00", "2019-06-12 12:00", "2021-03-22 06:00", "2021-03-22 12:00", None],
@@ -291,6 +304,7 @@ def test_gfs_version_by_run(snap, cfg) -> None:  # type: ignore[no-untyped-def]
 
 
 def test_weather_alignment_interval_and_instant() -> None:
+    """@relation(SWR-MLT-023, scope=function)"""
     run = pd.Timestamp("2024-01-01", tz="UTC")
     valid = run + pd.to_timedelta([120, 123], unit="h")
     w = pd.DataFrame(
@@ -320,6 +334,7 @@ class RecordingJob(JobLog):
 
 
 def test_backtest_beats_naive_baselines(snap, cfg) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-030, SWR-MLT-040, SWR-MLT-041, scope=function)"""
     fb = FeatureBuilder(snap, cfg)
     job = RecordingJob()
     res = run_backtest(fb, cfg, job=job)
@@ -342,6 +357,7 @@ def test_backtest_beats_naive_baselines(snap, cfg) -> None:  # type: ignore[no-u
 
 
 def test_folds_expand(cfg) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-040, scope=function)"""
     folds = make_folds(cfg, date(2023, 9, 20))
     assert [f.test_from for f in folds] == [date(2023, 7, 1), date(2023, 9, 1)]
     assert folds[-1].test_to == date(2023, 9, 20)
@@ -349,6 +365,7 @@ def test_folds_expand(cfg) -> None:  # type: ignore[no-untyped-def]
 
 
 def test_snapshot_roundtrip_checks_hash(snap, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-010, scope=function)"""
     snap.save(tmp_path)
     back = load_snapshot(tmp_path)
     assert back.snapshot_id == snap.manifest["snapshot_id"]
@@ -359,6 +376,7 @@ def test_snapshot_roundtrip_checks_hash(snap, tmp_path: Path) -> None:  # type: 
 
 
 def test_registry_champion_challenger(snap, cfg, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-050, SWR-MLT-051, scope=function)"""
     fb = FeatureBuilder(snap, cfg)
     res = run_backtest(fb, cfg)
     frame = fb.build([date(2023, 3, 1) + pd.Timedelta(days=i) for i in range(0, 120, 3)])
@@ -385,6 +403,7 @@ def test_registry_champion_challenger(snap, cfg, tmp_path: Path) -> None:  # typ
 
 
 def test_attach_backtest_to_registered_version(snap, cfg, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-052, scope=function)"""
     fb = FeatureBuilder(snap, cfg)
     res = run_backtest(fb, cfg, variants=["kalender"])
     frame = fb.build([date(2023, 3, 1) + pd.Timedelta(days=i) for i in range(0, 60, 3)])
@@ -402,6 +421,7 @@ def test_attach_backtest_to_registered_version(snap, cfg, tmp_path: Path) -> Non
 
 
 def test_compare_blocks_group_regression() -> None:
+    """@relation(SWR-MLT-051, scope=function)"""
     rng = np.random.default_rng(1)
     ts = pd.date_range("2024-01-01", periods=2000, freq="h", tz="UTC")
     base = pd.DataFrame(
@@ -427,6 +447,7 @@ def test_compare_blocks_group_regression() -> None:
 
 
 def test_dbsync_roles_and_metrics() -> None:
+    """@relation(SWR-MLT-053, scope=function)"""
     from ml_train.dbsync import metric_rows, roles
 
     st = {
@@ -463,6 +484,7 @@ def test_dbsync_roles_and_metrics() -> None:
 
 
 def test_due_issues_catches_up_missed_hours() -> None:
+    """@relation(SWR-MLT-061, scope=function)"""
     now = pd.Timestamp("2026-10-26T10:01:30", tz="UTC")
     assert due_issues(now, None, 24) == [pd.Timestamp("2026-10-26T10", tz="UTC")]
     last = pd.Timestamp("2026-10-26T07", tz="UTC")
@@ -475,6 +497,7 @@ def test_due_issues_catches_up_missed_hours() -> None:
 
 
 def test_next_wake_on_full_hour() -> None:
+    """@relation(SWR-MLT-061, scope=function)"""
     assert next_wake(pd.Timestamp("2026-10-26T09:59", tz="UTC"), 3600) == pd.Timestamp(
         "2026-10-26T10:01", tz="UTC"
     )
@@ -487,6 +510,7 @@ def test_next_wake_on_full_hour() -> None:
 
 
 def test_by_issue_groups_versions_per_issue() -> None:
+    """@relation(SWR-MLT-060, scope=function)"""
     a, b, c = (pd.Timestamp(f"2026-10-26T{h:02d}", tz="UTC") for h in (8, 9, 10))
     assert by_issue({"neu1": [c, a], "neu2": [a, b], "neu3": []}) == {
         a: ["neu1", "neu2"],
@@ -497,6 +521,7 @@ def test_by_issue_groups_versions_per_issue() -> None:
 
 
 def test_compare_issue_matches_dashboard_hours() -> None:
+    """@relation(SWR-MLT-062, scope=function)"""
     assert compare_issue(pd.Timestamp("2026-10-27T08", tz="UTC"))
     # 10 Uhr Ortszeit: im Winter 09 UTC, im Sommer 08 UTC
     assert compare_issue(pd.Timestamp("2026-10-27T09", tz="UTC"))
@@ -506,6 +531,8 @@ def test_compare_issue_matches_dashboard_hours() -> None:
 
 
 def test_needs_weather_from_manifest_variant(cfg_v2) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-063, scope=function)"""
+
     class Reg:
         def manifest(self, version: str) -> dict[str, dict[str, str]]:
             return {"variant": {"name": version}}
@@ -517,6 +544,7 @@ def test_needs_weather_from_manifest_variant(cfg_v2) -> None:  # type: ignore[no
 
 
 def test_grenzkosten_only_uses_known_hours(snap, cfg_v2) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-021, SWR-MLT-026, scope=function)"""
     sg = cfg_v2.series_groups["grenzkosten"]
     assert {"residual_load", "gen_lignite", "gen_gas"} <= set(sg.stored_codes)
     fb = FeatureBuilder(snap, cfg_v2)
@@ -541,6 +569,7 @@ def test_grenzkosten_only_uses_known_hours(snap, cfg_v2) -> None:  # type: ignor
 
 
 def test_scaled_target_trains_and_predicts(snap, cfg_v2, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-027, scope=function)"""
     cfg_v2.lgbm.n_estimators = 30
     fb = FeatureBuilder(snap, cfg_v2)
     frame = fb.build([date(2022, 10, 1) + pd.Timedelta(days=i) for i in range(0, 200, 4)])
@@ -565,6 +594,7 @@ def test_scaled_target_trains_and_predicts(snap, cfg_v2, tmp_path: Path) -> None
 
 
 def test_run_job_snapshot_has_no_variant(cfg, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-003, scope=function)"""
     from ml_train import cli
 
     job = RecordingJob()
@@ -578,6 +608,7 @@ def test_run_job_snapshot_has_no_variant(cfg, monkeypatch) -> None:  # type: ign
 
 
 def test_rotating_issue_hours_and_rest_of_day(snap, cfg_v2) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-020, scope=function)"""
     cfg_v2.issue.hours_utc = [2, 8, 14, 20]
     cfg_v2.issue.lead_days = [0, 1, 2]
     fb = FeatureBuilder(snap, cfg_v2)
@@ -613,6 +644,7 @@ def test_rotating_issue_hours_and_rest_of_day(snap, cfg_v2) -> None:  # type: ig
 
 
 def test_calibration_widens_bands_per_lead_day(snap, cfg, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-031, scope=function)"""
     cfg.lgbm.n_estimators = 40
     cfg.calibration.months = 3
     cfg.calibration.min_rows = 50
