@@ -1,0 +1,25 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; Job-Definition nachträglich festgehalten (2026-11-01)
+# ausgeführt von auswertung.py im selben Ordner
+id: terminpreis-treffsicherheit
+title: Terminpreise, Treffsicherheit des Jahres-Futures für den späteren Spotpreis
+question: >
+  Wie nah kommt der Phelix-DE Base Year Future für das Folgejahr (Cal Y+1) dem später
+  eintretenden Jahresmittel des Day-Ahead-Preises, und taugt er damit als Messlatte für ein
+  eigenes, aus freien Daten geschätztes Preisniveau?
+requested_by: Maulwurf
+kind: comparison
+inputs:
+  futures: {datei: tabellen/terminpreise.csv, herkunft: ÜNB-Veröffentlichungen EEG-Umlage/-Finanzierungsbedarf}   # von Hand, je Zeile Quelle
+  spot:
+    source: energy_charts      # /price, CC BY 4.0 (Bundesnetzagentur | SMARD.de)
+    zonen: {DE-AT-LU: bis 2018-09-30, DE-LU: ab 2018-10-01}
+    from: 2015-01-01
+    vollstaendig_ab_stunden: 8700
+method:
+  naive: [mittel_16_06_bis_15_09_vorjahr, mittel_12_monate_bis_15_09_vorjahr]   # mind. 95 % der Stunden
+  metrics: [bias, mae, mape, n]
+  ohne_krise: [2021, 2022, 2023, 2024]   # Kennzahlen zusätzlich ohne diese Lieferjahre
+outputs:
+  tables: [terminpreise, paare, kennzahlen, kennzahlen_ohne_krise, lauf]
+  figures: [termin_gegen_ist]
+schedule: once

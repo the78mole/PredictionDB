@@ -1,6 +1,6 @@
 # Preisniveau aus freien Daten: Backtest 2016–2026
 
-Einmalige Auswertung vom 25.10.2026. Frage: Wie gut sagt ein Modell, das nur freie Daten nutzt,
+Einmalige Auswertung vom 25.10.2026, Auftrag in [job.yaml](job.yaml). Frage: Wie gut sagt ein Modell, das nur freie Daten nutzt,
 das Monatsmittel des Day-Ahead-Preises (Base) und die Marktwerte Solar und Wind an Land für die
 nächsten 18 Monate voraus? Hintergrund: Für Terminpreise gibt es keine freie Quelle. Der
 Terminpreis ist ohnehin nur ein mäßiger Schätzer des späteren Spotpreises

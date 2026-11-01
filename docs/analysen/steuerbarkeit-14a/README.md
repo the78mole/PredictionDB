@@ -1,6 +1,6 @@
 # Steuerbarkeit nach § 14a EnWG: Senken Wärmepumpen und E-Autos die Lastspitze?
 
-Einmalige Auswertung vom 26.10.2026. Die Frage: Neue Wärmepumpen und Wallboxen sind seit
+Einmalige Auswertung vom 26.10.2026, Auftrag in [job.yaml](job.yaml). Die Frage: Neue Wärmepumpen und Wallboxen sind seit
 2024 steuerbare Verbrauchseinrichtungen. Ihre Betreiber wählen zwischen drei Modulen. Reicht
 der Anreiz aus Modul 3, damit sie ihren Verbrauch aus der Lastspitze nehmen? Oder wählen
 die meisten Modul 1 oder 2, sodass die Steuerbarkeit an der Höchstlast nichts ändert?

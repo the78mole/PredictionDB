@@ -1,0 +1,27 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; Job-Definition nachträglich festgehalten (2026-11-01)
+# ausgeführt von auswertung.py im selben Ordner (Preisblätter in daten.py), baut auf elektrifizierung-last auf
+id: steuerbarkeit-14a
+title: Steuerbarkeit nach § 14a EnWG, senken Wärmepumpen und E-Autos die Lastspitze?
+question: >
+  Reicht der Anreiz aus Modul 3 (zeitvariable Netzentgelte), damit Betreiber steuerbarer
+  Wärmepumpen und Wallboxen ihren Verbrauch aus der Lastspitze nehmen, oder wählen die meisten
+  Modul 1 oder 2, sodass die Steuerbarkeit an der Höchstlast nichts ändert?
+requested_by: Maulwurf
+kind: custom
+inputs:
+  basis: ../elektrifizierung-last   # Vollausbau, Wetterjahre 1991-2025, gleicher Cache
+  prices: {source: smard, code: da_price_de_lu, period: {from: 2024-01-01, to: 2025-12-31}}
+  manual: daten.py             # Preisblätter Netzentgelte 2026 von 12 Netzbetreibern, je mit Quelle
+method:
+  haushalt: {e_wp_kwh: 4500, e_ev_kwh: 2000, zaehler_modul2_eur: 25, ust: 1.19}
+  module: [modul_1, modul_2, modul_3, dynamischer_tarif]
+  waermepumpe: [monovalent, bivalent_-5_bis_0, bivalent_-10_bis_-5]   # Heizstab unter Bivalenzpunkt
+  verschiebung: {wp_nt_anteil: 0.10, wp_flex_anteil_dynamisch: 0.20}
+  hochlast_fenster_winter: [17, 18, 19]
+  teilnahme: Anteil Modul 3 je Ersparnis, Teilnahmekurven
+  metrics: [ersparnis_eur_a, jahreshoechstlast_gw, stunde_jahresspitze]
+outputs:
+  tables: [preisblaetter_2026, preisblaetter_pruefung, haushalt_module, bivalenz, szenarien,
+           teilnahme, lauf]
+  figures: [ersparnis_module, zeitfenster_winter, kaeltewelle_modul3, teilnahme]
+schedule: once

@@ -1,6 +1,6 @@
 # Merit-Order Deutschland aus dem Marktstammdatenregister
 
-Einmalige Auswertung vom 27.10.2026. Frage: Wie sieht die Angebotskurve der Day-Ahead-Auktion
+Einmalige Auswertung vom 27.10.2026, Auftrag in [job.yaml](job.yaml). Frage: Wie sieht die Angebotskurve der Day-Ahead-Auktion
 DE-LU heute aus, wenn man sie nur aus freien Daten nachbaut? Die echten aggregierten
 Gebotskurven verkauft die EPEX über die EEX. Sie kosten ab etwa 68 €/Monat, gibt es nur für
 EPEX-Mitglieder und dürfen nicht weitergegeben werden. Für dieses Projekt fallen sie deshalb weg.

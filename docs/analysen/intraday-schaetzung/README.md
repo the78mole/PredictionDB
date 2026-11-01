@@ -1,6 +1,6 @@
 # Intraday-Preis aus freien Daten schätzen?
 
-Einmalige Auswertung vom 28.10.2026. Frage: Lässt sich der Intraday-Preis DE-LU aus freien Daten
+Einmalige Auswertung vom 28.10.2026, Auftrag in [job.yaml](job.yaml). Frage: Lässt sich der Intraday-Preis DE-LU aus freien Daten
 (Day-Ahead-Preis und Prognosefehler aus SMARD) annähernd schätzen? Eine freie Quelle für
 Intraday-Preise gibt es nicht. Energy-Charts, SMARD und ENTSO-E liefern per API nur Day-Ahead,
 und die EPEX-Intraday-Daten dürfen nicht weitergegeben werden.

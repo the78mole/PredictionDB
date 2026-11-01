@@ -1,6 +1,6 @@
 # PV-Ausrichtung mit Speicher: Süd, Ost-West oder Ost-West mit Fassade?
 
-Einmalige Auswertung vom 22.10.2026. Frage: Was erlöst eine Anlage mit 19,9 kWp und einem
+Einmalige Auswertung vom 22.10.2026, Auftrag in [job.yaml](job.yaml). Frage: Was erlöst eine Anlage mit 19,9 kWp und einem
 Speicher von 50 kWh / 25 kW am Day-Ahead-Markt, je nachdem, wie die Module ausgerichtet sind?
 Verglichen werden drei Belegungen derselben 19,9 kWp, alle Dachflächen 45° geneigt:
 
