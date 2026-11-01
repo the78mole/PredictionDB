@@ -1,0 +1,35 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; Job-Definition nachträglich festgehalten (2026-11-01)
+# ausgeführt von mastr_export.py, db_export.sh und auswertung.py im selben Ordner
+id: merit-order
+title: Merit-Order Deutschland aus dem Marktstammdatenregister
+question: >
+  Wie sieht die Angebotskurve der Day-Ahead-Auktion DE-LU heute aus, wenn man sie nur aus
+  freien Daten nachbaut (MaStR-Einheiten, geschätzte Wirkungsgrade, Brennstoff- und CO2-Preise
+  vom Stichtag, Wärmegutschrift für KWK), statt die unfreien EPEX-Gebotskurven zu nutzen?
+requested_by: Maulwurf
+kind: custom
+inputs:
+  mastr:                       # Gesamtdatenexport 20.10.2026 (Release 26.2), DL-DE-BY-2.0, aus Bronze
+    tables: [EinheitenVerbrennung, AnlagenKwk, EinheitenStromSpeicher, EinheitenKernkraft]
+    status: in_betrieb
+  series:
+    view: energy.value_best    # SMARD und Energy-Charts, CC BY 4.0, Stundenmittel
+    codes: [da_price_de_lu, load_actual, gen_*]
+  capacity: assets.capacity_daily
+  prices:                      # Stichtag 26./27.10.2026
+    db: {fx_usd_eur: 1.115, oil_ulsd_nyh: 5.265 USD/gal, oil_brent_m: 116.8 USD/bbl}
+    manual: {eua_dez26: 86 EUR/t, ttf_frontmonat: 94.6 EUR/MWh, api2: 137 USD/t, behg_2026: 60 EUR/t}
+method:
+  ausgeschlossen: [notstrom, netzreserve, kapazitaetsreserve, voruebergehend_stillgelegt]
+  verfuegbarkeit: {thermisch: 0.88, pumpspeicher: 0.90}
+  wirkungsgrad: linear im Baujahr je Technologieklasse, gedeckelt durch Bestwert
+  grenzkosten: Brennstoff / eta + EF * CO2 (BEHG unter 8 MW el.)
+  kwk: {waermewert: ersetzter Gaskessel eta 0.92, kopplung: [fest, entnahme]}
+  jahreszeiten: {sommer: 0.25, jetzt: 0.6, winter: 1.0}   # Anteil der Wärmeleistung
+  kalibrierung: Abgleich der Treppe mit Day-Ahead-Preis über Residuallast (Korrektur in GW)
+outputs:
+  tables: [kraftwerkspark, ausgeschlossen, brennstoffe, beispielanlagen, kalibrierung, kennzahlen,
+           treppe_jetzt, treppe_sommer, treppe_winter]
+  figures: [merit_order_jahreszeiten, merit_order_stunde, abgleich, wirkungsgrade]
+  html: interaktiv.template.html   # mit --html, nicht im Repo
+schedule: once

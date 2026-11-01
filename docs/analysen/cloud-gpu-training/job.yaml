@@ -1,0 +1,27 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; Job-Definition nachträglich festgehalten (2026-11-01)
+# Abschätzung ohne Auswertungsskript; Messungen auf der VM nur lesend
+id: cloud-gpu-training
+title: Training auf einer gemieteten Cloud-GPU, Datenmengen, Zeit und Kosten
+question: >
+  Welche Datenmengen entstehen und welchen Zeitvorteil hätte es, die Prognosemodelle (LightGBM
+  wie heute, dazu TFT, TiDE und N-HiTS) auf einer gemieteten Cloud-GPU statt auf der VM zu
+  trainieren? Was kostet das am Beispiel vast.ai, und welche GPU passt?
+requested_by: Maulwurf
+kind: custom                   # Abschätzung aus Messungen und Angeboten, kein Datenlauf
+inputs:
+  vm:                          # gemessen am 29.10.2026, nur lesend
+    hardware: [cpu, ram]
+    snapshot: snap-v2-20261029
+    registry: [manifeste, meta.ml_job, lauf.json der Backtests]
+  config: config/ml/de_lu_v2.yaml
+  prices: {source: vast.ai, stand: 2026-10-29, typ: on_demand_je_gpu_stunde}
+  network: {rate_mb_s: 8.3}    # Drosselung der VM, siehe pve-netzrate
+method:
+  lightgbm: gemessen auf der VM (Snapshot-Export, Fit, Backtest je Variante)
+  netze: geschätzt aus Modellgröße und Datenmenge (TFT, TiDE, N-HiTS), Faktor 2 Unsicherheit
+  transfer: Snapshot hoch/runter über GHCR, Modell- und Backtest-Rückgabe
+  vergleich: [vast.ai-GPUs, Tesla T4 im eigenen Server, neuere CPU/AMD-APU, NPU/TPU/Jetson/Hailo]
+  metrics: [laufzeit_h, kosten_eur, datenmenge_mb]
+outputs:
+  figures: [netz-aufbau, training-ablauf]
+schedule: once

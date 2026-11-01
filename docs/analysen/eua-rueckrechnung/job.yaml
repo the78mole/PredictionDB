@@ -1,0 +1,35 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; Job-Definition nachträglich festgehalten (2026-11-01)
+# ausgeführt von auktionen.py (Auktionsreihe) und auswertung.py im selben Ordner
+id: eua-rueckrechnung
+title: EUA-Preis aus Strompreisen zurückrechnen, Machbarkeit mit freien Daten
+question: >
+  Lässt sich der Preis für EU-Emissionsberechtigungen (EUA) täglich und mit kurzem Verzug aus
+  frei lizenzierten Strommarktdaten zurückrechnen? Referenz sind die Auktionsberichte der
+  EU-Kommission.
+requested_by: Maulwurf
+kind: backtest
+inputs:
+  reference: {source: eu_dg_clima_auktionsberichte, period: {from: 2015-01-01, to: 2025-06-30}}   # PDF, einmalig
+  series:
+    source: smard              # CC BY 4.0
+    codes: [da_price_de_at_lu, da_price_de_lu, load_actual, residual_load, gen_lignite,
+            gen_hard_coal, gen_gas, gen_nuclear, gen_wind_*, gen_solar]
+  monthly: {worldbank_pink_sheet: [natural_gas_europe, coal_south_african], eurostat: ert_bil_eur_m}
+  optional: {source: acer_terminal_lng, lizenz: ungeklaert, nur_zusatzvariante: true}
+method:
+  stundenklassen: Auslastung je Brennstoff relativ zu 5/95-%-Quantil der letzten 30 Tage
+  merkmal: Median des Preises der Stunden je Klasse, Fenster 14 Tage (sonst 28, 56)
+  struktur: EUA = (eta * Preis_Braunkohle - Brennstoff) / EF
+  models: [fortschreibung, struktur, struktur_korrigiert, regel, kalibriert, verankert,
+           gemeinsam, acer]
+  kalibrierung: {stichtag: monatserster, fenster_monate: 24, nur_veroeffentlichte_berichte: true}
+  parameterwahl: {from: 2018-01-01, to: 2023-12-31}
+  test: {from: 2024-01-01, to: 2025-06-30}   # realer Berichtsverzug
+  uncertainty: {intervall: empirische_quantile_5_95, group_by: verzug}
+  metrics: [mae, rmse, bias, n]
+outputs:
+  tables: [kennzahlen_test, kennzahlen_2018_2025, parameterwahl_2018_2023, backtest_tag,
+           merkmale_tag, empfindlichkeit, fester_verzug, aenderungsmodelle, abgleich_berichtsmittel,
+           plausibilitaet_monat, plausibilitaetsreihe_tag]
+  figures: [auktionsreihe, tagesreihe, test_verlauf, fehler_verzug, plausibilitaet]
+schedule: once

@@ -1,0 +1,31 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; Job-Definition nachträglich festgehalten (2026-11-01)
+# ausgeführt von auswertung.py im selben Ordner (Daten in daten.py, Brennstoffe in brennstoff.py)
+id: preisniveau-schaetzung
+title: Preisniveau aus freien Daten, Backtest 2016-2026
+question: >
+  Wie gut sagt ein Modell, das nur freie Daten nutzt, das Monatsmittel des Day-Ahead-Preises
+  (Base) und die Marktwerte Solar und Wind an Land für die nächsten 18 Monate voraus,
+  verglichen mit einfachen Spot-Mitteln?
+requested_by: Maulwurf
+kind: backtest
+inputs:
+  energy_charts: {endpoints: [/price, /public_power, /installed_power], from: 2015-01-01}   # CC BY 4.0
+  steo: {source: eia_steo, issues: {from: 2015-01, to: 2026-10}, series: [NGHHUUS, BREPUUS]}
+  eurostat: nrg_stk_gasm       # Gasspeicher EU27, drei Monate Verzug
+  worldbank: natural_gas_europe   # ein Monat Verzug
+method:
+  stichtag: monatserster, nur Daten vor dem Stichtag
+  horizons_months: 18
+  niveau: Median des Preises der Stunden mit Residuallast im oberen Viertel, letzte 30 Tage
+  form: Median Preis/Niveau je Residuallastklasse 2 GW über 365 Tage
+  residuallast: gleiche Kalendermonate der bis zu 3 Vorjahre, Wind und PV nach Leistung skaliert
+  models: [modell, modell_relativ, steo_regression, regression_alle_merkmale]
+  baselines: [letzter_monat, mittel_12_monate, vorjahresmonat]
+  regression: {ridge_lambda: 1.0, min_training: 24, ohne_achsenabschnitt: true}
+  krise: {from: 2021-07, to: 2023-06}   # Kennzahlen auch ohne Krise
+  metrics: [mae, bias, n]
+  group_by: [ziel, teil (alle/ohne Krise), horizont (1-3, 4-6, ... Monate), schaetzer]
+outputs:
+  tables: [prognosen, kennzahlen_base, kennzahlen_mw_solar, kennzahlen_mw_wind_onshore, ist_monate, lauf]
+  figures: [verlauf, fehler_horizont]
+schedule: once

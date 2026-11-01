@@ -1,0 +1,43 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; Job-Definition nachträglich festgehalten (2026-11-01)
+# ausgeführt von mastr_abruf.py, smard_abruf.py, auswertung.py, mastr_pv_jahrgaenge.py, esc.py
+id: batteriespeicher-preiswirkung
+title: Preiswirkung von Batteriespeichern am Day-Ahead-Markt DE-LU
+question: >
+  Wie und ab wann verändern Batteriespeicher den Börsenpreis DE-LU merklich, wenn der Ausbau
+  aus dem abgeleitet wird, was im MaStR tatsächlich in Betrieb und in Planung steht?
+  Ergänzend: Was bringt Energy Sharing nach § 42c EnWG?
+requested_by: Maulwurf
+kind: custom                   # Simulation auf gemessenen Stunden, kein Backtest
+inputs:
+  mastr:                       # öffentliche Einheitenübersicht, Abruf 28.10.2026, DL-DE-BY-2.0
+    speicher: {ueber_30kw: vollständig, bis_30kw: Anzahl je Monat + Stichprobe 500 je Monat}
+    solar: {status: in_betrieb, group_by: [inbetriebnahmejahr, groessenklasse]}
+  series:
+    source: smard              # CC BY 4.0, Bundesnetzagentur | SMARD.de
+    from: 2019-01-01
+    codes: [da_price_de_lu, load_actual, residual_load, gen_*]
+  merit_order: ../merit-order/tabellen     # Treppen Winter, Ende Oktober, Sommer
+  steo: {source: eia_steo, issue: 2026-10, series: [BREPUUS, NGHHUUS]}
+  h0_profile: ../pv-speicher-szenario-2027/daten/h0_dyn_2025.csv
+  manual: [Netzanschlussanfragen 2025 (pv magazine), Bestand 09/2026 (Energy-Charts), NEP 2037,
+           BDEW Strompreisanalyse 08/2026, EEG-Vergütungssätze, Preisblatt e-netz Südhessen 2026]
+method:
+  basis: {from: 2025-10-27, to: 2026-10-27}   # 365 Tage, Ende ausschließlich
+  price: p_neu = p_gemessen + g(R + x) - g(R)  # R Residuallast, x Zusatzlast des Speichers
+  curves: [empirisch_isoton_je_monat, merit_order_geglaettet_1gw]
+  dispatch: {lp: wochenweise_168h, stufen: 40, wirkungsgrad: 0.86, start_ende: halb_voll}
+  zubau_gw: [0, 2, 5, 10, 15, 20, 30, 40]
+  dauer_h: {standard: 2.0, varianten: [1.0, 4.0]}
+  marktanteil: {gross: 1.0, gewerbe: 0.3, heim: 0.0}
+  wirksam: 0.7                 # perfekte Voraussicht überschätzt die Wirkung
+  ausbaupfade: [zubau_wie_2026, zubau_waechst_50pct, mastr_planung_termingerecht]
+  ee_zubau: {fest: {solar: 0.5, wind: 0.25}, je_jahr: {solar: 0.155, wind: 0.06}}
+  abregelung_gw: [3.0, 6.0]
+  metrics: [tagesspanne, abend_17_21, mittag_11_15, stunden_negativ, stunden_ueber_schwelle]
+outputs:
+  tables: [bestand_jahr, bestand_monat, planung_mastr, heimspeicher_stichprobe, zubau_jahr,
+           simulation, schwellen, zeitachse, zeitachse_ee, rueckblick_tagesspanne,
+           rueckblick_ueberschuss, esc_*]
+  figures: [bestand, angebotskurven, simulation, tagesprofil, preisdauerlinie, zeitachse,
+            zeitachse_ee, rueckblick, esc]
+schedule: once

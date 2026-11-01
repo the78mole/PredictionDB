@@ -1,0 +1,30 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; Job-Definition nachträglich festgehalten (2026-11-01)
+# ausgeführt von auswertung.py im selben Ordner
+id: pv-speicher-arbitrage
+title: PV-Speicher, Mehrerlös durch Verschieben der Einspeisung in teure Stunden
+question: >
+  Wie viel mehr erlöst eine 10-kWp-PV-Anlage (45°, Süd) am Day-Ahead-Markt, wenn ein Speicher
+  den Mittagsstrom in teure Abend-, Nacht- und Morgenstunden verschiebt, für 10 kWh / 10 kW,
+  20 kWh / 15 kW und 30 kWh / 15 kW?
+requested_by: Maulwurf
+kind: backtest                 # Fahrplan auf gemessenen Preisen je Jahr
+inputs:
+  prices: {snapshot: snap-20261022, code: da_price_de_lu, resolution: hourly}   # SMARD/ENTSO-E
+  pv:
+    source: pvgis_5_3          # SARAH3/ERA5, 2005-2023
+    anlage: {kwp: 10, neigung: 45, azimut: 0, verluste: 0.14}
+    standorte: {mitte: [50.9, 10.0], nord: [53.5, 10.0], sued: [48.4, 11.0]}
+  pv_ersatz: {code: gen_solar, jahre: [2024, 2025]}   # auf PVGIS-Profil skaliert
+method:
+  speicher: [{kwh: 10, kw: 10}, {kwh: 20, kw: 15}, {kwh: 30, kw: 15}]
+  wirkungsgrad: {laden: 0.95, entladen: 0.95}
+  fahrplan: {planung: "13:00 Europe/Berlin", fenster: bis Mitternacht Folgetag (35 h), lp: true}
+  vergleich: Direkteinspeisung mit Abregelung bei negativem Preis
+  varianten: [basis, verschleiss_3ct, wirkungsgrad_85, pv_prognosefehler, netzladen, volle_voraussicht]
+  gegenprobe: nationale Ersatzreihe gegen PVGIS 2019-2023
+  metrics: [mehrerloes_eur_a, zyklen]
+  group_by: [jahr, speicher, standort, variante]
+outputs:
+  tables: [jahre, standorte, varianten, gegenprobe_national]
+  figures: [mehrerloes_jahr, mehrerloes_monat_2025, preisprofil_sommer, beispielwoche]
+schedule: once

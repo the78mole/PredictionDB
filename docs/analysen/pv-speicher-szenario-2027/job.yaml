@@ -1,0 +1,28 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; Job-Definition nachträglich festgehalten (2026-11-01)
+# ausgeführt von auswertung.py im selben Ordner; H0-Profil in daten/ (demandlib, siehe README)
+id: pv-speicher-szenario-2027
+title: PV-Speicher, Szenario 2027 mit teurerem Haushaltsstrom und Solarmittag bei 0 ct
+question: >
+  Wie ändert sich der Mehrerlös der Speicher aus pv-speicher-arbitrage, wenn der mit H0
+  gewichtete Day-Ahead-Preis 2027 um 5 ct/kWh über 2025 liegt, der Preis in den Solarstunden
+  aber trotzdem auf 0 ct fällt?
+requested_by: Maulwurf
+kind: custom                   # Szenario auf umgeformter Preisreihe 2025
+inputs:
+  prices: {snapshot: snap-20261022, code: da_price_de_lu, year: 2025}
+  pv: {source: pvgis_5_3, standort: mitte, anlage: {kwp: 10, neigung: 45, azimut: 0}}
+  h0_profile: daten/h0_dyn_2025.csv   # BDEW H0 dynamisch über demandlib
+method:
+  szenario:
+    h0_gewichteter_preis: +5 ct/kWh (14,3 statt 9,3 ct/kWh)
+    solarstunden: 0 ct, negative Preise bleiben negativ
+    aufschlag_auf: übrige Stunden (Abend, Nacht, Morgen, trübe Tage)
+  speicher: [{kwh: 10, kw: 10}, {kwh: 20, kw: 15}, {kwh: 30, kw: 15}]
+  fahrplan: wie pv-speicher-arbitrage
+  varianten: [basis, pv_prognosefehler, wirkungsgrad_85]
+  metrics: [marktwert_pv_ct, direkt_eur, speicher_eur, mehr_eur, zyklen]
+  group_by: [szenario, speicher]
+outputs:
+  tables: [ergebnis, preise]
+  figures: [mehrerloes, preisprofil]
+schedule: once

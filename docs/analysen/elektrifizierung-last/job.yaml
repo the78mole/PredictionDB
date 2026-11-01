@@ -1,0 +1,32 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; Job-Definition nachträglich festgehalten (2026-11-01)
+# ausgeführt von auswertung.py im selben Ordner (Handwerte in daten.py, Klimaszenario in klima.py)
+id: elektrifizierung-last
+title: E-Autos, Wärmepumpen und Klimageräte, Einfluss auf Strombedarf und Lastspitzen
+question: >
+  Wie stark haben E-Autos, Wärmepumpen und Klimageräte die deutsche Netzlast bis 2025
+  verändert? Was bedeutet Vollausbau (fast alle Pkw elektrisch, Wärmepumpen überall ohne
+  nicht-fossile Alternative) für Jahresbedarf und Lastspitzen? Wie entwickelt sich die
+  Sommerlast mit Klimaanlagen im Klimaszenario 2050, und wie wirken PV und Speicher darauf?
+requested_by: Maulwurf
+kind: custom
+inputs:
+  load: {source: energy_charts, endpoint: /public_power, period: {from: 2015-01-01}}   # bis zum Abruf 26.10.2026
+  pv: {source: energy_charts, endpoints: [/public_power, /installed_power]}
+  temperature: {source: dwd_cdc, stations: 22, from: 1991-01-01, resolution: hourly}
+  eurostat: [road_eqs_carpda, road_eqr_carpda, nrg_d_hhq]
+  manual: daten.py             # BWP-Absatz, FGK, AGEB, BDEW, KBA, Destatis, Verivox, NEP; je Wert mit Quelle
+method:
+  rueckblick: Last je Jahr gegen Bestand E-Autos, Wärmepumpen, Klimageräte 2015-2025
+  basismodell: Last je Stunde aus Temperatur, Kalender und Feiertagen
+  vollausbau: {pkw: elektrisch, waermepumpen: ueberall_ohne_nicht_fossile_alternative}
+  wetterjahre: {from: 1991, to: 2025}
+  klima: Klimaszenario 2050, Installationsgrenze des Handwerks
+  pv_speicher: Ausbaustufen nach NEP-Szenariorahmen 2037/2045
+  metrics: [jahresbedarf_twh, jahreshoechstlast_gw, stunde_der_spitze]
+outputs:
+  tables: [rueckblick_jahre, temperaturempfindlichkeit, basismodell_spitzen, szenario_wetterjahre,
+           sensitivitaet, klima_szenarien, klima_wetterjahre, klima_ausbaupfad, hitze_sommer_2023_2026,
+           pv_speicher_stufen, pv_speicher_szenarien, pv_speicher_wetterjahre, lauf]
+  figures: [rueckblick_last, rueckblick_verbrauch, temperaturempfindlichkeit, typische_spitze,
+            spitzen_wetterjahre, kaeltewelle, klima_hitzewoche, klima_sommerspitzen, pv_speicher_hitzetag]
+schedule: once

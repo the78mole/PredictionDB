@@ -1,0 +1,32 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; Job-Definition nachträglich festgehalten (2026-11-01)
+# ausgeführt von auswertung.py im selben Ordner (Fahrplan aus ../pv-speicher-arbitrage/auswertung.py)
+id: pv-ausrichtung-speicher
+title: PV-Ausrichtung mit Speicher, Süd gegen Ost-West und Ost-West mit Fassade
+question: >
+  Was erlöst eine Anlage mit 19,9 kWp und einem Speicher von 50 kWh / 25 kW am Day-Ahead-Markt,
+  je nachdem, ob die Module nach Süden, Ost-West 50/50 oder Ost-West 40/40 plus 20 % Südfassade
+  ausgerichtet sind?
+requested_by: Maulwurf
+kind: backtest
+inputs:
+  prices: {snapshot: snap-20261022, code: da_price_de_lu, resolution: hourly}
+  pv:
+    source: pvgis_5_3          # je Fläche 1 kWp, 2005-2023
+    standort: [50.9, 10.0]
+    flaechen: {sued45: [45, 0], ost45: [45, -90], west45: [45, 90], fassade90: [90, 0]}
+    verluste: 0.14
+  pv_ersatz: {code: gen_solar, jahre: [2024, 2025]}
+method:
+  belegungen:
+    sued: {sued45: 19.9}
+    ost_west_50_50: {ost45: 9.95, west45: 9.95}
+    ost_west_40_40_fassade_20: {ost45: 7.96, west45: 7.96, fassade90: 3.98}
+  speicher: {kwh: 50, kw: 25, wirkungsgrad: {laden: 0.95, entladen: 0.95}}
+  fahrplan: wie pv-speicher-arbitrage (13:00 bis Mitternacht Folgetag)
+  varianten: [basis, pv_prognosefehler, wirkungsgrad_85]
+  metrics: [pv_kwh, marktwert_pv_ct, direkt_eur, speicher_eur, mehr_eur, zyklen]
+  group_by: [belegung, jahr]
+outputs:
+  tables: [jahre, ertrag_langjaehrig]
+  figures: [erloes_jahr, mehrerloes_jahr, ertrag_monat, tagesprofil, beispieltage]
+schedule: once

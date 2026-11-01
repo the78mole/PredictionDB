@@ -1,0 +1,38 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; Job-Definition nachträglich festgehalten (2026-11-01)
+# ausgeführt von ntp_fetch.py, db_export.sql, auswertung.py und auswertung2.py im selben Ordner
+id: intraday-schaetzung
+title: Intraday-Preis DE-LU aus freien Daten schätzen
+question: >
+  Lässt sich der Intraday-Preis DE-LU aus freien Daten (Day-Ahead-Preis und Prognosefehler aus
+  SMARD) annähernd schätzen, obwohl es keine freie Quelle für Intraday-Preise gibt?
+requested_by: Maulwurf
+kind: backtest
+inputs:
+  reference:                   # nur Referenz, keine Lizenz: Rohdaten lokal, nicht in DB oder Repo
+    source: netztransparenz
+    endpoints: [api/v1/data/IdAep, reBAP]
+    period: {from: 2020-07-01, to: 2026-10-27}
+  series:
+    view: energy.value_best    # SMARD, Viertelstunden
+    codes: [da_price_de_lu, load_actual, load_da_forecast, gen_wind_*, gen_solar,
+            gen_da_forecast_*, residual_load]
+method:
+  resolution: 15min
+  train: {to: 2024-12-31}
+  test: {from: 2025-01-01, to: 2026-10-27}
+  spread: ID-AEP minus Day-Ahead je Prognosefehlerklasse der Residuallast
+  models:
+    - B0: Intraday = Day-Ahead           # Pflicht-Baseline
+    - B1: Day-Ahead + mittleres Tagesprofil
+    - G0: LightGBM nur mit vorab bekannten Merkmalen
+    - L1: linear mit Prognosefehlern
+    - G1: LightGBM mit Prognosefehlern
+    - L2: Huber-Regression mit Prognosefehlern (auch auf P1-P99 gekappt)
+  zusatz: [stundenmittel, nur_15min_day_ahead (Training bis 04/2026, Test ab 05/2026), rebap]
+  metrics: [mae, median_abs_error, r2_spread, korrelation]
+  group_by: [jahr, fehlerklasse, stunde]
+  publish: nur aggregierte Kennzahlen (README), keine Rohdaten
+outputs:
+  tables: [t1_abstand_je_jahr, t2_spread_je_fehlerklasse, t3_modelle_test_2025_2026,
+           t4_test_je_jahr, t5_test_je_stunde]   # nur lokal in daten/out/, Lizenz der Referenz ungeklärt
+schedule: once

@@ -1,0 +1,31 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; ausgeführt von auswertung.py im selben Ordner
+# (erste Analyse, lief noch mit Parametern als Konstanten; Job-Definition nachträglich festgehalten)
+id: gfs-v15-v16
+title: GFS v15 gegen v16, Prognosefehler an DWD-Stationen
+question: Wie stark unterscheiden sich die Fehler von v15 und v16 gegenüber Messungen, von der Analyse bis 10 Tage?
+requested_by: Maulwurf
+kind: verification             # verification | comparison | backtest | data_quality | custom
+inputs:
+  forecast:
+    source: gfs_0p25
+    periods:                   # Version je Lauf aus meta.model_version
+      - {label: v15 2021, from: 2021-01-01, to: 2021-03-22}
+      - {label: v16 2022, from: 2022-01-01, to: 2022-03-22}   # gleiche Kalendertage
+      - {label: v16 2023, from: 2023-01-01, to: 2023-03-22}   # Kontrolle: Jahresschwankung
+    runs: [0, 12]
+    variables: [t2m, d2m, ff10, prmsl, dswrf]
+  observations:
+    source: dwd_cdc            # Ausweichquelle: noaa_isd
+    stations: {country: DE, min_completeness: 0.8, in_all_periods: true}
+method:
+  horizons_h: [0, 6, 12, 24, 36, 72, 96, 240]
+  time_interpolation: linear   # nur für fehlende Schritte, erst beim Lesen; none | linear | solar
+  space_interpolation: bilinear
+  corrections: {t2m: lapse_rate_0.0065}       # Modellhöhe -> Stationshöhe
+  windows: {dswrf: mean_6h_ending, skip_night: true}
+  metrics: [bias, mae, rmse, n]
+  uncertainty: {rmse: bootstrap_over_runs, level: 0.95}
+  group_by: [period, variable, horizon]
+outputs:
+  figures: [error_by_horizon]
+schedule: once                 # once | monthly | on_new_model_version

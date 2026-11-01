@@ -37,6 +37,13 @@ repos:
         files: ^docs/analysen/.*\.py$
         pass_filenames: false
         require_serial: true
+      - id: analysen-konvention
+        name: Analysen (README, job.yaml, lauf.json je Ordner, siehe CLAUDE.md)
+        entry: uv run --no-sync python scripts/analysen-pruefen.py
+        language: system
+        files: ^(docs/analysen/.*|scripts/analysen-pruefen\.py)$
+        pass_filenames: false
+        require_serial: true
       - id: strictdoc
         name: strictdoc (Anforderungen und @relation-Marker)
         # Exportiert reqs/ nach build/reqs/html. Bricht bei unbekannten IDs in Relationen
