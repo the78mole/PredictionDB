@@ -71,6 +71,11 @@ ignore_missing_imports = true
 testpaths = ["packages", "services", "predict", "tests"]
 addopts = ["-ra", "-m", "not network"]
 asyncio_mode = "auto"
+# Veraltete APIs sollen im Test auffallen, nicht erst beim Entfernen.
+filterwarnings = [
+    "error::DeprecationWarning",
+    "error::FutureWarning",
+]
 markers = [
     "network: braucht Internetzugang zu externen Quellen (mit -m network ausführen)",
     "integration: benötigt laufende Dienste (Postgres, Garage) aus compose.yaml",

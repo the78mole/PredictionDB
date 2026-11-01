@@ -79,7 +79,7 @@ def daily_calendar(start: date, end: date) -> pd.DataFrame:
     """
     days = pd.date_range(start - timedelta(days=3), end + timedelta(days=3), freq="D")
     hs = holiday_share(days)
-    dow = days.dayofweek.to_numpy()
+    dow = days.day_of_week.to_numpy()
     off = (hs >= 0.5) | (dow >= 5)
     # Brückentag: Werktag ohne Feiertag, links und rechts frei (Feiertag oder Wochenende)
     prev_off = np.r_[False, off[:-1]]
@@ -111,7 +111,7 @@ def calendar_features(ts_utc: pd.DatetimeIndex | pd.Series) -> pd.DataFrame:
     local_days = pd.DatetimeIndex(local.normalize().tz_localize(None))
     daily = daily_calendar(local_days.min().date(), local_days.max().date())
     d = daily.reindex(local_days.date)
-    doy = local.dayofyear.to_numpy()
+    doy = local.day_of_year.to_numpy()
     utc_off = (local.tz_localize(None) - idx.tz_localize(None)).total_seconds().to_numpy() / 3600
     # Tageslänge als glatter Saisonindikator (astronomisch, 51° N)
     decl = 23.44 * np.sin(np.radians(360 / 365 * (doy - 81)))
@@ -120,8 +120,8 @@ def calendar_features(ts_utc: pd.DatetimeIndex | pd.Series) -> pd.DataFrame:
     return pd.DataFrame(
         {
             "hour": local.hour.to_numpy(),
-            "dow": local.dayofweek.to_numpy(),
-            "weekend": (local.dayofweek >= 5).astype(np.int8),
+            "dow": local.day_of_week.to_numpy(),
+            "weekend": (local.day_of_week >= 5).astype(np.int8),
             "month": local.month.to_numpy(),
             "doy_sin": np.sin(2 * np.pi * doy / 365.25),
             "doy_cos": np.cos(2 * np.pi * doy / 365.25),
