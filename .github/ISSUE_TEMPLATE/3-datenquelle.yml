@@ -1,0 +1,50 @@
+name: Datenquelle vorschlagen
+description: Eine weitere freie Datenquelle für Prognose oder Training einbinden.
+title: "feat(daten): "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Trainierte Modelle und Daten werden öffentlich veröffentlicht. Regelmäßige Eingänge
+        müssen deshalb **frei lizenziert** und **vollautomatisch per API oder Download** abrufbar
+        sein. Quellen, die PDFs, Webseiten-Parsing oder Handpflege brauchen, kommen nicht infrage.
+        Details: [docs/DATENQUELLEN-ZUGANG.md](https://github.com/the78mole/PredictionDB/blob/main/docs/DATENQUELLEN-ZUGANG.md).
+  - type: input
+    id: quelle
+    attributes:
+      label: Quelle
+      description: Name und Link zur Daten- oder API-Dokumentation
+    validations:
+      required: true
+  - type: textarea
+    id: inhalt
+    attributes:
+      label: Inhalt und Nutzen
+      description: Welche Reihen, welche Auflösung, welcher Zeitraum? Was verbessert sich an der Prognose?
+    validations:
+      required: true
+  - type: input
+    id: lizenz
+    attributes:
+      label: Lizenz
+      description: Link zu den Nutzungsbedingungen
+      placeholder: CC BY 4.0, DL-DE/BY-2.0, gemeinfrei, …
+    validations:
+      required: true
+  - type: dropdown
+    id: zugang
+    attributes:
+      label: Zugang
+      options:
+        - offene API ohne Schlüssel
+        - API mit kostenlosem Schlüssel
+        - statische Dateien mit fester URL
+        - anderes (bitte beschreiben)
+    validations:
+      required: true
+  - type: textarea
+    id: bemerkungen
+    attributes:
+      label: Bemerkungen
+      description: Ratenlimits, Verfügbarkeit von Historie, bekannte Lücken

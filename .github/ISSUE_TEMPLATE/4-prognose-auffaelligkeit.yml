@@ -1,0 +1,39 @@
+name: Auffällige Prognose melden
+description: Eine Last- oder Preisprognose weicht deutlich ab oder sieht unplausibel aus.
+title: "Prognose: "
+labels: [question]
+body:
+  - type: input
+    id: zeitraum
+    attributes:
+      label: Betroffener Zeitraum
+      description: Lieferzeitraum der Prognose, möglichst mit Zeitzone
+      placeholder: 2026-10-29 17:00–20:00 MEZ
+    validations:
+      required: true
+  - type: dropdown
+    id: groesse
+    attributes:
+      label: Größe
+      multiple: true
+      options:
+        - Day-Ahead-Preis
+        - Last
+        - Erzeugung (PV, Wind)
+        - anderes
+    validations:
+      required: true
+  - type: input
+    id: fundort
+    attributes:
+      label: Wo gesehen?
+      description: Öffentliches Dashboard, eigener predict-Stack (mit Version), Datei-Ausgabe …
+    validations:
+      required: true
+  - type: textarea
+    id: beobachtung
+    attributes:
+      label: Beobachtung
+      description: Prognose gegen tatsächlichen Wert, gern mit Screenshot und vermuteter Ursache.
+    validations:
+      required: true
