@@ -44,7 +44,16 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --locked --all-packages
-      - run: uv run pytest
+      # Bericht für die Pages-Seite (Workflow pages.yml holt ihn vom Lauf auf main)
+      - run: >-
+          uv run pytest --html=build/tests/unit.html --self-contained-html
+          --junitxml=build/tests/unit.xml
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: testbericht-unit
+          path: build/tests
+          if-no-files-found: ignore
 
   stack:
     name: Image und Compose-Stack
@@ -75,7 +84,15 @@ jobs:
         run: |
           uv sync --locked --all-packages
           set -a; . ./.env; set +a
-          PDB_INTEGRATION=1 uv run pytest tests/integration
+          PDB_INTEGRATION=1 uv run pytest tests/integration \
+            --html=build/tests/integration.html --self-contained-html \
+            --junitxml=build/tests/integration.xml
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: testbericht-integration
+          path: build/tests
+          if-no-files-found: ignore
       - name: Logs bei Fehler
         if: failure()
         run: docker compose logs
