@@ -6,6 +6,12 @@ oder des Netzentwicklungsplans abgeleitet, sondern aus dem, was im Marktstammdat
 tatsächlich in Betrieb und in Planung steht. Die Preiswirkung kommt aus einer Simulation auf den
 SMARD-Stunden des letzten Jahres.
 
+> **Nachtrag 01.11.2026:** Der Abgleich mit dem Strompreissimulator des Fraunhofer ISE für 2025
+> ([batteriespeicher-2025-ise](../batteriespeicher-2025-ise/README.md)) zeigt, dass die empirische
+> Monatskurve dieser Analyse die Wirkung auf Preisspitzen unterschätzt und ohne Abregelungsplateau
+> die negativen Stunden zu schnell verschwinden lässt. Die dortige Näherung (Steigung nach
+> Preisniveau plus Abregelungsplateau) trifft das ISE-Ergebnis deutlich besser.
+
 ## Ergebnis in Kürze
 
 **Die Wirkung ist schon da und wird 2027 deutlich.** Ein zusätzlicher, am Markt geführter
