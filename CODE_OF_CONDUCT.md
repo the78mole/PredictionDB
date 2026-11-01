@@ -42,7 +42,7 @@ vom Projekt. Entscheidungen werden der betroffenen Person in der Regel begründe
 
 ## Meldung
 
-Verstöße bitte vertraulich an **KONTAKT-ADRESSE** melden. Jede Meldung wird geprüft,
+Verstöße bitte vertraulich an [predictiondb-kodex@the78mole.de](mailto:predictiondb-kodex@the78mole.de) melden. Jede Meldung wird geprüft,
 vertraulich behandelt und beantwortet. Wer sich gegen eine Entscheidung wehren möchte, kann
 über dieselbe Adresse widersprechen.
 
@@ -63,4 +63,4 @@ discussions, commit messages). Be respectful and criticise work, not people. Har
 insults, sexualised language, publishing other people's private data and knowingly adding
 third-party material without the rights to it are not acceptable. The maintainer may edit or
 remove contributions and warn or ban participants. Report incidents confidentially to
-**KONTAKT-ADRESSE**. Adapted from the Contributor Covenant 2.1 (CC BY 4.0).
+[predictiondb-kodex@the78mole.de](mailto:predictiondb-kodex@the78mole.de). Adapted from the Contributor Covenant 2.1 (CC BY 4.0).
