@@ -81,34 +81,39 @@ alle Schritte der Quelle (keine zeitliche Interpolation). Gespeichert als Int16 
 der Spalte „Schritt“. Kopie in GHCR: `ghcr.io/the78mole/predictiondb-data/gfs-0p25-silver` bzw.
 `gfs-0p5-silver` (siehe [ARCHITEKTUR.md](ARCHITEKTUR.md) 5.5).
 
-| Variable | Einheit | Inhalt | aus | Schritt | Offset | Wertebereich |
-|---|---|---|---|---|---|---|
-| `t2m` | K | Temperatur 2 m | `TMP` 2 m | 0,01 | 273,15 | −54,52 … 600,82 |
-| `d2m` | K | Taupunkt 2 m | `DPT` 2 m | 0,01 | 273,15 | −54,52 … 600,82 |
-| `r2m` | % | relative Feuchte 2 m | `RH` 2 m | 0,01 | 50 | 0 … 377,67 |
-| `u10`, `v10` | m s-1 | Wind 10 m (West-Ost, Süd-Nord) | `UGRD`/`VGRD` 10 m | 0,01 | 0 | ±327,67 |
-| `u100`, `v100` | m s-1 | Wind 100 m | `UGRD`/`VGRD` 100 m | 0,01 | 0 | ±327,67 |
-| `gust` | m s-1 | Böen am Boden | `GUST` | 0,01 | 0 | 0 … 327,67 |
-| `dswrf` | W m-2 | Globalstrahlung, Mittel im Intervall | `DSWRF` (Mittel) | 0,05 | 0 | 0 … 1 638,35 |
-| `tcc` | % | Gesamtbedeckung, Momentanwert | `TCDC` (Momentanwert) | 0,01 | 50 | 0 … 377,67 |
-| `tcc_mean` | % | Gesamtbedeckung, Mittel im Intervall | `TCDC` (Mittel) | 0,01 | 50 | 0 … 377,67 |
-| `tp` | kg m-2 h-1 | Niederschlag je Stunde im Intervall | `APCP` (Summe) | 0,001 | 30 | 0 … 62,767 |
-| `csnow` | 1 | Schneefall, kategorisch (0/1) | `CSNOW` (Momentanwert) | 0,001 | 0 | 0 … 32,767 |
-| `csnow_mean` | 1 | Anteil Schneefall im Intervall | `CSNOW` (Mittel) | 0,001 | 0 | 0 … 32,767 |
-| `prmsl` | Pa | Luftdruck auf Meereshöhe | `PRMSL` | 1 | 100 000 | 67 233 … 132 767 |
-| `sp` | Pa | Luftdruck am Boden | `PRES` surface | 1 | 87 500 | 54 733 … 120 267 |
-| `dlwrf` | W m-2 | Gegenstrahlung, Mittel im Intervall | `DLWRF` (Mittel) | 0,05 | 0 | 0 … 1 638,35 |
-| `sunshine` | 1 | Sonnenscheinanteil im Intervall | `SUNSD` | 0,0001 | 0 | 0 … 3,2767 |
-| `weasd` | kg m-2 | Schnee-Wasseräquivalent | `WEASD` | 0,1 | 0 | 0 … 3 276,7 |
-| `snod` | m | Schneehöhe | `SNOD` | 0,001 | 0 | 0 … 32,767 |
-| `tsoil_0_10`, `tsoil_10_40` | K | Bodentemperatur 0–10 cm, 10–40 cm | `TSOIL` | 0,01 | 273,15 | −54,52 … 600,82 |
-| `soilw_0_10`, `soilw_10_40` | 1 | Bodenfeuchte (Volumenanteil) 0–10 cm, 10–40 cm | `SOILW` | 0,0001 | 0 | 0 … 3,2767 |
+| Variable | Einheit | Inhalt | aus | Schritt | Offset | Int16-Bereich | gespeichert |
+|---|---|---|---|---|---|---|---|
+| `t2m` | K | Temperatur 2 m | `TMP` 2 m | 0,01 | 273,15 | −54,52 … 600,82 | −54,52 … 600,82 |
+| `d2m` | K | Taupunkt 2 m | `DPT` 2 m | 0,01 | 273,15 | −54,52 … 600,82 | −54,52 … 600,82 |
+| `r2m` | % | relative Feuchte 2 m | `RH` 2 m | 0,01 | 50 | −277,67 … 377,67 | 0 … 377,67 |
+| `u10`, `v10` | m s-1 | Wind 10 m (West-Ost, Süd-Nord) | `UGRD`/`VGRD` 10 m | 0,01 | 0 | ±327,67 | ±327,67 |
+| `u100`, `v100` | m s-1 | Wind 100 m | `UGRD`/`VGRD` 100 m | 0,01 | 0 | ±327,67 | ±327,67 |
+| `gust` | m s-1 | Böen am Boden | `GUST` | 0,01 | 0 | ±327,67 | 0 … 327,67 |
+| `dswrf` | W m-2 | Globalstrahlung, Mittel im Intervall | `DSWRF` (Mittel) | 0,05 | 0 | ±1 638,35 | 0 … 1 638,35 |
+| `tcc` | % | Gesamtbedeckung, Momentanwert | `TCDC` (Momentanwert) | 0,01 | 50 | −277,67 … 377,67 | 0 … 377,67 |
+| `tcc_mean` | % | Gesamtbedeckung, Mittel im Intervall | `TCDC` (Mittel) | 0,01 | 50 | −277,67 … 377,67 | 0 … 377,67 |
+| `tp` | kg m-2 h-1 | Niederschlag je Stunde im Intervall | `APCP` (Summe) | 0,001 | 30 | −2,767 … 62,767 | 0 … 62,767 |
+| `csnow` | 1 | Schneefall, kategorisch (0/1) | `CSNOW` (Momentanwert) | 0,001 | 0 | ±32,767 | 0 … 32,767 |
+| `csnow_mean` | 1 | Anteil Schneefall im Intervall | `CSNOW` (Mittel) | 0,001 | 0 | ±32,767 | 0 … 32,767 |
+| `prmsl` | Pa | Luftdruck auf Meereshöhe | `PRMSL` | 1 | 100 000 | 67 233 … 132 767 | 67 233 … 132 767 |
+| `sp` | Pa | Luftdruck am Boden | `PRES` surface | 1 | 87 500 | 54 733 … 120 267 | 54 733 … 120 267 |
+| `dlwrf` | W m-2 | Gegenstrahlung, Mittel im Intervall | `DLWRF` (Mittel) | 0,05 | 0 | ±1 638,35 | 0 … 1 638,35 |
+| `sunshine` | 1 | Sonnenscheinanteil im Intervall | `SUNSD` | 0,0001 | 0 | ±3,2767 | 0 … 3,2767 |
+| `weasd` | kg m-2 | Schnee-Wasseräquivalent | `WEASD` | 0,1 | 0 | ±3 276,7 | 0 … 3 276,7 |
+| `snod` | m | Schneehöhe | `SNOD` | 0,001 | 0 | ±32,767 | 0 … 32,767 |
+| `tsoil_0_10`, `tsoil_10_40` | K | Bodentemperatur 0–10 cm, 10–40 cm | `TSOIL` | 0,01 | 273,15 | −54,52 … 600,82 | −54,52 … 600,82 |
+| `soilw_0_10`, `soilw_10_40` | 1 | Bodenfeuchte (Volumenanteil) 0–10 cm, 10–40 cm | `SOILW` | 0,0001 | 0 | ±3,2767 | 0 … 3,2767 |
 
-Gespeichert wird `round((x − Offset) / Schritt)` als Int16 im Bereich −32 767 … 32 767; −32 768 ist der
-Füllwert (`_FillValue`, fehlender Wert). Der Wertebereich ist damit Offset ± 32 767 × Schritt. Werte
-außerhalb werden beim Schreiben auf die Grenze gesetzt (`np.clip` in `silver.encode`), nicht als
-fehlend markiert. Größen mit Untergrenze 0 werden schon vorher auf 0 begrenzt (`min_value`, wegen
-Rundung beim Zurückrechnen der Eimer). Der einzige Bereich, der bei extremem Wetter knapp werden
+Gespeichert wird der Rohwert `round((x − Offset) / Schritt)` als vorzeichenbehaftetes Int16 im
+Bereich −32 767 … 32 767; −32 768 ist der Füllwert (`_FillValue`, fehlender Wert). Zurück gilt
+`x = Rohwert × Schritt + Offset`. Der Offset ist also der Wert beim Rohwert 0, die Mitte des
+Int16-Bereichs, und dieser reicht von Offset − 32 767 × Schritt bis Offset + 32 767 × Schritt
+(Spalte „Int16-Bereich“; bei `tp`: 30 ± 32,767 mm/h). Werte außerhalb werden beim Schreiben
+auf die Grenze gesetzt (`np.clip` in `silver.encode`), nicht als fehlend markiert. Größen mit
+Untergrenze 0 werden schon vorher auf 0 begrenzt (`min_value`, wegen Rundung beim Zurückrechnen
+der Eimer); die Spalte „gespeichert“ zeigt den Bereich, der danach tatsächlich vorkommen kann. Bei
+`tp` bleibt so der Teil −2,767 … 0 ungenutzt, der Offset liegt nicht ganz in der Mitte des
+genutzten Bereichs. Der einzige Bereich, der bei extremem Wetter knapp werden
 kann, ist `tp` mit höchstens 62,8 mm/h; bei stündlichen Schritten im 0,25°-Mittel ist das selten,
 aber nicht ausgeschlossen. Alle anderen Grenzen liegen weit außerhalb des Physikalischen. Der
 Rundungsfehler ist höchstens ein halber Schritt (z. B. 0,005 K bei `t2m`, 0,025 W m-2 bei `dswrf`).
