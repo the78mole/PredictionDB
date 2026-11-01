@@ -799,14 +799,39 @@ Projektseite).
 <<<
 RATIONALE: >>>
 Bewusst nicht verfolgt: Code-Review (keine zweite Person zur Freigabe), Contributors (Projekt
-einer Person), Fuzzing (kein Parser für fremde Eingaben über GRIB-Bibliotheken hinaus, deren
-Fuzzing liegt upstream) und das OpenSSF-Best-Practices-Badge (Selbstauskunft ohne Nutzen für
-die Anwender).
+einer Person) und das OpenSSF-Best-Practices-Badge (Selbstauskunft ohne Nutzen für die
+Anwender).
 <<<
 QUELLE: .github/workflows/scorecard.yml
 RELATIONS:
 - TYPE: Parent
   VALUE: STK-039
+
+[REQUIREMENT]
+UID: SYSR-SEC-009
+ART: Qualität
+STATUS: Geplant
+NACHWEIS: Test
+TITLE: Fuzzing externer Eingaben
+STATEMENT: >>>
+Code, der Daten von außen parst, muss mit zufällig erzeugten und verfälschten Eingaben geprüft
+werden: mindestens ``.idx``-Inventare, GRIB-Kopfdaten und Byte-Bereiche in gribkit, die Antworten
+der Energiequellen (JSON, XML) und die Manifeste der GHCR-Artefakte. Ungültige Eingaben dürfen nur
+zu den vorgesehenen Fehlern führen, nie zu Abstürzen, Endlosschleifen oder falsch übernommenen
+Daten. Property-Tests laufen mit den Unit-Tests bei jedem Pull Request, ein Fuzzer zusätzlich
+regelmäßig.
+<<<
+RATIONALE: >>>
+Die Eingaben stammen von NOAA, GDEX, den Energiequellen und über GHCR von anderen Instanzen und
+sind damit nicht vertrauenswürdig. Vorgesehen sind Hypothesis für die Property-Tests und Atheris
+für den Fuzzer, den auch OpenSSF Scorecard (Prüfung Fuzzing) erkennt.
+<<<
+QUELLE: OpenSSF Scorecard Fuzzing; Entscheidung 2026-11-01
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-039
+- TYPE: Parent
+  VALUE: STK-016
 
 [[/SECTION]]
 
