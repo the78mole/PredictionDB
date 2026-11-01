@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PredictionDB</title>
 <meta name="description" content="Strombedarfs- und Strompreisprognose für Deutschland aus freien Wetter- und Energiedaten">
+<meta property="og:title" content="PredictionDB">
+<meta property="og:description" content="Strombedarfs- und Strompreisprognose für Deutschland aus freien Wetter- und Energiedaten">
+<meta property="og:image" content="https://the78mole.github.io/PredictionDB/assets/banner-1200.jpg">
+<meta name="twitter:card" content="summary_large_image">
 <style>
   :root {
     --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #5b6475;
@@ -22,32 +26,22 @@
     font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
   main { max-width: 1080px; margin: 0 auto; padding: 24px 16px 56px; }
-  /* Banner: Bild als Hintergrund, darüber ein dunkler Verlauf, damit der weiße
-     Text unabhängig vom Bildinhalt mindestens 7:1 Kontrast hat (WCAG AAA). */
-  .hero {
-    position: relative; overflow: hidden; border-radius: 16px;
-    min-height: 260px; padding: 72px 28px 32px;
-    display: flex; flex-direction: column; justify-content: flex-end;
-    color: #fff; background-color: #0b1220;
-    background-image:
-      linear-gradient(90deg, rgba(6,10,18,.88) 0%, rgba(6,10,18,.72) 55%, rgba(6,10,18,.45) 100%),
-      linear-gradient(0deg, rgba(6,10,18,.55) 0%, rgba(6,10,18,0) 60%),
-      image-set(url("assets/banner-1600.webp") type("image/webp"), url("assets/banner-1600.jpg") type("image/jpeg"));
-    background-size: cover; background-position: center;
+  /* Banner: Das Bild trägt Titel und Untertitel selbst, deshalb steht es
+     vollständig und ohne Text darüber. Der deutsche Untertitel folgt darunter
+     auf normalem Seitenhintergrund, die GitHub-Ecke liegt auf dunklen Pillen. */
+  .hero { position: relative; margin: 0; }
+  .hero picture, .hero img {
+    display: block; width: 100%; height: auto; aspect-ratio: 3168 / 1344;
+    border-radius: 16px; background: #e9dcc8;
   }
-  @media (max-width: 720px) {
-    .hero {
-      background-image:
-        linear-gradient(0deg, rgba(6,10,18,.85) 0%, rgba(6,10,18,.7) 100%),
-        image-set(url("assets/banner-800.webp") type("image/webp"), url("assets/banner-800.jpg") type("image/jpeg"));
-    }
+  .hero h1 {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap;
   }
-  .hero h1 { margin: 0 0 4px; font-size: clamp(1.8rem, 4vw, 2.6rem); letter-spacing: -0.01em; }
-  .hero p { margin: 0; max-width: 40rem; color: #e8edf5; text-shadow: 0 1px 2px rgba(0,0,0,.5); }
-  .hero h1 { text-shadow: 0 1px 3px rgba(0,0,0,.5); }
+  .hero p { margin: 14px 0 0; color: var(--muted); font-size: 1.05rem; }
   /* GitHub-Ecke rechts oben im Banner */
   .gh {
-    position: absolute; top: 16px; right: 16px;
+    position: absolute; top: 12px; right: 12px;
     display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px;
   }
   .gh a {
@@ -61,6 +55,11 @@
   .gh a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
   .gh svg { width: 16px; height: 16px; fill: currentColor; flex: none; }
   .gh .n { opacity: .9; font-weight: 700; }
+  @media (max-width: 720px) {
+    /* Auf schmalen Bildschirmen würden die Pillen das Bild verdecken */
+    .gh { position: static; margin-bottom: 12px; }
+    .gh a { background: #1d2330; border-color: #1d2330; }
+  }
   .grid {
     display: grid; gap: 16px; margin-top: 28px;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -110,6 +109,13 @@
         PRs <span class="n" data-gh="prs">$gh_prs</span>
       </a>
     </nav>
+    <picture>
+      <source type="image/webp"
+        srcset="assets/banner-800.webp 800w, assets/banner-1200.webp 1200w, assets/banner-2000.webp 2000w"
+        sizes="(max-width: 1080px) 100vw, 1048px">
+      <img src="assets/banner-1200.jpg" width="1200" height="509" fetchpriority="high"
+        alt="PredictionDB – Germany’s Energy Price &amp; Load Forecast Burrow: ein Maulwurf mit Sonnenbrille vor seinem Bau, mit Laptop, GRIB-Dateien, Bronze-, Silber- und Gold-Ordnern, einer Deutschlandkarte des Stromnetzes und Preiskurven; ein Schild nennt die Prognoseziele Day-Ahead-Preise, Netzlast, Wetterhistorie sowie offene Daten und Code.">
+    </picture>
     <h1>PredictionDB</h1>
     <p>Strombedarfs- und Strompreisprognose für Deutschland</p>
   </header>
