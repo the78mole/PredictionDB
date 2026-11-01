@@ -229,6 +229,8 @@ def _fcst(sec4: bytes, template: int) -> str:
     if template in (8, 11):
         # Ensemble (4.11) hat vor der Zeitangabe drei Bytes mehr als 4.8
         base = 34 if template == 8 else 37
+        if len(sec4) < base + 19:
+            raise HeaderError(f"Sektion 4 zu kurz für Vorlage 4.{template}: {len(sec4)} Bytes")
         n = sec4[base + 7]
         if n < 1:
             raise HeaderError("Statistik ohne Zeitbereich")
@@ -268,7 +270,7 @@ def parse_head(data: bytes, *, complete: bool = False) -> Head:
     ``complete``: Namen wie ``wgrib2 -s`` für alle Nachrichten und Bezugsdatum (``.idx``
     schreiben); sonst die festen Schlüssel der Kopf-Vorlagen.
 
-    @relation(SWR-GRIB-004, scope=function)
+    @relation(SWR-GRIB-004, SWR-GRIB-008, scope=function)
     """
     if len(data) < 16 or data[:4] != b"GRIB":
         raise HeaderError("keine GRIB-Kennung")
@@ -317,7 +319,7 @@ def find_boundary(chunk: bytes, size_left: int) -> int | None:
     davor, Edition 2 und eine Länge, die in die Datei passt. Ob der Treffer echt war, zeigt
     erst der Lauf über die Köpfe, der genau am nächsten Anfang bzw. Dateiende landen muss.
 
-    @relation(SWR-GRIB-004, scope=function)
+    @relation(SWR-GRIB-004, SWR-GRIB-008, scope=function)
     """
     pos = chunk.find(b"7777GRIB")
     while pos >= 0:

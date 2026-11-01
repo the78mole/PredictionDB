@@ -31,6 +31,8 @@ RELATIONS:
   VALUE: SWR-GRIB-002
 - TYPE: Parent
   VALUE: SWR-GRIB-003
+- TYPE: Parent
+  VALUE: SWR-GRIB-008
 
 [ELEMENT]
 UID: SWA-GRIB-HEADERS
@@ -44,6 +46,8 @@ ORT: packages/gribkit/src/gribkit/headers.py
 RELATIONS:
 - TYPE: Parent
   VALUE: SWR-GRIB-004
+- TYPE: Parent
+  VALUE: SWR-GRIB-008
 
 [ELEMENT]
 UID: SWA-GRIB-GRIB
