@@ -645,6 +645,197 @@ RELATIONS:
 [[/SECTION]]
 
 [[SECTION]]
+TITLE: Sicherheit der Lieferkette
+
+[TEXT]
+STATEMENT: >>>
+Die Anforderungen dieses Abschnitts orientieren sich an den Prüfungen von OpenSSF Scorecard
+(Workflow ``scorecard.yml``, Ergebnis auf scorecard.dev). Prüfungen, die zu einem Projekt mit
+einer Person nicht passen, sind bewusst nicht als Anforderung aufgenommen, siehe SYSR-SEC-008.
+<<<
+
+[REQUIREMENT]
+UID: SYSR-SEC-001
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Inspektion
+TITLE: Kein fremder Code mit Schreibrechten
+STATEMENT: >>>
+Workflows, die mit Schreibrechten oder Geheimnissen laufen (``workflow_run``,
+``pull_request_target``, ``schedule``, ``workflow_dispatch``), dürfen nur Commits ausführen, die
+bereits auf ``main`` liegen. Code aus Pull Requests, insbesondere aus Forks, darf nur in Workflows
+mit Leserechten und ohne Geheimnisse laufen.
+<<<
+RATIONALE: >>>
+Ein ``workflow_run`` nach einem Fork-PR liefe sonst mit den Rechten des Repos. Die Bedingung
+``event == 'push'`` allein reicht nicht als einzige Sicherung, weil der Filter ``branches`` nur
+den Branchnamen prüft.
+<<<
+QUELLE: OpenSSF Scorecard Dangerous-Workflow; scripts/main-commit-auschecken.sh
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-039
+
+[REQUIREMENT]
+UID: SYSR-SEC-002
+ART: Qualität
+STATUS: Teilweise
+NACHWEIS: Inspektion
+TITLE: Minimale Token-Rechte
+STATEMENT: >>>
+Jeder Workflow muss auf oberster Ebene höchstens Leserechte vergeben. Schreibrechte
+(``contents``, ``packages``, ``pages``, ``id-token``, ``security-events``) dürfen nur Jobs
+erhalten, die sie brauchen.
+<<<
+RATIONALE: >>>
+Offen: ``gfs-templates.yml``, ``gfs-history-block.yml`` und ``ghcr-cleanup.yml`` vergeben
+Schreibrechte noch auf oberster Ebene.
+<<<
+QUELLE: OpenSSF Scorecard Token-Permissions
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-039
+
+[REQUIREMENT]
+UID: SYSR-SEC-003
+ART: Qualität
+STATUS: Teilweise
+NACHWEIS: Inspektion
+TITLE: Abhängigkeiten fest gepinnt
+STATEMENT: >>>
+Abhängigkeiten müssen unveränderlich festgelegt sein: Python-Pakete über ``uv.lock`` mit Hashes,
+GitHub Actions über den vollständigen Commit-Hash, Container-Basisimages über den Digest.
+Renovate muss diese Festlegungen aktuell halten.
+<<<
+RATIONALE: >>>
+Offen: Actions und Basisimages stehen noch auf Versions-Tags.
+<<<
+QUELLE: OpenSSF Scorecard Pinned-Dependencies; renovate.json
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-039
+- TYPE: Parent
+  VALUE: STK-030
+
+[REQUIREMENT]
+UID: SYSR-SEC-004
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Inspektion
+TITLE: Statische Sicherheitsanalyse
+STATEMENT: >>>
+Jede Änderung an ``main`` und jeder Pull Request muss mit einer statischen Sicherheitsanalyse
+(CodeQL für Python und Workflows) geprüft werden. Funde erscheinen im Code Scanning.
+<<<
+QUELLE: OpenSSF Scorecard SAST; CodeQL Default Setup (Repository-Einstellung)
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-039
+
+[REQUIREMENT]
+UID: SYSR-SEC-005
+ART: Qualität
+STATUS: Geplant
+NACHWEIS: Inspektion
+TITLE: Herkunftsnachweis für Veröffentlichungen
+STATEMENT: >>>
+Container-Images, Modellartefakte und Silber-Artefakte auf GHCR sowie Release-Anhänge müssen
+einen prüfbaren Herkunftsnachweis tragen (Build-Provenance bzw. Signatur), der sie einem Commit
+und Workflow-Lauf dieses Repositorys zuordnet.
+<<<
+QUELLE: OpenSSF Scorecard Signed-Releases
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-039
+- TYPE: Parent
+  VALUE: STK-016
+
+[REQUIREMENT]
+UID: SYSR-SEC-006
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Inspektion
+TITLE: Lücken vertraulich melden, Geheimnisse schützen
+STATEMENT: >>>
+Das Repository muss eine Sicherheitsrichtlinie mit vertraulichem Meldeweg (Private Vulnerability
+Reporting) haben. Secret Scanning mit Push Protection muss Geheimnisse in Commits erkennen und
+abweisen.
+<<<
+QUELLE: SECURITY.md; OpenSSF Scorecard Security-Policy; Repository-Einstellungen
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-039
+
+[REQUIREMENT]
+UID: SYSR-SEC-007
+ART: Qualität
+STATUS: Vorgemerkt
+NACHWEIS: Inspektion
+TITLE: Schutz von main
+STATEMENT: >>>
+Änderungen an ``main`` sollen nur über Pull Requests mit grüner CI möglich sein. Force-Push und
+Löschen von ``main`` sollen gesperrt sein.
+<<<
+RATIONALE: >>>
+Wird als Ruleset in den Repository-Einstellungen gesetzt (Entscheidung des Betreibers). Eine
+Freigabe durch eine zweite Person ist nicht verlangt, siehe SYSR-SEC-008. Seit dem 2026-10-21
+lief jede Änderung ohnehin über Pull Requests.
+<<<
+QUELLE: OpenSSF Scorecard Branch-Protection
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-039
+
+[REQUIREMENT]
+UID: SYSR-SEC-008
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Analyse
+TITLE: Regelmäßige Bewertung der Sicherheitspraxis
+STATEMENT: >>>
+Die Sicherheitspraxis des Repositorys muss bei jeder Änderung an ``main`` und wöchentlich mit
+OpenSSF Scorecard bewertet und das Ergebnis öffentlich gemacht werden (Badge im README und auf der
+Projektseite).
+<<<
+RATIONALE: >>>
+Bewusst nicht verfolgt: Code-Review (keine zweite Person zur Freigabe), Contributors (Projekt
+einer Person) und das OpenSSF-Best-Practices-Badge (Selbstauskunft ohne Nutzen für die
+Anwender).
+<<<
+QUELLE: .github/workflows/scorecard.yml
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-039
+
+[REQUIREMENT]
+UID: SYSR-SEC-009
+ART: Qualität
+STATUS: Geplant
+NACHWEIS: Test
+TITLE: Fuzzing externer Eingaben
+STATEMENT: >>>
+Code, der Daten von außen parst, muss mit zufällig erzeugten und verfälschten Eingaben geprüft
+werden: mindestens ``.idx``-Inventare, GRIB-Kopfdaten und Byte-Bereiche in gribkit, die Antworten
+der Energiequellen (JSON, XML) und die Manifeste der GHCR-Artefakte. Ungültige Eingaben dürfen nur
+zu den vorgesehenen Fehlern führen, nie zu Abstürzen, Endlosschleifen oder falsch übernommenen
+Daten. Property-Tests laufen mit den Unit-Tests bei jedem Pull Request, ein Fuzzer zusätzlich
+regelmäßig.
+<<<
+RATIONALE: >>>
+Die Eingaben stammen von NOAA, GDEX, den Energiequellen und über GHCR von anderen Instanzen und
+sind damit nicht vertrauenswürdig. Vorgesehen sind Hypothesis für die Property-Tests und Atheris
+für den Fuzzer, den auch OpenSSF Scorecard (Prüfung Fuzzing) erkennt.
+<<<
+QUELLE: OpenSSF Scorecard Fuzzing; Entscheidung 2026-11-01
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-039
+- TYPE: Parent
+  VALUE: STK-016
+
+[[/SECTION]]
+
+[[SECTION]]
 TITLE: Qualität und Randbedingungen
 
 [REQUIREMENT]
