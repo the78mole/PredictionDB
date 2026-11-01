@@ -13,9 +13,9 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import urllib.parse
 import urllib.request
-import sys
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -116,12 +116,12 @@ def _api(pfad: str) -> dict | None:
 
 
 def github_zahlen() -> dict[str, str]:
-    """Stars, offene Issues und offene PRs zum Bauzeitpunkt, "–" wenn nicht abrufbar.
+    """Stars, offene Issues und offene PRs zum Bauzeitpunkt, ein Strich, wenn nicht abrufbar.
 
     Die Seite aktualisiert die Zahlen im Browser, das hier ist nur der Startwert
     für Besucher ohne JavaScript oder bei erschöpftem API-Kontingent.
     """
-    zahlen = {"stars": "–", "issues": "–", "prs": "–"}
+    zahlen = dict.fromkeys(("stars", "issues", "prs"), "&ndash;")
     repo = _api(f"/repos/{REPO_NAME}")
     if repo and isinstance(repo.get("stargazers_count"), int):
         zahlen["stars"] = str(repo["stargazers_count"])
