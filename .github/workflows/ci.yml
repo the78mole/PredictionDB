@@ -44,9 +44,11 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --locked --all-packages
-      # Bericht für die Pages-Seite (Workflow pages.yml holt ihn vom Lauf auf main)
+      # Bericht für die Pages-Seite (Workflow pages.yml holt ihn vom Lauf auf main).
+      # -n auto: ein Testprozess je Kern (pytest-xdist); LightGBM läuft in den Tests
+      # deshalb mit einem Thread, siehe services/ml_train/tests/test_ml_train.py.
       - run: >-
-          uv run pytest --html=build/tests/unit.html --self-contained-html
+          uv run pytest -n auto --html=build/tests/unit.html --self-contained-html
           --junitxml=build/tests/unit.xml
       - uses: actions/upload-artifact@v7
         if: always()
