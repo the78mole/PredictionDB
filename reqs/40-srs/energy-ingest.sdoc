@@ -337,6 +337,29 @@ RELATIONS:
 - TYPE: Parent
   VALUE: SYSR-QA-001
 
+[REQUIREMENT]
+UID: SWR-ENI-033
+ART: Qualität
+STATUS: Teilweise
+NACHWEIS: Test
+TITLE: Robust gegen ungültige Antworten
+STATEMENT: >>>
+Die Parser der Quellen müssen bei beliebigen, verfälschten oder abgeschnittenen Antworten
+entweder gültige Werte liefern oder nur ``SourceError`` bzw. ``FormatError`` auslösen; nie andere
+Ausnahmen, unbegrenzte Laufzeit oder Werte, die nicht endlich sind. Nachgewiesen wird das mit
+Property-Tests (Hypothesis) in jeder CI und regelmäßig mit dem Fuzzer
+``fuzz/predictiondb_fuzz.py`` (Atheris).
+<<<
+RATIONALE: >>>
+Umgesetzt für ENTSO-E (XML, Auflösung, Zeitpunkte, Zahlen, höchstens ``MAX_POINTS`` je
+Period); offen sind die übrigen Quellen (Netztransparenz, Eurostat, SMARD …). Gefunden wurden
+u. a. ``ZeroDivisionError`` bei ``PT0M``, ``LookupError`` bei unbekannter Kodierung und
+Milliarden Schleifendurchläufe bei sehr langen Perioden.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-SEC-009
+
 [[/SECTION]]
 
 [[SECTION]]

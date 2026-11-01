@@ -44,6 +44,15 @@ from pydantic import BaseModel, Field
 from predictiondb_core.log import get_logger
 from wx_exchange.artifact import LICENSE, PREFIX, month_bounds, tag
 from wx_exchange.oci import EMPTY, MANIFEST, Registry
+from wx_exchange.safe import (
+    GUARDED,
+    ArtifactError,
+    annotations_of,
+    check_digest,
+    json_object,
+    read_tar,
+)
+from wx_exchange.safe import layers as manifest_layers
 from wx_process.features import PowerCurve, PvModel, TechnologyFeatures, shear_exponent
 
 log = get_logger(__name__)
@@ -524,14 +533,17 @@ def pack(meta: dict[str, Any], values: F32) -> tuple[bytes, str]:
 
 
 def unpack(data: bytes) -> tuple[dict[str, Any], F32]:
-    with tarfile.open(fileobj=io.BytesIO(gzip.decompress(data)), mode="r") as tar:
-        files = {}
-        for m in tar.getmembers():
-            f = tar.extractfile(m) if m.isfile() else None
-            if f is not None:
-                files[m.name] = f.read()
-    meta = json.loads(files["meta.json"])
-    values = np.load(io.BytesIO(files["values.npy"]), allow_pickle=False)
+    """@relation(SWR-WXX-060, scope=function)"""
+    files = read_tar(data, compressed=True)
+    if "meta.json" not in files or "values.npy" not in files:
+        raise ArtifactError(f"GEFS-Layer unvollständig: {sorted(files)[:5]}")
+    meta = json_object(files["meta.json"])
+    try:
+        values = np.load(io.BytesIO(files["values.npy"]), allow_pickle=False)
+    except (ValueError, OSError, EOFError) as exc:
+        raise ArtifactError(f"values.npy nicht lesbar: {exc}") from exc
+    if not isinstance(values, np.ndarray) or not np.issubdtype(values.dtype, np.number):
+        raise ArtifactError("values.npy ist kein Zahlen-Array")
     return meta, values.astype(np.float32)
 
 
@@ -650,15 +662,22 @@ class GefsLayer:
 
     @classmethod
     def from_descriptor(cls, d: dict[str, Any]) -> GefsLayer:
-        a = d.get("annotations", {})
-        return cls(
-            run=datetime.fromisoformat(a[PREFIX + "run"]),
-            digest=d["digest"],
-            size=int(d["size"]),
-            content=a.get(PREFIX + "content", ""),
-            fingerprint=a.get(PREFIX + "fingerprint", ""),
-            missing=int(a.get(PREFIX + "missing", 0)),
-        )
+        """@relation(SWR-WXX-060, scope=function)"""
+        a = annotations_of(d)
+        try:
+            run = datetime.fromisoformat(a[PREFIX + "run"])
+            return cls(
+                run=run if run.tzinfo else run.replace(tzinfo=UTC),
+                digest=check_digest(d.get("digest")),
+                size=int(d["size"]),
+                content=a.get(PREFIX + "content", ""),
+                fingerprint=a.get(PREFIX + "fingerprint", ""),
+                missing=int(a.get(PREFIX + "missing", 0)),
+            )
+        except ArtifactError:
+            raise
+        except GUARDED as exc:
+            raise ArtifactError(f"GEFS-Layer ungültig: {type(exc).__name__}: {exc}") from exc
 
 
 @dataclass
@@ -700,17 +719,21 @@ class GefsMonth:
 
     @classmethod
     def from_manifest(cls, month: str, hour: int, m: dict[str, Any] | None) -> GefsMonth:
+        """@relation(SWR-WXX-060, scope=function)"""
         art = cls(month, hour)
         if m is None:
             return art
-        a = m.get("annotations", {})
+        a = annotations_of(m)
         art.regions_version = a.get(PREFIX + "regions_version", "")
-        for d in m.get("layers", []):
+        for d in manifest_layers(m):
             if d.get("mediaType") == LAYER_TYPE:
                 layer = GefsLayer.from_descriptor(d)
                 art.layers[layer.run] = layer
-        for text in filter(None, a.get(PREFIX + "missing", "").split(",")):
-            art.missing.add(datetime.strptime(text, "%Y%m%d%H").replace(tzinfo=UTC))
+        try:
+            for text in filter(None, a.get(PREFIX + "missing", "").split(",")):
+                art.missing.add(datetime.strptime(text, "%Y%m%d%H").replace(tzinfo=UTC))
+        except ValueError as exc:
+            raise ArtifactError(f"missing ungültig: {exc}") from exc
         return art
 
 
