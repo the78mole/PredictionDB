@@ -75,7 +75,7 @@ loc = df.index.tz_convert("Europe/Berlin")
 df["hour"] = loc.hour
 df["qh"] = loc.minute // 15
 df["month"] = loc.month
-df["dow"] = loc.dayofweek
+df["dow"] = loc.day_of_week
 df["da_qh"] = (df.index >= pd.Timestamp("2025-10-01 00:00", tz="Europe/Berlin")).astype(int)
 df["year"] = loc.year
 need = ["id", "da", "err_wind", "err_solar", "err_load", "res_fc"]

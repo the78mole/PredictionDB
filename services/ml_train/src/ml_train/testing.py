@@ -29,7 +29,7 @@ def synthetic_snapshot(
     ts = pd.date_range(start, end, freq="h", tz="UTC", inclusive="left")
     n = len(ts)
     local = ts.tz_convert("Europe/Berlin")
-    doy = local.dayofyear.to_numpy()
+    doy = local.day_of_year.to_numpy()
     hour = local.hour.to_numpy()
     days = pd.DatetimeIndex(local.normalize().tz_localize(None))
 
@@ -54,7 +54,7 @@ def synthetic_snapshot(
     gen_solar = cap_pv * ghi / 1000 * 0.8 + rng.normal(0, 300, n)
 
     hs = holiday_share(pd.DatetimeIndex(days))
-    weekend = np.asarray(local.dayofweek >= 5)
+    weekend = np.asarray(local.day_of_week >= 5)
     shape = 1 + 0.15 * np.sin(np.pi * np.clip(hour - 5, 0, 17) / 17)
     load = 52000 * shape - 7000 * weekend - 8000 * hs + 350 * np.clip(15 - temp, 0, None)
     load += rng.normal(0, 900, n)
