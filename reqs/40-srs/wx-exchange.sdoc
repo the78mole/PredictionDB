@@ -409,4 +409,20 @@ RELATIONS:
 - TYPE: Parent
   VALUE: SYSR-PUB-006
 
+[REQUIREMENT]
+UID: SWR-WXX-052
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Vorlauf-Panels für morgen im Snapshot
+STATEMENT: >>>
+Der Snapshot muss die Panels „Morgen“ (Preis und Last mit D+1 bis D+7, je Champion und
+Challenger, mit Day-Ahead-Preis bzw. ÜNB-Lastprognose) für den Liefertag nach dem Stand von 0 bis
+24 Uhr Ortszeit enthalten, mit der Uhrzeit als x-Achse, auch an Tagen der Zeitumstellung.
+<<<
+QUELLE: Nutzerwunsch 2026-11-01
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-OPS-003
+
 [[/SECTION]]

@@ -68,6 +68,12 @@ class FakeGrafana(snapshot.Grafana):
                     "targets": [{"refId": "B", "rawSql": "WHERE v = '${challenger}'"}],
                 },
                 {"id": 59, "datasource": ds, "title": "Heute", "targets": []},
+                {
+                    "id": 60,
+                    "datasource": ds,
+                    "title": "Morgen: Preis · Champion",
+                    "targets": [{"refId": "A", "rawSql": "SELECT preis"}],
+                },
             ],
         }
 
@@ -77,6 +83,7 @@ class FakeGrafana(snapshot.Grafana):
                 "kind": "Panel",
                 "spec": {
                     "title": title,
+                    "vizConfig": {"kind": "VizConfig", "group": "timeseries", "spec": {}},
                     "data": {
                         "kind": "QueryGroup",
                         "spec": {
@@ -97,10 +104,11 @@ class FakeGrafana(snapshot.Grafana):
                     "Woche · Challenger ${challenger:text} · erstellt ${lauf_challenger}"
                 ),
                 "panel-59": el("Heute"),
+                "panel-60": el("Morgen: Preis · Champion"),
             },
             "layout": {
                 "kind": "GridLayout",
-                "spec": {"items": [item("panel-69"), item("panel-59")]},
+                "spec": {"items": [item("panel-69"), item("panel-59"), item("panel-60")]},
             },
             "variables": [{"kind": "QueryVariable"}],
             "links": [{"title": "intern"}],
@@ -155,9 +163,9 @@ def test_build_snapshot_embeds_frames_in_v2() -> None:
     """@relation(SWR-WXX-050, scope=function)"""
     g = FakeGrafana()
     spec = snapshot.build_snapshot(g, datetime(2026, 10, 30, 13, 30, tzinfo=UTC))
-    assert list(spec["elements"]) == ["panel-69", "panel-staende"]
+    assert list(spec["elements"]) == ["panel-69", "panel-60", "panel-staende"]
     names = [i["spec"]["element"]["name"] for i in spec["layout"]["spec"]["items"]]
-    assert names == ["panel-69", "panel-staende"]
+    assert names == ["panel-69", "panel-60", "panel-staende"]
     # frühere Stände: nur eigene, nicht abgelaufene, mit Link und Ablaufdatum
     staende = spec["elements"]["panel-staende"]["spec"]["vizConfig"]["spec"]["options"]
     assert staende["content"].splitlines()[2:] == [
@@ -172,7 +180,14 @@ def test_build_snapshot_embeds_frames_in_v2() -> None:
     assert q["datasource"] == {"name": "grafana"}
     assert q["spec"]["queryType"] == "snapshot"
     assert q["spec"]["snapshot"][0]["schema"]["fields"][0]["config"] == {}
-    assert g.queries[-1]["rawSql"] == "WHERE v = 'v-123'"
+    assert [q["rawSql"] for q in g.queries[-2:]] == ["WHERE v = 'v-123'", "SELECT preis"]
+    # Morgen: Trend-Panel über den Liefertag mit Uhrzeit als x
+    morgen = spec["elements"]["panel-60"]["spec"]
+    assert morgen["title"] == "Morgen: Preis · Champion · Liefertag Sa 31.10.2026"
+    assert morgen["vizConfig"]["group"] == "trend"
+    assert morgen["vizConfig"]["spec"]["options"]["xField"] == "Uhrzeit"
+    frames = morgen["data"]["spec"]["queries"][0]["spec"]["query"]["spec"]["snapshot"]
+    assert [f["name"] for f in frames[0]["schema"]["fields"]] == ["Uhrzeit"]
     assert spec["variables"] == [] and spec["links"] == []
     assert spec["timeSettings"]["from"] == "2026-10-29T23:00:00.000Z"
     assert spec["timeSettings"]["to"] == "2026-11-06T22:59:59.999Z"
@@ -237,3 +252,49 @@ def test_shortio_creates_missing_link() -> None:
     assert [r.method for r in seen] == ["GET", "POST"]
     assert seen[1].url == "https://api.short.io/links"
     assert b'"path":"strom"' in seen[1].content.replace(b" ", b"")
+
+
+def test_day_range_and_clock_mapping_over_dst() -> None:
+    """@relation(SWR-WXX-052, scope=function)"""
+    # Stand Sa 24.10.2026: Liefertag So 25.10. hat 25 Stunden (Ende der Sommerzeit)
+    start, end = snapshot.day_range(datetime(2026, 10, 24, 12, 30, tzinfo=UTC))
+    assert start.isoformat() == "2026-10-25T00:00:00+02:00"
+    assert end.isoformat() == "2026-10-26T00:00:00+01:00"
+    opts = snapshot.clock_mapping(start, end)["options"]
+    assert len(opts) == 25 * 4 + 1
+    assert opts["0"]["text"] == "00:00" and opts["2.25"]["text"] == "02:15"
+    # 02:00 bis 03:00 gibt es zweimal
+    assert opts["3"]["text"] == "02:00" and opts["4"]["text"] == "03:00"
+    assert opts["25"]["text"] == "24:00"
+
+
+def test_day_frame_joins_series_on_hours() -> None:
+    """@relation(SWR-WXX-052, scope=function)"""
+    start, end = snapshot.day_range(datetime(2026, 10, 31, 13, 30, tzinfo=UTC))
+    t0 = int(start.timestamp() * 1000)
+    q, h = 900_000, 3_600_000
+    preis = {
+        "schema": {"fields": [{"name": "Time", "type": "time"}, {"name": "p", "type": "number"}]},
+        "data": {"values": [[t0 - q, t0, t0 + q, t0 + 24 * h], [9, 1, 2, 9]]},
+    }
+    prog = {
+        "schema": {
+            "fields": [
+                {"name": "Time", "type": "time"},
+                {"name": "D+1", "type": "number"},
+                {"name": "D+2", "type": "number"},
+            ]
+        },
+        "data": {"values": [[t0, t0 + h], [10, 11], [20, None]]},
+    }
+    f = snapshot.day_frame([preis, prog], start, end)
+    names = [x["name"] for x in f["schema"]["fields"]]
+    assert names == ["Uhrzeit", "p", "D+1", "D+2"]
+    x = f["schema"]["fields"][0]["config"]
+    assert (x["min"], x["max"]) == (0, 24.0)
+    assert f["data"]["values"] == [
+        [0.0, 0.25, 1.0],
+        [1, 2, None],
+        [10, None, 11],
+        [20, None, None],
+    ]
