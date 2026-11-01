@@ -100,7 +100,7 @@ def testkachel(ziel: Path, name: str, titel: str, text: str) -> str:
     )
 
 
-def _api(pfad: str) -> dict | None:
+def _api(pfad: str) -> dict[str, object] | None:
     """GET auf die GitHub-API, mit GH_TOKEN falls gesetzt; None bei jedem Fehler."""
     anfrage = urllib.request.Request(
         f"{API}{pfad}", headers={"Accept": "application/vnd.github+json"}
@@ -110,9 +110,10 @@ def _api(pfad: str) -> dict | None:
         anfrage.add_header("Authorization", f"Bearer {token}")
     try:
         with urllib.request.urlopen(anfrage, timeout=10) as antwort:
-            return json.load(antwort)
+            daten = json.load(antwort)
     except (OSError, ValueError):
         return None
+    return daten if isinstance(daten, dict) else None
 
 
 def github_zahlen() -> dict[str, str]:
