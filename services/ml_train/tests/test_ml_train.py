@@ -35,18 +35,35 @@ def snap():  # type: ignore[no-untyped-def]
     return synthetic_snapshot("2022-06-01", "2023-10-01", weather_from="2023-03-01")
 
 
-@pytest.fixture
-def cfg() -> ModelConfig:
+def small_lgbm(c: ModelConfig) -> None:
+    """Kleine Bäume, wenige Runden: Die Tests prüfen Logik, nicht Modellgüte.
+
+    LightGBM ist der größte Posten der Testlaufzeit; 15 Blätter und 60 Runden reichen,
+    damit die Wettervariante die Baselines auf dem synthetischen Snapshot schlägt.
+    Ein Thread je Testprozess: pytest-xdist startet einen Prozess je Kern, mehrere
+    OpenMP-Threads je Prozess überbuchen die CPU und laufen dann quälend langsam.
+    """
+    c.lgbm.num_leaves = 15
+    c.lgbm.n_estimators = 60
+    c.lgbm.learning_rate = 0.2
+    c.lgbm.n_jobs = 1
+
+
+def make_cfg() -> ModelConfig:
     c, _ = load_config(ROOT / "config/ml/de_lu_v1.yaml")
     c.stage1 = [t for t in c.stage1 if t.code != "gen_wind_offshore"]
-    c.lgbm.n_estimators = 150
-    c.lgbm.learning_rate = 0.1
+    small_lgbm(c)
     c.backtest.test_from = date(2023, 7, 1)
     c.backtest.fold_months = 2
     c.backtest.train_issue_stride = 3
     for v in c.variants:
         v.train_from = date(2022, 6, 1) if not v.requires_weather else date(2023, 3, 1)
     return c
+
+
+@pytest.fixture
+def cfg() -> ModelConfig:
+    return make_cfg()
 
 
 def test_local_days_have_23_to_25_hours() -> None:
@@ -196,6 +213,8 @@ def cfg_v2() -> ModelConfig:
     c.issue.hours_utc = []
     c.issue.lead_days = [1, 2, 3, 4, 5, 6, 7]
     c.calibration.months = 0
+    c.lgbm.num_leaves = 15
+    c.lgbm.n_jobs = 1  # siehe small_lgbm
     return c
 
 
@@ -333,11 +352,18 @@ class RecordingJob(JobLog):
         self.labels.append(label)
 
 
-def test_backtest_beats_naive_baselines(snap, cfg) -> None:  # type: ignore[no-untyped-def]
-    """@relation(SWR-MLT-030, SWR-MLT-040, SWR-MLT-041, scope=function)"""
-    fb = FeatureBuilder(snap, cfg)
+@pytest.fixture(scope="module")
+def backtest(snap):  # type: ignore[no-untyped-def]
+    """Ein voller Backtest für alle Tests, die nur sein Ergebnis brauchen (teuerster Schritt)."""
+    c = make_cfg()
+    fb = FeatureBuilder(snap, c)
     job = RecordingJob()
-    res = run_backtest(fb, cfg, job=job)
+    return fb, c, run_backtest(fb, c, job=job), job
+
+
+def test_backtest_beats_naive_baselines(backtest) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-030, SWR-MLT-040, SWR-MLT-041, scope=function)"""
+    fb, cfg, res, job = backtest
     # Fortschritt im Dashboard: angekündigte Schritte = gemeldete Schritte
     assert len(job.labels) == backtest_steps(fb, cfg)
     assert job.labels[1].startswith("Faltung 1/")
@@ -375,10 +401,9 @@ def test_snapshot_roundtrip_checks_hash(snap, tmp_path: Path) -> None:  # type: 
         load_snapshot(tmp_path)
 
 
-def test_registry_champion_challenger(snap, cfg, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+def test_registry_champion_challenger(backtest, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
     """@relation(SWR-MLT-050, SWR-MLT-051, scope=function)"""
-    fb = FeatureBuilder(snap, cfg)
-    res = run_backtest(fb, cfg)
+    fb, cfg, res, _ = backtest
     frame = fb.build([date(2023, 3, 1) + pd.Timedelta(days=i) for i in range(0, 120, 3)])
     reg = Registry(str(tmp_path), cfg)
     preds = res.predictions
@@ -402,10 +427,9 @@ def test_registry_champion_challenger(snap, cfg, tmp_path: Path) -> None:  # typ
     pd.testing.assert_frame_equal(a["da_price_de_lu"], b["da_price_de_lu"])
 
 
-def test_attach_backtest_to_registered_version(snap, cfg, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+def test_attach_backtest_to_registered_version(backtest, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
     """@relation(SWR-MLT-052, scope=function)"""
-    fb = FeatureBuilder(snap, cfg)
-    res = run_backtest(fb, cfg, variants=["kalender"])
+    fb, cfg, res, _ = backtest
     frame = fb.build([date(2023, 3, 1) + pd.Timedelta(days=i) for i in range(0, 60, 3)])
     reg = Registry(str(tmp_path), cfg)
     model = TwoStageModel(cfg, cfg.variant("kalender")).fit(frame)
