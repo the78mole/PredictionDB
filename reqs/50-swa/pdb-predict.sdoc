@@ -1,0 +1,183 @@
+[DOCUMENT]
+TITLE: Softwarearchitektur pdb-predict (SWA)
+PREFIX: SWA-PRD-
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @architektur
+
+[TEXT]
+STATEMENT: >>>
+Softwarearchitektur nach ISO/IEC/IEEE 12207 für das Softwareelement SYSA-SW-PRD. Jede Komponente
+entspricht einem Modul unter ``predict/src/pdb_predict`` und nennt die Softwareanforderungen,
+die sie umsetzt (``Parent``). Das Modul selbst verweist mit ``@relation(SWA-PRD-…, scope=file)``
+im Modul-Docstring zurück.
+
+Abhängigkeiten: ``ml_train`` (Merkmale, Modelle, Paketformat), ``energy_ingest`` (Quellen),
+``gribkit`` (GRIB-Zuschnitt).
+<<<
+
+[[SECTION]]
+TITLE: Komponenten
+
+[ELEMENT]
+UID: SWA-PRD-CLI
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Kommandozeile
+STATEMENT: >>>
+Befehle, Zeitplan, Aufbau des Prognose-Dienstes.
+<<<
+ORT: predict/src/pdb_predict/cli.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-PRD-001
+- TYPE: Parent
+  VALUE: SWR-PRD-003
+
+[ELEMENT]
+UID: SWA-PRD-SETTINGS
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Einstellungen
+STATEMENT: >>>
+``PredictSettings`` mit Präfix ``PDB_PREDICT_``.
+<<<
+ORT: predict/src/pdb_predict/settings.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-PRD-002
+
+[ELEMENT]
+UID: SWA-PRD-PACKAGE
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Modellpaket
+STATEMENT: >>>
+Laden aus Ordner oder OCI-Registry, Auffrischen wandernder Tags.
+<<<
+ORT: predict/src/pdb_predict/package.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-PRD-010
+- TYPE: Parent
+  VALUE: SWR-PRD-011
+
+[ELEMENT]
+UID: SWA-PRD-ENERGY
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Energie-Cache
+STATEMENT: >>>
+Quellen in Rangfolge, Datei-Cache, Marktwerte, Snapshot für die Merkmale.
+<<<
+ORT: predict/src/pdb_predict/energy.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-PRD-020
+- TYPE: Parent
+  VALUE: SWR-PRD-021
+- TYPE: Parent
+  VALUE: SWR-PRD-022
+
+[ELEMENT]
+UID: SWA-PRD-WEATHER
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Wetter-Cache
+STATEMENT: >>>
+GFS-Läufe laden, Features je Technologie und Cluster.
+<<<
+ORT: predict/src/pdb_predict/weather.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-PRD-023
+
+[ELEMENT]
+UID: SWA-PRD-SERVICE
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Prognoselauf
+STATEMENT: >>>
+Fenster je Reihe, Merkmale, Prognose, Ausgabedokument und Dateien.
+<<<
+ORT: predict/src/pdb_predict/service.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-PRD-024
+- TYPE: Parent
+  VALUE: SWR-PRD-030
+- TYPE: Parent
+  VALUE: SWR-PRD-032
+
+[ELEMENT]
+UID: SWA-PRD-SERVER
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: HTTP-Schnittstelle
+STATEMENT: >>>
+Nur lesende Antworten aus ``latest.json``, Healthcheck.
+<<<
+ORT: predict/src/pdb_predict/server.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-PRD-031
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Schnittstellen
+
+[ELEMENT]
+UID: SWA-PRD-IF-PACKAGE
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: Modellpaket
+STATEMENT: >>>
+ml-train → pdb-predict. Ordner oder ORAS-Artefakt mit ``package.json``, Modellen, Bestand und Gewichten.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-PRD-010
+- TYPE: Parent
+  VALUE: SWR-PRD-011
+
+[ELEMENT]
+UID: SWA-PRD-IF-OUT
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: Ausgabedateien
+STATEMENT: >>>
+pdb-predict → Verbraucher. ``out/latest.json``, ``out/latest.csv``, ``out/archive/``.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-PRD-030
+- TYPE: Parent
+  VALUE: SWR-PRD-032
+
+[ELEMENT]
+UID: SWA-PRD-IF-HTTP
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: HTTP
+STATEMENT: >>>
+pdb-predict → Home Assistant, evcc, Node-RED, Grafana. ``/v1/forecast``, ``/v1/model``, ``/health``.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-PRD-031
+
+[ELEMENT]
+UID: SWA-PRD-IF-ENV
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: Einstellungen
+STATEMENT: >>>
+Betreiber → pdb-predict. ``PDB_PREDICT_*`` in ``predict/.env``.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-PRD-002
+
+[[/SECTION]]
+

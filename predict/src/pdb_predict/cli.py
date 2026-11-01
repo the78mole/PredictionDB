@@ -6,6 +6,8 @@ Beispiele::
     pdb-predict once                          # eine Prognose jetzt, nach out/ und stdout
     pdb-predict once --issue 2026-10-24T08 --no-write
     pdb-predict info                          # Modellpaket anzeigen (holt es bei Bedarf)
+
+@relation(SWA-PRD-CLI, scope=file)
 """
 
 from __future__ import annotations
@@ -36,6 +38,7 @@ USER_AGENT = "PredictionDB pdb-predict (+https://github.com/the78mole/Prediction
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """@relation(SWR-PRD-001, scope=function)"""
     p = argparse.ArgumentParser(prog="pdb-predict", description="Last- und Preisprognose DE-LU")
     cmd = p.add_subparsers(dest="cmd", required=True)
     cmd.add_parser("serve", help="Läufe nach Zeitplan, Ausgabe als Dateien und HTTP")
@@ -47,7 +50,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def next_slot(now: datetime, every_min: int, offset_min: int) -> datetime:
-    """Nächster Startzeitpunkt im Raster ``offset_min + k · every_min`` ab Mitternacht UTC."""
+    """Nächster Startzeitpunkt im Raster ``offset_min + k · every_min`` ab Mitternacht UTC.
+
+    @relation(SWR-PRD-003, scope=function)
+    """
     day = now.replace(hour=0, minute=0, second=0, microsecond=0)
     k = int(((now - day).total_seconds() / 60 - offset_min) // every_min) + 1
     slot = day + timedelta(minutes=offset_min + k * every_min)
@@ -72,6 +78,7 @@ def make_predictor(s: PredictSettings, client: httpx.Client) -> tuple[Predictor,
 
 
 def main(argv: list[str] | None = None) -> int:
+    """@relation(SWR-PRD-001, SWR-PRD-003, scope=function)"""
     a = build_parser().parse_args(argv)
     core = get_settings()
     configure_logging(core.log_level, core.log_json)

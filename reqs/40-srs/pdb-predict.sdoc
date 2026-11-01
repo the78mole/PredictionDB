@@ -1,0 +1,235 @@
+[DOCUMENT]
+TITLE: Softwareanforderungen pdb-predict (SRS)
+PREFIX: SWR-PRD-
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @anforderung
+
+[TEXT]
+STATEMENT: >>>
+Softwareanforderungen nach ISO/IEC/IEEE 29148 an das Softwareelement SYSA-SW-PRD
+(``predict/``). Der schlanke Prognose-Stack lädt ein Modellpaket, holt die Eingänge selbst bei
+freien Quellen und gibt Last DE und Day-Ahead-Preis DE-LU als Dateien und über eine nur lesende
+HTTP-Schnittstelle aus. Er hat kein Training, keinen Backfill, keine Datenbank und kein S3.
+Merkmale und Modelle kommen aus ``ml_train``, die Quellen aus ``energy_ingest``.
+<<<
+
+[[SECTION]]
+TITLE: Steuerung und Konfiguration
+
+[REQUIREMENT]
+UID: SWR-PRD-001
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Inspektion, Demonstration
+TITLE: Befehle
+STATEMENT: >>>
+Der Dienst muss die Befehle ``serve`` (Läufe nach Zeitplan, Dateien und HTTP), ``once``
+(eine Prognose, optional ``--issue`` und ``--no-write``) und ``info`` (Modellpaket anzeigen)
+bereitstellen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-004
+
+[REQUIREMENT]
+UID: SWR-PRD-002
+ART: Randbedingung
+STATUS: Umgesetzt
+NACHWEIS: Inspektion
+TITLE: Einstellungen
+STATEMENT: >>>
+Einstellungen müssen aus Variablen mit Präfix ``PDB_PREDICT_`` kommen (Modell, Zeitraster,
+HTTP-Port, Archivdauer, Auffrischung, Frist für ``/health``). Ein Schlüssel ist für keine Quelle
+nötig; ``PDB_EIA_API_KEY`` ist optional.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-QA-003
+- TYPE: Parent
+  VALUE: SYSR-PUB-004
+
+[REQUIREMENT]
+UID: SWR-PRD-003
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Zeitplan
+STATEMENT: >>>
+``serve`` muss im Raster ``PDB_PREDICT_OFFSET_MIN`` + k · ``PDB_PREDICT_EVERY_MIN`` ab
+Mitternacht UTC rechnen (Vorgabe stündlich um hh:20).
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-004
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Modellpaket
+
+[REQUIREMENT]
+UID: SWR-PRD-010
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Paket aus Ordner
+STATEMENT: >>>
+Der Dienst muss ein Modellpaket aus einem Ordner laden (Aufbau wie ``ml-train bundle``) und
+Version, Reihen, Wetterbedarf und Kennzahlen anzeigen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-004
+
+[REQUIREMENT]
+UID: SWR-PRD-011
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Paket aus OCI-Registry
+STATEMENT: >>>
+Ist ``PDB_PREDICT_MODEL`` eine OCI-Referenz, muss der Dienst das Paket anonym (Token nach 401)
+aus der Registry ziehen, wandernde Tags wie ``champion`` alle ``PDB_PREDICT_MODEL_REFRESH_H``
+Stunden neu auflösen und dazwischen das zwischengespeicherte Paket nutzen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-004
+- TYPE: Parent
+  VALUE: SYSR-PUB-002
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Eingänge
+
+[REQUIREMENT]
+UID: SWR-PRD-020
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Freie Quellen in Rangfolge
+STATEMENT: >>>
+Die Energie- und Preisreihen des Pakets müssen direkt von den freien Quellen kommen, in der
+Rangfolge von ``energy.value_best``; fällt eine Quelle aus, springt die nächste ein. Eine ganz
+fehlende Reihe bleibt als Merkmal leer und wird in ``inputs_missing`` genannt.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-004
+- TYPE: Parent
+  VALUE: SYSR-EN-006
+
+[REQUIREMENT]
+UID: SWR-PRD-021
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Datei-Cache
+STATEMENT: >>>
+Eingänge müssen in einem Datei-Cache liegen: Der erste Lauf lädt die nötige Historie, spätere
+Läufe nur das Fenster um heute. Beim Zusammenführen bleibt der früheste ``published`` erhalten.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-004
+- TYPE: Parent
+  VALUE: SYSR-PR-003
+
+[REQUIREMENT]
+UID: SWR-PRD-022
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Marktwerte selbst rechnen
+STATEMENT: >>>
+Braucht das Paket Marktwerte, muss der Dienst sie wie ``pdb_marktwert`` aus Stundenwerten von
+SMARD rechnen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-004
+
+[REQUIREMENT]
+UID: SWR-PRD-023
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Wetter ohne Bronze und Silber
+STATEMENT: >>>
+Nur für Wetter-Varianten muss der Dienst GFS-Läufe selbst laden und mit den Gitter-Gewichten
+aus dem Paket Features je Technologie und Cluster bilden wie im Snapshot.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-004
+
+[REQUIREMENT]
+UID: SWR-PRD-024
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Merkmale wie im Training
+STATEMENT: >>>
+Merkmale und Prognose müssen mit ``ml_train`` gebildet werden, mit denselben Regeln für bekannte
+Werte und verfügbare Wetterläufe wie im Training.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-004
+- TYPE: Parent
+  VALUE: SYSR-PR-003
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Ausgabe
+
+[REQUIREMENT]
+UID: SWR-PRD-030
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Ausgabedateien
+STATEMENT: >>>
+Jede Prognose muss atomar nach ``latest.json`` (alle Ziele, je Stunde ``valid_time``, P10, P50,
+P90, Einheiten, Modell, Wetterlauf, fehlende Eingänge, Quellen mit Lizenz) und ``latest.csv``
+geschrieben und unter ``archive/`` für ``PDB_PREDICT_KEEP_DAYS`` Tage aufbewahrt werden.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-004
+
+[REQUIREMENT]
+UID: SWR-PRD-031
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: HTTP-Schnittstelle
+STATEMENT: >>>
+Der Dienst muss nur lesend ``/v1/forecast`` (alle Ziele, ein Ziel über Pfad oder ``target``,
+CSV über ``format=csv``), ``/v1/model`` und ``/health`` anbieten. Die Antworten kommen aus
+``latest.json``; ``/health`` liefert 503, wenn die Prognose älter als
+``PDB_PREDICT_STALE_AFTER_H`` ist, unbekannte Ziele 404.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-004
+
+[REQUIREMENT]
+UID: SWR-PRD-032
+ART: Randbedingung
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Lizenz und Namensnennung
+STATEMENT: >>>
+Jede Ausgabe muss die Lizenz der Prognose (CC BY 4.0) und die Quellenvermerke der genutzten
+Quellen tragen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-QA-004
+
+[[/SECTION]]
+
