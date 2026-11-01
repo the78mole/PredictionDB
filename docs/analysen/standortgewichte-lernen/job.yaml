@@ -1,0 +1,43 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; ausgeführt von abruf.py und auswertung.py im selben Ordner
+id: standortgewichte-lernen
+title: Standortgewichte für Wind und PV aus der Ist-Erzeugung lernen
+question: >
+  Für Länder ohne offenes Anlagenregister kennen wir die Standorte von Windrädern und
+  PV-Anlagen nicht. Lassen sich Gewichte je GFS-Zelle stattdessen aus der Ist-Erzeugung je
+  Zone lernen, und erklären sie die Erzeugung besser als das heutige Flächenmittel im
+  GEFS-Silber (regions_v2)? Untersucht für PL, AT und ES, mit DE als Prüfstein gegen das MaStR.
+requested_by: Maulwurf
+kind: custom                   # eigene Schätzung, Backtest über zwei Jahre
+inputs:
+  forecast:
+    source: ghcr.io/the78mole/predictiondb-data/gfs-0p5-silver   # CC BY 4.0, NOAA gemeinfrei
+    period: {from: 2024-01-01, to: 2026-01-01}
+    runs: [0]
+    steps_h: [3, 6, 9, 12, 15, 18, 21, 24]
+    variables: [u100, v100, dswrf, t2m]
+  energy_charts:               # CC BY 4.0 laut API-Doku, abruf.py
+    public_power: {country: [de, pl, at, es], reihen: [Wind onshore, Solar]}
+    installed_power: {country: [de, pl, at, es], time_step: yearly}
+  regions: config/gefs/regions_v2.json.gz   # Flächenanteile je Zone, MaStR-Gewichte DE
+method:
+  zones: [DE, PL, AT, ES]
+  technologies: {wind: Wind an Land, pv: Solar}
+  target: Kapazitätsfaktor = Erzeugung / installierte Leistung (Jahresendwerte linear interpoliert)
+  windows: {wind: ±1,5 h um den Schritt, pv: Mittel der 3 h vor dem Schritt, pv_nur_tag: Zell-CF > 0.02}
+  features: {wind: Leistungskurve 3/12/25 m/s auf Wind 100 m, pv: PvModel wie wx_process.features}
+  blocks: 2 x 2 Zellen (1°)
+  estimator: NNLS mit Ridge-Strafe zur skalierten Flächenverteilung
+  lambda_cv: {kandidaten: [1.0e-4, 3.0e-4, 1.0e-3, 3.0e-3, 1.0e-2, 3.0e-2, 0.1, 1.0],
+              validierung: jeder vierte Monat des Trainingsjahres}
+  variants:
+    cv_2024: Training 2024, Test 2025, λ aus Kreuzvalidierung
+    cv_2025: Training 2025, Test 2024, λ aus Kreuzvalidierung
+    lam0.03_2024: Training 2024, Test 2025, λ = 0.03
+    lam0.3_2024: Training 2024, Test 2025, λ = 0.3
+  baselines: [Flächenmittel mit eigenem Skalenfaktor, MaStR-Gewichte (nur DE) mit eigenem Skalenfaktor]
+  metrics: [r2, rmse, korrelation_gewichte_mastr, korrelation_gewichte_2024_2025, ueberlappung]
+  group_by: [land, technik, variante]
+outputs:
+  tables: [ergebnis, stabilitaet, gewichte_wind]
+  figures: [gewichte_wind]
+schedule: once

@@ -39,6 +39,7 @@ from wx_exchange.artifact import (
     unpack,
 )
 from wx_exchange.oci import Registry, digest
+from wx_exchange.safe import ArtifactError
 from wx_process.silver import Silver
 from wx_process.store import Store
 from wx_process.variables import SILVER_VERSION
@@ -133,7 +134,11 @@ class Importer:
         tags.sort(key=lambda e: e[1], reverse=True)
         tags.sort(key=lambda e: priority.get(e[2], 0))
         for t, month, hour in tags:
-            art = MonthArtifact.from_manifest(month, hour, self.registry.manifest(t))
+            try:
+                art = MonthArtifact.from_manifest(month, hour, self.registry.manifest(t))
+            except ArtifactError as exc:
+                log.warning("import_manifest_invalid", tag=t, error=str(exc))
+                continue
             for run in sorted(art.layers, reverse=True):
                 if start <= run <= end:
                     yield t, art.layers[run]
@@ -235,6 +240,9 @@ class Importer:
                 continue
             result.runs[name] = "different"
             if len(result.details) < details:
-                remote = files_from_tar(self.registry.blob(layer.digest))
-                result.details[name] = compare(read_files(self.store, prefix), remote)
+                try:
+                    remote = files_from_tar(self.registry.blob(layer.digest))
+                    result.details[name] = compare(read_files(self.store, prefix), remote)
+                except ArtifactError as exc:
+                    result.details[name] = {"error": str(exc)}
         return result

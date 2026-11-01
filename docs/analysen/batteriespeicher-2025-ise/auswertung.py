@@ -1,8 +1,9 @@
 """Nachrechnung: 20 GW / 40 GWh zusätzliche Batteriespeicher im Day-Ahead-Markt DE-LU 2025.
 
-Einmalige Auswertung vom 01.11.2026. Vergleich mit dem Strompreissimulator des Fraunhofer ISE
-(Energy-Charts, Pressemitteilung vom 01.10.2026): Stunden über 200 €/MWh 169 -> 20, Stunden
-mit negativem Preis 575 -> 271, Tagesspanne 130 -> 53 €/MWh.
+Einmalige Auswertung vom 01.11.2026, Auftrag und Parameter in ``job.yaml`` (docs/ARCHITEKTUR.md
+7.9), Laufprotokoll in ``tabellen/lauf.json``. Vergleich mit dem Strompreissimulator des
+Fraunhofer ISE (Energy-Charts, Pressemitteilung vom 01.10.2026): Stunden über 200 €/MWh
+169 -> 20, Stunden mit negativem Preis 575 -> 271, Tagesspanne 130 -> 53 €/MWh.
 
 Das ISE verschiebt die echten aggregierten Kauf- und Verkaufskurven der EPEX. Die sind nicht
 frei. Hier wird die Preisreaktion stattdessen aus freien Daten geschätzt: eine monotone Kurve
@@ -33,15 +34,18 @@ Aufruf aus dem Repository-Wurzelverzeichnis::
 
     uv run --no-project --with requests \\
         python docs/analysen/batteriespeicher-2025-ise/abruf.py ./daten-2025
-    uv run --no-project --with pandas --with numpy --with scipy --with matplotlib \\
+    uv run --no-project --with pandas --with numpy --with scipy --with matplotlib --with pyyaml \\
         python docs/analysen/batteriespeicher-2025-ise/auswertung.py --daten ./daten-2025
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import itertools
 import json
+import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -51,30 +55,27 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import yaml
 from scipy import sparse
 from scipy.optimize import linprog
 from scipy.sparse import linalg as splinalg
 
 HIER = Path(__file__).resolve().parent
 TZ = "Europe/Berlin"
-JAHR = ("2025-01-01", "2026-01-01")
-VIERTEL_AB = pd.Timestamp("2025-10-01", tz=TZ)  # Day-Ahead in 15-min-Produkten
-ETA = 0.86  # Netz zu Netz
-P_GW = 20.0
-E_GWH = 40.0
-K = 24  # Teilstücke der Leistung im LP
+#: Auftrag und Parameter (docs/ARCHITEKTUR.md 7.9)
+JOB_PFAD = HIER / "job.yaml"
+JOB: dict[str, Any] = yaml.safe_load(JOB_PFAD.read_text())
+_M = JOB["method"]
+JAHR = (str(_M["jahr"]["from"]), str(_M["jahr"]["to"]))
+VIERTEL_AB = pd.Timestamp(str(_M["aufloesung"]["bis"]), tz=TZ)  # Day-Ahead in 15-min-Produkten
+ETA = float(_M["speicher"]["wirkungsgrad"])  # Netz zu Netz
+P_GW = float(_M["speicher"]["leistung_gw"])
+E_GWH = float(_M["speicher"]["energie_gwh"])
+K = int(_M["fahrplan"]["leistungsstufen"])  # Teilstücke der Leistung im LP
 #: Alterungskosten je MWh Entladung (ISE nennt Alterungskosten, aber keinen Wert)
-ALTERUNG = [0.0, 10.0]
+ALTERUNG = [float(x) for x in _M["alterung_eur_mwh"]]
 #: Ergebnisse des Fraunhofer ISE (Pressemitteilung vom 01.10.2026, ZfK vom 28.09.2026)
-ISE = {
-    "ueber_200_h": (169, 20),
-    "neg_h": (575, 271),
-    "spanne": (130, 53),
-    "mittel": (89.32, 89.44),
-    "pv_marktwert": (45.08, 61.02),
-    "max": (583, 221),
-    "min": (-250, -20),
-}
+ISE = {k: tuple(v) for k, v in JOB["inputs"]["vergleich"]["ise"].items()}
 GITTER = np.arange(-80.0, 120.01, 0.5)
 FARBE = {
     "A": "#2f6db3",
@@ -85,16 +86,20 @@ FARBE = {
     "E2": "#8a6d1a",
     "ISE": "#444444",
 }
-VARIANTEN = ["A", "B", "C", "D", "E", "E2"]
+VARIANTEN = list(_M["varianten"])
 #: mittlerer Prognosefehler Wind + PV (Prognose - Ist) in Stunden mit Preis > 30 €/MWh, 10-16 Uhr,
 #: April bis September 2025 (gemessen, siehe README)
-PROGNOSEFEHLER_GW = 1.0
+PROGNOSEFEHLER_GW = float(_M["prognosefehler_gw"])
 #: Preisklassen für die Steigung s(p) in Variante D (€/MWh)
-KLASSEN = [-1e9, -50, -10, -2, 0.5, 10, 40, 70, 90, 110, 130, 160, 200, 260, 1e9]
+KLASSEN = [float(x) for x in _M["preisklassen_eur_mwh"]]
 PGITTER = np.arange(-1000.0, 5000.01, 0.05)
 
 
 # ---------------------------------------------------------------- Daten
+#: fehlende Werte, die beim Laden ersetzt wurden (für tabellen/lauf.json)
+LUECKEN: dict[str, int] = {}
+
+
 def lade(ordner: Path) -> pd.DataFrame:
     pr = json.loads((ordner / "price.json").read_text())
     pp = json.loads((ordner / "public_power.json").read_text())
@@ -118,7 +123,11 @@ def lade(ordner: Path) -> pd.DataFrame:
         index=pd.to_datetime(pr["unix_seconds"], unit="s", utc=True).tz_convert(TZ),
         dtype=float,
     )
-    df["price"] = p.reindex(df.index).ffill(limit=3)  # Stundenpreis auf die Viertelstunden
+    p15 = p.reindex(df.index)
+    im_jahr = (df.index >= pd.Timestamp(JAHR[0], tz=TZ)) & (df.index < pd.Timestamp(JAHR[1], tz=TZ))
+    ab_okt = im_jahr & (df.index >= VIERTEL_AB)
+    LUECKEN["preis_viertelstunden_ab_oktober_fehlend"] = int(p15[ab_okt].isna().sum())
+    df["price"] = p15.ffill(limit=3)  # Stundenpreis auf die Viertelstunden
     df["steuerbar"] = df.residual - df["import"]
     # Abregelung bei negativen Preisen, geschätzt: Day-Ahead-Prognose Wind + PV minus Ist,
     # abzüglich des mittleren Prognosefehlers in Stunden mit normalem Preis
@@ -142,6 +151,8 @@ def lade(ordner: Path) -> pd.DataFrame:
     )
     df["prog_minus_ist"] = fc.sum(axis=1, min_count=3) - ist
     df = df.dropna(subset=["price", "load", "residual", "import"])
+    jahr = (df.index >= pd.Timestamp(JAHR[0], tz=TZ)) & (df.index < pd.Timestamp(JAHR[1], tz=TZ))
+    LUECKEN["prognose_viertelstunden_fehlend_als_0"] = int(df.prog_minus_ist[jahr].isna().sum())
     df["prog_minus_ist"] = df.prog_minus_ist.fillna(0)
     return df
 
@@ -392,6 +403,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--daten", type=Path, required=True)
     a = ap.parse_args()
+    gestartet = datetime.now(UTC).isoformat(timespec="seconds")
     tab, gra = HIER / "tabellen", HIER / "grafiken"
     tab.mkdir(exist_ok=True)
     gra.mkdir(exist_ok=True)
@@ -591,6 +603,32 @@ def main() -> None:
     fig.tight_layout()
     fig.savefig(gra / "preisdauerlinie.png", dpi=130)
     plt.close(fig)
+
+    commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=HIER
+    ).stdout.strip()
+    lauf = {
+        "job": JOB["id"],
+        "job_sha256": hashlib.sha256(JOB_PFAD.read_bytes()).hexdigest(),
+        "git_commit": commit,
+        "gestartet": gestartet,
+        "beendet": datetime.now(UTC).isoformat(timespec="seconds"),
+        "eingaben_sha256": {
+            f.name: hashlib.sha256(f.read_bytes()).hexdigest()
+            for f in sorted(a.daten.glob("*.json"))
+        },
+        "zeitraum": {"von": JAHR[0], "bis": JAHR[1]},
+        "zeitschritte": {
+            "stunden_bis_30_09": int((df.dt == 1.0).sum()),
+            "viertelstunden_ab_01_10": int((df.dt == 0.25).sum()),
+            "stunden_gesamt": float(df.dt.sum()),
+        },
+        "fehlende_werte_ersetzt": LUECKEN,
+        "schritte_zeitlich_interpoliert": {},
+        "varianten": VARIANTEN,
+        "alterung_eur_mwh": ALTERUNG,
+    }
+    (tab / "lauf.json").write_text(json.dumps(lauf, indent=1, ensure_ascii=False) + "\n")
 
 
 if __name__ == "__main__":

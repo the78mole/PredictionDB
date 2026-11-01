@@ -426,3 +426,30 @@ RELATIONS:
   VALUE: SYSR-OPS-003
 
 [[/SECTION]]
+
+[[SECTION]]
+TITLE: Robustheit
+
+[REQUIREMENT]
+UID: SWR-WXX-060
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Artefakte fremder Instanzen prüfen
+STATEMENT: >>>
+Manifeste und Layer aus GHCR müssen vor der Übernahme geprüft werden: Tar-Einträge nur mit
+relativen Pfaden ohne ``..``, eindeutig, mit Obergrenzen für Anzahl und entpackte Größe;
+Digests nur als ``sha256:<64 hex>``; Tags nur in der Form von ``tag``; Annotationen, Layer und
+``zarr.json`` mit den erwarteten Typen. Ungültiges muss als ``ArtifactError`` gemeldet werden,
+der Import überspringt das betroffene Manifest. Nachgewiesen wird das mit Property-Tests
+(Hypothesis) in jeder CI und regelmäßig mit dem Fuzzer ``fuzz/predictiondb_fuzz.py`` (Atheris).
+<<<
+RATIONALE: >>>
+Bis 2026-11-01 übernahm ``files_from_tar`` jeden Namen ungeprüft und ohne Größengrenze, und ein
+unvollständiger Deskriptor brach den Import mit ``KeyError`` ab.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-SEC-009
+
+[[/SECTION]]

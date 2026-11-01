@@ -1,9 +1,10 @@
 # Batteriespeicher 2025 nachgerechnet: Abgleich mit dem Fraunhofer ISE
 
-Einmalige Auswertung vom 01.11.2026. Frage: Wie hätten 20 GW / 40 GWh zusätzliche
-Batteriespeicher den Day-Ahead-Preis DE-LU im Jahr 2025 verändert, und lässt sich das Ergebnis des
-Fraunhofer ISE mit freien Daten bestätigen? Das ISE kommt mit den echten Gebotskurven der EPEX auf
-169 → 20 Stunden über 200 €/MWh und 575 → 271 Stunden mit negativem Preis.
+Einmalige Auswertung vom 01.11.2026, Auftrag in [job.yaml](job.yaml). Frage: Wie hätten
+20 GW / 40 GWh zusätzliche Batteriespeicher den Day-Ahead-Preis DE-LU im Jahr 2025 verändert, und
+lässt sich das Ergebnis des Fraunhofer ISE mit freien Daten bestätigen? Das ISE kommt mit den
+echten Gebotskurven der EPEX auf 169 → 20 Stunden über 200 €/MWh und 575 → 271 Stunden mit
+negativem Preis.
 
 ## Ergebnis in Kürze
 
@@ -88,7 +89,7 @@ Die Ist-Werte stimmen mit unseren Daten überein: 574,75 Stunden mit negativem P
 wir 165,75 (≥ 200: 168,5), das ISE 169. Gezählt werden Viertelstunden ab dem 01.10.2025 als
 Viertelstunden, davor Stunden.
 
-## Rechnung
+## Daten und Methode
 
 Daten: Energy-Charts (Fraunhofer ISE), CC BY 4.0: Day-Ahead-Preis DE-LU (Bundesnetzagentur |
 SMARD.de), öffentliche Nettoerzeugung, Last, Residuallast und kommerzieller Außenhandel
@@ -202,7 +203,7 @@ bis 5 €/MWh höher, die Stunden über 200 €/MWh ändern sich nicht. Bei E si
 Stunden leicht (249 statt 263). Das ist kein echter Effekt: Auf dem Plateau ist der Preis flach,
 und das Programm verteilt die Ladung dann beliebig auf gleich teure Stunden.
 
-## Grenzen
+## Unsicherheit und Einschränkungen
 
 - Alle Varianten verschieben den gemessenen Preis. Sie können eine Stunde nicht über einen Sprung
   der Angebotskurve heben, den es in den Daten nie gab (etwa ein Blockgebot, das ausscheidet).
@@ -217,8 +218,12 @@ und das Programm verteilt die Ladung dann beliebig auf gleich teure Stunden.
 - Ein Speicherbestand von 2025 steckt bereits in den Preisen, gerechnet wird der Zubau darüber
   hinaus (wie beim ISE).
 
-## Dateien
+## Nachvollziehen
 
+- [job.yaml](job.yaml): Auftrag und alle Parameter (Speicher, Varianten, Preisklassen), die
+  `auswertung.py` liest.
+- [tabellen/lauf.json](tabellen/lauf.json): Laufprotokoll mit Commit, Hash der `job.yaml`,
+  Hashes der Eingangsdateien, Zeitschritten und ersetzten fehlenden Werten.
 - [abruf.py](abruf.py): Daten von Energy-Charts (Preis, Erzeugung, Last, Außenhandel,
   Day-Ahead-Prognosen Wind und PV).
 - [auswertung.py](auswertung.py): Kurven, Simulation, Tabellen und Grafiken (Laufzeit etwa 8 min).
@@ -234,6 +239,6 @@ Aufruf aus dem Repository-Wurzelverzeichnis:
 
 ```bash
 uv run --no-project --with requests python docs/analysen/batteriespeicher-2025-ise/abruf.py ./daten-2025
-uv run --no-project --with pandas --with numpy --with scipy --with matplotlib \
+uv run --no-project --with pandas --with numpy --with scipy --with matplotlib --with pyyaml \
     python docs/analysen/batteriespeicher-2025-ise/auswertung.py --daten ./daten-2025
 ```

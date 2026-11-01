@@ -1,0 +1,42 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; ausgeführt von auswertung.py im selben Ordner
+id: batteriespeicher-2025-ise
+title: 20 GW / 40 GWh Batteriespeicher 2025, Abgleich mit dem Strompreissimulator des Fraunhofer ISE
+question: >
+  Wie hätten 20 GW / 40 GWh zusätzliche Batteriespeicher den Day-Ahead-Preis DE-LU 2025
+  verändert (Stunden über 200 €/MWh, Stunden mit negativem Preis)? Lässt sich das Ergebnis des
+  Fraunhofer ISE (169 -> 20 h bzw. 575 -> 271 h) mit einer aus freien Daten geschätzten
+  Merit-Order bestätigen, und woher kommen die Abweichungen?
+requested_by: Maulwurf
+kind: custom                   # Simulation auf gemessenen Preisen, keine Verifikation
+inputs:
+  energy_charts:               # CC BY 4.0, abruf.py, 15 min
+    zeitraum: {from: 2024-12-01, to: 2026-01-01}   # Dezember 2024 für die Nachbarmonate
+    price: {bzn: DE-LU}
+    public_power: {country: de, reihen: [Load, Residual load, Cross border electricity trading, Solar, Wind onshore, Wind offshore]}
+    public_power_forecast: {country: de, forecast_type: day-ahead, production_type: [solar, wind_onshore, wind_offshore]}
+  vergleich:                   # von Hand übernommen, Quelle im README
+    ise_pressemitteilung: 2026-10-01
+    ise: {ueber_200_h: [169, 20], neg_h: [575, 271], spanne: [130, 53], mittel: [89.32, 89.44],
+          pv_marktwert: [45.08, 61.02], max: [583, 221], min: [-250, -20]}
+method:
+  jahr: {from: 2025-01-01, to: 2026-01-01}
+  aufloesung: {bis: 2025-10-01, schritt: 1h, danach: 15min}        # wie die Auktion
+  speicher: {leistung_gw: 20, energie_gwh: 40, wirkungsgrad: 0.86, marktanteil: 1.0}
+  fahrplan: {optimierung: Wohlfahrt je Woche, voraussicht: perfekt, leistungsstufen: 24,
+             fuellstand_wochenanfang: 0.5}
+  alterung_eur_mwh: [0, 10]
+  varianten:
+    A: Residuallast, monotone Kurve je Monat ± 1
+    B: Residuallast - Nettoimport (Austausch fest), monotone Kurve je Monat ± 1
+    C: wie B mit Tages-Festeffekten
+    D: Steigung nach Preisniveau aus aufeinanderfolgenden Stunden
+    E: D plus Abregelungsplateau (Prognose - Ist Wind+PV - Prognosefehler) bei Preis < 0
+    E2: D plus doppeltes Abregelungsplateau
+  preisklassen_eur_mwh: [-1.0e9, -50, -10, -2, 0.5, 10, 40, 70, 90, 110, 130, 160, 200, 260, 1.0e9]
+  prognosefehler_gw: 1.0       # Prognose - Ist bei Preis > 30, 10-16 Uhr, April-September 2025
+  metrics: [ueber_180_h, ueber_200_h, ueber_220_h, neg_h, null_oder_neg_h, spanne, mittel,
+            pv_marktwert, max, min, zyklen]
+outputs:
+  tables: [ergebnis, steigung, steigung_preisniveau, profil_2025, tag_2025-01-20, tag_2025-05-11]
+  figures: [vergleich, kurven, steigung_preisniveau, extremtage, preisdauerlinie]
+schedule: once

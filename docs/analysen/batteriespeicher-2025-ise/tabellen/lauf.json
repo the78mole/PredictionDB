@@ -1,0 +1,40 @@
+{
+ "job": "batteriespeicher-2025-ise",
+ "job_sha256": "178e480883fec6fb7d63bef6e51d9c1cfd7d1ce949343ffc976283d7dfc8e553",
+ "git_commit": "b9875ba58db07efb9acb5f931674b1557274b434",
+ "gestartet": "2026-11-01T19:56:09+00:00",
+ "beendet": "2026-11-01T19:56:56+00:00",
+ "eingaben_sha256": {
+  "fc_solar.json": "909cef0d1909d26287d5b2610edb978b97fb1c89168bf4b31b9515f9a5bec223",
+  "fc_wind_offshore.json": "a167e3f0a271c8238065719d914fb20c76f0ea033335c7ef5f21059699589b79",
+  "fc_wind_onshore.json": "c18cdb7619878db5408c288898e28cd3e210da33b6e952f148cdf997f82ea611",
+  "price.json": "a4a81e7390a1523aa97683693e5811d4e57f9f079d5ee4722f03e8d2b4586168",
+  "public_power.json": "d61f52ceaadb7830e57e06dd2e0cc3b1a11e23818823f00866fcb6dba9b87ffe"
+ },
+ "zeitraum": {
+  "von": "2025-01-01",
+  "bis": "2026-01-01"
+ },
+ "zeitschritte": {
+  "stunden_bis_30_09": 6551,
+  "viertelstunden_ab_01_10": 8836,
+  "stunden_gesamt": 8760.0
+ },
+ "fehlende_werte_ersetzt": {
+  "preis_viertelstunden_ab_oktober_fehlend": 0,
+  "prognose_viertelstunden_fehlend_als_0": 0
+ },
+ "schritte_zeitlich_interpoliert": {},
+ "varianten": [
+  "A",
+  "B",
+  "C",
+  "D",
+  "E",
+  "E2"
+ ],
+ "alterung_eur_mwh": [
+  0.0,
+  10.0
+ ]
+}

@@ -60,6 +60,7 @@ from wx_exchange.gefs import (
     unpack,
 )
 from wx_exchange.oci import Registry, RegistryError, digest
+from wx_exchange.safe import ArtifactError
 from wx_process.store import BronzeStatus, Store
 
 log = get_logger(__name__)
@@ -484,7 +485,11 @@ class GefsVm:
                 t = tag(month, hour)
                 if t not in existing:
                     continue
-                art = GefsMonth.from_manifest(month, hour, self.registry.manifest(t))
+                try:
+                    art = GefsMonth.from_manifest(month, hour, self.registry.manifest(t))
+                except ArtifactError as exc:
+                    log.warning("gefs_manifest_invalid", tag=t, error=str(exc))
+                    continue
                 imported: list[datetime] = []
                 repair: dict[Origin, list[datetime]] = {}
                 for run, layer in sorted(art.layers.items(), reverse=True):
@@ -563,7 +568,14 @@ class GefsVm:
         for run in self.bronze.runs(before=cutoff):
             month, t = f"{run:%Y-%m}", tag(f"{run:%Y-%m}", run.hour)
             if t not in manifests:
-                manifests[t] = GefsMonth.from_manifest(month, run.hour, self.registry.manifest(t))
+                try:
+                    manifests[t] = GefsMonth.from_manifest(
+                        month, run.hour, self.registry.manifest(t)
+                    )
+                except ArtifactError as exc:
+                    # ungültiges Manifest: nichts gilt als hochgeladen, Bronze bleibt liegen
+                    log.warning("gefs_manifest_invalid", tag=t, error=str(exc))
+                    manifests[t] = GefsMonth(month, run.hour)
             layer = manifests[t].layers.get(run)
             info = self.local.info(run)
             if layer is None or info is None or layer.content != info.content:
