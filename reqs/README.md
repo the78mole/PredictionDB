@@ -64,6 +64,10 @@ uv run strictdoc server reqs                           # Bearbeiten im Browser
 uv run python reqs/pruefen.py                          # Abdeckung der SWR durch Code und Tests
 ```
 
+Die veröffentlichte Fassung mit Traceability-Matrix, Abdeckung und Quelltext-Verweisen steht unter
+<https://the78mole.github.io/PredictionDB/>; der Workflow `reqs-pages.yml` erneuert sie nach
+jedem Push auf `main`, der `reqs/` oder Python-Code ändert.
+
 Beides läuft als pre-commit-Hook und damit im CI-Job „Lint und Typen“. Der Export bricht ab, wenn
 eine Relation oder ein `@relation`-Marker auf eine unbekannte ID zeigt. `pruefen.py` meldet jede
 umgesetzte SWR ohne Verweis aus dem Code und jede mit Nachweis `Test` ohne Verweis aus einem
