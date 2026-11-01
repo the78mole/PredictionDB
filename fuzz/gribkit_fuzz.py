@@ -14,6 +14,7 @@ Eigenschaften kürzer bei jedem Pull Request.
 from __future__ import annotations
 
 import sys
+from itertools import pairwise
 
 import atheris
 
@@ -36,7 +37,7 @@ def fuzz_idx(data: bytes) -> None:
         if e.length is not None and e.length <= 0:
             raise AssertionError(f"Länge {e.length} für {e}")
     bereiche = merge_ranges(eintraege, max_gap=luecke)
-    for a, b in zip(bereiche, bereiche[1:], strict=False):
+    for a, b in pairwise(bereiche):
         if a.end is None or a.end >= b.start:
             raise AssertionError(f"Bereiche überlappen: {a.header} {b.header}")
 

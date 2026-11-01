@@ -8,7 +8,9 @@ Funktionen länger und mit abdeckungsgesteuerten Eingaben.
 
 from __future__ import annotations
 
+import contextlib
 from functools import cache
+from itertools import pairwise
 
 from hypothesis import HealthCheck, example, given, settings
 from hypothesis import strategies as st
@@ -91,7 +93,7 @@ def test_merge_ranges_deckt_genau_die_auswahl(
     """
     auswahl = data.draw(st.lists(st.sampled_from(eintraege), unique=True))
     bereiche = merge_ranges(auswahl, max_gap=luecke)
-    for a, b in zip(bereiche, bereiche[1:], strict=False):
+    for a, b in pairwise(bereiche):
         assert a.end is not None and a.end < b.start
     gedeckt = [e for r in bereiche for e in r.entries]
     assert sorted(e.offset for e in gedeckt) == sorted({e.offset for e in auswahl})
@@ -116,10 +118,8 @@ def test_parse_head_beliebige_bytes(daten: bytes) -> None:
     @relation(SWR-GRIB-008, scope=function)
     """
     for complete in (False, True):
-        try:
+        with contextlib.suppress(HeaderError):
             parse_head(daten, complete=complete)
-        except HeaderError:
-            pass
 
 
 @given(st.data())
@@ -164,10 +164,8 @@ def test_parse_head_beliebige_sektion4(rumpf: bytes) -> None:
     """
     daten = _mit_sektion4(rumpf)
     for complete in (False, True):
-        try:
+        with contextlib.suppress(HeaderError):
             parse_head(daten, complete=complete)
-        except HeaderError:
-            pass
 
 
 @given(st.binary(max_size=512), st.integers(0, 10**12))
