@@ -45,6 +45,7 @@ def package(snap, tmp_path_factory):  # type: ignore[no-untyped-def]
     cfg, _ = load_config(ROOT / "config/ml/de_lu_v1.yaml")
     cfg.stage1 = [t for t in cfg.stage1 if t.code != "gen_wind_offshore"]
     cfg.lgbm.n_estimators = 30
+    cfg.lgbm.n_jobs = 1  # ein Thread je Testprozess (pytest-xdist)
     tmp = tmp_path_factory.mktemp("pkg")
     cfg_path = tmp / "cfg.yaml"
     cfg_path.write_text(yaml.safe_dump(cfg.model_dump(mode="json"), allow_unicode=True))
