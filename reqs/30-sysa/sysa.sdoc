@@ -207,24 +207,6 @@ RELATIONS:
   VALUE: SYSR-OPS-005
 
 [ELEMENT]
-UID: SYSA-SW-GRIBKIT
-ART: Softwareelement
-STATUS: Umgesetzt
-TITLE: gribkit
-STATEMENT: >>>
-GRIB2-Hilfen: ``.idx`` lesen, Byte-Bereiche zusammenfassen, Nachrichtenköpfe lesen, prüfen und
-zuschneiden.
-<<<
-ORT: packages/gribkit
-RELATIONS:
-- TYPE: Parent
-  VALUE: SYSR-WX-002
-- TYPE: Parent
-  VALUE: SYSR-WX-004
-- TYPE: Parent
-  VALUE: SYSR-SEC-009
-
-[ELEMENT]
 UID: SYSA-SW-WXI
 ART: Softwareelement
 STATUS: Umgesetzt
@@ -405,6 +387,27 @@ Gesamtdatenexport der Bundesnetzagentur.
 RELATIONS:
 - TYPE: Parent
   VALUE: SYSR-EN-004
+
+[ELEMENT]
+UID: SYSA-EXT-GRIBKIT
+ART: Externes System
+STATUS: Umgesetzt
+TITLE: gribkit
+STATEMENT: >>>
+Externes Python-Paket für GRIB2-Hilfen: ``.idx`` lesen, Byte-Bereiche zusammenfassen,
+Nachrichtenköpfe lesen, prüfen und zuschneiden. Bezogen von PyPI (``gribkit~=0.2``) durch
+wx-ingest, wx-process, wx-exchange und pdb-predict. Anforderungen, Tests und Fuzzing liegen im
+eigenen Repository.
+<<<
+ORT: https://github.com/the78mole/gribkit
+QUELLE: https://pypi.org/project/gribkit/
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-002
+- TYPE: Parent
+  VALUE: SYSR-WX-004
+- TYPE: Parent
+  VALUE: SYSR-SEC-009
 
 [ELEMENT]
 UID: SYSA-EXT-MAIL

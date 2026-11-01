@@ -16,8 +16,8 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 import httpx
-
 from gribkit import IdxParseError
+
 from predictiondb_core.log import get_logger
 from wx_ingest.bronze import Bronze, StepManifest
 from wx_ingest.config import GfsConfig

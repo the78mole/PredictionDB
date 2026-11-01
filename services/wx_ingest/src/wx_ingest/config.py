@@ -13,9 +13,8 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, Field, field_validator, model_validator
-
 from gribkit import BBox, MessageSpec
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class EndpointConfig(BaseModel):

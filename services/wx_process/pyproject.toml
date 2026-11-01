@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = "LicenseRef-BUSL-1.1"
 dependencies = [
-    "gribkit",
+    "gribkit~=0.2",
     "predictiondb-core",
     "wx-ingest",
     "numpy>=2.1",
@@ -22,7 +22,6 @@ dependencies = [
 wx-process = "wx_process.cli:main"
 
 [tool.uv.sources]
-gribkit = { workspace = true }
 predictiondb-core = { workspace = true }
 wx-ingest = { workspace = true }
 

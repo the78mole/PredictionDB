@@ -129,8 +129,10 @@ Ein Image für alle Python-Dienste (`docker/Dockerfile`), Monorepo als uv-Worksp
 | `api` | FastAPI | Prognosen, Punktabfragen, eigene Anlagen | geplant (Phase 8, Anlagen ab 4b) |
 | `mlflow`, `grafana` | – | Modellregistry, Dashboards und Alarme | geplant |
 
-Bibliotheken des Workspace: `packages/core` (Konfiguration `PDB_*`, Logging, S3, DB, Garage-Init),
-`packages/gribkit` (`.idx` lesen, Byte-Bereiche zusammenfassen, GRIB2 prüfen und zuschneiden).
+Bibliothek des Workspace: `packages/core` (Konfiguration `PDB_*`, Logging, S3, DB, Garage-Init).
+GRIB2-Hilfen (`.idx` lesen, Byte-Bereiche zusammenfassen, GRIB2 prüfen und zuschneiden) kommen aus
+dem externen Paket [gribkit](https://pypi.org/project/gribkit/) (Repository
+[the78mole/gribkit](https://github.com/the78mole/gribkit)).
 Bedienung je Dienst steht in dessen README.
 
 ## 6. Funktionale Anforderungen

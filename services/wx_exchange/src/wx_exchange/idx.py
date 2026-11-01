@@ -44,9 +44,9 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
-
 from gribkit.headers import idx_line, is_known
 from gribkit.idx import parse_idx
+
 from predictiondb_core.log import configure_logging, get_logger
 from predictiondb_core.settings import get_settings
 from wx_exchange.artifact import ATTRIBUTION_GDEX, LICENSE, PREFIX, month_bounds

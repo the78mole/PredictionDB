@@ -36,9 +36,8 @@ from typing import Any
 
 import httpx
 import numpy as np
-from numpy.typing import NDArray
-
 from gribkit import BBox, MessageSpec, crop, iter_messages, merge_ranges, parse_idx, select
+from numpy.typing import NDArray
 
 GFS = "https://noaa-gfs-bdp-pds.s3.amazonaws.com"
 DWD = "https://opendata.dwd.de/climate_environment/CDC/observations_germany/climate/hourly"

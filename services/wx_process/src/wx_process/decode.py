@@ -19,9 +19,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 import numpy as np
+from gribkit import GribError, iter_messages
 from numpy.typing import NDArray
 
-from gribkit import GribError, iter_messages
 from wx_process.variables import VARIABLES, GribKey
 
 Array = NDArray[np.float32]

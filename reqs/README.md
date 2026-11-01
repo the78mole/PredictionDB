@@ -20,8 +20,9 @@ Anforderungen der Art `Qualität` auf SYSR- bzw. SWR-Ebene. Schnittstellen stehe
 der Art `Schnittstelle` in SYSA (extern) bzw. SWA (intern).
 
 Kürzel der Softwareelemente: `WXI` wx-ingest, `WXP` wx-process, `WXX` wx-exchange, `ENI`
-energy-ingest, `MAI` mastr-ingest, `MLT` ml-train, `PRD` pdb-predict, `CORE` core, `GRIB`
-gribkit. Ausgearbeitet sind alle Softwareelemente.
+energy-ingest, `MAI` mastr-ingest, `MLT` ml-train, `PRD` pdb-predict, `CORE` core.
+Ausgearbeitet sind alle Softwareelemente. gribkit ist ein externes Paket (SYSA-EXT-GRIBKIT) mit
+eigenen Anforderungen im Repository [the78mole/gribkit](https://github.com/the78mole/gribkit).
 
 ## Felder
 

@@ -6,8 +6,8 @@ from pathlib import Path
 import httpx
 import numpy as np
 import pytest
-
 from gribkit import iter_messages
+
 from wx_ingest.bronze import Bronze
 from wx_ingest.config import GfsConfig
 from wx_ingest.ingest import GfsIngestor

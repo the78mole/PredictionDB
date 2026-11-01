@@ -13,7 +13,7 @@ Softwareanforderungen, die sie umsetzt (``Parent``). Das Modul selbst verweist m
 ``@relation(SWA-WXI-…, scope=file)`` im Modul-Docstring zurück.
 
 Abhängigkeiten: ``predictiondb_core`` (Einstellungen, Logging, S3, DB) und ``gribkit``
-(``.idx``, Byte-Bereiche, Köpfe, Zuschnitt). Abnehmer von Bronze ist wx-process.
+(externes Paket SYSA-EXT-GRIBKIT: ``.idx``, Byte-Bereiche, Köpfe, Zuschnitt). Abnehmer von Bronze ist wx-process.
 <<<
 
 [[SECTION]]

@@ -44,8 +44,6 @@ from typing import Any
 
 import httpx
 from aiolimiter import AsyncLimiter
-from tenacity import AsyncRetrying, retry_if_exception, stop_after_attempt, wait_exponential
-
 from gribkit import (
     BBox,
     ByteRange,
@@ -64,6 +62,8 @@ from gribkit import (
     select,
 )
 from gribkit.headers import HEAD_BYTES, Head, entry
+from tenacity import AsyncRetrying, retry_if_exception, stop_after_attempt, wait_exponential
+
 from predictiondb_core.log import get_logger
 from wx_ingest.config import EndpointConfig
 
