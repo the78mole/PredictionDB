@@ -149,9 +149,10 @@ NACHWEIS: Test
 TITLE: Silber-Format
 STATEMENT: >>>
 wx-process muss je Lauf einen Zarr-v3-Store ``<modell>/<auflösung>/JJJJ/MM/TT/HH.zarr`` schreiben:
-je Variable ein Int16-Array ``(step, lat, lon)`` mit ``scale_factor``/``add_offset`` in der
-festen Auflösung der Variable, Blosc/Zstd mit Byte-Shuffle und Chunks über 48 Schritte. Werte
-außerhalb des Wertebereichs werden begrenzt. Ein neuer Store ersetzt den alten vollständig.
+je Variable ein Array ``(step, lat, lon)`` im Ablage-Datentyp der Variable, Int16 mit
+``scale_factor``/``add_offset``/``_FillValue`` in der festen Auflösung der Variable (Standard) oder
+float16/float32 mit NaN als Füllwert, Blosc/Zstd mit Byte-Shuffle und Chunks über 48 Schritte.
+Werte außerhalb des Wertebereichs werden begrenzt. Ein neuer Store ersetzt den alten vollständig.
 <<<
 QUELLE: ARCHITEKTUR.md 5.1, 5.5.1
 RELATIONS:
@@ -219,6 +220,25 @@ die angegebene Zahl Tage sind, aber nur, wenn ihr Silber vorliegt. ``--dry-run``
 RELATIONS:
 - TYPE: Parent
   VALUE: SYSR-QA-001
+
+[REQUIREMENT]
+UID: SWR-WXP-025
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Silber formatunabhängig lesen
+STATEMENT: >>>
+wx-process muss Silber nach den Attributen jedes Arrays dekodieren (Datentyp, ``scale_factor``,
+``add_offset``, ``_FillValue``), nicht nach der aktuellen Variablentabelle. Eine Änderung von
+Datentyp, Schritt oder Offset einer Variable darf damit keinen Neubau bestehender Stores
+erfordern; nur eine neue ``SILVER_VERSION`` (anderer Inhalt) tut das.
+<<<
+QUELLE: ARCHITEKTUR.md 5.1, docs/WETTERDATEN.md 2.2
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-OPS-001
+- TYPE: Parent
+  VALUE: SYSR-WX-006
 
 [[/SECTION]]
 
