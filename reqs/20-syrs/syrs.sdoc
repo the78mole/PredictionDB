@@ -810,7 +810,7 @@ RELATIONS:
 [REQUIREMENT]
 UID: SYSR-SEC-009
 ART: Qualität
-STATUS: Geplant
+STATUS: Teilweise
 NACHWEIS: Test
 TITLE: Fuzzing externer Eingaben
 STATEMENT: >>>
@@ -823,8 +823,10 @@ regelmäßig.
 <<<
 RATIONALE: >>>
 Die Eingaben stammen von NOAA, GDEX, den Energiequellen und über GHCR von anderen Instanzen und
-sind damit nicht vertrauenswürdig. Vorgesehen sind Hypothesis für die Property-Tests und Atheris
-für den Fuzzer, den auch OpenSSF Scorecard (Prüfung Fuzzing) erkennt.
+sind damit nicht vertrauenswürdig. Property-Tests mit Hypothesis, Fuzzer mit Atheris
+(``fuzz/``, Workflow ``fuzz.yml``), den auch OpenSSF Scorecard (Prüfung Fuzzing) erkennt.
+Umgesetzt für gribkit (SWR-GRIB-008); offen sind die Antworten der Energiequellen und die
+GHCR-Manifeste.
 <<<
 QUELLE: OpenSSF Scorecard Fuzzing; Entscheidung 2026-11-01
 RELATIONS:

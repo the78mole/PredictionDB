@@ -109,7 +109,7 @@ def parse_idx(text: str, total_size: int | None = None) -> list[IdxEntry]:
     """Liest eine ``.idx``-Datei. Unter-Nachrichten (``12.1``, ``12.2``) teilen
     sich einen Offset und damit denselben Byte-Bereich.
 
-    @relation(SWR-GRIB-001, scope=function)
+    @relation(SWR-GRIB-001, SWR-GRIB-008, scope=function)
     """
     rows: list[tuple[str, int, str, str, str, str]] = []
     for lineno, line in enumerate(text.splitlines(), start=1):
@@ -167,7 +167,7 @@ def merge_ranges(entries: Iterable[IdxEntry], max_gap: int = 0) -> list[ByteRang
     geladen. Liegen zwei Bereiche höchstens ``max_gap`` Bytes auseinander,
     werden sie verschmolzen (die Lücke wird mitgeladen und verworfen).
 
-    @relation(SWR-GRIB-003, scope=function)
+    @relation(SWR-GRIB-003, SWR-GRIB-008, scope=function)
     """
     unique: dict[int, IdxEntry] = {}
     for e in sorted(entries, key=lambda e: e.offset):

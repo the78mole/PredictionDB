@@ -116,5 +116,21 @@ RELATIONS:
 - TYPE: Parent
   VALUE: SYSR-WX-004
 
+[REQUIREMENT]
+UID: SWR-GRIB-008
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Robust gegen ungültige Eingaben
+STATEMENT: >>>
+``parse_idx``, ``merge_ranges``, ``parse_head`` und ``find_boundary`` müssen bei beliebigen,
+verfälschten oder abgeschnittenen Eingaben entweder ein gültiges Ergebnis liefern oder nur
+``IdxParseError`` bzw. ``HeaderError`` auslösen. Nachgewiesen wird das mit Property-Tests
+(Hypothesis) in jeder CI und regelmäßig mit dem Fuzzer ``fuzz/gribkit_fuzz.py`` (Atheris).
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-SEC-009
+
 [[/SECTION]]
 

@@ -10,6 +10,7 @@ dependencies = ["predictiondb-core"]
 
 [dependency-groups]
 dev = [
+    "hypothesis>=6.170",
     "mypy>=1.13",
     "pre-commit>=4.7.0",
     "pytest>=8.3",
@@ -18,6 +19,9 @@ dev = [
     "ruff>=0.8",
     "strictdoc>=0.30.4",
     "types-PyYAML",
+]
+fuzz = [
+    "atheris>=3.1",
 ]
 
 [tool.uv]
@@ -63,7 +67,7 @@ exclude = ["^\\.venv/", "^build/", "^docs/analysen/"]
 [[tool.mypy.overrides]]
 module = [
     "obstore.*", "eccodes.*", "gribapi.*", "lxml.*", "matplotlib.*", "lightgbm.*", "holidays.*",
-    "pandas.*", "pyarrow.*", "scipy.*", "openpyxl.*", "strictdoc.*",
+    "pandas.*", "pyarrow.*", "scipy.*", "openpyxl.*", "strictdoc.*", "atheris",
 ]
 ignore_missing_imports = true
 
