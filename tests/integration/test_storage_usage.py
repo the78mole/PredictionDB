@@ -133,6 +133,7 @@ def _panel_sql(panel_id: int, ref: str = "A") -> str:
 
 
 def test_measure_groups_and_panels(engine: Engine, tmp_path: Path) -> None:
+    """@relation(SWR-CORE-006, scope=function)"""
     _gold(engine)
     _runs(engine)
     (tmp_path / "db.lmdb").mkdir()

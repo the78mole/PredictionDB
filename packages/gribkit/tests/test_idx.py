@@ -21,6 +21,7 @@ def f042() -> list[IdxEntry]:
 
 
 def test_parse_real_gfs_idx(f042: list[IdxEntry]) -> None:
+    """@relation(SWR-GRIB-001, scope=function)"""
     assert len(f042) == 743
     first = f042[0]
     assert (first.number, first.offset, first.date, first.var, first.level, first.fcst) == (
@@ -37,6 +38,7 @@ def test_parse_real_gfs_idx(f042: list[IdxEntry]) -> None:
 
 
 def test_total_size_sets_last_length(f042: list[IdxEntry]) -> None:
+    """@relation(SWR-GRIB-001, scope=function)"""
     text = (FIXTURES / "gfs.t06z.pgrb2.0p25.f042.idx").read_text()
     entries = parse_idx(text, total_size=f042[-1].offset + 1234)
     assert entries[-1].length == 1234
@@ -45,6 +47,7 @@ def test_total_size_sets_last_length(f042: list[IdxEntry]) -> None:
 
 
 def test_select_and_missing(f042: list[IdxEntry]) -> None:
+    """@relation(SWR-GRIB-002, scope=function)"""
     specs = [
         MessageSpec("TMP", "2 m above ground"),
         MessageSpec("TCDC", "entire atmosphere"),
@@ -62,12 +65,14 @@ def test_select_and_missing(f042: list[IdxEntry]) -> None:
 
 
 def test_f000_has_no_accumulations() -> None:
+    """@relation(SWR-GRIB-002, scope=function)"""
     entries = parse_idx((FIXTURES / "gfs.t06z.pgrb2.0p25.f000.idx").read_text())
     specs = [MessageSpec("DSWRF", "surface"), MessageSpec("TMP", "2 m above ground")]
     assert [s.var for s in missing_specs(entries, specs)] == ["DSWRF"]
 
 
 def test_merge_adjacent_and_gap() -> None:
+    """@relation(SWR-GRIB-003, scope=function)"""
     text = "\n".join(
         [
             "1:0:d=2026102006:A:surface:anl:",
@@ -89,6 +94,7 @@ def test_merge_adjacent_and_gap() -> None:
 
 
 def test_merge_open_end_and_submessages() -> None:
+    """@relation(SWR-GRIB-003, scope=function)"""
     text = "\n".join(
         [
             "1:0:d=2026102006:A:surface:anl:",
@@ -105,12 +111,14 @@ def test_merge_open_end_and_submessages() -> None:
 
 
 def test_extract_checks_length() -> None:
+    """@relation(SWR-GRIB-003, scope=function)"""
     e = parse_idx("1:0:d=1:A:surface:anl:", total_size=10)
     with pytest.raises(ValueError):
         merge_ranges(e)[0].extract(b"short")
 
 
 def test_parse_errors() -> None:
+    """@relation(SWR-GRIB-001, scope=function)"""
     with pytest.raises(IdxParseError):
         parse_idx("1:abc:d=1:A:surface:anl:")
     with pytest.raises(IdxParseError):

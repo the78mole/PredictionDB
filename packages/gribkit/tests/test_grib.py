@@ -30,6 +30,7 @@ def _decode(message: bytes) -> tuple[Any, Any, Any, dict[str, Any]]:
 
 
 def test_iter_messages_splits_and_validates(global_message: tuple[bytes, Any, Any]) -> None:
+    """@relation(SWR-GRIB-005, scope=function)"""
     msg, _, _ = global_message
     assert list(iter_messages(msg + msg)) == [msg, msg]
     with pytest.raises(GribError, match="abgeschnitten"):
@@ -39,6 +40,7 @@ def test_iter_messages_splits_and_validates(global_message: tuple[bytes, Any, An
 
 
 def test_crop_europe_box(global_message: tuple[bytes, Any, Any]) -> None:
+    """@relation(SWR-GRIB-006, scope=function)"""
     msg, _, _ = global_message
     bbox = BBox(north=58, south=44, west=0, east=20)
     out = list(iter_messages(crop(msg + msg, bbox)))
@@ -55,6 +57,7 @@ def test_crop_europe_box(global_message: tuple[bytes, Any, Any]) -> None:
 
 
 def test_crop_across_prime_meridian() -> None:
+    """@relation(SWR-GRIB-006, scope=function)"""
     msg, _, _ = make_global_message(values_fn=lambda lat, lon: lat * 1000 + lon)
     out = crop(msg, BBox(north=50, south=45, west=-5, east=5))
     values, _lats, lons, keys = _decode(out)
@@ -68,6 +71,7 @@ def test_crop_across_prime_meridian() -> None:
 
 
 def test_crop_south_to_north_input_is_flipped() -> None:
+    """@relation(SWR-GRIB-006, scope=function)"""
     msg, _, _ = make_global_message(j_scans_positively=True)
     out = crop(msg, BBox(north=58, south=44, west=0, east=20))
     values, lats, lons, keys = _decode(out)
@@ -78,6 +82,7 @@ def test_crop_south_to_north_input_is_flipped() -> None:
 
 
 def test_crop_repacks_lossless_with_ccsds() -> None:
+    """@relation(SWR-GRIB-007, scope=function)"""
     import eccodes as ec
 
     msg, _, _ = make_global_message()
@@ -92,18 +97,21 @@ def test_crop_repacks_lossless_with_ccsds() -> None:
 
 
 def test_crop_quarter_degree_grid_point_count() -> None:
+    """@relation(SWR-GRIB-006, scope=function)"""
     msg, _, _ = make_global_message(inc=0.25, values_fn=lambda lat, lon: lat + 0 * lon)
     values, *_ = _decode(crop(msg, BBox(north=58, south=44, west=0, east=20)))
     assert values.shape == (57, 81)  # 4 617 Punkte, wie in ARCHITEKTUR.md 4.3
 
 
 def test_crop_empty_box_raises(global_message: tuple[bytes, Any, Any]) -> None:
+    """@relation(SWR-GRIB-006, scope=function)"""
     msg, _, _ = global_message
     with pytest.raises(GribError):
         crop(msg, BBox(north=45.5, south=45.2, west=1.2, east=1.4))
 
 
 def test_bbox_validation() -> None:
+    """@relation(SWR-GRIB-006, scope=function)"""
     with pytest.raises(ValueError):
         BBox(north=40, south=50, west=0, east=10)
     with pytest.raises(ValueError):

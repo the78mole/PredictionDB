@@ -1,0 +1,120 @@
+[DOCUMENT]
+TITLE: Softwareanforderungen gribkit (SRS)
+PREFIX: SWR-GRIB-
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @anforderung
+
+[TEXT]
+STATEMENT: >>>
+Softwareanforderungen nach ISO/IEC/IEEE 29148 an das Softwareelement SYSA-SW-GRIBKIT
+(``packages/gribkit``): Inventare (``.idx`` oder Nachrichtenköpfe), Auswahl und Byte-Bereiche für
+Partial Downloads, Trennen und Zuschneiden von GRIB2-Nachrichten. Abnehmer sind wx-ingest,
+wx-exchange und pdb-predict.
+<<<
+
+[[SECTION]]
+TITLE: Anforderungen
+
+[REQUIREMENT]
+UID: SWR-GRIB-001
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Inventar lesen
+STATEMENT: >>>
+gribkit muss NCEP-Inventardateien (``.idx``) lesen, Unter-Nachrichten demselben Byte-Bereich
+zuordnen, die Länge der letzten Nachricht aus der Dateigröße bestimmen und fehlerhafte Zeilen als
+Fehler melden.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-002
+
+[REQUIREMENT]
+UID: SWR-GRIB-002
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Nachrichten auswählen
+STATEMENT: >>>
+gribkit muss Einträge nach Spezifikationen (Variable, Ebene, optional Vorlauf) auswählen und
+Spezifikationen ohne Treffer melden, z. B. akkumulierte Größen im Analyse-Schritt.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-002
+
+[REQUIREMENT]
+UID: SWR-GRIB-003
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Byte-Bereiche bilden
+STATEMENT: >>>
+gribkit muss gewählte Nachrichten zu möglichst wenigen Byte-Bereichen zusammenfassen (angrenzend
+oder mit kleiner Lücke, offenes Dateiende) und beim Herausschneiden die Länge prüfen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-002
+
+[REQUIREMENT]
+UID: SWR-GRIB-004
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Inventar aus Nachrichtenköpfen
+STATEMENT: >>>
+Ohne ``.idx`` muss gribkit Nachrichtengrenzen finden und aus den Sektionen 0 bis 4 Zeilen wie
+``wgrib2 -s`` bilden (Parameter nach NCEP-Tabelle 4.2, Ebenen und Schichten, Statistiken,
+Vorlauf); unbekannte Parameter behalten ihre Nummern wie bei wgrib2.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-002
+
+[REQUIREMENT]
+UID: SWR-GRIB-005
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Nachrichten trennen
+STATEMENT: >>>
+gribkit muss einen Bytestrom in einzelne GRIB2-Nachrichten zerlegen und unvollständige oder
+fremde Daten als Fehler melden.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-004
+
+[REQUIREMENT]
+UID: SWR-GRIB-006
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Ausschnitt zuschneiden
+STATEMENT: >>>
+gribkit muss ``regular_ll``-Nachrichten auf alle Gitterpunkte in einem Ausschnitt zuschneiden,
+auch über den Nullmeridian und bei Süd-Nord-Reihenfolge; ein leerer Ausschnitt oder eine
+ungültige Box ist ein Fehler.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-002
+
+[REQUIREMENT]
+UID: SWR-GRIB-007
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Verlustfrei neu packen
+STATEMENT: >>>
+Zugeschnittene Nachrichten müssen verlustfrei (CCSDS) neu gepackt werden.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-004
+
+[[/SECTION]]
+

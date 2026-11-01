@@ -1,0 +1,125 @@
+[DOCUMENT]
+TITLE: Softwarearchitektur core (SWA)
+PREFIX: SWA-CORE-
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @architektur
+
+[TEXT]
+STATEMENT: >>>
+Softwarearchitektur nach ISO/IEC/IEEE 12207 für das Softwareelement SYSA-SW-CORE. Jede Komponente
+entspricht einem Modul unter ``packages/core/src/predictiondb_core``. Abnehmer sind alle Dienste.
+<<<
+
+[[SECTION]]
+TITLE: Komponenten
+
+[ELEMENT]
+UID: SWA-CORE-SETTINGS
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Einstellungen
+STATEMENT: >>>
+``Settings`` und ``Buckets`` mit Präfix ``PDB_``.
+<<<
+ORT: packages/core/src/predictiondb_core/settings.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-CORE-001
+
+[ELEMENT]
+UID: SWA-CORE-DB
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Datenbank
+STATEMENT: >>>
+SQLAlchemy-Engine mit psycopg 3.
+<<<
+ORT: packages/core/src/predictiondb_core/db.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-CORE-002
+
+[ELEMENT]
+UID: SWA-CORE-S3
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Objektspeicher
+STATEMENT: >>>
+``obstore``-Store je Bucket.
+<<<
+ORT: packages/core/src/predictiondb_core/s3.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-CORE-003
+
+[ELEMENT]
+UID: SWA-CORE-LOG
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Logging
+STATEMENT: >>>
+structlog-Einrichtung, JSON auf stdout.
+<<<
+ORT: packages/core/src/predictiondb_core/log.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-CORE-004
+
+[ELEMENT]
+UID: SWA-CORE-GARAGE
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Garage-Init
+STATEMENT: >>>
+Admin-API v2: Layout, Schlüssel, Buckets.
+<<<
+ORT: packages/core/src/predictiondb_core/garage_init.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-CORE-005
+
+[ELEMENT]
+UID: SWA-CORE-USAGE
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Speicherbelegung
+STATEMENT: >>>
+Messung je Gruppe in Garage und Postgres mit Zwischenspeichern.
+<<<
+ORT: packages/core/src/predictiondb_core/storage_usage.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-CORE-006
+
+[[/SECTION]]
+
+[[SECTION]]
+TITLE: Schnittstellen
+
+[ELEMENT]
+UID: SWA-CORE-IF-ENV
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: Gemeinsame Einstellungen
+STATEMENT: >>>
+Betreiber → alle Dienste. ``PDB_DATABASE_URL``, ``PDB_S3_*``, ``PDB_BUCKET_*``, ``PDB_LOG_*``.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-CORE-001
+
+[ELEMENT]
+UID: SWA-CORE-IF-USAGE
+ART: Schnittstelle
+STATUS: Umgesetzt
+TITLE: Belegungstabellen
+STATEMENT: >>>
+pdb-storage-usage → Grafana (Dashboard „Wetter“). ``meta.storage_usage``, Zwischenspeicher ``meta.storage_s3_month`` und ``meta.storage_pg_chunk``.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-CORE-006
+
+[[/SECTION]]
+

@@ -1,0 +1,113 @@
+[DOCUMENT]
+TITLE: Softwareanforderungen core (SRS)
+PREFIX: SWR-CORE-
+
+[GRAMMAR]
+IMPORT_FROM_FILE: @anforderung
+
+[TEXT]
+STATEMENT: >>>
+Softwareanforderungen nach ISO/IEC/IEEE 29148 an das Softwareelement SYSA-SW-CORE
+(``packages/core``, Paket ``predictiondb_core``): gemeinsame Einstellungen, Datenbank- und
+S3-Zugang und Logging aller Dienste, dazu die Erstinitialisierung von Garage und die Messung der
+Speicherbelegung.
+<<<
+
+[[SECTION]]
+TITLE: Anforderungen
+
+[REQUIREMENT]
+UID: SWR-CORE-001
+ART: Randbedingung
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Einstellungen aus der Umgebung
+STATEMENT: >>>
+Alle Dienste müssen ihre gemeinsamen Einstellungen (Datenbank, S3-Endpunkt und Zugang, Buckets,
+Logging) aus Variablen mit Präfix ``PDB_`` bzw. der ``.env`` lesen. Ohne Umgebung gelten Vorgaben
+für den lokalen Stack; Geheimnisse werden nicht im Klartext ausgegeben.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-QA-003
+- TYPE: Parent
+  VALUE: SYSR-QA-002
+
+[REQUIREMENT]
+UID: SWR-CORE-002
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Datenbankzugang
+STATEMENT: >>>
+Der Zugang zu PostgreSQL mit TimescaleDB muss allein über ``PDB_DATABASE_URL`` erfolgen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-QA-002
+
+[REQUIREMENT]
+UID: SWR-CORE-003
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Objektspeicher
+STATEMENT: >>>
+Der Zugang zum Objektspeicher muss über die S3-API eines beliebigen S3-kompatiblen Dienstes
+erfolgen (Endpunkt, Region, Schlüssel aus ``PDB_S3_*``), je Bucket ein Store.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-QA-002
+
+[REQUIREMENT]
+UID: SWR-CORE-004
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Inspektion
+TITLE: Strukturierte Protokolle
+STATEMENT: >>>
+Alle Dienste müssen über eine gemeinsame Einrichtung protokollieren, als JSON auf stdout
+(``PDB_LOG_JSON``) mit einstellbarer Stufe (``PDB_LOG_LEVEL``).
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-OPS-005
+
+[REQUIREMENT]
+UID: SWR-CORE-005
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Garage einrichten
+STATEMENT: >>>
+``garage-init`` muss einen Garage-Single-Node über die Admin-API idempotent einrichten:
+Layout mit Kapazität, Zugangsschlüssel und alle Buckets mit Rechten. Ein zweiter Lauf ändert
+nichts; ohne Zugangsdaten bricht er mit Fehler ab.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-OPS-001
+- TYPE: Parent
+  VALUE: SYSR-QA-003
+
+[REQUIREMENT]
+UID: SWR-CORE-006
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Speicherbelegung messen
+STATEMENT: >>>
+``pdb-storage-usage`` muss die Belegung je Wettergruppe (GFS DE, GFS Europa, GEFS) und Stufe in
+Garage und Postgres nach ``meta.storage_usage`` schreiben. Monatspräfixe werden nur neu gelistet,
+wenn sie neu, aktuell, geändert oder zu alt sind; die Postgres-Anteile werden je Chunk anteilig
+nach Zeilen geschätzt. Grafana liest nur die Messung.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-OPS-003
+- TYPE: Parent
+  VALUE: SYSR-QA-001
+
+[[/SECTION]]
+

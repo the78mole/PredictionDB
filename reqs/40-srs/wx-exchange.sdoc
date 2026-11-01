@@ -393,7 +393,7 @@ gültigen Stände verlinken.
 QUELLE: Projektentscheidung Prognose öffentlich
 RELATIONS:
 - TYPE: Parent
-  VALUE: SYSR-OPS-003
+  VALUE: SYSR-PUB-006
 
 [REQUIREMENT]
 UID: SWR-WXX-051
@@ -407,6 +407,6 @@ umbiegen und ihn bei Short.io anlegen, wenn er fehlt. Ohne Kurzlink wird nur hoc
 <<<
 RELATIONS:
 - TYPE: Parent
-  VALUE: SYSR-OPS-003
+  VALUE: SYSR-PUB-006
 
 [[/SECTION]]

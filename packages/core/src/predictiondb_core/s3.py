@@ -1,4 +1,7 @@
-"""Zugriff auf den Objektspeicher (Garage oder jeder andere S3-kompatible Dienst)."""
+"""Zugriff auf den Objektspeicher (Garage oder jeder andere S3-kompatible Dienst).
+
+@relation(SWA-CORE-S3, scope=file)
+"""
 
 from obstore.store import S3Store
 
@@ -10,6 +13,8 @@ def s3_store(bucket: str, settings: Settings | None = None) -> S3Store:
 
     Endpoint, Region und Schlüssel kommen ausschließlich aus der Konfiguration, damit ein
     Wechsel des S3-Dienstes reine Konfiguration bleibt.
+
+    @relation(SWR-CORE-003, scope=function)
     """
     s = settings or get_settings()
     return S3Store(

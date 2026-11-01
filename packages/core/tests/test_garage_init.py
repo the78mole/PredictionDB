@@ -17,6 +17,7 @@ SECRET = SecretStr("f" * 64)
     [("100G", 100 * 10**9), ("1.5T", 1_500 * 10**9), ("500MB", 500 * 10**6), ("1024", 1024)],
 )
 def test_parse_capacity(value: str, expected: int) -> None:
+    """@relation(SWR-CORE-005, scope=function)"""
     assert parse_capacity(value) == expected
 
 
@@ -76,6 +77,7 @@ def _run(fake: FakeGarage) -> None:
 
 
 def test_init_creates_layout_key_and_buckets() -> None:
+    """@relation(SWR-CORE-005, scope=function)"""
     fake = FakeGarage()
     _run(fake)
     assert fake.layout_version == 1
@@ -92,6 +94,7 @@ def test_init_creates_layout_key_and_buckets() -> None:
 
 
 def test_init_is_idempotent() -> None:
+    """@relation(SWR-CORE-005, scope=function)"""
     fake = FakeGarage()
     _run(fake)
     fake.calls.clear()
@@ -103,5 +106,6 @@ def test_init_is_idempotent() -> None:
 
 
 def test_init_requires_credentials() -> None:
+    """@relation(SWR-CORE-005, scope=function)"""
     with httpx.Client() as client, pytest.raises(ValueError, match="PDB_S3_ACCESS_KEY_ID"):
         run(Settings(s3_access_key_id=""), GarageAdminSettings(), client)

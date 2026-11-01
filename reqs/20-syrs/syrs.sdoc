@@ -509,6 +509,28 @@ RELATIONS:
 - TYPE: Parent
   VALUE: STK-019
 
+[REQUIREMENT]
+UID: SYSR-PUB-006
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test, Demonstration
+TITLE: Öffentliche Prognose
+STATEMENT: >>>
+Das System muss die aktuelle Wochenprognose (Preis und Last, D+0 bis D+7) mindestens täglich
+ohne Anmeldung öffentlich zugänglich machen, unter einer gleichbleibenden Adresse und mit den
+Quellenvermerken. Ältere Stände sollen eine Zeit lang zum Vergleich erreichbar bleiben. Wie und
+wo veröffentlicht wird, ist austauschbar und nicht Teil dieser Anforderung.
+<<<
+RATIONALE: >>>
+Heute als Grafana-Snapshot auf snapshots.raintank.io mit Kurzlink go.the78mole.de/predb
+(SWR-WXX-050, SWR-WXX-051). Die Art der Veröffentlichung kann sich noch ändern.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-003
+- TYPE: Parent
+  VALUE: STK-014
+
 [[/SECTION]]
 
 [[SECTION]]

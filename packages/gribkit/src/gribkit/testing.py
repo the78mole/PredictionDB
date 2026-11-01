@@ -1,4 +1,7 @@
-"""Hilfen für Tests: synthetische GRIB2-Nachrichten mit bekannten Werten."""
+"""Hilfen für Tests: synthetische GRIB2-Nachrichten mit bekannten Werten.
+
+@relation(SWA-GRIB-TESTING, scope=file)
+"""
 
 from __future__ import annotations
 
