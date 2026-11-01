@@ -1,6 +1,7 @@
 # PredictionDB
 
 [![CI](https://github.com/the78mole/PredictionDB/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/the78mole/PredictionDB/actions/workflows/ci.yml)
+[![Anforderungen](https://github.com/the78mole/PredictionDB/actions/workflows/reqs-pages.yml/badge.svg?branch=main)](https://the78mole.github.io/PredictionDB/)
 [![Release](https://img.shields.io/github/v/release/the78mole/PredictionDB?filter=v*&sort=semver)](https://github.com/the78mole/PredictionDB/releases)
 [![Lizenz: BSL 1.1](https://img.shields.io/badge/Lizenz-BSL%201.1-blue)](LICENSE)
 [![Python 3.14](https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white)](.python-version)
@@ -15,6 +16,8 @@ Strombedarfs- und Strompreisprognose für Deutschland auf Basis kostenfreier Wet
 [docs/PROGNOSEMODELLE.md](docs/PROGNOSEMODELLE.md), Backtest:
 [docs/BACKTEST.md](docs/BACKTEST.md). Gespeicherte Wetterdaten: [docs/WETTERDATEN.md](docs/WETTERDATEN.md). Quellen mit
 Schlüssel- oder Lizenzbedarf: [docs/DATENQUELLEN-ZUGANG.md](docs/DATENQUELLEN-ZUGANG.md).
+Anforderungen mit Traceability und Projektstatistik:
+[the78mole.github.io/PredictionDB](https://the78mole.github.io/PredictionDB/).
 
 ## Aufbau
 
@@ -25,7 +28,7 @@ Monorepo als [uv](https://docs.astral.sh/uv/)-Workspace (Kapitel 6.1 der Archite
 | `packages/core` | `predictiondb_core`: Konfiguration (`PDB_*`), Logging, S3- und DB-Zugriff, Garage-Init |
 | `packages/gribkit` | GRIB2-Hilfen: `.idx`-Parser, Range-Merging, Zuschnitt |
 | `services/*` | Dienste je mit eigener `pyproject.toml` und README: `wx_ingest`, `wx_process`, `wx_exchange`, `energy_ingest`, `mastr_ingest`, `ml_train` |
-| `reqs/` | Anforderungen als StrictDoc-Projekt (StRS, SyRS, Systemarchitektur, SRS und SWA je Dienst), Verweise aus Code und Tests per `@relation` ([README](reqs/README.md)) |
+| `reqs/` | Anforderungen als StrictDoc-Projekt (StRS, SyRS, Systemarchitektur, SRS und SWA je Dienst), Verweise aus Code und Tests per `@relation` ([README](reqs/README.md), [veröffentlicht](https://the78mole.github.io/PredictionDB/)) |
 | `migrations/` | Alembic-Migrationen (SQL inkl. TimescaleDB-Befehle) |
 | `compose.yaml` | Stack für die VM: TimescaleDB, Garage (Single Node), Ingest (GFS, Energie, MaStR), `wx-process`, Grafana mit Prometheus; Profile `backfill`, `history` (GFS-Historie) und `ml` (Training, Inferenz), Übersicht in Kapitel 8.2 der Architektur |
 | `docker/Dockerfile` | ein Image für alle Python-Dienste |

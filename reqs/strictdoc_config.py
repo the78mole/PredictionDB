@@ -22,6 +22,8 @@ def create_config() -> ProjectConfig:
             "SEARCH",
             "TRACEABILITY_MATRIX_SCREEN",
             "REQUIREMENT_TO_SOURCE_TRACEABILITY",
+            "PROJECT_STATISTICS_SCREEN",
+            "TREE_MAP_SCREEN",
         ],
         grammars={
             "@anforderung": "grammatik/anforderung.sgra",
