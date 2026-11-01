@@ -1,3 +1,5 @@
+"""@relation(SWA-GRIB-BBOX, scope=file)"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,7 +9,10 @@ from dataclasses import dataclass
 class BBox:
     """Geografischer Ausschnitt in Grad. ``west``/``east`` dürfen negativ sein;
     ``west > east`` ist nicht erlaubt (für Ausschnitte über die Datumsgrenze
-    ``east`` größer 180 angeben)."""
+    ``east`` größer 180 angeben).
+
+    @relation(SWR-GRIB-006, scope=class)
+    """
 
     north: float
     south: float

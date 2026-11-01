@@ -7,6 +7,8 @@ Eine ``.idx``-Zeile hat die Form::
 Die Länge einer Nachricht ergibt sich aus dem Offset der folgenden Zeile.
 Für die letzte Nachricht ist die Länge nur bekannt, wenn die Dateigröße
 übergeben wird; sonst bleibt sie offen (``Range: bytes=<offset>-``).
+
+@relation(SWA-GRIB-IDX, scope=file)
 """
 
 from __future__ import annotations
@@ -48,6 +50,8 @@ class MessageSpec:
     ``.idx``-Zeile, z. B. ``"ave"`` für Mittelwerte. Ohne ``fcst`` werden
     alle Nachrichten mit passendem ``VAR:LEVEL`` gewählt (bei GFS z. B. für
     ``TCDC`` sowohl der Momentanwert als auch das Intervallmittel).
+
+    @relation(SWR-GRIB-002, scope=class)
     """
 
     var: str
@@ -82,7 +86,10 @@ class ByteRange:
 
     def extract(self, data: bytes) -> bytes:
         """Schneidet aus den geladenen Bytes nur die gewählten Nachrichten heraus
-        (bei verschmolzenen Bereichen liegen dazwischen fremde Nachrichten)."""
+        (bei verschmolzenen Bereichen liegen dazwischen fremde Nachrichten).
+
+        @relation(SWR-GRIB-003, scope=function)
+        """
         if self.length is not None and len(data) != self.length:
             raise ValueError(f"{self.header}: {len(data)} Bytes erhalten, {self.length} erwartet")
         parts = []
@@ -93,12 +100,17 @@ class ByteRange:
 
 
 class IdxParseError(ValueError):
+    """@relation(SWR-GRIB-001, scope=class)"""
+
     pass
 
 
 def parse_idx(text: str, total_size: int | None = None) -> list[IdxEntry]:
     """Liest eine ``.idx``-Datei. Unter-Nachrichten (``12.1``, ``12.2``) teilen
-    sich einen Offset und damit denselben Byte-Bereich."""
+    sich einen Offset und damit denselben Byte-Bereich.
+
+    @relation(SWR-GRIB-001, scope=function)
+    """
     rows: list[tuple[str, int, str, str, str, str]] = []
     for lineno, line in enumerate(text.splitlines(), start=1):
         line = line.strip()
@@ -132,12 +144,18 @@ def parse_idx(text: str, total_size: int | None = None) -> list[IdxEntry]:
 
 
 def select(entries: Iterable[IdxEntry], specs: Sequence[MessageSpec]) -> list[IdxEntry]:
-    """Alle Einträge, die mindestens eine Spezifikation erfüllen (Reihenfolge der Datei)."""
+    """Alle Einträge, die mindestens eine Spezifikation erfüllen (Reihenfolge der Datei).
+
+    @relation(SWR-GRIB-002, scope=function)
+    """
     return [e for e in entries if any(s.matches(e) for s in specs)]
 
 
 def missing_specs(entries: Iterable[IdxEntry], specs: Sequence[MessageSpec]) -> list[MessageSpec]:
-    """Spezifikationen ohne Treffer, z. B. akkumulierte Größen im Analyse-Schritt f000."""
+    """Spezifikationen ohne Treffer, z. B. akkumulierte Größen im Analyse-Schritt f000.
+
+    @relation(SWR-GRIB-002, scope=function)
+    """
     entries = list(entries)
     return [s for s in specs if not any(s.matches(e) for e in entries)]
 
@@ -148,6 +166,8 @@ def merge_ranges(entries: Iterable[IdxEntry], max_gap: int = 0) -> list[ByteRang
     Nachrichten mit gleichem Offset (Unter-Nachrichten) werden nur einmal
     geladen. Liegen zwei Bereiche höchstens ``max_gap`` Bytes auseinander,
     werden sie verschmolzen (die Lücke wird mitgeladen und verworfen).
+
+    @relation(SWR-GRIB-003, scope=function)
     """
     unique: dict[int, IdxEntry] = {}
     for e in sorted(entries, key=lambda e: e.offset):

@@ -3,6 +3,8 @@
 Dekodieren und Neucodieren übernimmt ecCodes. Die Packungsart der Quelle
 (bei GFS ``grid_complex_spatial_differencing``) bleibt erhalten, ebenso die
 Genauigkeit über den Dezimal-Skalierungsfaktor.
+
+@relation(SWA-GRIB-GRIB, scope=file)
 """
 
 from __future__ import annotations
@@ -19,6 +21,8 @@ _EPS = 1e-6
 
 
 class GribError(ValueError):
+    """@relation(SWR-GRIB-005, scope=class)"""
+
     pass
 
 
@@ -27,6 +31,8 @@ def iter_messages(data: bytes) -> Iterator[bytes]:
 
     Prüft Kennung ``GRIB``, Edition 2 und Endkennung ``7777``. Bytes zwischen
     den Nachrichten sind nicht erlaubt; so fallen abgeschnittene Downloads auf.
+
+    @relation(SWR-GRIB-005, scope=function)
     """
     pos = 0
     n = len(data)
@@ -87,6 +93,8 @@ def crop_message(message: bytes, bbox: BBox, packing: str | None = None) -> byte
     Die Ausgabe ist immer Nord→Süd abgetastet (wie die globalen GFS-Dateien),
     damit Bronze unabhängig vom Endpunkt einheitlich ist. ``packing`` setzt
     optional eine andere Packungsart (z. B. ``grid_complex_spatial_differencing``).
+
+    @relation(SWR-GRIB-006, SWR-GRIB-007, scope=function)
     """
     import eccodes as ec
 
@@ -138,5 +146,8 @@ def crop_message(message: bytes, bbox: BBox, packing: str | None = None) -> byte
 
 
 def crop(data: bytes, bbox: BBox, packing: str | None = None) -> bytes:
-    """Schneidet alle Nachrichten eines GRIB2-Bytestroms zu."""
+    """Schneidet alle Nachrichten eines GRIB2-Bytestroms zu.
+
+    @relation(SWR-GRIB-006, scope=function)
+    """
     return b"".join(crop_message(m, bbox, packing) for m in iter_messages(data))

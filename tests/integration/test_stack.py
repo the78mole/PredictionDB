@@ -21,6 +21,7 @@ pytestmark = [
 
 
 def test_schema_and_hypertables() -> None:
+    """@relation(SWR-CORE-002, scope=function)"""
     engine = create_db_engine(Settings())
     with engine.connect() as conn:
         version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
@@ -39,6 +40,7 @@ def test_schema_and_hypertables() -> None:
 
 
 def test_buckets_read_write() -> None:
+    """@relation(SWR-CORE-003, scope=function)"""
     settings = Settings()
     for bucket in settings.buckets.all():
         store = s3_store(bucket, settings)

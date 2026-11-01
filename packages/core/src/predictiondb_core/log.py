@@ -1,4 +1,7 @@
-"""Strukturiertes Logging (JSON auf stdout) mit structlog."""
+"""Strukturiertes Logging (JSON auf stdout) mit structlog.
+
+@relation(SWA-CORE-LOG, scope=file)
+"""
 
 import logging
 import sys
@@ -7,7 +10,10 @@ import structlog
 
 
 def configure_logging(level: str = "INFO", json: bool = True) -> None:
-    """Richtet structlog und das Standard-Logging einheitlich ein."""
+    """Richtet structlog und das Standard-Logging einheitlich ein.
+
+    @relation(SWR-CORE-004, scope=function)
+    """
     log_level = logging.getLevelNamesMapping().get(level.upper(), logging.INFO)
     renderer: structlog.typing.Processor = (
         structlog.processors.JSONRenderer() if json else structlog.dev.ConsoleRenderer()
@@ -30,5 +36,6 @@ def configure_logging(level: str = "INFO", json: bool = True) -> None:
 
 
 def get_logger(name: str | None = None) -> structlog.typing.FilteringBoundLogger:
+    """@relation(SWR-CORE-004, scope=function)"""
     logger: structlog.typing.FilteringBoundLogger = structlog.get_logger(name)
     return logger

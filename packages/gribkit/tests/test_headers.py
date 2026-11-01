@@ -27,6 +27,7 @@ def _message(**keys: Any) -> bytes:
 
 
 def test_instant_above_ground() -> None:
+    """@relation(SWR-GRIB-004, scope=function)"""
     msg = _message(
         discipline=0,
         parameterCategory=2,
@@ -47,6 +48,7 @@ def test_instant_above_ground() -> None:
 
 
 def test_analysis_and_surfaces() -> None:
+    """@relation(SWR-GRIB-004, scope=function)"""
     msg = _message(
         discipline=0,
         parameterCategory=3,
@@ -59,6 +61,7 @@ def test_analysis_and_surfaces() -> None:
 
 
 def test_soil_layer() -> None:
+    """@relation(SWR-GRIB-004, scope=function)"""
     msg = _message(
         discipline=2,
         parameterCategory=0,
@@ -83,6 +86,7 @@ def test_soil_layer() -> None:
     ],
 )
 def test_statistics(start: int, end: int, type_: int, fcst: str) -> None:
+    """@relation(SWR-GRIB-004, scope=function)"""
     msg = _message(
         productDefinitionTemplateNumber=8,
         discipline=0,
@@ -99,11 +103,13 @@ def test_statistics(start: int, end: int, type_: int, fcst: str) -> None:
 
 
 def test_unknown_parameter_keeps_numbers() -> None:
+    """@relation(SWR-GRIB-004, scope=function)"""
     msg = _message(discipline=0, parameterCategory=19, parameterNumber=0)
     assert parse_head(msg).var == "var0_19_0"
 
 
 def test_head_errors() -> None:
+    """@relation(SWR-GRIB-004, scope=function)"""
     msg = _message()
     with pytest.raises(HeaderError, match="GRIB-Kennung"):
         parse_head(b"<html>" + msg)
@@ -112,6 +118,7 @@ def test_head_errors() -> None:
 
 
 def test_find_boundary() -> None:
+    """@relation(SWR-GRIB-004, scope=function)"""
     msg = _message()
     data = msg + msg + msg
     # Mitten in der ersten Nachricht: nächster Anfang ist die zweite
@@ -125,6 +132,7 @@ def test_find_boundary() -> None:
 def test_complete_lines_match_noaa_idx() -> None:
     # Je Name, Flächenart und Zeitangabe eine Nachricht aus GFS v15 (AWS, 2021-03-01 00Z):
     # Kopf (Sektion 0 bis 4) und die Zeile aus der .idx von NOAA (wgrib2)
+    """@relation(SWR-GRIB-004, scope=function)"""
     data = json.loads(gzip.decompress((FIXTURES / "gfs_v15_heads.json.gz").read_bytes()))
     assert len(data["rows"]) > 300
     for line, head in data["rows"]:
@@ -136,6 +144,7 @@ def test_complete_lines_match_noaa_idx() -> None:
 
 def test_complete_keeps_template_keys_apart() -> None:
     # Vorlagen-Schlüssel bleiben, wie sie sind; nur complete nutzt die ganze Tabelle
+    """@relation(SWR-GRIB-004, scope=function)"""
     msg = _message(discipline=0, parameterCategory=1, parameterNumber=22)
     assert parse_head(msg).var == "var0_1_22"
     head = parse_head(msg, complete=True)
@@ -143,6 +152,7 @@ def test_complete_keeps_template_keys_apart() -> None:
 
 
 def test_complete_unknown_parameter_like_wgrib2() -> None:
+    """@relation(SWR-GRIB-004, scope=function)"""
     msg = _message(discipline=0, parameterCategory=250, parameterNumber=250)
     e = entry(1, 0, parse_head(msg, complete=True))
     assert e.var.startswith("var discipline=0 master_table=") and "parmcat=250 parm=250" in e.var

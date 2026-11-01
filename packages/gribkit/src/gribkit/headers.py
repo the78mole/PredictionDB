@@ -14,6 +14,8 @@ Mit ``complete=True`` entsteht dagegen eine Zeile wie von ``wgrib2 -s``: Name au
 NCEP-Tabelle 4.2 (``ncep_parameters.json``), alle Flächentypen der GFS-Dateien und das
 Bezugsdatum aus Sektion 1. Geprüft an den ``.idx`` von NOAA für GFS v15 (AWS, 2021-03-01).
 Damit lassen sich vollständige ``.idx`` für Archive ohne Inventar schreiben (:func:`idx_line`).
+
+@relation(SWA-GRIB-HEADERS, scope=file)
 """
 
 from __future__ import annotations
@@ -242,7 +244,10 @@ def _fcst(sec4: bytes, template: int) -> str:
 
 @cache
 def ncep_parameters() -> dict[tuple[int, int, int], str]:
-    """NCEP-Tabelle 4.2 (Disziplin, Kategorie, Parameter) → wgrib2-Kürzel."""
+    """NCEP-Tabelle 4.2 (Disziplin, Kategorie, Parameter) → wgrib2-Kürzel.
+
+    @relation(SWR-GRIB-004, scope=function)
+    """
     raw = resources.files("gribkit").joinpath("ncep_parameters.json").read_text("utf-8")
     table: dict[str, str] = json.loads(raw)["parameters"]
     out = {}
@@ -262,6 +267,8 @@ def parse_head(data: bytes, *, complete: bool = False) -> Head:
 
     ``complete``: Namen wie ``wgrib2 -s`` für alle Nachrichten und Bezugsdatum (``.idx``
     schreiben); sonst die festen Schlüssel der Kopf-Vorlagen.
+
+    @relation(SWR-GRIB-004, scope=function)
     """
     if len(data) < 16 or data[:4] != b"GRIB":
         raise HeaderError("keine GRIB-Kennung")
@@ -309,6 +316,8 @@ def find_boundary(chunk: bytes, size_left: int) -> int | None:
     zufällig in gepackten Daten stehen; verlangt werden deshalb das Ende der vorigen Nachricht
     davor, Edition 2 und eine Länge, die in die Datei passt. Ob der Treffer echt war, zeigt
     erst der Lauf über die Köpfe, der genau am nächsten Anfang bzw. Dateiende landen muss.
+
+    @relation(SWR-GRIB-004, scope=function)
     """
     pos = chunk.find(b"7777GRIB")
     while pos >= 0:
@@ -322,16 +331,25 @@ def find_boundary(chunk: bytes, size_left: int) -> int | None:
 
 
 def entry(number: int, offset: int, head: Head, date: str = "") -> IdxEntry:
-    """Zeile wie aus einer ``.idx`` für die Nachricht an ``offset``."""
+    """Zeile wie aus einer ``.idx`` für die Nachricht an ``offset``.
+
+    @relation(SWR-GRIB-004, scope=function)
+    """
     date = date or head.date
     return IdxEntry(str(number), offset, head.length, date, head.var, head.level, head.fcst)
 
 
 def idx_line(e: IdxEntry) -> str:
-    """Zeile im Format von ``wgrib2 -s``, z. B. ``581:415092545:d=2019070100:TMP:…:``."""
+    """Zeile im Format von ``wgrib2 -s``, z. B. ``581:415092545:d=2019070100:TMP:…:``.
+
+    @relation(SWR-GRIB-004, scope=function)
+    """
     return f"{e.number}:{e.offset}:d={e.date}:{e.var}:{e.level}:{e.fcst}:"
 
 
 def is_known(e: IdxEntry) -> bool:
-    """``False``, wenn Name oder Fläche nicht aus den Tabellen kam (Platzhalter)."""
+    """``False``, wenn Name oder Fläche nicht aus den Tabellen kam (Platzhalter).
+
+    @relation(SWR-GRIB-004, scope=function)
+    """
     return not (e.var.startswith("var ") or e.level.startswith("level type "))

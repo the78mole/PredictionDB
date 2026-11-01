@@ -17,6 +17,8 @@ liest; Grafana selbst listet nie Buckets.
   Quelle anteilig nach Zeilen und der Rest der Datenbank als ``sonstige``.
 - **Garage-Metadaten:** Größe des LMDB-Verzeichnisses (inkl. Snapshots), wenn es ins
   Messverzeichnis eingebunden ist.
+
+@relation(SWA-CORE-USAGE, scope=file)
 """
 
 import argparse
@@ -90,6 +92,8 @@ def list_size(store: ObjectStore, prefix: str) -> tuple[int, int]:
 
 
 class Usage:
+    """@relation(SWR-CORE-006, scope=class)"""
+
     def __init__(self, engine: Engine, settings: Settings) -> None:
         self.engine = engine
         self.settings = settings
@@ -492,6 +496,7 @@ def measure(
     max_age: timedelta,
     parallel: int = 4,
 ) -> None:
+    """@relation(SWR-CORE-006, scope=function)"""
     t0 = time.monotonic()
     usage.pending = False
     scanned = usage.scan_s3(budget_s, max_age, parallel)
@@ -512,6 +517,7 @@ def measure(
 
 
 def main(argv: list[str] | None = None) -> int:
+    """@relation(SWR-CORE-006, scope=function)"""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--watch", type=int, default=0, help="alle N Sekunden wiederholen")
     parser.add_argument(

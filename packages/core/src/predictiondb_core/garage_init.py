@@ -3,6 +3,8 @@
 Legt das Cluster-Layout an (falls noch keines existiert), importiert den Zugangsschlüssel
 der Dienste aus der Konfiguration und erstellt die Buckets mit Lese- und Schreibrecht.
 Mehrfaches Ausführen ist unschädlich; ``compose.yaml`` startet es als einmaligen Dienst.
+
+@relation(SWA-CORE-GARAGE, scope=file)
 """
 
 import argparse
@@ -36,7 +38,10 @@ _UNITS = {"": 1, "K": 10**3, "M": 10**6, "G": 10**9, "T": 10**12}
 
 
 def parse_capacity(value: str) -> int:
-    """Wandelt ``"100G"`` o. ä. in Bytes (Dezimalpräfixe wie bei ``garage layout assign``)."""
+    """Wandelt ``"100G"`` o. ä. in Bytes (Dezimalpräfixe wie bei ``garage layout assign``).
+
+    @relation(SWR-CORE-005, scope=function)
+    """
     v = value.strip().upper().removesuffix("B")
     unit = v[-1] if v and v[-1] in _UNITS else ""
     number = v[: -1 or None] if unit else v
@@ -44,6 +49,8 @@ def parse_capacity(value: str) -> int:
 
 
 class GarageAdmin:
+    """@relation(SWR-CORE-005, scope=class)"""
+
     def __init__(self, client: httpx.Client) -> None:
         self._c = client
 
@@ -118,6 +125,7 @@ class GarageAdmin:
 
 
 def run(settings: Settings, admin: GarageAdminSettings, client: httpx.Client) -> None:
+    """@relation(SWR-CORE-005, scope=function)"""
     if not settings.s3_access_key_id or not settings.s3_secret_access_key.get_secret_value():
         raise ValueError("PDB_S3_ACCESS_KEY_ID und PDB_S3_SECRET_ACCESS_KEY müssen gesetzt sein")
     ga = GarageAdmin(client)

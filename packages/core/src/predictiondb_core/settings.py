@@ -1,4 +1,7 @@
-"""Zentrale Konfiguration über Umgebungsvariablen (Präfix ``PDB_``)."""
+"""Zentrale Konfiguration über Umgebungsvariablen (Präfix ``PDB_``).
+
+@relation(SWA-CORE-SETTINGS, scope=file)
+"""
 
 from functools import lru_cache
 
@@ -7,7 +10,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Buckets(BaseSettings):
-    """Namen der Garage-Buckets (Kapitel 5.2 der Architektur)."""
+    """Namen der Garage-Buckets (Kapitel 5.2 der Architektur).
+
+    @relation(SWR-CORE-001, scope=class)
+    """
 
     model_config = SettingsConfigDict(env_prefix="PDB_BUCKET_", extra="ignore")
 
@@ -26,6 +32,8 @@ class Settings(BaseSettings):
     """Laufzeitkonfiguration, gemeinsam für alle Dienste.
 
     Werte kommen aus Umgebungsvariablen bzw. ``.env``; Geheimnisse nie ins Repo.
+
+    @relation(SWR-CORE-001, scope=class)
     """
 
     model_config = SettingsConfigDict(
@@ -47,4 +55,5 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
+    """@relation(SWR-CORE-001, scope=function)"""
     return Settings()
