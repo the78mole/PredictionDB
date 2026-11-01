@@ -70,8 +70,8 @@ jobs:
           CI_RUN_ID: ${{ steps.lauf.outputs.id }}
           COMMIT_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: uv run python pages/build_site.py build/pages
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: build/pages
 
@@ -87,4 +87,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

@@ -6,8 +6,12 @@ ecCodes-Tabellen und vom Zentrum ab (GFS-Strahlung ist z. B. der NCEP-Parameter 
 Was nicht in der Tabelle steht, wird ignoriert; das deckt die Obermenge ab, die der
 NOMADS-Filter liefert.
 
-Gespeichert wird als Int16 mit ``scale_factor``/``add_offset`` (CF-Konvention, wie
-``docs/ARCHITEKTUR.md`` 5.1). Mittel und Summen der Quelle beziehen sich bei GFS auf Eimer, die
+Gespeichert wird je Variable im Datentyp ``dtype``: Int16 mit ``scale_factor``/``add_offset``
+(CF-Konvention, wie ``docs/ARCHITEKTUR.md`` 5.1, Standard) oder float16/float32 ohne
+Skalierung. Die Tabelle gilt nur beim Schreiben; gelesen wird nach den Attributen jedes Arrays
+(:meth:`wx_process.silver.Silver.read`). Datentyp, Schritt und Offset einer Variable lassen
+sich deshalb ändern, ohne bestehendes Silber neu zu bauen: Neue Läufe bekommen das neue
+Format, alte bleiben lesbar. Mittel und Summen der Quelle beziehen sich bei GFS auf Eimer, die
 alle 6 h neu beginnen (``36-42 hour ave``); in Silber stehen stattdessen Werte für das Intervall
 seit dem vorigen Schritt (siehe :mod:`wx_process.decode`).
 
@@ -20,6 +24,8 @@ from dataclasses import dataclass
 from typing import Literal
 
 StepType = Literal["instant", "avg", "accum"]
+#: Ablage-Datentyp einer Variable im Silber
+DType = Literal["int16", "float16", "float32"]
 
 #: (discipline, parameterCategory, parameterNumber, typeOfFirstFixedSurface, level, stepType);
 #: ``level`` ist bei Bodenschichten (Flächentyp 106) die Oberkante in cm, sonst ``level``
@@ -44,6 +50,8 @@ class Variable:
     bucket_hours: int | None = None
     #: Teiler nach ``per_hour`` (z. B. 3600 für Sekunden je Stunde → Anteil)
     divisor: float = 1.0
+    #: Ablage-Datentyp; ``scale``/``offset`` gelten nur für ``int16``
+    dtype: DType = "int16"
 
     @property
     def lo(self) -> float:
@@ -102,5 +110,7 @@ VARIABLES: dict[GribKey, Variable] = {
 
 BY_NAME: dict[str, Variable] = {v.name: v for v in VARIABLES.values()}
 
-#: Version der Silber-Kodierung; eine Änderung erzwingt den Neuaufbau aus Bronze
+#: Version des Silber-Inhalts; eine Änderung erzwingt den Neuaufbau aus Bronze bzw. GHCR.
+#: Nur erhöhen, wenn sich die Werte selbst ändern (Herleitung, Intervalle, Gitter, Schritte),
+#: nicht für Datentyp, Schritt oder Offset einer Variable: die stehen je Array im Store.
 SILVER_VERSION = "1"

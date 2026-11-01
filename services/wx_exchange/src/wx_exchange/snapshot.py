@@ -9,8 +9,12 @@ ein interaktives Standbild (Tooltips, Zoom, Legende), aktualisiert sich aber nic
 eine neue Adresse, daher der Kurzlink. Jeder Snapshot listet die früheren, noch nicht
 abgelaufenen Stände mit Link, damit man Prognosen später mit dem Eingetretenen vergleichen kann.
 
-Panels mit eigener Zeitüberschreibung (Gestern, Heute, Morgen) bleiben draußen: Ein Snapshot
-hat einen absoluten Zeitraum, und dann ignoriert Grafana relative Panel-Zeiträume.
+Panels mit eigener Zeitüberschreibung wertet Grafana im Snapshot nicht aus (absoluter Zeitraum,
+dann gilt ``timeFrom`` nicht). Die vier Panels „Morgen“ (Preis und Last mit D+1 bis D+7, je
+Champion und Challenger) laufen daher für den Liefertag nach dem Stand und werden zu einem
+Trend-Panel umgebaut: x-Achse in Stunden seit 0 Uhr, beschriftet mit der Uhrzeit (Wertzuordnung
+je Viertelstunde, an Tagen der Zeitumstellung mit doppelter bzw. fehlender Stunde). Ein
+Zeitreihen-Panel hätte sonst den Wochenbereich als x-Achse. Gestern und Heute bleiben draußen.
 
 @relation(SWA-WXX-SNAPSHOT, scope=file)
 """
@@ -31,8 +35,12 @@ from predictiondb_core.log import get_logger
 log = get_logger(__name__)
 
 DASHBOARD_UID = "pdb-prognose-oeffentlich"
-#: Wochenpanels (Last und Preis, Champion und Challenger) und das Quellen-Panel
-PANELS = (67, 68, 69, 70, 71)
+#: Panels „Morgen“: Preis Champion, Preis Challenger, Last Champion, Last Challenger
+DAY_PANELS = (60, 62, 73, 75)
+#: Wochenpanels (Last und Preis, Champion und Challenger), „Morgen“ und das Quellen-Panel
+PANELS = (67, 68, 69, 70, *DAY_PANELS, 71)
+#: x-Feld der Trend-Panels „Morgen“ (Stunden seit 0 Uhr Ortszeit)
+X_FIELD = "Uhrzeit"
 TZ = ZoneInfo("Europe/Berlin")
 #: Namensanfang aller veröffentlichten Stände (Titel und Name des Snapshots)
 TITLE = "Strompreis- und Lastprognose DE-LU · Stand"
@@ -50,6 +58,83 @@ def week_range(now: datetime) -> tuple[datetime, datetime]:
     start = datetime(local.year, local.month, local.day, tzinfo=TZ)
     # Rechnen mit ZoneInfo geht über die Wanduhr: +8 Tage ist wieder 00:00 Ortszeit
     return start, start + timedelta(days=8)
+
+
+def day_range(now: datetime) -> tuple[datetime, datetime]:
+    """Der Liefertag nach ``now`` (morgen) von 0 bis 24 Uhr Ortszeit.
+
+    @relation(SWR-WXX-052, scope=function)
+    """
+    start = week_range(now)[0] + timedelta(days=1)
+    return start, start + timedelta(days=1)
+
+
+def clock_mapping(start: datetime, end: datetime) -> dict[str, Any]:
+    """Wertzuordnung Stunden seit ``start`` → Uhrzeit ``HH:MM`` je Viertelstunde.
+
+    @relation(SWR-WXX-052, scope=function)
+    """
+    # über UTC: Python zieht bei gleicher tzinfo Wanduhren ab (23 bzw. 25 h bei Zeitumstellung)
+    hours = (end.astimezone(UTC) - start.astimezone(UTC)).total_seconds() / 3600
+    options = {}
+    for k in range(int(hours * 4) + 1):
+        h = k / 4
+        t = (start.astimezone(UTC) + timedelta(hours=h)).astimezone(TZ)
+        options[f"{h:g}"] = {"text": "24:00" if k == hours * 4 else f"{t:%H:%M}", "index": k}
+    return {"type": "value", "options": options}
+
+
+def day_frame(frames: list[dict[str, Any]], start: datetime, end: datetime) -> dict[str, Any]:
+    """Frames (Zeitreihen) zu einem Frame mit Stunden seit ``start`` als erstem Feld.
+
+    Das Trend-Panel braucht genau einen Frame mit aufsteigender Zahlenspalte als x. Werte
+    außerhalb von [start, end) fallen weg, fehlende Zeitpunkte einer Reihe sind ``None``.
+
+    @relation(SWR-WXX-052, scope=function)
+    """
+    t0, t1 = start.timestamp() * 1000, end.timestamp() * 1000
+    cols: dict[str, dict[float, Any]] = {}
+    for f in frames:
+        fields, values = f["schema"]["fields"], f["data"]["values"]
+        ti = next((i for i, x in enumerate(fields) if x.get("type") == "time"), None)
+        if ti is None:
+            continue
+        for i, x in enumerate(fields):
+            if i == ti or x.get("type") != "number":
+                continue
+            col = cols.setdefault(x["name"], {})
+            for t, v in zip(values[ti], values[i], strict=True):
+                if t0 <= t < t1:
+                    col[(t - t0) / 3_600_000] = v
+    hours = sorted({h for c in cols.values() for h in c})
+    mapping = clock_mapping(start, end)
+    # Achse immer über den ganzen Tag, auch wenn späte Stunden (noch) fehlen
+    x_config = {
+        "unit": "none",
+        "min": 0,
+        "max": max(len(mapping["options"]) - 1, 0) / 4,
+        "mappings": [mapping],
+    }
+    return {
+        "schema": {
+            "fields": [
+                {"name": X_FIELD, "type": "number", "config": x_config},
+                *({"name": n, "type": "number", "config": {}} for n in cols),
+            ]
+        },
+        "data": {"values": [hours, *([c.get(h) for h in hours] for c in cols.values())]},
+    }
+
+
+def _as_trend(panel: dict[str, Any]) -> None:
+    """Zeitreihen-Panel (Schema v2) auf Trend umstellen: x-Feld, Lücken überbrücken."""
+    viz = panel["vizConfig"]
+    viz["group"] = "trend"
+    spec = viz.setdefault("spec", {})
+    spec.setdefault("options", {})["xField"] = X_FIELD
+    defaults = spec.setdefault("fieldConfig", {}).setdefault("defaults", {})
+    # Preise in Viertelstunden, Prognosen stündlich: im gemeinsamen Frame Lücken je Reihe
+    defaults.setdefault("custom", {})["spanNulls"] = True
 
 
 def _ms(t: datetime) -> str:
@@ -236,12 +321,22 @@ def build_snapshot(grafana: Grafana, now: datetime) -> dict[str, Any]:
     start, end = week_range(now)
     values = _variable_values(grafana, v1, start, end)
     sources = {f"panel-{p['id']}": p for p in v1["panels"] if p["id"] in PANELS}
+    day_start, day_end = day_range(now)
+    day = f"{WOCHENTAG[day_start.weekday()]} {day_start:%d.%m.%Y}"
     elements = {}
     for name, el in spec["elements"].items():
         if name not in sources:
             continue
         panel = el["spec"]
         panel["title"] = interpolate(panel.get("title", ""), values)
+        source = sources[name]
+        if source["id"] in DAY_PANELS:
+            raw = _frames(grafana, source, values, day_start, day_end)
+            frames = [day_frame(raw, day_start, day_end)]
+            panel["title"] += f" · Liefertag {day}"
+            _as_trend(panel)
+        else:
+            frames = _frames(grafana, source, values, start, end)
         if panel.get("data"):
             data = panel["data"]["spec"]
             data["queries"] = [
@@ -257,7 +352,7 @@ def build_snapshot(grafana: Grafana, now: datetime) -> dict[str, Any]:
                             "datasource": {"name": "grafana"},
                             "spec": {
                                 "queryType": "snapshot",
-                                "snapshot": _frames(grafana, sources[name], values, start, end),
+                                "snapshot": frames,
                             },
                         },
                     },

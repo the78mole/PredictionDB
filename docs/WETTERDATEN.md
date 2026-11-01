@@ -118,6 +118,14 @@ kann, ist `tp` mit höchstens 62,8 mm/h; bei stündlichen Schritten im 0,25°-Mi
 aber nicht ausgeschlossen. Alle anderen Grenzen liegen weit außerhalb des Physikalischen. Der
 Rundungsfehler ist höchstens ein halber Schritt (z. B. 0,005 K bei `t2m`, 0,025 W m-2 bei `dswrf`).
 
+**Format ändern ohne Neubau:** Gelesen wird nach den Attributen jedes Arrays (Datentyp,
+`scale_factor`, `add_offset`, `_FillValue`), nicht nach der Tabelle in
+`services/wx_process/src/wx_process/variables.py`. Datentyp (`dtype`: `int16`, `float16`,
+`float32`), Schritt und Offset einer Variable lassen sich dort deshalb ändern, ohne bestehendes
+Silber neu zu bauen; neue Läufe bekommen das neue Format, alte bleiben, wie sie sind. Die Tabelle
+oben zeigt das aktuelle Schreibformat. `SILVER_VERSION` wird nur erhöht, wenn sich die Werte
+selbst ändern (Herleitung, Intervalle, Gitter, Schritte); das erzwingt einen Neubau.
+
 Das sind 26 Variablen aus 22 Feldern (`TCDC` und `CSNOW` je zweifach, Windkomponenten getrennt).
 Mittel und Summen bezieht GFS auf Eimer, die alle 6 h neu beginnen; Silber rechnet sie auf das
 Intervall seit dem vorigen Schritt zurück (bis 120 h bei GFS DE eine Stunde, sonst drei
