@@ -52,6 +52,8 @@ from predictiondb_core.settings import get_settings
 from wx_exchange.artifact import ATTRIBUTION_GDEX, LICENSE, PREFIX, month_bounds
 from wx_exchange.oci import EMPTY, MANIFEST, Registry
 from wx_exchange.publish import months_between
+from wx_exchange.safe import GUARDED, ArtifactError, annotations_of, check_digest, read_tar
+from wx_exchange.safe import layers as manifest_layers
 from wx_ingest.config import GfsConfig
 from wx_ingest.gfs import BrokenFile, Endpoint, StepUnavailable
 
@@ -132,32 +134,41 @@ class IdxLayer:
 
     @classmethod
     def from_descriptor(cls, d: dict[str, Any]) -> IdxLayer:
-        a = d.get("annotations", {})
+        """@relation(SWR-WXX-060, scope=function)"""
+        a = annotations_of(d)
 
         def items(name: str) -> list[str]:
             return [x for x in a.get(PREFIX + name, "").split(",") if x]
 
-        return cls(
-            month=a[PREFIX + "month"],
-            hour=int(a[PREFIX + "hour"]),
-            digest=d["digest"],
-            size=int(d["size"]),
-            runs=int(a.get(PREFIX + "runs", 0)),
-            files=int(a.get(PREFIX + "files", 0)),
-            absent=items("absent"),
-            failed=items("failed"),
-            broken=items("broken"),
-            unknown=int(a.get(PREFIX + "unknown", 0)),
-            unknown_names=json.loads(a.get(PREFIX + "unknown_names", "[]")),
-            built=a.get(PREFIX + "built", ""),
-        )
+        try:
+            names = json.loads(a.get(PREFIX + "unknown_names", "[]"))
+            if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
+                raise ArtifactError("unknown_names muss eine Liste von Texten sein")
+            return cls(
+                month=a[PREFIX + "month"],
+                hour=int(a[PREFIX + "hour"]),
+                digest=check_digest(d.get("digest")),
+                size=int(d["size"]),
+                runs=int(a.get(PREFIX + "runs", 0)),
+                files=int(a.get(PREFIX + "files", 0)),
+                absent=items("absent"),
+                failed=items("failed"),
+                broken=items("broken"),
+                unknown=int(a.get(PREFIX + "unknown", 0)),
+                unknown_names=names,
+                built=a.get(PREFIX + "built", ""),
+            )
+        except ArtifactError:
+            raise
+        except (*GUARDED, RecursionError) as exc:
+            raise ArtifactError(f"idx-Layer ungültig: {type(exc).__name__}: {exc}") from exc
 
 
 def read_layers(registry: Registry) -> dict[str, IdxLayer]:
     """Layer des Manifests nach Schlüssel (leer, wenn es das Artefakt noch nicht gibt)."""
     m = registry.manifest(TAG)
     out = {}
-    for d in (m or {}).get("layers", []):
+    for d in manifest_layers(m or {}):
         if d.get("mediaType") == LAYER_TYPE:
             layer = IdxLayer.from_descriptor(d)
             out[layer.key] = layer
@@ -230,15 +241,8 @@ def pack(files: dict[str, bytes]) -> bytes:
 
 
 def unpack(data: bytes) -> dict[str, bytes]:
-    out = {}
-    with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar:
-        for m in tar.getmembers():
-            if m.name.startswith("/") or ".." in m.name.split("/"):
-                raise ValueError(f"unzulässiger Pfad im Tar: {m.name}")
-            f = tar.extractfile(m) if m.isfile() else None
-            if f is not None:
-                out[m.name] = f.read()
-    return out
+    """@relation(SWR-WXX-060, scope=function)"""
+    return read_tar(data, compressed=True)
 
 
 def _describe(exc: BaseException) -> str:

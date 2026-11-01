@@ -20,6 +20,7 @@ mit ``TimeSeries/Period/Point``. Bei Kurventyp A03 fehlen Punkte, deren Wert sic
 
 from __future__ import annotations
 
+import math
 import re
 import xml.etree.ElementTree as ET
 from collections.abc import Iterator
@@ -27,7 +28,7 @@ from datetime import UTC, datetime, timedelta
 
 from energy_ingest.http import Http
 from energy_ingest.model import LOAD_FORECAST_ZONES, SERIES, SeriesData, series
-from energy_ingest.sources import SourceError, clip
+from energy_ingest.sources import FormatError, SourceError, clip
 
 BASE_URL = "https://web-api.tp.entsoe.eu/api"
 
@@ -98,15 +99,24 @@ QUERIES: dict[str, dict[str, str]] = {
     "wind_solar_forecast": {"documentType": "A69", "processType": "A01", "in_Domain": EIC_DE},
 }
 
-_DURATION = re.compile(r"^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?)?$")
+_DURATION = re.compile(r"\AP(?:([0-9]{1,3})D)?(?:T(?:([0-9]{1,4})H)?(?:([0-9]{1,5})M)?)?\Z")
+#: Höchstens so viele Punkte je Period (31 Tage zu 15 min sind 2976)
+MAX_POINTS = 100_000
 
 
 def parse_duration(text: str) -> timedelta:
+    """ISO-8601-Dauer der Auflösung (``PT15M``, ``PT60M``, ``P1D``), größer als null.
+
+    @relation(SWR-ENI-033, scope=function)
+    """
     m = _DURATION.match(text.strip())
     if not m or not any(m.groups()):
         raise SourceError(f"ENTSO-E: Auflösung {text!r} nicht unterstützt")
     d, h, mi = (int(g) if g else 0 for g in m.groups())
-    return timedelta(days=d, hours=h, minutes=mi)
+    res = timedelta(days=d, hours=h, minutes=mi)
+    if res <= timedelta(0):
+        raise FormatError(f"ENTSO-E: Auflösung {text!r} ist null")
+    return res
 
 
 def _local(tag: str) -> str:
@@ -128,7 +138,20 @@ def _text(el: ET.Element, *path: str) -> str | None:
 
 
 def _parse_ts(text: str) -> datetime:
-    return datetime.strptime(text, "%Y-%m-%dT%H:%MZ").replace(tzinfo=UTC)
+    try:
+        return datetime.strptime(text, "%Y-%m-%dT%H:%MZ").replace(tzinfo=UTC)
+    except ValueError as exc:
+        raise FormatError(f"ENTSO-E: Zeitpunkt {text!r} ungültig") from exc
+
+
+def _number(text: str, kind: type[int] | type[float]) -> float:
+    try:
+        value = kind(text)
+    except ValueError as exc:
+        raise FormatError(f"ENTSO-E: {text!r} ist keine Zahl") from exc
+    if not math.isfinite(value):
+        raise FormatError(f"ENTSO-E: {text!r} ist kein endlicher Wert")
+    return value
 
 
 def _fmt(ts: datetime) -> str:
@@ -152,13 +175,17 @@ class TimeSeries:
             if not (start_s and end_s and res_s):
                 raise SourceError("ENTSO-E: Period ohne timeInterval/resolution")
             start, end, res = _parse_ts(start_s), _parse_ts(end_s), parse_duration(res_s)
+            if end < start:
+                raise FormatError(f"ENTSO-E: Period endet vor Beginn ({start_s} > {end_s})")
+            n = (end - start) // res
+            if n > MAX_POINTS:
+                raise FormatError(f"ENTSO-E: Period mit {n} Punkten (höchstens {MAX_POINTS})")
             given: dict[int, float] = {}
             for point in (c for c in period if _local(c.tag) == "Point"):
                 pos = _text(point, "position")
                 val = _text(point, "quantity") or _text(point, "price.amount")
                 if pos is not None and val is not None:
-                    given[int(pos)] = float(val)
-            n = int((end - start) / res)
+                    given[int(_number(pos, int))] = _number(val, float)
             pts: list[tuple[datetime, float]] = []
             last: float | None = None
             for i in range(1, n + 1):
@@ -169,8 +196,11 @@ class TimeSeries:
 
 
 def parse_document(xml: bytes) -> list[TimeSeries]:
-    """@relation(SWR-ENI-042, SWR-ENI-030, scope=function)"""
-    root = ET.fromstring(xml)
+    """@relation(SWR-ENI-042, SWR-ENI-033, scope=function)"""
+    try:
+        root = ET.fromstring(xml)
+    except (ET.ParseError, LookupError, ValueError) as exc:  # LookupError: unbekannte Kodierung
+        raise FormatError(f"ENTSO-E: kein gültiges XML ({exc})") from exc
     if _local(root.tag) == "Acknowledgement_MarketDocument":
         code = _text(root, "Reason", "code")
         text = _text(root, "Reason", "text") or ""

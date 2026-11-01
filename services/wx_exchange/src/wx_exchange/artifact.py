@@ -22,6 +22,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import re
 import tarfile
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -32,6 +33,17 @@ import obstore
 from obstore.store import ObjectStore
 
 from wx_exchange.oci import EMPTY, MANIFEST
+from wx_exchange.safe import (
+    GUARDED,
+    ArtifactError,
+    annotations_of,
+    check_digest,
+    json_object,
+    read_tar,
+)
+from wx_exchange.safe import (
+    layers as manifest_layers,
+)
 from wx_ingest.config import GfsConfig
 from wx_process.variables import SILVER_VERSION
 
@@ -60,16 +72,19 @@ def tag(month: str, hour: int) -> str:
     return f"{month}-{hour:02d}z"
 
 
+_TAG = re.compile(r"\A([0-9]{4})-(0[1-9]|1[0-2])-(00|06|12|18)z\Z")
+
+
 def parse_tag(text: str) -> tuple[str, int] | None:
-    parts = text.rsplit("-", 1)
-    if len(parts) != 2 or not parts[1].endswith("z"):
+    """Umkehrung von ``tag``; fremde Tags der Registry ergeben ``None``.
+
+    @relation(SWR-WXX-060, scope=function)
+    """
+    m = _TAG.match(text)
+    # month_bounds braucht den Folgemonat, deshalb nicht bis 9999-12
+    if m is None or not 1900 <= int(m.group(1)) <= 9998:
         return None
-    try:
-        hour = int(parts[1][:-1])
-        datetime.strptime(parts[0], "%Y-%m")  # noqa: DTZ007 - nur Formatprüfung
-    except ValueError:
-        return None
-    return (parts[0], hour) if hour in (0, 6, 12, 18) else None
+    return f"{m.group(1)}-{m.group(2)}", int(m.group(3))
 
 
 def month_bounds(month: str) -> tuple[datetime, datetime]:
@@ -116,22 +131,19 @@ def content_hash(files: dict[str, bytes]) -> str:
     for name in sorted(files):
         data = files[name]
         if name == "zarr.json":
-            meta = json.loads(data)
-            for key in VOLATILE:
-                meta.get("attributes", {}).pop(key, None)
+            meta = json_object(data)
+            attributes = meta.get("attributes", {})
+            if isinstance(attributes, dict):
+                for key in VOLATILE:
+                    attributes.pop(key, None)
             data = json.dumps(meta, sort_keys=True).encode()
         h.update(name.encode() + b"\0" + hashlib.sha256(data).digest())
     return h.hexdigest()
 
 
 def files_from_tar(data: bytes) -> dict[str, bytes]:
-    with tarfile.open(fileobj=io.BytesIO(data), mode="r") as tar:
-        out = {}
-        for m in tar.getmembers():
-            f = tar.extractfile(m) if m.isfile() else None
-            if f is not None:
-                out[m.name] = f.read()
-        return out
+    """@relation(SWR-WXX-060, scope=function)"""
+    return read_tar(data)
 
 
 def compare(local: dict[str, bytes], remote: dict[str, bytes]) -> dict[str, Any]:
@@ -141,8 +153,9 @@ def compare(local: dict[str, bytes], remote: dict[str, bytes]) -> dict[str, Any]
     """
 
     def attrs(files: dict[str, bytes]) -> dict[str, Any]:
-        meta = json.loads(files.get("zarr.json", b"{}"))
-        out: dict[str, Any] = meta.get("attributes", {})
+        out = json_object(files.get("zarr.json", b"{}")).get("attributes", {})
+        if not isinstance(out, dict):
+            raise ArtifactError("zarr.json: attributes ist kein Objekt")
         return {k: v for k, v in out.items() if k not in VOLATILE}
 
     def data(files: dict[str, bytes]) -> dict[str, str]:
@@ -189,16 +202,7 @@ def unpack(data: bytes, store: ObjectStore, prefix: str, *, workers: int = 16) -
     Die Dateien gehen parallel hinaus (``workers``): Ein Put nach Garage dauert unter Last
     ≈ 0,3 s, ein GFS-Europa-Lauf hat ≈ 100 Chunks.
     """
-    with tarfile.open(fileobj=io.BytesIO(data), mode="r") as tar:
-        files: list[tuple[str, bytes]] = []
-        for m in tar.getmembers():
-            if not m.isfile():
-                continue
-            if m.name.startswith("/") or ".." in m.name.split("/"):
-                raise ValueError(f"unzulässiger Pfad im Tar: {m.name}")
-            f = tar.extractfile(m)
-            assert f is not None
-            files.append((m.name, f.read()))
+    files = list(read_tar(data).items())
     root = [f for f in files if f[0] == "zarr.json"]
     rest = [f for f in files if f[0] != "zarr.json"]
     with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
@@ -240,16 +244,26 @@ class Layer:
 
     @classmethod
     def from_descriptor(cls, d: dict[str, Any]) -> Layer:
-        a = d.get("annotations", {})
-        return cls(
-            run=datetime.fromisoformat(a[PREFIX + "run"]),
-            digest=d["digest"],
-            size=int(d["size"]),
-            content=a.get(PREFIX + "content", ""),
-            fingerprint=a.get(PREFIX + "fingerprint", ""),
-            silver_version=a.get(PREFIX + "silver_version", ""),
-            steps=int(a.get(PREFIX + "steps", 0)),
-        )
+        """@relation(SWR-WXX-060, scope=function)"""
+        a = annotations_of(d)
+        try:
+            run = datetime.fromisoformat(a[PREFIX + "run"])
+            layer = cls(
+                run=run if run.tzinfo else run.replace(tzinfo=UTC),
+                digest=check_digest(d.get("digest")),
+                size=int(d["size"]),
+                content=a.get(PREFIX + "content", ""),
+                fingerprint=a.get(PREFIX + "fingerprint", ""),
+                silver_version=a.get(PREFIX + "silver_version", ""),
+                steps=int(a.get(PREFIX + "steps", 0)),
+            )
+        except ArtifactError:
+            raise
+        except GUARDED as exc:
+            raise ArtifactError(f"Layer ungültig: {type(exc).__name__}: {exc}") from exc
+        if layer.size < 0 or layer.steps < 0:
+            raise ArtifactError(f"Layer ungültig: size={layer.size} steps={layer.steps}")
+        return layer
 
 
 @dataclass
@@ -298,16 +312,20 @@ class MonthArtifact:
 
     @classmethod
     def from_manifest(cls, month: str, hour: int, m: dict[str, Any] | None) -> MonthArtifact:
+        """@relation(SWR-WXX-060, scope=function)"""
         art = cls(month, hour)
         if m is None:
             return art
-        a = m.get("annotations", {})
+        a = annotations_of(m)
         art.model = a.get(PREFIX + "model", art.model)
         art.resolution = a.get(PREFIX + "grid", art.resolution)
-        for d in m.get("layers", []):
+        for d in manifest_layers(m):
             if d.get("mediaType") == LAYER_TYPE:
                 layer = Layer.from_descriptor(d)
                 art.layers[layer.run] = layer
-        for text in filter(None, a.get(PREFIX + "missing", "").split(",")):
-            art.missing.add(datetime.strptime(text, "%Y%m%d%H").replace(tzinfo=UTC))
+        try:
+            for text in filter(None, a.get(PREFIX + "missing", "").split(",")):
+                art.missing.add(datetime.strptime(text, "%Y%m%d%H").replace(tzinfo=UTC))
+        except ValueError as exc:
+            raise ArtifactError(f"missing ungültig: {exc}") from exc
         return art

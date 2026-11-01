@@ -73,6 +73,19 @@ RELATIONS:
   VALUE: SWR-WXX-022
 
 [ELEMENT]
+UID: SWA-WXX-SAFE
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Artefaktprüfung
+STATEMENT: >>>
+Sicheres Lesen von Tars, Prüfung von Digests, Annotationen und Layer-Listen, ``ArtifactError``.
+<<<
+ORT: services/wx_exchange/src/wx_exchange/safe.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXX-060
+
+[ELEMENT]
 UID: SWA-WXX-PUBLISH
 ART: Komponente
 STATUS: Umgesetzt
