@@ -81,28 +81,37 @@ alle Schritte der Quelle (keine zeitliche Interpolation). Gespeichert als Int16 
 der Spalte „Schritt“. Kopie in GHCR: `ghcr.io/the78mole/predictiondb-data/gfs-0p25-silver` bzw.
 `gfs-0p5-silver` (siehe [ARCHITEKTUR.md](ARCHITEKTUR.md) 5.5).
 
-| Variable | Einheit | Inhalt | aus | Schritt |
-|---|---|---|---|---|
-| `t2m` | K | Temperatur 2 m | `TMP` 2 m | 0,01 |
-| `d2m` | K | Taupunkt 2 m | `DPT` 2 m | 0,01 |
-| `r2m` | % | relative Feuchte 2 m | `RH` 2 m | 0,01 |
-| `u10`, `v10` | m s-1 | Wind 10 m (West-Ost, Süd-Nord) | `UGRD`/`VGRD` 10 m | 0,01 |
-| `u100`, `v100` | m s-1 | Wind 100 m | `UGRD`/`VGRD` 100 m | 0,01 |
-| `gust` | m s-1 | Böen am Boden | `GUST` | 0,01 |
-| `dswrf` | W m-2 | Globalstrahlung, Mittel im Intervall | `DSWRF` (Mittel) | 0,05 |
-| `tcc` | % | Gesamtbedeckung, Momentanwert | `TCDC` (Momentanwert) | 0,01 |
-| `tcc_mean` | % | Gesamtbedeckung, Mittel im Intervall | `TCDC` (Mittel) | 0,01 |
-| `tp` | kg m-2 h-1 | Niederschlag je Stunde im Intervall | `APCP` (Summe) | 0,001 |
-| `csnow` | 1 | Schneefall, kategorisch (0/1) | `CSNOW` (Momentanwert) | 0,001 |
-| `csnow_mean` | 1 | Anteil Schneefall im Intervall | `CSNOW` (Mittel) | 0,001 |
-| `prmsl` | Pa | Luftdruck auf Meereshöhe | `PRMSL` | 1 |
-| `sp` | Pa | Luftdruck am Boden | `PRES` surface | 1 |
-| `dlwrf` | W m-2 | Gegenstrahlung, Mittel im Intervall | `DLWRF` (Mittel) | 0,05 |
-| `sunshine` | 1 | Sonnenscheinanteil im Intervall | `SUNSD` | 0,0001 |
-| `weasd` | kg m-2 | Schnee-Wasseräquivalent | `WEASD` | 0,1 |
-| `snod` | m | Schneehöhe | `SNOD` | 0,001 |
-| `tsoil_0_10`, `tsoil_10_40` | K | Bodentemperatur 0–10 cm, 10–40 cm | `TSOIL` | 0,01 |
-| `soilw_0_10`, `soilw_10_40` | 1 | Bodenfeuchte (Volumenanteil) 0–10 cm, 10–40 cm | `SOILW` | 0,0001 |
+| Variable | Einheit | Inhalt | aus | Schritt | Offset | Wertebereich |
+|---|---|---|---|---|---|---|
+| `t2m` | K | Temperatur 2 m | `TMP` 2 m | 0,01 | 273,15 | −54,52 … 600,82 |
+| `d2m` | K | Taupunkt 2 m | `DPT` 2 m | 0,01 | 273,15 | −54,52 … 600,82 |
+| `r2m` | % | relative Feuchte 2 m | `RH` 2 m | 0,01 | 50 | 0 … 377,67 |
+| `u10`, `v10` | m s-1 | Wind 10 m (West-Ost, Süd-Nord) | `UGRD`/`VGRD` 10 m | 0,01 | 0 | ±327,67 |
+| `u100`, `v100` | m s-1 | Wind 100 m | `UGRD`/`VGRD` 100 m | 0,01 | 0 | ±327,67 |
+| `gust` | m s-1 | Böen am Boden | `GUST` | 0,01 | 0 | 0 … 327,67 |
+| `dswrf` | W m-2 | Globalstrahlung, Mittel im Intervall | `DSWRF` (Mittel) | 0,05 | 0 | 0 … 1 638,35 |
+| `tcc` | % | Gesamtbedeckung, Momentanwert | `TCDC` (Momentanwert) | 0,01 | 50 | 0 … 377,67 |
+| `tcc_mean` | % | Gesamtbedeckung, Mittel im Intervall | `TCDC` (Mittel) | 0,01 | 50 | 0 … 377,67 |
+| `tp` | kg m-2 h-1 | Niederschlag je Stunde im Intervall | `APCP` (Summe) | 0,001 | 30 | 0 … 62,767 |
+| `csnow` | 1 | Schneefall, kategorisch (0/1) | `CSNOW` (Momentanwert) | 0,001 | 0 | 0 … 32,767 |
+| `csnow_mean` | 1 | Anteil Schneefall im Intervall | `CSNOW` (Mittel) | 0,001 | 0 | 0 … 32,767 |
+| `prmsl` | Pa | Luftdruck auf Meereshöhe | `PRMSL` | 1 | 100 000 | 67 233 … 132 767 |
+| `sp` | Pa | Luftdruck am Boden | `PRES` surface | 1 | 87 500 | 54 733 … 120 267 |
+| `dlwrf` | W m-2 | Gegenstrahlung, Mittel im Intervall | `DLWRF` (Mittel) | 0,05 | 0 | 0 … 1 638,35 |
+| `sunshine` | 1 | Sonnenscheinanteil im Intervall | `SUNSD` | 0,0001 | 0 | 0 … 3,2767 |
+| `weasd` | kg m-2 | Schnee-Wasseräquivalent | `WEASD` | 0,1 | 0 | 0 … 3 276,7 |
+| `snod` | m | Schneehöhe | `SNOD` | 0,001 | 0 | 0 … 32,767 |
+| `tsoil_0_10`, `tsoil_10_40` | K | Bodentemperatur 0–10 cm, 10–40 cm | `TSOIL` | 0,01 | 273,15 | −54,52 … 600,82 |
+| `soilw_0_10`, `soilw_10_40` | 1 | Bodenfeuchte (Volumenanteil) 0–10 cm, 10–40 cm | `SOILW` | 0,0001 | 0 | 0 … 3,2767 |
+
+Gespeichert wird `round((x − Offset) / Schritt)` als Int16 im Bereich −32 767 … 32 767; −32 768 ist der
+Füllwert (`_FillValue`, fehlender Wert). Der Wertebereich ist damit Offset ± 32 767 × Schritt. Werte
+außerhalb werden beim Schreiben auf die Grenze gesetzt (`np.clip` in `silver.encode`), nicht als
+fehlend markiert. Größen mit Untergrenze 0 werden schon vorher auf 0 begrenzt (`min_value`, wegen
+Rundung beim Zurückrechnen der Eimer). Der einzige Bereich, der bei extremem Wetter knapp werden
+kann, ist `tp` mit höchstens 62,8 mm/h; bei stündlichen Schritten im 0,25°-Mittel ist das selten,
+aber nicht ausgeschlossen. Alle anderen Grenzen liegen weit außerhalb des Physikalischen. Der
+Rundungsfehler ist höchstens ein halber Schritt (z. B. 0,005 K bei `t2m`, 0,025 W m-2 bei `dswrf`).
 
 Das sind 26 Variablen aus 22 Feldern (`TCDC` und `CSNOW` je zweifach, Windkomponenten getrennt).
 Mittel und Summen bezieht GFS auf Eimer, die alle 6 h neu beginnen; Silber rechnet sie auf das
@@ -133,6 +142,10 @@ Leistungskurve und PV-Modell werden je Zelle gerechnet und dann gewichtet.
 | `pv_cf` | 1 | PV-Modell aus `dswrf` und `t2m` (PR 0,85, −0,4 %/K, NOCT 45 °C) | pv |
 | `pv_power` | MW | `pv_cf` × installierte Leistung des Clusters | pv, nur GFS DE |
 | `precip` | mm h-1 | `tp` | hydro |
+
+Gold ist **nicht quantisiert**: `feat.nwp_value.value` ist `real` (float32), die TimescaleDB-
+Kompression nach 30 Tagen ist verlustfrei. Die Genauigkeit erbt Gold aber aus Silber, weil die
+Features aus den schon quantisierten Silberwerten gerechnet werden.
 
 Art `area` bekommt alle Features von `wind`, `pv` und `hydro`, Art `other` nur `t2m`. Die
 übrigen Silber-Variablen (`d2m`, `r2m`, Druck, `dlwrf`, `sunshine`, Schnee, Boden) liegen
@@ -179,7 +192,8 @@ lokal und in GHCR gleich ist. Die Historie in GitHub Actions legt kein GRIB ab.
 Je Lauf ein Tar (`wx-silver/gefs/0p5/JJJJ/MM/TT/HH.tar.gz`) mit `meta.json` und `values.npy`:
 `float32`, Achsen Mitglied (31) × Schritt (65) × Region (53) × Größe (7). Kopie in GHCR:
 `ghcr.io/the78mole/predictiondb-data/gefs-0p5-silver`, Tags `JJJJ-MM-00z`. Mittel und Summen
-beziehen sich auf die 6 h vor dem Schritt; in f000 sind sie leer.
+beziehen sich auf die 6 h vor dem Schritt; in f000 sind sie leer. Anders als bei GFS ist
+GEFS-Silber nicht quantisiert (float32, NaN = unbekannt), also ohne feste Grenzen.
 
 | Größe | Einheit | Berechnung |
 |---|---|---|
@@ -207,7 +221,7 @@ Natural Earth (gemeinfrei), 53 Regionen:
 Je Region, Größe und Schritt über die Mitglieder: `mean`, `std`, `p10`, `p90` (nur wenn
 mindestens 10 Mitglieder gültig sind). Merkmal `<größe>_<kennzahl>`, also 7 × 4 = 28 Features
 wie `t2m_mean` oder `wind_cf_p90`, Aggregation `ensemble`, Region `gefs:<code>`, in
-`feat.nwp_value`.
+`feat.nwp_value` (float32, nicht quantisiert, wie 2.3).
 
 ## 4. Nicht im Betrieb: GFS vor v16 (GDEX)
 
