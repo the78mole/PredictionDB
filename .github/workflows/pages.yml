@@ -1,0 +1,90 @@
+name: Pages
+
+# Projektseite auf GitHub Pages: Landing Page mit Kacheln (pages/), darunter der
+# StrictDoc-Export des kompletten Anforderungssets mit Traceability (reqs/) und
+# die Testberichte (tests/) des letzten CI-Laufs auf main. Läuft nach jedem
+# abgeschlossenen CI-Lauf auf main, auch wenn Tests rot sind (der Bericht zeigt
+# dann die Fehler). Abgebrochene Läufe werden übersprungen.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Seite bauen
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.conclusion != 'cancelled')
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+      actions: read  # Testberichte aus dem CI-Lauf holen
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+          save-cache: false
+      - run: uv sync --locked --all-packages
+      - run: uv run python reqs/pruefen.py
+      - run: uv run strictdoc export reqs --output-dir build/strictdoc
+      - run: mkdir -p build/pages && cp -r build/strictdoc/html build/pages/reqs
+      # Testberichte: beim CI-Auslöser genau dieser Lauf, sonst der letzte
+      # erfolgreich abgeschlossene CI-Lauf auf main.
+      - name: CI-Lauf bestimmen
+        id: lauf
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          if [ -z "$RUN_ID" ]; then
+            RUN_ID=$(gh run list -R "$GITHUB_REPOSITORY" --workflow ci.yml \
+              --branch main --event push --status completed --limit 1 \
+              --json databaseId -q '.[0].databaseId')
+          fi
+          echo "id=$RUN_ID" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v8
+        continue-on-error: true  # fehlt ein Bericht, zeigt die Kachel das an
+        with:
+          pattern: testbericht-*
+          merge-multiple: true
+          path: build/pages/tests
+          run-id: ${{ steps.lauf.outputs.id }}
+          github-token: ${{ github.token }}
+      - name: Landing Page
+        env:
+          CI_RUN_ID: ${{ steps.lauf.outputs.id }}
+          COMMIT_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: uv run python pages/build_site.py build/pages
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: build/pages
+
+  deploy:
+    name: Auf Pages veröffentlichen
+    needs: build
+    runs-on: ubuntu-26.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

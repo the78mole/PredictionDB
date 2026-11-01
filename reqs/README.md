@@ -66,8 +66,9 @@ uv run python reqs/pruefen.py                          # Abdeckung der SWR durch
 
 Die veröffentlichte Fassung mit Traceability-Matrix, Abdeckung, Projektstatistik, Tree-Map und
 Quelltext-Verweisen steht unter
-<https://the78mole.github.io/PredictionDB/>; der Workflow `reqs-pages.yml` erneuert sie nach
-jedem Push auf `main`, der `reqs/` oder Python-Code ändert.
+<https://the78mole.github.io/PredictionDB/reqs/>, verlinkt von der Projektseite
+<https://the78mole.github.io/PredictionDB/>. Der Workflow `pages.yml` erneuert sie nach jedem
+CI-Lauf auf `main`, zusammen mit den Testberichten.
 
 Beides läuft als pre-commit-Hook und damit im CI-Job „Lint und Typen“. Der Export bricht ab, wenn
 eine Relation oder ein `@relation`-Marker auf eine unbekannte ID zeigt. `pruefen.py` meldet jede

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PredictionDB</title>
+<meta name="description" content="Strombedarfs- und Strompreisprognose für Deutschland aus freien Wetter- und Energiedaten">
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #5b6475;
+    --line: #dde1e8; --accent: #1f6feb; --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1218; --card: #171b23; --text: #e6e9ef; --muted: #9aa3b2;
+      --line: #2a303b; --accent: #58a6ff; --ok: #3fb950; --warn: #d29922; --bad: #f85149;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 1080px; margin: 0 auto; padding: 40px 16px 56px; }
+  header h1 { margin: 0 0 4px; font-size: 2rem; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--muted); }
+  .grid {
+    display: grid; gap: 16px; margin-top: 28px;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+  .card {
+    display: flex; flex-direction: column; gap: 8px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 20px; color: inherit; text-decoration: none;
+  }
+  a.card:hover { border-color: var(--accent); }
+  a.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .card h2 { margin: 0; font-size: 1.1rem; }
+  .card p { margin: 0; color: var(--muted); }
+  .card .more { margin-top: auto; padding-top: 8px; color: var(--accent); font-weight: 600; }
+  .intro { grid-column: 1 / -1; }
+  .intro p { color: var(--text); }
+  .card .stat { color: var(--text); font-size: 1.6rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .card .ok { color: var(--ok); } .card .warn { color: var(--warn); } .card .bad { color: var(--bad); }
+  .links { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+  .links a { color: var(--accent); }
+  footer { margin-top: 32px; color: var(--muted); font-size: 0.875rem; }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>PredictionDB</h1>
+    <p>Strombedarfs- und Strompreisprognose für Deutschland</p>
+  </header>
+
+  <div class="grid">
+    <section class="card intro">
+      <h2>Das Projekt</h2>
+      <p>PredictionDB lädt regelmäßig die Prognosen freier Wettermodelle (NOAA GFS und GEFS)
+      sowie Verbrauchs-, Erzeugungs- und Preisdaten aus frei verfügbaren Quellen wie SMARD,
+      ENTSO-E und dem Marktstammdatenregister. Daraus trainiert es Modelle, die Strombedarf und
+      Day-Ahead-Strompreis in Deutschland für die kommenden Tage vorhersagen. Modelle und Daten
+      werden frei veröffentlicht, deshalb fließen nur Quellen mit freier Lizenz ein.</p>
+      <div class="links">
+        <a href="https://github.com/the78mole/PredictionDB">Repository</a>
+        <a href="https://github.com/the78mole/PredictionDB/blob/main/docs/ARCHITEKTUR.md">Architektur</a>
+        <a href="https://github.com/the78mole/PredictionDB/blob/main/docs/PROGNOSEMODELLE.md">Prognosemodelle</a>
+        <a href="https://github.com/the78mole/PredictionDB/releases">Releases</a>
+      </div>
+    </section>
+
+    <a class="card" href="https://go.the78mole.de/predb">
+      <h2>Aktuelle Prognose</h2>
+      <p>Interaktives Dashboard mit der jüngsten Prognose von Last und Preis, täglich neu.</p>
+      <span class="more">Zur Prognose →</span>
+    </a>
+
+    <a class="card" href="reqs/index.html">
+      <h2>Anforderungen</h2>
+      <p class="stat">$req_count</p>
+      <p>Stakeholder-, System- und Softwareanforderungen mit Architektur je Dienst
+      nach ISO/IEC/IEEE 29148, als StrictDoc-Export.</p>
+      <span class="more">Zu den Anforderungen →</span>
+    </a>
+
+    <a class="card" href="reqs/traceability_matrix.html">
+      <h2>Traceability</h2>
+      <p>Matrix der Beziehungen von den Stakeholder-Anforderungen bis zum Quellcode und den Tests.</p>
+      <span class="more">Zur Matrix →</span>
+    </a>
+
+    <a class="card" href="reqs/project_statistics.html">
+      <h2>Projektstatistik</h2>
+      <p>Anforderungen nach Status, Abdeckung der Quelldateien und weitere Kennzahlen.</p>
+      <span class="more">Zur Statistik →</span>
+    </a>
+
+    $test_cards
+  </div>
+
+  <footer>
+    Stand $built_at · Commit <a href="https://github.com/the78mole/PredictionDB/commit/$commit">$commit_short</a>$ci_link
+  </footer>
+</main>
+</body>
+</html>
