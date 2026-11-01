@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
-
 from gribkit import GribError
+
 from wx_process.decode import decode_step
 from wx_process.silver import assemble
 from wx_process.testing import RUN, _message, default_hourly, grid, make_step

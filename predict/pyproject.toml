@@ -11,7 +11,7 @@ dependencies = [
     "energy-ingest",
     "wx-ingest",
     "wx-process",
-    "gribkit",
+    "gribkit~=0.2",
     "httpx>=0.27",
     "pandas>=2.2",
     "pyarrow>=18",
@@ -29,7 +29,6 @@ ml-train = { workspace = true }
 energy-ingest = { workspace = true }
 wx-ingest = { workspace = true }
 wx-process = { workspace = true }
-gribkit = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

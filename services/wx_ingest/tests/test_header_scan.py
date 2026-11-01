@@ -5,10 +5,10 @@ from typing import Any
 
 import httpx
 import pytest
-from obstore.store import MemoryStore
-
 from gribkit import IdxEntry
 from gribkit.headers import idx_line
+from obstore.store import MemoryStore
+
 from wx_ingest import gfs
 from wx_ingest.bronze import Bronze
 from wx_ingest.config import EndpointConfig

@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = "LicenseRef-BUSL-1.1"
 dependencies = [
+    "gribkit~=0.2",
     "predictiondb-core",
     "wx-ingest",
     "wx-process",

@@ -6,9 +6,9 @@ from typing import Any
 import httpx
 import numpy as np
 import obstore
+from gribkit import BBox, iter_messages
 from obstore.store import MemoryStore
 
-from gribkit import BBox, iter_messages
 from wx_ingest.bronze import Bronze
 from wx_ingest.gfs import nomads_params
 from wx_ingest.ingest import GfsIngestor, RunResult

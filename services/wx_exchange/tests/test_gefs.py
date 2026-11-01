@@ -12,9 +12,9 @@ import httpx
 import numpy as np
 import obstore
 import pytest
+from gribkit.grib import describe, iter_messages
 from obstore.store import MemoryStore
 
-from gribkit.grib import describe, iter_messages
 from wx_exchange import gefs, gefs_vm
 from wx_exchange.gefs import (
     VARIABLES,
