@@ -778,7 +778,6 @@ PredictionDB/
 │   └── garage.toml
 ├── packages/
 │   ├── core/                   # Konfiguration (pydantic-settings), Logging, S3-Client, DB-Zugriff, Modelle
-│   ├── gribkit/                # .idx/.index-Parser, Range-Merging, Zuschnitt, GRIB→xarray (eccodes)
 │   └── features/               # Regionen-Aggregation, Wind-/PV-Proxies, Kalendermerkmale
 ├── services/
 │   ├── wx_ingest/              # Quellen-Plugins + Scheduler
@@ -791,7 +790,7 @@ PredictionDB/
 └── tests/                      # inkl. aufgezeichneter .idx-/GRIB-Beispiele als Fixtures
 ```
 
-**Umsetzungsstand:** Pakete `packages/core` (`predictiondb_core`) und `packages/gribkit`; Dienste `services/wx_ingest`, `services/wx_process`, `services/wx_exchange` (GHCR-Austausch, 5.5), `services/energy_ingest`, `services/mastr_ingest` (MaStR getrennt vom Energie-Ingest) und `services/ml_train` (Training und Inferenz); dazu der schlanke Prognose-Stack `predict/` (7.11). Konfiguration unter `config/sources/`, `config/process/`, `config/ml/`, `config/grafana/` und `config/prometheus/`. Noch nicht vorhanden sind `packages/features`, `services/api` und `config/regions/`.
+**Umsetzungsstand:** Paket `packages/core` (`predictiondb_core`); `gribkit` (`.idx`-Parser, Range-Merging, Zuschnitt) ist seit 2026-11-01 ein eigenes Repository ([the78mole/gribkit](https://github.com/the78mole/gribkit)) und kommt als Abhängigkeit `gribkit~=0.2` von PyPI; Dienste `services/wx_ingest`, `services/wx_process`, `services/wx_exchange` (GHCR-Austausch, 5.5), `services/energy_ingest`, `services/mastr_ingest` (MaStR getrennt vom Energie-Ingest) und `services/ml_train` (Training und Inferenz); dazu der schlanke Prognose-Stack `predict/` (7.11). Konfiguration unter `config/sources/`, `config/process/`, `config/ml/`, `config/grafana/` und `config/prometheus/`. Noch nicht vorhanden sind `packages/features`, `services/api` und `config/regions/`.
 
 ### 6.2 Bibliotheken
 

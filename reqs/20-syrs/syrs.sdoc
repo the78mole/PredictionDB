@@ -824,9 +824,10 @@ regelmäßig.
 <<<
 RATIONALE: >>>
 Die Eingaben stammen von NOAA, GDEX, den Energiequellen und über GHCR von anderen Instanzen und
-sind damit nicht vertrauenswürdig. Property-Tests mit Hypothesis, Fuzzer mit Atheris
-(``fuzz/``, Workflow ``fuzz.yml``), den auch OpenSSF Scorecard (Prüfung Fuzzing) erkennt.
-Umgesetzt für gribkit (SWR-GRIB-008); offen sind die Antworten der Energiequellen und die
+sind damit nicht vertrauenswürdig. Property-Tests mit Hypothesis, Fuzzer mit Atheris, den auch
+OpenSSF Scorecard (Prüfung Fuzzing) erkennt. Umgesetzt für gribkit, das seit 2026-11-01 als
+externes Paket (SYSA-EXT-GRIBKIT) im eigenen Repository the78mole/gribkit gepflegt und dort
+gefuzzt wird; offen sind in diesem Repository die Antworten der Energiequellen und die
 GHCR-Manifeste.
 <<<
 QUELLE: OpenSSF Scorecard Fuzzing; Entscheidung 2026-11-01

@@ -10,7 +10,7 @@ STATEMENT: >>>
 Softwarearchitektur nach ISO/IEC/IEEE 12207 für das Softwareelement SYSA-SW-WXP. Jede Komponente
 entspricht einem Modul unter ``services/wx_process/src/wx_process``.
 
-Abhängigkeiten: ``predictiondb_core``, ``gribkit`` und die Quellendefinition aus ``wx_ingest``.
+Abhängigkeiten: ``predictiondb_core``, ``gribkit`` (extern, SYSA-EXT-GRIBKIT) und die Quellendefinition aus ``wx_ingest``.
 Abnehmer von Silber sind wx-exchange und Analysen, von Gold ml-train und Grafana.
 <<<
 

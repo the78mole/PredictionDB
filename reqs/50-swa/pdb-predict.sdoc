@@ -13,7 +13,7 @@ die sie umsetzt (``Parent``). Das Modul selbst verweist mit ``@relation(SWA-PRD-
 im Modul-Docstring zurück.
 
 Abhängigkeiten: ``ml_train`` (Merkmale, Modelle, Paketformat), ``energy_ingest`` (Quellen),
-``gribkit`` (GRIB-Zuschnitt).
+``gribkit`` (GRIB-Zuschnitt, externes Paket SYSA-EXT-GRIBKIT).
 <<<
 
 [[SECTION]]

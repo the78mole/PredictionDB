@@ -29,7 +29,7 @@ Monorepo als [uv](https://docs.astral.sh/uv/)-Workspace (Kapitel 6.1 der Archite
 | Pfad | Inhalt |
 |---|---|
 | `packages/core` | `predictiondb_core`: Konfiguration (`PDB_*`), Logging, S3- und DB-Zugriff, Garage-Init |
-| `packages/gribkit` | GRIB2-Hilfen: `.idx`-Parser, Range-Merging, Zuschnitt |
+| (extern) `gribkit` | GRIB2-Hilfen (`.idx`-Parser, Range-Merging, Zuschnitt) als eigenes Paket von [PyPI](https://pypi.org/project/gribkit/), Quellcode in [the78mole/gribkit](https://github.com/the78mole/gribkit) |
 | `services/*` | Dienste je mit eigener `pyproject.toml` und README: `wx_ingest`, `wx_process`, `wx_exchange`, `energy_ingest`, `mastr_ingest`, `ml_train` |
 | `reqs/` | Anforderungen als StrictDoc-Projekt (StRS, SyRS, Systemarchitektur, SRS und SWA je Dienst), Verweise aus Code und Tests per `@relation` ([README](reqs/README.md), [veröffentlicht](https://the78mole.github.io/PredictionDB/reqs/)) |
 | `pages/` | Landing Page der Projektseite auf GitHub Pages (Vorlage und `build_site.py`, Workflow `pages.yml`) |
