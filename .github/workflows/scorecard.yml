@@ -1,0 +1,43 @@
+name: OpenSSF Scorecard
+
+# Bewertet die Sicherheitspraxis des Repos (Branchschutz, Token-Rechte,
+# gepinnte Abhängigkeiten, SAST usw.) mit OpenSSF Scorecard. Die Ergebnisse
+# landen als SARIF im Code Scanning (Security-Tab) und werden auf
+# scorecard.dev veröffentlicht, woraus das Badge im README und die Zahl auf der
+# Projektseite stammen. Mit publish_results darf der Job nur die hier genutzten
+# Actions verwenden und keine weiteren Schritte enthalten.
+
+on:
+  push:
+    branches: [main]
+  # Branchschutz-Regeln ändern sich ohne Push, deshalb zusätzlich wöchentlich
+  schedule:
+    - cron: "23 4 * * 1"
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  analyse:
+    name: Scorecard
+    runs-on: ubuntu-26.04
+    permissions:
+      security-events: write  # SARIF ins Code Scanning hochladen
+      id-token: write         # Ergebnisse auf scorecard.dev veröffentlichen
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: ossf/scorecard-action@v2.5.0
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+      - uses: actions/upload-artifact@v7
+        with:
+          name: scorecard-sarif
+          path: results.sarif
+          retention-days: 5
+      - uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: results.sarif
