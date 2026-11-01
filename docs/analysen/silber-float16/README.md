@@ -1,6 +1,6 @@
 # Silber: float16 statt Int16 mit Scale/Offset?
 
-Einmalige Auswertung vom 01.11.2026. Frage: Wie viel größer oder kleiner wäre das GFS-Silber,
+Einmalige Auswertung vom 01.11.2026, Auftrag in [job.yaml](job.yaml). Frage: Wie viel größer oder kleiner wäre das GFS-Silber,
 wenn die Gitterwerte als float16 statt als Int16 mit `scale_factor`/`add_offset` abgelegt
 würden? Ein Neubau des bestehenden Silbers steht nicht zur Debatte. Es geht darum, ob sich ein
 anderes Format für künftige Läufe lohnt.
@@ -20,6 +20,9 @@ Druckvariablen ist float16 gleich groß (aus Silber) bzw. 7–9 % größer (aus 
 | Quelle GFS DE, 01.07.2025 00Z, f000–f012 | 1,07 MB | 1,04 MB (−3 %) | +7 % | +40 % |
 
 Je Gruppe (Änderung der Größe float16 gegen Int16):
+
+![Größe float16 gegen Int16 je Gruppe](grafiken/groesse_je_gruppe.png)
+
 
 | Gruppe | Silber DE | Silber Europa | Quelle Januar | Quelle Juli | größter float16-Fehler |
 |---|---|---|---|---|---|
@@ -45,7 +48,7 @@ Strahlung, Feuchte und Druck gröber.
 65 504, Druck nur in hPa). Wo eine Grenze knapp ist (bisher nur `tp` bis 62,8 mm/h), reicht es,
 Schritt und Offset dieser einen Variablen anzupassen.
 
-## Methode
+## Daten und Methode
 
 - **Silber:** Je Paket der erste Lauf eines Monats aus GHCR (`gfs-0p25-silver`: 2025-01,
   2025-04, 2025-07, 2025-10 je 00Z und 2026-10 12Z; `gfs-0p5-silver`: 2026-01, 2026-07 je 00Z),
@@ -62,13 +65,29 @@ Schritt und Offset dieser einen Variablen anzupassen.
 - Bitshuffle statt Byte-Shuffle ist für beide Formate schlechter (Int16 +12–19 %, float16
   +20–30 %, Vorlauf der Auswertung) und deshalb nicht in den Tabellen.
 
+## Grenzen
+
+- Nur 7 Silber-Läufe und 2 × 13 Schritte aus der Quelle. Die Unterschiede zwischen Winter und
+  Sommer (Temperatur, Schnee) zeigen, dass die Größe je Variable mit der Wetterlage schwankt;
+  die Summe ohne Druck liegt aber in allen Messungen zwischen ±0 und +9 %.
+- Nur Byte-Shuffle und Zstd 5, also der Kompressor des Silbers. Andere Verfahren für float16
+  (z. B. Bitrundung vor dem Packen) sind nicht geprüft; sie verschieben die Grenze zwischen
+  Platz und Genauigkeit, wie hier beim Druck sichtbar.
+- Nur GFS-Silber. GEFS-Silber ist schon float32 je Region (wenige Werte), dort lohnt sich der
+  Vergleich nicht.
+
+## Nachvollziehen
+
 Tabellen: [tabellen/silber.csv](tabellen/silber.csv) (summiert je Gitter und Variable),
-[tabellen/quelle.csv](tabellen/quelle.csv) (je Lauf und Variable). Skript:
+[tabellen/quelle.csv](tabellen/quelle.csv) (je Lauf und Variable),
+[tabellen/lauf.json](tabellen/lauf.json) (Läufe, Schritte, Summen, Commit). Skript:
 [auswertung.py](auswertung.py).
 
 ```bash
 uv run --package wx-process python docs/analysen/silber-float16/auswertung.py silber /tmp/sf16
 uv run --package wx-process python docs/analysen/silber-float16/auswertung.py quelle /tmp/sf16
+uv run --package wx-process --with matplotlib python \
+    docs/analysen/silber-float16/auswertung.py bericht /tmp/sf16
 ```
 
 ## Wo das Format steht

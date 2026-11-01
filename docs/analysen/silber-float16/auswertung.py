@@ -11,18 +11,25 @@ Zwei Messungen, beide mit dem Kompressor des Silbers (Blosc/Zstd 5, Byte-Shuffle
 float16 in natürlichen Einheiten: °C statt K, hPa statt Pa (101 300 Pa liegt über dem
 float16-Maximum 65 504), sonst wie Silber.
 
-Aufruf (aus dem Repo-Wurzelverzeichnis)::
+Auftrag: ``job.yaml`` im selben Ordner. Aufruf (aus dem Repo-Wurzelverzeichnis)::
 
     uv run --package wx-process python docs/analysen/silber-float16/auswertung.py silber /tmp/sf16
     uv run --package wx-process python docs/analysen/silber-float16/auswertung.py quelle /tmp/sf16
+    uv run --package wx-process --with matplotlib python \\
+        docs/analysen/silber-float16/auswertung.py bericht /tmp/sf16
+
+``bericht`` liest nur die Tabellen und schreibt ``grafiken/groesse_je_gruppe.png`` sowie
+``tabellen/lauf.json``.
 """
 
 from __future__ import annotations
 
 import asyncio
 import csv
+import hashlib
 import io
 import json
+import subprocess
 import sys
 import tarfile
 from datetime import UTC, datetime
@@ -51,6 +58,16 @@ SILVER_RUNS = [
 ]
 SOURCE_RUNS = ["2025-01-01T00:00", "2025-07-01T00:00"]
 SOURCE_STEPS = list(range(13))
+
+
+GROUPS: dict[str, list[str]] = {
+    "Temperaturen": ["t2m", "d2m", "tsoil_0_10", "tsoil_10_40"],
+    "Wind": ["u10", "v10", "u100", "v100", "gust"],
+    "Strahlung": ["dswrf", "dlwrf", "sunshine"],
+    "Feuchte, Wolken": ["r2m", "tcc", "tcc_mean", "soilw_0_10", "soilw_10_40"],
+    "Niederschlag, Schnee": ["tp", "csnow", "csnow_mean", "weasd", "snod"],
+    "Druck": ["prmsl", "sp"],
+}
 
 
 def packed(a: NDArray[Any], chunk: int) -> int:
@@ -186,6 +203,85 @@ def source(workdir: Path) -> None:
     write(HERE / "tabellen" / "quelle.csv", rows)
 
 
+def read(name: str) -> list[dict[str, str]]:
+    with (HERE / "tabellen" / f"{name}.csv").open() as f:
+        return list(csv.DictReader(f))
+
+
+def change(rows: list[dict[str, str]], variables: list[str] | None = None) -> float:
+    sel = [r for r in rows if variables is None or r["variable"] in variables]
+    i16 = sum(int(r["int16_bytes"]) for r in sel)
+    f16 = sum(int(r["float16_bytes"]) for r in sel)
+    return f16 / i16 - 1 if i16 else float("nan")
+
+
+def report(workdir: Path) -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    silver_rows, source_rows = read("silber"), read("quelle")
+    columns = [
+        ("Silber DE", [r for r in silver_rows if r["grid"] == "0p25"]),
+        ("Silber Europa", [r for r in silver_rows if r["grid"] == "0p5"]),
+    ] + [
+        (f"Quelle {run[:7]}", [r for r in source_rows if r["run"] == run])
+        for run in sorted({r["run"] for r in source_rows})
+    ]
+    groups = [*GROUPS, "alle", "alle ohne Druck"]
+    no_pressure = [v for g, vs in GROUPS.items() if g != "Druck" for v in vs]
+    fig, ax = plt.subplots(figsize=(9, 4.8))
+    width = 0.8 / len(columns)
+    for k, (label, rows) in enumerate(columns):
+        values = []
+        for g in groups:
+            vs = GROUPS.get(g, no_pressure if g == "alle ohne Druck" else None)
+            values.append(100 * change(rows, vs))
+        ax.bar(
+            [i + (k - (len(columns) - 1) / 2) * width for i in range(len(groups))],
+            values,
+            width,
+            label=label,
+        )
+    ax.axhline(0, color="black", lw=0.8)
+    ax.set_xticks(range(len(groups)), groups, rotation=20, ha="right")
+    ax.set_ylabel("Größe float16 gegen Int16 in %")
+    ax.set_title("Komprimierte Größe float16 gegen Int16 (Blosc/Zstd 5, Byte-Shuffle)")
+    ax.legend(fontsize=8)
+    ax.grid(axis="y", alpha=0.3)
+    fig.tight_layout()
+    (HERE / "grafiken").mkdir(exist_ok=True)
+    fig.savefig(HERE / "grafiken" / "groesse_je_gruppe.png", dpi=130)
+    job = (HERE / "job.yaml").read_bytes()
+    commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"], capture_output=True, text=True
+    ).stdout.strip()
+    lauf = {
+        "job": "silber-float16",
+        "job_sha256": hashlib.sha256(job).hexdigest(),
+        "git_commit": commit,
+        "erstellt": datetime.now(UTC).isoformat(timespec="seconds"),
+        "silber_laeufe": [f"{repo}:{tag}" for repo, tag in SILVER_RUNS],
+        "quelle_laeufe": SOURCE_RUNS,
+        "quelle_schritte_h": SOURCE_STEPS,
+        "variablen": sorted({r["variable"] for r in silver_rows}),
+        "bytes": {
+            label: {
+                "int16": sum(int(r["int16_bytes"]) for r in rows),
+                "float16": sum(int(r["float16_bytes"]) for r in rows),
+                "float32": sum(int(r["float32_bytes"]) for r in rows),
+            }
+            for label, rows in columns
+        },
+        "schritte_zeitlich_interpoliert": {},
+    }
+    (HERE / "tabellen" / "lauf.json").write_text(
+        json.dumps(lauf, indent=1, ensure_ascii=False) + "\n"
+    )
+    print(json.dumps({"grafik": "grafiken/groesse_je_gruppe.png", "lauf": "tabellen/lauf.json"}))
+
+
 def write(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="") as f:
@@ -198,4 +294,4 @@ def write(path: Path, rows: list[dict[str, Any]]) -> None:
 if __name__ == "__main__":
     mode, workdir = sys.argv[1], Path(sys.argv[2])
     workdir.mkdir(parents=True, exist_ok=True)
-    {"silber": silver, "quelle": source}[mode](workdir)
+    {"silber": silver, "quelle": source, "bericht": report}[mode](workdir)

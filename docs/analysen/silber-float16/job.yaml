@@ -1,0 +1,27 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; ausgeführt von auswertung.py im selben Ordner
+id: silber-float16
+title: Silber GFS, float16 statt Int16 mit Scale/Offset
+question: >
+  Wie viel größer oder kleiner wäre das GFS-Silber nach Blosc/Zstd, wenn die Gitterwerte als
+  float16 statt als Int16 mit scale_factor/add_offset abgelegt würden, und wie groß wäre der
+  Fehler? Kein Neubau des bestehenden Silbers, nur Entscheidungsgrundlage für künftige Läufe.
+requested_by: Maulwurf
+kind: custom                   # Kompressionsvergleich, keine Verifikation gegen Messungen
+inputs:
+  silver:                      # öffentliche Pakete in GHCR, je Tag der erste Lauf des Monats
+    gfs-0p25-silver: [2025-01-00z, 2025-04-00z, 2025-07-00z, 2025-10-00z, 2026-10-12z]
+    gfs-0p5-silver: [2026-01-00z, 2026-07-00z]
+  source:                      # GRIB direkt aus dem AWS-Archiv, Konfiguration wie GFS DE
+    config: config/sources/gfs_0p25.yaml
+    runs: [2025-01-01T00, 2025-07-01T00]
+    steps: [0, 12, 1]
+method:
+  compressor: {codec: blosc, cname: zstd, clevel: 5, shuffle: byte}   # wie wx_process.silver
+  chunks: {silver: 48 Schritte wie im Store, source: ein Chunk über alle Schritte}
+  float16_units: {K: degC, Pa: hPa}                                  # 101 300 Pa > float16-Maximum
+  metrics: [bytes_int16, bytes_float16, bytes_float32, float16_max_err, float16_rmse]
+  group_by: [grid oder run, variable]
+outputs:
+  tables: [silber, quelle]
+  figures: [groesse_je_gruppe]
+schedule: once
