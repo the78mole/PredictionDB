@@ -43,8 +43,10 @@ auf GHCR, `compose.yaml`, die GitHub-Actions-Workflows und die Projektseite.
 
 Nicht gemeint sind
 
-- Lücken in Abhängigkeiten, die schon öffentlich bekannt sind. Diese werden über Renovate
-  aktualisiert, ein normales Issue genügt.
+- Bereits öffentlich dokumentierte Advisories zu Abhängigkeiten (CVE, GHSA). Ein Hinweis auf
+  das Advisory darf als normales Issue kommen, aber ohne eigene Angaben dazu, wie es sich in
+  PredictionDB ausnutzen lässt. Neue oder projektbezogene Erkenntnisse bitte immer privat
+  melden.
 - Eigene Installationen Dritter und deren Konfiguration, etwa offen erreichbare Datenbanken
   oder Grafana-Instanzen ohne Passwort.
 - Inhalte und Verfügbarkeit externer Datenquellen (NOAA, SMARD, ENTSO-E usw.).
@@ -58,5 +60,6 @@ Only the latest release (`vX.Y.Z`, `predict/vX.Y.Z`) and `main` receive security
 Please do not report vulnerabilities publicly; use
 [GitHub private vulnerability reporting](https://github.com/the78mole/PredictionDB/security/advisories/new).
 This is a one-person project: expect an acknowledgement within 7 days and a first
-assessment within 14 days. There is no bug bounty. Known vulnerabilities in dependencies
-and third-party deployments are out of scope.
+assessment within 14 days. There is no bug bounty. Already public advisories for dependencies may be
+filed as a normal issue without project-specific exploit details; anything new or specific
+to PredictionDB must be reported privately. Third-party deployments are out of scope.

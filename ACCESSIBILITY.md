@@ -35,7 +35,7 @@ nach Aufwand priorisiert.
 
 PredictionDB is mostly a backend project. The project site, the public Grafana dashboard and
 the documentation are the human-facing parts. Known limitations: charts lack text
-descriptions (the underlying numbers are available via the `predict/` file and HTTP
-output), dashboard colours are not fully checked for colour-vision deficiencies, generated
+descriptions (the underlying numbers are available from the `predict/` stack's file and
+HTTP outputs), dashboard colours are not fully checked for colour-vision deficiencies, generated
 PDFs are not tagged (PDF/UA), and most content is in German. Please report barriers as a
 GitHub issue.
