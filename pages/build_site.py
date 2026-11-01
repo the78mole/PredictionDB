@@ -9,8 +9,12 @@ Aufruf: ``python pages/build_site.py build/pages``. Umgebungsvariablen
 from __future__ import annotations
 
 import html
+import json
 import os
+import shutil
 import subprocess
+import urllib.parse
+import urllib.request
 import sys
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -20,6 +24,8 @@ from string import Template
 
 WURZEL = Path(__file__).resolve().parent.parent
 REPO = "https://github.com/the78mole/PredictionDB"
+REPO_NAME = "the78mole/PredictionDB"
+API = "https://api.github.com"
 
 BERICHTE = (
     ("unit", "Unit-Tests", "Tests aller Pakete und Dienste ohne externe Abhängigkeiten."),
@@ -94,6 +100,45 @@ def testkachel(ziel: Path, name: str, titel: str, text: str) -> str:
     )
 
 
+def _api(pfad: str) -> dict | None:
+    """GET auf die GitHub-API, mit GH_TOKEN falls gesetzt; None bei jedem Fehler."""
+    anfrage = urllib.request.Request(
+        f"{API}{pfad}", headers={"Accept": "application/vnd.github+json"}
+    )
+    token = os.environ.get("GH_TOKEN", "")
+    if token:
+        anfrage.add_header("Authorization", f"Bearer {token}")
+    try:
+        with urllib.request.urlopen(anfrage, timeout=10) as antwort:
+            return json.load(antwort)
+    except (OSError, ValueError):
+        return None
+
+
+def github_zahlen() -> dict[str, str]:
+    """Stars, offene Issues und offene PRs zum Bauzeitpunkt, "–" wenn nicht abrufbar.
+
+    Die Seite aktualisiert die Zahlen im Browser, das hier ist nur der Startwert
+    für Besucher ohne JavaScript oder bei erschöpftem API-Kontingent.
+    """
+    zahlen = {"stars": "–", "issues": "–", "prs": "–"}
+    repo = _api(f"/repos/{REPO_NAME}")
+    if repo and isinstance(repo.get("stargazers_count"), int):
+        zahlen["stars"] = str(repo["stargazers_count"])
+    for schluessel, typ in (("issues", "issue"), ("prs", "pr")):
+        q = urllib.parse.quote(f"repo:{REPO_NAME} type:{typ} state:open")
+        treffer = _api(f"/search/issues?q={q}&per_page=1")
+        if treffer and isinstance(treffer.get("total_count"), int):
+            zahlen[schluessel] = str(treffer["total_count"])
+    return zahlen
+
+
+def assets_kopieren(ziel: Path) -> None:
+    quelle = WURZEL / "pages" / "assets"
+    if quelle.is_dir():
+        shutil.copytree(quelle, ziel / "assets", dirs_exist_ok=True)
+
+
 def commit_bestimmen() -> str:
     sha = os.environ.get("COMMIT_SHA", "")
     if sha:
@@ -118,7 +163,12 @@ def bauen(ziel: Path) -> Path:
     ci_link = (
         f' · <a href="{REPO}/actions/runs/{html.escape(run_id)}">CI-Lauf</a>' if run_id else ""
     )
+    assets_kopieren(ziel)
+    gh = github_zahlen()
     seite = vorlage.substitute(
+        gh_stars=gh["stars"],
+        gh_issues=gh["issues"],
+        gh_prs=gh["prs"],
         req_count=anforderungen_zaehlen(WURZEL / "reqs"),
         test_cards="\n    ".join(testkachel(ziel, *b) for b in BERICHTE),
         built_at=datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
