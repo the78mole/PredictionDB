@@ -27,5 +27,5 @@ method:
   uncertainty: {rmse: bootstrap_over_runs, level: 0.95}
   group_by: [period, variable, horizon]
 outputs:
-  figures: [error_by_horizon]
+  figures: [t2m, td2m, ff10, mslp, ghi]   # RMSE und Bias je Horizont, eine Grafik je Größe
 schedule: once                 # once | monthly | on_new_model_version

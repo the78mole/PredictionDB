@@ -1,6 +1,6 @@
 # PV-Speicher, Szenario 2027: Haushaltsstrom an der Börse 5 ct teurer, Solarmittag bei 0 ct
 
-Einmalige Auswertung vom 22.10.2026, Szenario zur Analyse
+Einmalige Auswertung vom 22.10.2026, Auftrag in [job.yaml](job.yaml), Szenario zur Analyse
 [PV-Speicher-Arbitrage](../pv-speicher-arbitrage/README.md). Gleiche Anlage (10 kWp, 45°, Süd),
 gleiche Speicher (10/10, 20/15, 30/15 kWh/kW), gleicher Fahrplan (Planung um 13 Uhr bis
 Mitternacht des Folgetags), Wetter und Preisverlauf von 2025. Annahme für 2027:

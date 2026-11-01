@@ -1,6 +1,6 @@
 # Training auf einer gemieteten Cloud-GPU: Datenmengen, Zeit und Kosten
 
-Einmalige Abschätzung vom 29.10.2026. Frage: Welche Datenmengen entstehen und welchen
+Einmalige Abschätzung vom 29.10.2026, Auftrag in [job.yaml](job.yaml). Frage: Welche Datenmengen entstehen und welchen
 Zeitvorteil hätte es, die Prognosemodelle (LightGBM wie heute, dazu die neuronalen Netze TFT,
 TiDE und N-HiTS) auf einer gemieteten Cloud-GPU zu trainieren statt auf der VM? Was kostet das
 am Beispiel vast.ai, und welche GPU passt?

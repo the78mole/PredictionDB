@@ -1,6 +1,6 @@
 # Preiswirkung von Batteriespeichern am Day-Ahead-Markt
 
-Einmalige Auswertung vom 28.10.2026. Frage: Wie und ab wann verändern Batteriespeicher den
+Einmalige Auswertung vom 28.10.2026, Auftrag in [job.yaml](job.yaml). Frage: Wie und ab wann verändern Batteriespeicher den
 Börsenpreis DE-LU merklich? Der Speicherausbau ist hier nicht aus Prognosen der Bundesregierung
 oder des Netzentwicklungsplans abgeleitet, sondern aus dem, was im Marktstammdatenregister
 tatsächlich in Betrieb und in Planung steht. Die Preiswirkung kommt aus einer Simulation auf den

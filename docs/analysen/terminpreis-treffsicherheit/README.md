@@ -1,6 +1,6 @@
 # Terminpreise: Wie gut trifft der Jahres-Future den späteren Spotpreis?
 
-Einmalige Auswertung vom 25.10.2026. Frage: Taugt der Terminpreis als Messlatte für ein eigenes,
+Einmalige Auswertung vom 25.10.2026, Auftrag in [job.yaml](job.yaml). Frage: Taugt der Terminpreis als Messlatte für ein eigenes,
 aus freien Daten geschätztes Preisniveau? Konkret: Wie nah kommt der Phelix-DE Base Year Future
 für das Folgejahr (Cal Y+1) dem Jahresmittel des Day-Ahead-Preises, das später tatsächlich
 eintritt? Hintergrund: Eine freie Quelle für Terminpreise gibt es nicht (Energy-Charts darf die

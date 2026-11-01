@@ -2,7 +2,8 @@
 
 Je Analyse-Ordner müssen vorhanden sein:
 
-- ``README.md`` mit Titel (``# ...``) und dem Abschnitt ``## Ergebnis in Kürze``,
+- ``README.md`` mit Titel (``# ...``), Link ``[job.yaml](job.yaml)`` und dem Abschnitt
+  ``## Ergebnis in Kürze``,
 - ``job.yaml`` mit den Pflichtfeldern aus docs/ARCHITEKTUR.md 7.9, ``id`` gleich Ordnername,
 - ``tabellen/lauf.json`` (außer bei den Altanalysen in ``OHNE_LAUF``, die vor dieser Prüfung
   entstanden sind und nur durch einen neuen Lauf eine ``lauf.json`` bekommen könnten).
@@ -68,6 +69,8 @@ def pruefe(ordner: Path) -> list[str]:
             fehler.append("README.md beginnt nicht mit einem Titel '# ...'")
         if not re.search(r"(?m)^## Ergebnis in Kürze\s*$", text):
             fehler.append("README.md ohne Abschnitt '## Ergebnis in Kürze'")
+        if "](job.yaml)" not in text:
+            fehler.append("README.md verlinkt den Auftrag nicht ([job.yaml](job.yaml))")
 
     job = ordner / "job.yaml"
     if not job.is_file():

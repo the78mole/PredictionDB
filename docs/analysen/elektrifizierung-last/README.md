@@ -1,6 +1,6 @@
 # E-Autos, Wärmepumpen und Klimageräte: Einfluss auf Strombedarf und Lastspitzen
 
-Einmalige Auswertung vom 26.10.2026. Vier Fragen:
+Einmalige Auswertung vom 26.10.2026, Auftrag in [job.yaml](job.yaml). Vier Fragen:
 
 1. Wie stark haben die Zulassungen von E-Autos und die Verkäufe von Wärmepumpen und
    Klimageräten die deutsche Netzlast bis 2025 verändert?

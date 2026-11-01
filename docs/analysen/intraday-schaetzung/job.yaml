@@ -33,6 +33,7 @@ method:
   group_by: [jahr, fehlerklasse, stunde]
   publish: nur aggregierte Kennzahlen (README), keine Rohdaten
 outputs:
-  tables: [t1_abstand_je_jahr, t2_spread_je_fehlerklasse, t3_modelle_test_2025_2026,
+  readme: aggregierte Kennzahlen als Tabellen im README (Abstand je Jahr, Spread je Fehlerklasse, Modelle im Test)
+  local_tables: [t1_abstand_je_jahr, t2_spread_je_fehlerklasse, t3_modelle_test_2025_2026,
            t4_test_je_jahr, t5_test_je_stunde]   # nur lokal in daten/out/, Lizenz der Referenz ungeklärt
 schedule: once

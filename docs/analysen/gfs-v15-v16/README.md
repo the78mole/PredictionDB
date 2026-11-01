@@ -1,6 +1,6 @@
 # GFS v15 gegen v16: Prognosefehler an DWD-Stationen
 
-Einmalige Auswertung vom 21.10.2026. Frage: Wie stark unterscheiden sich die Fehler von GFS v15
+Einmalige Auswertung vom 21.10.2026, Auftrag in [job.yaml](job.yaml). Frage: Wie stark unterscheiden sich die Fehler von GFS v15
 (bis 22.03.2021 06Z) und GFS v16 (ab 22.03.2021 12Z) gegenüber Messungen, von der Analyse bis
 10 Tage Vorhersage? Das entscheidet, ob ältere v15-Läufe ohne Weiteres in dieselbe
 Trainingshistorie dürfen.

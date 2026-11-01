@@ -52,7 +52,8 @@ Zahl ihre Quelle trägt.
 
 ### `README.md`
 
-- Titel `# ...`, darunter ein kurzer Einstieg: „Einmalige Auswertung vom TT.MM.JJJJ. Frage: …“.
+- Titel `# ...`, darunter ein kurzer Einstieg mit Link auf den Auftrag (wird geprüft):
+  „Einmalige Auswertung vom TT.MM.JJJJ, Auftrag in [job.yaml](job.yaml). Frage: …“.
 - Erster Abschnitt `## Ergebnis in Kürze` (Pflicht, wird geprüft): die Antwort zuerst.
 - Danach je nach Analyse Ergebnisse, `## Daten und Methode` (oder `## Modell` / `## Daten`),
   `## Grenzen` bzw. `## Einschränkungen`, `## Quellen` mit Lizenz und Namensnennung je Quelle,

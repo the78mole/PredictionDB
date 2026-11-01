@@ -1,6 +1,6 @@
 # PV-Speicher: Was bringt das Verschieben der Einspeisung in teure Stunden?
 
-Einmalige Auswertung vom 22.10.2026. Frage: Wie viel mehr erlöst eine 10-kWp-PV-Anlage
+Einmalige Auswertung vom 22.10.2026, Auftrag in [job.yaml](job.yaml). Frage: Wie viel mehr erlöst eine 10-kWp-PV-Anlage
 (45° Neigung, genau nach Süden) am Day-Ahead-Markt, wenn ein Speicher den Mittagsstrom in die
 teuren Abend-, Nacht- und Morgenstunden verschiebt? Verglichen werden drei Speicher:
 10 kWh / 10 kW, 20 kWh / 15 kW und 30 kWh / 15 kW. Die Preise des Folgetags sind erst um 13 Uhr

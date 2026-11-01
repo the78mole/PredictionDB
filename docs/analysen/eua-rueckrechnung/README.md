@@ -1,6 +1,6 @@
 # EUA-Preis aus Strompreisen zurückrechnen: Machbarkeit mit freien Daten
 
-Einmalige Auswertung vom 28.10.2026. Frage: Lässt sich der Preis für EU-Emissionsberechtigungen
+Einmalige Auswertung vom 28.10.2026, Auftrag in [job.yaml](job.yaml). Frage: Lässt sich der Preis für EU-Emissionsberechtigungen
 (EUA) täglich und mit kurzem Verzug aus frei lizenzierten Strommarktdaten zurückrechnen? Den
 Referenzpreis liefern die Auktionsberichte der EU-Kommission.
 
