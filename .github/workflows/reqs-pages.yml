@@ -33,7 +33,7 @@ jobs:
       - run: uv sync --locked --all-packages
       - run: uv run python reqs/pruefen.py
       - run: uv run strictdoc export reqs --output-dir build/reqs
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
           path: build/reqs/html
