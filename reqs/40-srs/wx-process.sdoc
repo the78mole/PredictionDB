@@ -216,6 +216,9 @@ TITLE: Altes Bronze aufräumen
 STATEMENT: >>>
 Mit ``prune-bronze`` bzw. ``--bronze-days`` muss wx-process Bronze-Läufe löschen, die älter als
 die angegebene Zahl Tage sind, aber nur, wenn ihr Silber vorliegt. ``--dry-run`` zählt nur.
+Gelöschte Läufe muss es als ``deleted`` in ``meta.bronze_run`` melden und Läufe nachtragen, die
+laut Datenbank Bronze hatten, in ``wx-bronze`` aber fehlen, damit das Status-Dashboard den
+tatsächlichen Bestand zeigt.
 <<<
 RELATIONS:
 - TYPE: Parent

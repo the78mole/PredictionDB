@@ -147,6 +147,10 @@ class WxPipeline:
         ohne Silber bleiben stehen, denn aus ihnen entsteht es noch. ``pause`` Sekunden zwischen
         zwei Läufen schonen Garage, das jedes gelöschte Objekt im Hintergrund nacharbeitet.
 
+        Gelöschte Läufe kommen als ``deleted`` nach ``meta.bronze_run`` (Status-Dashboard). Läufe,
+        die laut Datenbank Bronze hatten, in ``wx-bronze`` aber fehlen (früher ohne Meldung
+        gelöscht), werden dabei nachgetragen (``reconciled``).
+
         @relation(SWR-WXP-024, scope=function)
         """
         now = now or datetime.now(UTC)
@@ -157,7 +161,13 @@ class WxPipeline:
             if self.store is not None
             else None
         )
-        counts = {"runs": 0, "objects": 0, "kept_no_silver": 0, "failed": 0}
+        counts = {"runs": 0, "objects": 0, "kept_no_silver": 0, "failed": 0, "reconciled": 0}
+        if self.store is not None:
+            gone = self.store.local_bronze_runs(self.source_id, start or BRONZE_SINCE, cutoff)
+            gone -= set(runs)
+            counts["reconciled"] = len(gone)
+            if gone and not dry_run:
+                self.store.mark_bronze(self.source_id, sorted(gone), "deleted")
         for run in runs:
             if present is not None:
                 has_silver = run in present
@@ -173,6 +183,8 @@ class WxPipeline:
             try:
                 counts["objects"] += self._delete_bronze_run(run)
                 counts["runs"] += 1
+                if self.store is not None:
+                    self.store.mark_bronze(self.source_id, [run], "deleted")
             except Exception as exc:  # ein Lauf (z. B. Garage-Timeout) darf nicht alles beenden
                 log.warning("bronze.prune_failed", run=f"{run:%Y%m%d%H}", error=str(exc))
                 counts["failed"] += 1
