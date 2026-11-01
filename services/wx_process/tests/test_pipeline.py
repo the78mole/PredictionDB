@@ -38,6 +38,7 @@ class FakeStore:
         self.done: dict[tuple[datetime, str], dict[str, Any]] = {}
         self.features: dict[str, int] = {}
         self.silver: dict[datetime, tuple[str, str]] = {}
+        self.bronze: dict[datetime, str] = {}
         self.packed: list[Chunk] = []
         self.replaced: list[bool] = []
         self.log: list[tuple[str, str]] = []
@@ -92,6 +93,20 @@ class FakeStore:
 
     def silver_runs(self, source_id: int) -> dict[datetime, str]:
         return {r: st for r, (st, _) in self.silver.items()}
+
+    def mark_bronze(self, source_id, runs, status, nbytes=None) -> None:  # type: ignore[no-untyped-def]
+        for r in runs:
+            self.bronze[r] = status
+
+    def local_bronze_runs(self, source_id: int, start: datetime, end: datetime) -> set[datetime]:
+        return {
+            r
+            for r, (st, origin) in self.silver.items()
+            if st == "present"
+            and origin == "bronze"
+            and start <= r < end
+            and self.bronze.get(r) != "deleted"
+        }
 
     def has_features(self, source_id: int, run: datetime) -> bool:
         return any(r == run for r, _ in self.done)
@@ -341,7 +356,7 @@ def test_prune_bronze_only_with_silver(setup) -> None:  # type: ignore[no-untype
 
     now = RUN + timedelta(days=100)
     dry = pipeline.prune_bronze(92, start=RUN - timedelta(days=1), now=now, dry_run=True)
-    assert dry == {"runs": 1, "objects": 0, "kept_no_silver": 1, "failed": 0}
+    assert dry == {"runs": 1, "objects": 0, "kept_no_silver": 1, "failed": 0, "reconciled": 0}
     # noch jung genug: nichts zu tun
     young = pipeline.prune_bronze(92, start=RUN - timedelta(days=1), now=RUN + timedelta(days=10))
     assert young["runs"] == 0
@@ -349,8 +364,31 @@ def test_prune_bronze_only_with_silver(setup) -> None:  # type: ignore[no-untype
     counts = pipeline.prune_bronze(92, start=RUN - timedelta(days=1), now=now)
     assert counts["runs"] == 1 and counts["objects"] > 0
     assert pipeline.bronze_runs(RUN - timedelta(days=1), now) == [other]
+    # gelöscht gemeldet (Status-Dashboard), der Lauf ohne Silber nicht
+    _, _, store = setup
+    assert store.bronze == {RUN: "deleted"}
     # Silber bleibt lesbar, der Lauf gilt weiter als gerechnet
     assert pipeline.process(RUN).status == "skipped"
+
+
+def test_prune_bronze_reconciles_runs_deleted_earlier(setup) -> None:  # type: ignore[no-untyped-def]
+    """Bronze, das schon ohne Meldung gelöscht wurde, wird als ``deleted`` nachgetragen.
+
+    @relation(SWR-WXP-024, scope=function)
+    """
+    pipeline, bronze, store = setup
+    fill_bronze(bronze, STEPS)
+    pipeline.process(RUN)  # Silber aus Bronze
+    for b in list(obstore.list(bronze, prefix="")):
+        obstore.delete(bronze, [m["path"] for m in b])
+    now = RUN + timedelta(days=100)
+    dry = pipeline.prune_bronze(92, start=RUN - timedelta(days=1), now=now, dry_run=True)
+    assert dry["reconciled"] == 1 and store.bronze == {}
+    counts = pipeline.prune_bronze(92, start=RUN - timedelta(days=1), now=now)
+    assert counts["reconciled"] == 1 and counts["runs"] == 0
+    assert store.bronze == {RUN: "deleted"}
+    # beim nächsten Mal nichts mehr nachzutragen
+    assert pipeline.prune_bronze(92, start=RUN - timedelta(days=1), now=now)["reconciled"] == 0
 
 
 def test_prune_bronze_retries_and_skips_failing_run(setup, monkeypatch) -> None:  # type: ignore[no-untyped-def]

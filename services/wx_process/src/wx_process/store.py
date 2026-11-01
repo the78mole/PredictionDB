@@ -476,6 +476,30 @@ class Store:
                 params,
             )
 
+    def local_bronze_runs(self, source_id: int, start: datetime, end: datetime) -> set[datetime]:
+        """Läufe von ``start`` bis vor ``end``, deren Bronze laut Datenbank lokal liegen müsste:
+        ein Download hat sie abgelegt oder vorgefunden (``meta.backfill_run`` complete/skipped)
+        oder das Silber wurde aus Bronze gerechnet; ohne die schon als gelöscht gemeldeten.
+
+        @relation(SWR-WXP-024, scope=function)
+        """
+        with self.engine.connect() as c:
+            rows = c.execute(
+                text("""
+                SELECT r.run_time FROM meta.backfill_run r JOIN meta.backfill_job j USING (job_id)
+                 WHERE j.source_id = :s AND r.status IN ('complete', 'skipped')
+                   AND r.run_time >= :a AND r.run_time < :b
+                UNION
+                SELECT run_time FROM meta.silver_run
+                 WHERE source_id = :s AND origin = 'bronze' AND status = 'present'
+                   AND run_time >= :a AND run_time < :b
+                EXCEPT
+                SELECT run_time FROM meta.bronze_run
+                 WHERE source_id = :s AND status = 'deleted'"""),
+                {"s": source_id, "a": start, "b": end},
+            ).all()
+        return {r[0] for r in rows}
+
     def clear_silver_loading(self, source_id: int, runs: Iterable[datetime] | None = None) -> None:
         """``loading`` zurücknehmen: für ``runs`` oder alle (neuer Import-Durchgang)."""
         sql = "DELETE FROM meta.silver_run WHERE source_id = :s AND status = 'loading'"

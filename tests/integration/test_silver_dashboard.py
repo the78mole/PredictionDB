@@ -189,6 +189,13 @@ def test_bronze_month_bars(engine: Engine) -> None:
     gfs = tuple(float(v) for v in rows["2021-04"][:2])
     assert gfs == (round(800 / 30, 1), round(100 / 30, 1))
 
+    # nach der Frist gelöscht (wx-process prune-bronze): zählt nicht mehr als vorhanden
+    store.mark_bronze(sid, [runs[0], runs[1], runs[12]], "deleted")
+    with engine.connect() as c:
+        rows = {r[0]: r[1:] for r in c.execute(text(_panel_sql("'6'", 52))).all()}
+    gfs = tuple(float(v) for v in rows["2021-04"][:2])
+    assert gfs == (round(500 / 30, 1), round(100 / 30, 1))
+
 
 def _bar(engine: Engine, panel_id: int, prefix: str, hours: str = "'0'") -> tuple[float, ...]:
     """Werte des Balkens ``prefix`` im April 2021; die anderen Zeilen bleiben dafür leer."""
@@ -267,6 +274,9 @@ def test_gfs_europa_month_bars(engine: Engine) -> None:
     assert _bar(engine, 46, "GFS Europa") == (50.0, 10.0)
     # Bronze: nur die 3 aus lokalem Bronze gebauten Läufe
     assert _bar(engine, 52, "GFS Europa") == (10.0, 0.0)
+    # einer davon nach der Frist gelöscht
+    store.mark_bronze(sid, runs[:1], "deleted")
+    assert _bar(engine, 52, "GFS Europa") == (round(200 / 30, 1), 0.0)
     # Gold gibt es noch nicht: alle 15 mit Silber in Arbeit
     assert _bar(engine, 47, "GFS Europa") == (0.0, 50.0)
     # GFS DE bleibt leer
