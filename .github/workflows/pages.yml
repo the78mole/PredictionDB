@@ -67,6 +67,7 @@ jobs:
           github-token: ${{ github.token }}
       - name: Landing Page
         env:
+          GH_TOKEN: ${{ github.token }}  # Stars/Issues/PRs für die GitHub-Ecke
           CI_RUN_ID: ${{ steps.lauf.outputs.id }}
           COMMIT_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: uv run python pages/build_site.py build/pages
