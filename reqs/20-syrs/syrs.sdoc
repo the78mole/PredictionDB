@@ -769,17 +769,18 @@ RELATIONS:
 [REQUIREMENT]
 UID: SYSR-SEC-007
 ART: Qualität
-STATUS: Vorgemerkt
+STATUS: Umgesetzt
 NACHWEIS: Inspektion
 TITLE: Schutz von main
 STATEMENT: >>>
-Änderungen an ``main`` sollen nur über Pull Requests mit grüner CI möglich sein. Force-Push und
-Löschen von ``main`` sollen gesperrt sein.
+Änderungen an ``main`` dürfen nur über Pull Requests mit grüner CI möglich sein. Force-Push und
+Löschen von ``main`` müssen gesperrt sein.
 <<<
 RATIONALE: >>>
-Wird als Ruleset in den Repository-Einstellungen gesetzt (Entscheidung des Betreibers). Eine
-Freigabe durch eine zweite Person ist nicht verlangt, siehe SYSR-SEC-008. Seit dem 2026-10-21
-lief jede Änderung ohnehin über Pull Requests.
+Umgesetzt als Ruleset „main schützen“ (seit 2026-11-01): PR Pflicht, CI-Jobs Lint und Typen,
+Unit-Tests sowie Image und Compose-Stack müssen grün sein, kein Force-Push, kein Löschen;
+Admins dürfen nur im PR übersteuern. Eine Freigabe durch eine zweite Person ist nicht
+verlangt, siehe SYSR-SEC-008.
 <<<
 QUELLE: OpenSSF Scorecard Branch-Protection
 RELATIONS:
