@@ -1,6 +1,6 @@
 # Standortgewichte für Wind und PV aus der Ist-Erzeugung lernen
 
-Einmalige Auswertung vom 1.11.2026. Frage: Für Länder ohne offenes Anlagenregister kennen wir
+Einmalige Auswertung vom 1.11.2026 (Auftrag: [job.yaml](job.yaml)). Frage: Für Länder ohne offenes Anlagenregister kennen wir
 nicht, wo Windräder und PV-Anlagen stehen. Lassen sich Gewichte je Gitterzelle stattdessen aus
 der tatsächlichen Erzeugung je Zone lernen, und sind sie besser als das heutige Flächenmittel?
 
@@ -31,19 +31,24 @@ Für die Prognose zählt die Güte, nicht die Lage. Die gelernten Gewichte sind 
 Gewinn für Wind, aber man darf sie nicht als Anlagenkarte veröffentlichen oder für
 Anlagenprognosen verwenden.
 
-## Daten
+## Daten und Methode
 
-| Was | Quelle | Lizenz |
-|---|---|---|
-| Wetter je Zelle | GFS 0,5° aus unserem Silber `ghcr.io/the78mole/predictiondb-data/gfs-0p5-silver`, Lauf 00Z, Schritte f003 bis f024 (3-stündlich), 1.1.2024 bis 31.12.2025, 731 Läufe | NOAA gemeinfrei, Silber CC BY 4.0 |
-| Ist-Erzeugung Wind an Land, Solar je Land | Energy-Charts `/public_power` (DE, PL, AT, ES) | CC BY 4.0 laut API-Doku (kein `license_info` im Abruf, Vorlage meist ENTSO-E 16.1) |
-| Installierte Leistung | Energy-Charts `/installed_power`, jährlich (Jahresendwerte linear interpoliert) | CC BY 4.0 |
-| Zonenfläche und MaStR-Gewichte DE | `config/gefs/regions_v2.json.gz` | eigenes Repo |
+**Daten:**
+
+- **Wetter je Zelle:** GFS 0,5° aus unserem Silber `ghcr.io/the78mole/predictiondb-data/gfs-0p5-silver`,
+  Lauf 00Z, Schritte f003 bis f024 (3-stündlich), 1.1.2024 bis 31.12.2025, 731 von 731 Läufen.
+  Größen: Wind 100 m (u, v), Globalstrahlung (Intervallmittel), Temperatur 2 m.
+- **Ist-Erzeugung:** Energy-Charts `/public_power`, Reihen „Wind onshore“ und „Solar“ für DE,
+  PL, AT, ES (PL 2024 stündlich, sonst Viertelstunden).
+- **Installierte Leistung:** Energy-Charts `/installed_power`, jährlich (monatlich gibt es nur
+  für DE), Jahresendwerte linear interpoliert.
+- **Zonen und MaStR-Gewichte:** `config/gefs/regions_v2.json.gz` (Flächenanteile je Zelle,
+  in DE zusätzlich `DE:wind_on` und `DE:pv` aus dem MaStR).
 
 Ziel ist der Kapazitätsfaktor CF = Erzeugung / installierte Leistung. Wind wird im Fenster
 ±1,5 h um den Schritt gemittelt, PV über die 3 h vor dem Schritt (wie `dswrf` im Silber).
 
-## Verfahren
+**Methode:**
 
 1. Je Zelle der Zone werden aus dem GFS ein Wind-CF (Wind 100 m, Leistungskurve 3/12/25 m/s
    wie `wx_process.features.PowerCurve`) und ein PV-CF (Globalstrahlung und Temperatur wie
@@ -51,34 +56,42 @@ Ziel ist der Kapazitätsfaktor CF = Erzeugung / installierte Leistung. Wind wird
 2. Zellen werden zu 1°-Blöcken (2 × 2) zusammengefasst, damit die Zahl der Unbekannten zu den
    Daten passt (DE 68, PL 57, AT 20, ES 82 Blöcke).
 3. Je Zone und Technik: nicht negative kleinste Quadrate (NNLS) des Ist-CF auf die Block-CF,
-   mit Ridge-Strafe zur skalierten Flächenverteilung. λ wird in 2024 gewählt (jeder vierte
-   Monat als Validierung).
+   mit Ridge-Strafe zur skalierten Flächenverteilung. λ wird im Trainingsjahr gewählt (jeder
+   vierte Monat als Validierung); zusätzlich laufen feste λ = 0,03 und λ = 0,3.
 4. Training 2024, Test 2025, danach vertauscht. Vergleich mit dem Flächenmittel (mit eigenem
    Skalenfaktor) und in DE mit den MaStR-Gewichten (ebenfalls mit Skalenfaktor).
 
-PV wird nur zu Tagstunden bewertet, sonst würden die Nachtnullen das R² schönen.
+PV wird nur zu Tagstunden bewertet (Zell-CF > 0,02), sonst würden die Nachtnullen das R²
+schönen. Alle Kennzahlen stehen in [tabellen/ergebnis.csv](tabellen/ergebnis.csv) und
+[tabellen/stabilitaet.csv](tabellen/stabilitaet.csv), die gelernten Wind-Gewichte je Zelle in
+[tabellen/gewichte_wind.csv](tabellen/gewichte_wind.csv), das Laufprotokoll in
+[tabellen/lauf.json](tabellen/lauf.json).
 
 ## Ergebnisse
 
 R² im Testjahr (Training 2024 → Test 2025 / Training 2025 → Test 2024):
 
-| Zone, Technik | Flächenmittel | gelernt (λ aus CV) | gelernt, λ = 0,3 | MaStR | mittlerer CF |
-|---|---|---|---|---|---|
-| DE Wind | 0,69 / 0,80 | **0,89 / 0,92** | 0,84 | 0,84 / 0,90 | 0,18 |
-| PL Wind | 0,69 / 0,80 | **0,81 / 0,89** | 0,77 | – | 0,24 |
-| AT Wind | 0,34 / 0,24 | **0,76 / 0,77** | 0,50 | – | 0,24 |
-| ES Wind | 0,08 / 0,01 | **0,67 / 0,67** | 0,54 | – | 0,20 |
-| DE PV | 0,95 / 0,94 | 0,95 / 0,95 | 0,95 | 0,94 / 0,94 | 0,14 |
-| PL PV | 0,88 / 0,90 | 0,88 / 0,90 | 0,88 | – | 0,21 |
-| AT PV | 0,85 / 0,85 | 0,86 / 0,87 | 0,85 | – | 0,14 |
-| ES PV | 0,66 / 0,77 | 0,68 / 0,79 | 0,67 | – | 0,29 |
+| Zone, Technik | Flächenmittel | gelernt (λ aus CV) | gelernt, λ = 0,03 | gelernt, λ = 0,3 | MaStR | mittlerer CF |
+|---|---|---|---|---|---|---|
+| DE Wind | 0,69 / 0,80 | **0,89 / 0,92** | 0,88 | 0,84 | 0,84 / 0,90 | 0,18 |
+| PL Wind | 0,69 / 0,80 | **0,81 / 0,89** | 0,80 | 0,77 | – | 0,24 |
+| AT Wind | 0,34 / 0,24 | **0,76 / 0,77** | 0,70 | 0,50 | – | 0,24 |
+| ES Wind | 0,08 / 0,01 | **0,67 / 0,67** | 0,67 | 0,54 | – | 0,20 |
+| DE PV | 0,95 / 0,94 | 0,95 / 0,95 | 0,95 | 0,95 | 0,94 / 0,94 | 0,14 |
+| PL PV | 0,88 / 0,90 | 0,88 / 0,90 | 0,88 | 0,88 | – | 0,21 |
+| AT PV | 0,85 / 0,85 | 0,86 / 0,87 | 0,85 | 0,85 | – | 0,14 |
+| ES PV | 0,66 / 0,77 | 0,68 / 0,79 | 0,68 | 0,67 | – | 0,29 |
+
+Die festen λ gelten für Training 2024 → Test 2025. „Mittlerer CF“ ist der Ist-CF im Testjahr
+2025 (PV nur Tagstunden).
 
 RMSE des Wind-CF (Test 2025): DE 0,076 → 0,044, PL 0,095 → 0,074, AT 0,180 → 0,109,
 ES 0,114 → 0,068.
 
 **Stabilität:** Die Gewichte aus 2024 und aus 2025 korrelieren bei Wind in AT mit 0,98 und in
 ES mit 0,94 (Überlappung 87 % bzw. 84 %), in DE und PL mit 0,73 bzw. 0,69. Bei PV sind sie
-nicht stabil (DE 0,03), was zum fehlenden Gewinn passt.
+nicht stabil (DE 0,03), was zum fehlenden Gewinn passt. In AT liegen nur 42 % der gelernten
+Wind-Gewichte östlich von 15,5° O (Fläche dort: 31 %), obwohl dort fast alle Windräder stehen.
 
 **Warum das Flächenmittel bei Wind so schlecht ist:** In AT liegt der Großteil der Windräder
 im Osten (Burgenland, Niederösterreich), die Fläche aber vor allem in den Alpen. Das
@@ -114,13 +127,24 @@ auslöschen.
    verfügbar).
 4. Vor dem Umbau prüfen, ob die Gewichte auch für Vorläufe von 5 bis 15 Tagen tragen.
 
-## Nachrechnen
+## Quellen
+
+- **NOAA/NCEP Global Forecast System (GFS)**, gemeinfrei; verdichtet als GFS-0p5-Silber von
+  PredictionDB, CC BY 4.0.
+- **Energy-Charts, Fraunhofer ISE** (`api.energy-charts.info`, `/public_power`,
+  `/installed_power`), CC BY 4.0 laut API-Dokumentation. Für Länder außer DE stammen die
+  Erzeugungsdaten überwiegend von der ENTSO-E-Transparenzplattform (16.1).
+- **Marktstammdatenregister (MaStR)** der Bundesnetzagentur, Datenlizenz Deutschland –
+  Namensnennung 2.0, über `config/gefs/regions_v2.json.gz`.
+
+## Nachvollziehen
+
+Rohdaten laden (etwa 16 GB Download, nur lokal) und auswerten; `auswertung.py` schreibt
+`tabellen/` und `grafiken/` neu:
 
 ```bash
-docs/analysen/standortgewichte-lernen/daten_laden.sh /tmp/sg      # ~16 GB Download, wenige Minuten
-uv run --with numpy --with scipy python -I docs/analysen/standortgewichte-lernen/fit.py \
-  /tmp/sg/data /tmp/sg/ec config/gefs/regions_v2.json.gz /tmp/sg/out de,pl,at,es
-SWAP=1 …   # Jahre vertauschen;  LAMS=0.3 …   # feste Glättung
-uv run --with numpy --with matplotlib python -I docs/analysen/standortgewichte-lernen/karten.py \
-  /tmp/sg/out /tmp/sg/out_l0.3 docs/analysen/standortgewichte-lernen/grafiken
+uv run --no-project --with numpy --with numcodecs python -I \
+  docs/analysen/standortgewichte-lernen/abruf.py --cache /tmp/sg
+uv run --no-project --with numpy --with scipy --with matplotlib --with pyyaml python -I \
+  docs/analysen/standortgewichte-lernen/auswertung.py --cache /tmp/sg
 ```

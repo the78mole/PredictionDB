@@ -1,0 +1,61 @@
+{
+ "job": "standortgewichte-lernen",
+ "job_sha256": "1b8f7a3f4d24aaa3bd5eb336cf01c5da5e98959f832eff31ae1a80af50d7e997",
+ "git_commit": "1bd84690679cfcd2ac0f9da00f06bd3c60f0d3e4",
+ "gestartet": "2026-11-01T20:07:42+00:00",
+ "beendet": "2026-11-01T20:08:04+00:00",
+ "zeitraum": {
+  "von": "2024-01-01",
+  "bis": "2026-01-01"
+ },
+ "gfs": {
+  "quelle": "ghcr.io/the78mole/predictiondb-data/gfs-0p5-silver",
+  "laeufe": 731,
+  "laeufe_erwartet": 731,
+  "lauf_stunde": 0,
+  "schritte_h": [
+   3,
+   6,
+   9,
+   12,
+   15,
+   18,
+   21,
+   24
+  ],
+  "layer_digests_sha256": "b89ee590d15019627c3b032381e956a68ac4156ad4725e809266000d04b7f78c"
+ },
+ "eingaben_sha256": {
+  "ipy_at.json": "65ee20e7611a51229cdd7886d2e204552477f1c881ad15fdc34619588eafbed6",
+  "ipy_de.json": "592f93a37d7aba04cdea1a5c8a78ccd3a157db83d87f73bd14e31f8815e08a6e",
+  "ipy_es.json": "a987dd004d845a5aa07232003c9fb7f361b25c6f7c236886232acafac5a7a8dd",
+  "ipy_pl.json": "0907302da3616347a7c86da9cbe41dfedf3d09ed79bf51022eca785adca47be4",
+  "pp_at_2024.json": "15d62cda109a913390814d22e05d7985716a9326eac8a8ed3478e9eb166be5b8",
+  "pp_at_2025.json": "a1db7c89ce8b9431456229f40598d12fe8493adf28fc9398f8d000a21f4ce76f",
+  "pp_de_2024.json": "389a7a15f03b82c801bba8458169ea529918d1102a4cd8aef25badb247df84f6",
+  "pp_de_2025.json": "492da76ef128cc742997ee20d94957b84248b69b47011dc0bf9320b1602626de",
+  "pp_es_2024.json": "1982a22af5d8ec6616f380078ba877388d7e3c0441e711239d78dd9e88cb9c22",
+  "pp_es_2025.json": "8be7f72b5a067b7639281b6f0ec1a9213a7ef885a281ab80e70624427a309b1b",
+  "pp_pl_2024.json": "95aa46953d9e848fb602c6663ff0db36e6fbf8d22cd07703093ddfeda4b2f10f",
+  "pp_pl_2025.json": "ba169c12f761684d0cad590b84cb2945cfcdff549bf1c0403b7d640f1a53f963"
+ },
+ "regionen_sha256": "11d60ff6c6111a13ae6201bca44dec4ac73207867e81187cf58347597fc44663",
+ "zeitschritte_je_reihe": 5848,
+ "fehlende_rohwerte_energy_charts": {
+  "de_wind": 0,
+  "de_pv": 0,
+  "pl_wind": 0,
+  "pl_pv": 0,
+  "at_wind": 0,
+  "at_pv": 0,
+  "es_wind": 4,
+  "es_pv": 4
+ },
+ "schritte_zeitlich_interpoliert": {},
+ "annahmen": {
+  "kapazitaet": "Jahresendwerte /installed_power linear interpoliert",
+  "wind": "Ist-CF ±1,5 h um den Schritt, Leistungskurve 3/12/25 m/s auf Wind 100 m",
+  "pv": "Ist-CF als Mittel der 3 h vor dem Schritt, nur Schritte mit Zell-CF > 0,02",
+  "bloecke": "2 x 2 Zellen (1°)"
+ }
+}
