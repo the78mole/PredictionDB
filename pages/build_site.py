@@ -26,6 +26,7 @@ WURZEL = Path(__file__).resolve().parent.parent
 REPO = "https://github.com/the78mole/PredictionDB"
 REPO_NAME = "the78mole/PredictionDB"
 API = "https://api.github.com"
+SCORECARD_API = "https://api.scorecard.dev/projects/github.com"
 
 BERICHTE = (
     ("unit", "Unit-Tests", "Tests aller Pakete und Dienste ohne externe Abhängigkeiten."),
@@ -134,6 +135,24 @@ def github_zahlen() -> dict[str, str]:
     return zahlen
 
 
+def scorecard_wert() -> str:
+    """OpenSSF-Scorecard-Wert (0 bis 10, eine Nachkommastelle) zum Bauzeitpunkt.
+
+    Ein Strich, solange scorecard.dev noch kein Ergebnis hat (Workflow
+    scorecard.yml noch nicht auf main gelaufen) oder nicht antwortet. Die Seite
+    lädt den Wert im Browser nach.
+    """
+    try:
+        with urllib.request.urlopen(f"{SCORECARD_API}/{REPO_NAME}", timeout=10) as antwort:
+            daten = json.load(antwort)
+    except (OSError, ValueError):
+        return "&ndash;"
+    wert = daten.get("score") if isinstance(daten, dict) else None
+    if isinstance(wert, int | float) and not isinstance(wert, bool):
+        return f"{wert:.1f}".replace(".", ",")
+    return "&ndash;"
+
+
 def assets_kopieren(ziel: Path) -> None:
     quelle = WURZEL / "pages" / "assets"
     if quelle.is_dir():
@@ -170,6 +189,7 @@ def bauen(ziel: Path) -> Path:
         gh_stars=gh["stars"],
         gh_issues=gh["issues"],
         gh_prs=gh["prs"],
+        scorecard=scorecard_wert(),
         req_count=anforderungen_zaehlen(WURZEL / "reqs"),
         test_cards="\n    ".join(testkachel(ziel, *b) for b in BERICHTE),
         built_at=datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
