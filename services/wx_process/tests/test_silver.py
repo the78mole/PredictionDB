@@ -1,9 +1,11 @@
+import dataclasses
+
 import numpy as np
 import pytest
 from obstore.store import MemoryStore
 
 from wx_process.decode import decode_step
-from wx_process.silver import Silver, assemble, decode, encode
+from wx_process.silver import Silver, assemble, decode, decode_array, encode
 from wx_process.testing import RUN, grid, make_step
 from wx_process.variables import BY_NAME, SILVER_VERSION
 
@@ -61,3 +63,58 @@ def test_overwrite_replaces_store() -> None:
     silver.write(_dataset([0, 1, 2]))
     silver.write(_dataset([0, 1]))
     assert silver.read("gfs", "0p25", RUN).steps.tolist() == [0, 1]
+
+
+def test_read_uses_stored_encoding(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein Store mit älterer Kodierung bleibt lesbar, wenn sich die Tabelle ändert.
+
+    @relation(SWR-WXP-025, scope=function)
+    """
+    ds = _dataset([0, 1, 2, 3])
+    silver = Silver(MemoryStore())
+    silver.write(ds)
+    expected = ds.quantized().data
+    # neue Kodierung für t2m (anderer Schritt und Offset) und tp (float16)
+    t2m, tp = BY_NAME["t2m"], BY_NAME["tp"]
+    monkeypatch.setitem(BY_NAME, "t2m", dataclasses.replace(t2m, scale=0.02, offset=280.0))
+    monkeypatch.setitem(BY_NAME, "tp", dataclasses.replace(tp, dtype="float16"))
+    back = silver.read("gfs", "0p25", RUN)
+    for name in ("t2m", "tp", "dswrf"):
+        np.testing.assert_array_equal(back.data[name], expected[name])
+
+
+def test_float_dtype_roundtrip(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Variablen mit Gleitkomma-Ablage: float16 im Store, NaN bleibt NaN, kein inf.
+
+    @relation(SWR-WXP-020, SWR-WXP-025, scope=function)
+    """
+    monkeypatch.setitem(BY_NAME, "t2m", dataclasses.replace(BY_NAME["t2m"], dtype="float16"))
+    ds = _dataset([0, 1, 2])
+    ds.data["t2m"][1, 0, 0] = np.nan
+    ds.data["t2m"][2, 0, 0] = 1e6
+    silver = Silver(MemoryStore())
+    key = silver.write(ds)
+    import zarr
+
+    arr = zarr.open_group(silver.store, path=key, mode="r")["t2m"]
+    assert isinstance(arr, zarr.Array) and arr.dtype == np.float16
+    assert "scale_factor" not in arr.attrs
+    back = silver.read("gfs", "0p25", RUN).data["t2m"]
+    assert np.isnan(back[1, 0, 0])
+    assert back[2, 0, 0] == np.finfo(np.float16).max
+    ok = np.isfinite(ds.data["t2m"]) & (ds.data["t2m"] < 1e5)
+    np.testing.assert_allclose(back[ok], ds.data["t2m"][ok], rtol=2**-11)
+    np.testing.assert_array_equal(back, ds.quantized().data["t2m"])
+
+
+def test_decode_array_defaults() -> None:
+    """Ganzzahlen ohne Skalierung und Gleitkommawerte ohne Attribute.
+
+    @relation(SWR-WXP-025, scope=function)
+    """
+    raw = np.array([1, -32768, 3], np.int16)
+    np.testing.assert_array_equal(decode_array(raw, {}), [1.0, -32768.0, 3.0])
+    out = decode_array(raw, {"scale_factor": 0.5, "add_offset": 10.0, "_FillValue": -32768})
+    assert out[0] == 10.5 and np.isnan(out[1])
+    f = np.array([1.5, np.nan], np.float16)
+    assert decode_array(f, {"scale_factor": 99}).dtype == np.float32

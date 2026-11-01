@@ -3,13 +3,19 @@
 Schlüssel wie Bronze, mit ``.zarr`` statt Schrittdateien::
 
     gfs/0p25/2026/10/20/12.zarr/          # Gruppe, Attribute: Lauf, Herkunft, Versionen
-    gfs/0p25/2026/10/20/12.zarr/t2m/      # Int16 (step, lat, lon), scale_factor/add_offset
+    gfs/0p25/2026/10/20/12.zarr/t2m/      # (step, lat, lon), Int16 mit scale_factor/add_offset
     gfs/0p25/2026/10/20/12.zarr/step/     # Vorlauf in Stunden; lat, lon als Koordinaten
 
 Je Lauf ein Store statt eines wachsenden Stores je Modell: Neuberechnung und Aufräumen
 bleiben auf einen Lauf beschränkt, parallele Läufe kommen sich nicht in die Quere. Das Layout
 folgt der CF-Konvention, ``xarray.open_zarr`` liest es direkt (``valid_time = run + step``).
 Ein Store gilt erst als vollständig, wenn das Attribut ``complete`` gesetzt ist.
+
+Jedes Array beschreibt seine Kodierung selbst (Datentyp, bei Ganzzahlen ``scale_factor``,
+``add_offset`` und ``_FillValue``). Geschrieben wird nach :data:`wx_process.variables.VARIABLES`,
+gelesen nach diesen Attributen. So bleiben Stores mit älterer Kodierung lesbar, wenn sich
+Datentyp, Schritt oder Offset einer Variable ändern; neu gebaut werden muss nur bei einer neuen
+``SILVER_VERSION`` (anderer Inhalt).
 
 @relation(SWA-WXP-SILVER, scope=file)
 """
@@ -32,6 +38,8 @@ from wx_process.decode import Array, Grid, StepFields, interval_values
 from wx_process.variables import BY_NAME, SILVER_VERSION, VARIABLES
 
 FILL = np.int16(-32768)
+#: Koordinaten-Arrays eines Stores (keine Variablen)
+COORDS = ("step", "lat", "lon")
 
 
 @dataclass
@@ -114,21 +122,51 @@ def assemble(
     return Dataset(model, resolution, run, np.asarray(steps, np.int64), grid, data, attrs or {})
 
 
-def encode(values: Array, name: str) -> NDArray[np.int16]:
-    """@relation(SWR-WXP-020, scope=function)"""
+def encode(values: Array, name: str) -> NDArray[Any]:
+    """Werte im Ablage-Datentyp der Variable (Int16 skaliert, sonst Gleitkomma).
+
+    @relation(SWR-WXP-020, scope=function)
+    """
     var = BY_NAME[name]
+    if var.dtype != "int16":
+        dt = np.dtype(var.dtype)
+        lim = float(np.finfo(dt).max)
+        # begrenzen statt ±inf, wie bei Int16
+        return np.where(np.isnan(values), np.nan, np.clip(values, -lim, lim)).astype(dt)
     q = np.round((np.clip(values, var.lo, var.hi) - var.offset) / var.scale)
     out = np.where(np.isnan(values), FILL, q).astype(np.int16)
     return out
 
 
-def decode(values: NDArray[np.int16], name: str) -> Array:
-    """@relation(SWR-WXP-020, scope=function)"""
+def decode(values: NDArray[Any], name: str) -> Array:
+    """Rückweg zu :func:`encode` nach der aktuellen Tabelle.
+
+    @relation(SWR-WXP-020, scope=function)
+    """
     var = BY_NAME[name]
-    out = (values.astype(np.float32) * np.float32(var.scale) + np.float32(var.offset)).astype(
-        np.float32
+    if var.dtype != "int16":
+        return values.astype(np.float32)
+    return decode_array(
+        values, {"scale_factor": var.scale, "add_offset": var.offset, "_FillValue": int(FILL)}
     )
-    out[values == FILL] = np.nan
+
+
+def decode_array(values: NDArray[Any], attrs: dict[str, Any]) -> Array:
+    """Werte eines gespeicherten Arrays nach seinen eigenen Attributen.
+
+    Ganzzahlen werden mit ``scale_factor``/``add_offset`` (Standard 1 und 0) zurückgerechnet,
+    ``_FillValue`` wird NaN; Gleitkommawerte kommen unverändert als float32 zurück.
+
+    @relation(SWR-WXP-025, scope=function)
+    """
+    if not np.issubdtype(values.dtype, np.integer):
+        return values.astype(np.float32)
+    scale = np.float32(attrs.get("scale_factor", 1.0))
+    offset = np.float32(attrs.get("add_offset", 0.0))
+    out = (values.astype(np.float32) * scale + offset).astype(np.float32)
+    fill = attrs.get("_FillValue")
+    if fill is not None:
+        out[values == fill] = np.nan
     return out
 
 
@@ -182,22 +220,31 @@ class Silver:
         chunks = (min(self.step_chunk, len(ds.steps)), *ds.grid.shape)
         for name, arr in ds.data.items():
             var = BY_NAME[name]
+            attributes: dict[str, Any] = {
+                "units": var.units,
+                "long_name": var.long_name,
+                "coordinates": "step lat lon",
+            }
+            fill: float | int
+            if var.dtype == "int16":
+                fill = int(FILL)
+                attributes |= {
+                    "scale_factor": var.scale,
+                    "add_offset": var.offset,
+                    "_FillValue": fill,
+                }
+            else:
+                # fehlende Werte sind NaN; der Füllwert steht in den Zarr-Metadaten
+                fill = float("nan")
             z = group.create_array(
                 name,
                 shape=arr.shape,
-                dtype="int16",
+                dtype=var.dtype,
                 chunks=chunks,
                 compressors=compressors,
-                fill_value=int(FILL),
+                fill_value=fill,
                 dimension_names=["step", "lat", "lon"],
-                attributes={
-                    "units": var.units,
-                    "long_name": var.long_name,
-                    "scale_factor": var.scale,
-                    "add_offset": var.offset,
-                    "_FillValue": int(FILL),
-                    "coordinates": "step lat lon",
-                },
+                attributes=attributes,
             )
             z[...] = encode(arr, name)
         group.attrs["complete"] = True
@@ -208,20 +255,27 @@ class Silver:
         return key
 
     def read(self, model: str, resolution: str, run: datetime) -> Dataset:
-        """@relation(SWR-WXP-020, scope=function)"""
+        """Alle Variablen eines vollständigen Stores, dekodiert nach den Array-Attributen.
+
+        @relation(SWR-WXP-020, SWR-WXP-025, scope=function)
+        """
         group = zarr.open_group(self.store, path=self.key(model, resolution, run), mode="r")
         attrs = dict(group.attrs)
         if not attrs.get("complete"):
             raise FileNotFoundError(f"Silber für {run:%Y%m%d%H} unvollständig")
 
-        def values(name: str) -> np.ndarray:
+        def array(name: str) -> zarr.Array[Any]:
             arr = group[name]
             assert isinstance(arr, zarr.Array)
-            return np.asarray(arr[...])
+            return arr
+
+        def values(name: str) -> np.ndarray:
+            return np.asarray(array(name)[...])
 
         steps = values("step").astype(np.int64)
         grid = Grid(
             values("lat").astype(np.float64).round(6), values("lon").astype(np.float64).round(6)
         )
-        data = {n: decode(values(n).astype(np.int16), n) for n in BY_NAME if n in group}
+        names = sorted(n for n in group.array_keys() if n not in COORDS)
+        data = {n: decode_array(values(n), dict(array(n).attrs)) for n in names}
         return Dataset(model, resolution, run, steps, grid, data, attrs)

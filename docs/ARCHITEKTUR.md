@@ -591,7 +591,8 @@ Silber ist kein vergröbertes Abbild, sondern dasselbe native 0,25°-Gitter mit 
 | Features je Cluster, neue Clusterung, neue `FEATURES_VERSION`, neuer MaStR-Stand | Silber | ja |
 | Zeitliche Interpolation beim Abruf, Analyse-Jobs (7.9), Punktabfragen und Anlagenprognose (7.6) | Silber | ja |
 | Training und Inferenz | Gold, aus Silber gerechnet | ja |
-| Neue Silber-Kodierung (`SILVER_VERSION`), z. B. feinere Quantisierung, anderer Wertebereich, Korrektur der Eimer-Rückrechnung | Bronze | nein, neues Silber-Release des Herausgebers nötig |
+| Anderer Datentyp, Schritt oder Offset einer Variable (gilt für neue Läufe; bestehendes Silber bleibt lesbar, weil nach den Array-Attributen dekodiert wird) | nichts | ja |
+| Neuer Silber-Inhalt (`SILVER_VERSION`), z. B. Korrektur der Eimer-Rückrechnung, anderes Gitter | Bronze | nein, neues Silber-Release des Herausgebers nötig |
 | Variable, die in Bronze liegt, aber nicht in `VARIABLES` steht | Bronze | nein |
 | Abgleich mit dem Original (Audit, Fehlersuche im Decoder) | Bronze | nein |
 | Variable, die gar nicht geladen wurde | Quelle | bei keiner Instanz, nur Download aus dem AWS-Archiv |
@@ -624,7 +625,8 @@ Nicht veröffentlicht werden Energie- und Marktdaten (ENTSO-E, SMARD, Energy-Cha
 
 - **Laufender Monat:** Nach jedem verarbeiteten Lauf schiebt `wx-publish` ein neues Monatsmanifest mit dem zusätzlichen Layer. Bereits hochgeladene Layer werden nicht erneut übertragen (inhaltsadressiert, die Registry kennt den Blob), das Inkrement ist also ein Lauf von ~13 MB. Der Tag `JJJJ-MM` wandert mit; jede Fassung bleibt über ihren Digest abrufbar.
 - **Abgeschlossener Monat:** Sind alle Läufe da (oder als endgültig fehlend markiert), bekommt das Manifest zusätzlich den unveränderlichen Tag `JJJJ-MM.final`. Fehlende Läufe stehen in einer Manifest-Annotation, damit Importeure sie nicht als Lücke suchen.
-- **Formatwechsel:** Eine neue `SILVER_VERSION` erzeugt ein neues Artefakt-Repository mit Suffix (`gfs-0p25-silver-v2`), das der Herausgeber aus seinem Bronze neu aufbaut. Alte Versionen bleiben stehen; ein Importeur entscheidet über die Konfiguration, welche Version er bezieht. Ein Lauf darf in einer Instanz nur in einer Silber-Version liegen.
+- **Kodierung je Variable:** Datentyp, Schritt und Offset stehen in den Attributen jedes Arrays; Leser (wx-process, xarray) dekodieren danach. Ändert sich die Kodierung einer Variable, bekommen nur neue Läufe das neue Format, Layer mit alter Kodierung bleiben gültig ([WETTERDATEN.md](WETTERDATEN.md) 2.2).
+- **Inhaltswechsel:** Eine neue `SILVER_VERSION` erzeugt ein neues Artefakt-Repository mit Suffix (`gfs-0p25-silver-v2`), das der Herausgeber aus seinem Bronze neu aufbaut. Alte Versionen bleiben stehen; ein Importeur entscheidet über die Konfiguration, welche Version er bezieht. Ein Lauf darf in einer Instanz nur in einer Silber-Version liegen.
 - **Index:** Der Tag `index` zeigt auf ein kleines JSON-Artefakt mit allen Monaten, ihren Digests und dem Stand. Ein Importeur liest nur den Index und lädt die Monate nach, deren Digest sich geändert hat.
 - **Nichts wird gelöscht.** Fehlerhafte Läufe werden durch ein neues Manifest ohne bzw. mit korrigiertem Layer ersetzt, alte Digests bleiben gültig.
 
