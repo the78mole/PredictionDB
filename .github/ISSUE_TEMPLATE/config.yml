@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Sicherheitslücke melden
+    url: https://github.com/the78mole/PredictionDB/security/advisories/new
+    about: Bitte vertraulich melden, nicht als Issue (siehe SECURITY.md).
+  - name: Fragen und Ideen
+    url: https://github.com/the78mole/PredictionDB/discussions
+    about: Allgemeine Fragen zu Prognosen, Betrieb oder Daten gehören in die Discussions.
+  - name: Dokumentation und Anforderungen
+    url: https://the78mole.github.io/PredictionDB/
+    about: Projektseite mit Anforderungen, Testberichten und Projektstatistik.

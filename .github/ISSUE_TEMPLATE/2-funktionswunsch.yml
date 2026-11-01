@@ -1,0 +1,30 @@
+name: Funktion vorschlagen
+description: Idee für eine neue Funktion oder Verbesserung.
+title: "feat: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Welches Problem soll gelöst werden?
+      description: Beschreibe den Bedarf, nicht nur die Lösung.
+    validations:
+      required: true
+  - type: textarea
+    id: vorschlag
+    attributes:
+      label: Vorgeschlagene Lösung
+    validations:
+      required: true
+  - type: textarea
+    id: alternativen
+    attributes:
+      label: Betrachtete Alternativen
+  - type: checkboxes
+    id: rahmen
+    attributes:
+      label: Rahmenbedingungen
+      options:
+        - label: Der Vorschlag kommt ohne unfreie Daten aus oder schaltet sie nur hinter `PDB_ALLOW_*` frei.
+          required: true
+        - label: Ich würde einen Pull Request beisteuern (siehe CONTRIBUTING.md).

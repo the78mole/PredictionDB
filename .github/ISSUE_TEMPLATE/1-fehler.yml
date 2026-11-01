@@ -1,0 +1,65 @@
+name: Fehler melden
+description: Etwas funktioniert nicht wie beschrieben.
+title: "fix: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Danke für die Meldung. Sicherheitslücken bitte **nicht** hier, sondern vertraulich
+        melden (siehe [SECURITY.md](https://github.com/the78mole/PredictionDB/blob/main/SECURITY.md)).
+        Keine Zugangsdaten, Tokens oder `.env`-Inhalte einfügen.
+  - type: dropdown
+    id: bestandteil
+    attributes:
+      label: Betroffener Bestandteil
+      multiple: true
+      options:
+        - wx_ingest / wx_process (GFS, GEFS)
+        - wx_exchange (GHCR-Austausch)
+        - energy_ingest
+        - mastr_ingest
+        - ml_train / ml-predict
+        - predict/ (Prognose-Stack)
+        - Grafana-Dashboards
+        - Compose-Stack / Docker-Image
+        - GitHub-Actions-Workflows
+        - Projektseite / Dokumentation
+        - anderes
+    validations:
+      required: true
+  - type: textarea
+    id: beschreibung
+    attributes:
+      label: Was ist passiert?
+      description: Was hast Du getan, was hast Du erwartet, was ist stattdessen passiert?
+    validations:
+      required: true
+  - type: textarea
+    id: schritte
+    attributes:
+      label: Schritte zum Nachvollziehen
+      placeholder: |
+        1. `docker compose --profile ml up ...`
+        2. ...
+    validations:
+      required: false
+  - type: textarea
+    id: protokoll
+    attributes:
+      label: Protokollausgabe
+      description: Relevante Log-Zeilen, werden automatisch als Code formatiert.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Release-Tag, Image-Tag oder Commit
+      placeholder: v0.12.0, predict/v0.3.1, ghcr.io/…:sha-abc1234
+    validations:
+      required: true
+  - type: input
+    id: umgebung
+    attributes:
+      label: Umgebung
+      placeholder: z. B. Debian 13, Docker 28, Python 3.14
