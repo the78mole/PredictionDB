@@ -326,4 +326,23 @@ gedrosselt, die Datenbeschaffung muss damit auskommen.
 <<<
 QUELLE: ARCHITEKTUR.md 4; Betriebsentscheidung 2026-10-26
 
+[REQUIREMENT]
+UID: STK-039
+ART: Randbedingung
+STATUS: Teilweise
+TITLE: Vertrauenswürdige Veröffentlichungen
+STATEMENT: >>>
+Wer veröffentlichte Modelle, Images, Daten und Code nutzt, muss sich darauf verlassen können,
+dass sie aus diesem Repository stammen und nicht unterwegs verändert wurden. Fremde Beiträge
+dürfen keinen Zugriff auf die Veröffentlichungswege bekommen.
+<<<
+RATIONALE: >>>
+Folgt aus STK-003: Was frei veröffentlicht wird, wird auch von Dritten eingesetzt. Das Repository
+ist öffentlich und nimmt Pull Requests aus Forks an.
+<<<
+QUELLE: Projektentscheidung 2026-11-01 (OpenSSF Scorecard)
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-003
+
 [[/SECTION]]

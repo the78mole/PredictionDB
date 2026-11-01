@@ -23,27 +23,32 @@ jobs:
     name: Version und Release
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push'
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-26.04
     permissions:
       contents: write
     outputs:
       version: ${{ steps.version.outputs.version }}
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha }}
     steps:
+      # Default-Branch auschecken, dann nur auf einen Commit wechseln, der auf
+      # main liegt (SYSR-SEC-001, kein Checkout von head_sha im workflow_run)
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
+      - name: Commit von main auschecken
+        run: scripts/main-commit-auschecken.sh "$SHA"
       - name: Nächste Version
         id: version
-        run: scripts/naechste-version.sh "${{ github.event.workflow_run.head_sha }}"
+        run: scripts/naechste-version.sh "$SHA"
       - name: Tag und Release anlegen
         if: steps.version.outputs.version != ''
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
           VORHER: ${{ steps.version.outputs.vorher }}
-          SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           gh release create "$VERSION" --target "$SHA" --title "$VERSION" \
             --generate-notes ${VORHER:+--notes-start-tag "$VORHER"}
