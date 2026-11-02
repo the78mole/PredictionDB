@@ -218,7 +218,8 @@ Mit ``prune-bronze`` bzw. ``--bronze-days`` muss wx-process Bronze-Läufe lösch
 die angegebene Zahl Tage sind, aber nur, wenn ihr Silber vorliegt. ``--dry-run`` zählt nur.
 Gelöschte Läufe muss es als ``deleted`` in ``meta.bronze_run`` melden und Läufe nachtragen, die
 laut Datenbank Bronze hatten, in ``wx-bronze`` aber fehlen, damit das Status-Dashboard den
-tatsächlichen Bestand zeigt.
+tatsächlichen Bestand zeigt. Rechnet es Silber neu aus Bronze, muss es den Lauf wieder als
+``present`` melden.
 <<<
 RELATIONS:
 - TYPE: Parent

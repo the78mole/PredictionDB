@@ -383,12 +383,26 @@ def test_prune_bronze_reconciles_runs_deleted_earlier(setup) -> None:  # type: i
         obstore.delete(bronze, [m["path"] for m in b])
     now = RUN + timedelta(days=100)
     dry = pipeline.prune_bronze(92, start=RUN - timedelta(days=1), now=now, dry_run=True)
-    assert dry["reconciled"] == 1 and store.bronze == {}
+    assert dry["reconciled"] == 1 and store.bronze == {RUN: "present"}
     counts = pipeline.prune_bronze(92, start=RUN - timedelta(days=1), now=now)
     assert counts["reconciled"] == 1 and counts["runs"] == 0
     assert store.bronze == {RUN: "deleted"}
     # beim nächsten Mal nichts mehr nachzutragen
     assert pipeline.prune_bronze(92, start=RUN - timedelta(days=1), now=now)["reconciled"] == 0
+
+
+def test_reloaded_bronze_counts_as_present_again(setup) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-WXP-024, scope=function)"""
+    pipeline, bronze, store = setup
+    fill_bronze(bronze, STEPS)
+    pipeline.process(RUN)
+    assert store.bronze == {RUN: "present"}
+    pipeline.prune_bronze(92, start=RUN - timedelta(days=1), now=RUN + timedelta(days=100))
+    assert store.bronze == {RUN: "deleted"}
+
+    fill_bronze(bronze, STEPS)
+    pipeline.process(RUN, force=True)
+    assert store.bronze == {RUN: "present"}
 
 
 def test_prune_bronze_retries_and_skips_failing_run(setup, monkeypatch) -> None:  # type: ignore[no-untyped-def]

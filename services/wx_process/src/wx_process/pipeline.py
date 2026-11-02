@@ -348,6 +348,8 @@ class WxPipeline:
         if self.store is not None:
             origin: Literal["bronze", "ghcr"] = "ghcr" if manifest.get("imported") else "bronze"
             self.store.mark_silver(self.source_id, [run], "present", origin)
+            if built and origin == "bronze":  # auch ein zuvor gelöschter, neu geladener Lauf
+                self.store.mark_bronze(self.source_id, [run], "present")
         if self.store is None or version is None:
             if self.store is not None:
                 log.warning("features.no_clustering", grid=self.config.weight_grid)

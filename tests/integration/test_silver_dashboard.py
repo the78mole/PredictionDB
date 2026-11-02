@@ -238,7 +238,7 @@ def test_gefs_month_bars(engine: Engine) -> None:
             {"s": sid, "r": runs[11]},
         )
     assert store.bronze_runs(sid)[runs[0]] == "present"
-    assert _gefs_april(engine, 52) == (round(1000 / 30, 1), round(100 / 30, 1), 10.0)
+    assert _gefs_april(engine, 52) == (round(1000 / 30, 1), round(100 / 30, 1))
 
     # Silber: 20 vorhanden, 1 im Bau
     store.mark_silver(sid, runs[:20], "present", "ghcr")
