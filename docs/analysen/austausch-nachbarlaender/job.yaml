@@ -1,0 +1,60 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; ausgeführt von abruf.py und auswertung.py im selben Ordner
+id: austausch-nachbarlaender
+title: Im- und Export Deutschlands aus der Lage der Nachbarländer
+question: >
+  Haben wir denn schon analysiert, ob wir die Gewichtung und Verteilung der europäischen Länder
+  irgendwie zurückrechnen können, um die Stromerzeugung und deren möglichen Im- und Export
+  genauer abschätzen zu können? Machbarkeit: Wie viel des stündlichen Netto-Imports und des
+  Preises DE-LU erklärt die Lage in DE allein, wie viel kommt mit Wind und PV der
+  Nachbarländer dazu (Ist-Werte als obere Schranke, Wind und PV aus dem GFS geschätzt), und
+  welches Gewicht hat jedes Nachbarland? Eingrenzung des Nutzers (2.11.2026): Gebraucht werden
+  die Energieflüsse in Abhängigkeit der DE-Erzeugung und der Preis in Abhängigkeit der
+  EE-Erzeugung in den Nachbarländern.
+requested_by: Maulwurf
+kind: custom                   # Machbarkeit, Backtest über zwei Jahre
+inputs:
+  forecast:
+    source: ghcr.io/the78mole/predictiondb-data/gfs-0p5-silver   # CC BY 4.0, NOAA gemeinfrei
+    period: {from: 2024-01-01, to: 2026-01-01}
+    runs: [0]
+    steps_h: [0, 3, 6, 9, 12, 15, 18, 21, 24]
+    variables: [u100, v100, dswrf, t2m]
+  energy_charts:               # CC BY 4.0 laut API-Dokumentation, abruf.py
+    public_power: {country: [de, at, be, ch, cz, dk, fr, nl, no, pl, se]}
+    installed_power: {country: [de, at, be, ch, cz, dk, fr, nl, no, pl, se], time_step: yearly}
+    cbet: {country: de}        # Handel je Grenze und Summe, + = Import nach DE
+    price: {bzn: DE-LU}        # CC BY 4.0 Bundesnetzagentur | SMARD.de
+  regions: config/gefs/regions_v2.json.gz   # Flächenanteile je Zone; DK, NO, SE aus Teilzonen
+method:
+  raster: 3-h-Blöcke (Schritt − 3 h, Schritt] des 00Z-Laufs, f003 bis f024, 8 Blöcke je Tag
+  targets:
+    netto_import: Summe /cbet (GW → MW), + = Import
+    preis: Day-Ahead DE-LU (EUR/MWh)
+    grenzen: /cbet je Nachbarland (nur Kennzahlen)
+  feature_sets:                # eingegrenzt vom Nutzer: nur EE-Erzeugung der Nachbarn, keine Last/Kraftwerke dort
+    kalender: Blockstunde, Wochentag, Monat
+    s0_de: kalender + Last, Wind an Land, Wind auf See, PV in DE (Ist)
+    s1_ee_ist: s0_de + Wind (an Land + See) und PV je Nachbarland (Ist, obere Schranke)
+    s2a_ee_gfs_flaeche: s0_de + Wind und PV je Nachbarland aus GFS, Flächenmittel
+    s2b_ee_gfs_gelernt: s0_de + Wind und PV je Nachbarland aus GFS, gelernte Gewichte
+  wind_pv_aus_gfs:
+    vorbild: docs/analysen/standortgewichte-lernen
+    wind: Leistungskurve 3/12/25 m/s auf Wind 100 m, Blockmittel der Schritte davor und danach
+    pv: PvModel auf dswrf (Mittel der 3 h vor dem Schritt) und t2m
+    gewichte: NNLS auf 1°-Blöcke, Ridge zur Flächenverteilung, λ = 0.03, gelernt im Trainingsjahr
+    wind_auf_see: NNLS auf 1°-Blöcke in einem Seegebiet je Land, ohne Flächenvorgabe (λ = 0.03 zum Gleichverteilten)
+    kapazitaet: /installed_power jährlich, Jahresendwerte linear interpoliert
+  models:
+    ridge: Ridge auf standardisierten Merkmalen (alpha aus Validierung im Trainingsjahr), Kalender als Dummies
+    gbm: LightGBM wie ml_train, 400 Bäume, Lernrate 0.05, 31 Blätter, min_child_samples 40
+  laendergewichte: >
+    Ridge des Preises und des Netto-Imports auf Kalender + DE-Merkmale + EE-Erzeugung (Wind + PV)
+    je Nachbarland (Ist); Gewicht eines Landes = Koeffizient / Koeffizient der EE-Erzeugung DE,
+    getrennt für 2024 und 2025
+  split: {training: 2024, test: 2025, gegenprobe: vertauscht}
+  metrics: [r2, mae]
+  group_by: [ziel, merkmale, modell, variante]
+outputs:
+  tables: [ergebnis, grenzen, laendergewichte, wetter_nachbarn]
+  figures: [ergebnis, laendergewichte]
+schedule: once

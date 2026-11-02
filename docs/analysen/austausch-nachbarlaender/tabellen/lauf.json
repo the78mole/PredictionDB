@@ -1,0 +1,157 @@
+{
+ "job": "austausch-nachbarlaender",
+ "job_sha256": "78725a7f6d4de8e0c0794ed0a5ad1a6fda484fc75363a133037dfcb3bdb91444",
+ "git_commit": "c6e3334f349776c715a4058cb395a646f804c818",
+ "gestartet": "2026-11-02T09:51:36+00:00",
+ "beendet": "2026-11-02T09:52:41+00:00",
+ "zeitraum": {
+  "von": "2024-01-01",
+  "bis": "2026-01-01"
+ },
+ "gfs": {
+  "quelle": "ghcr.io/the78mole/predictiondb-data/gfs-0p5-silver",
+  "laeufe": 731,
+  "laeufe_erwartet": 731,
+  "lauf_stunde": 0,
+  "schritte_h": [
+   0,
+   3,
+   6,
+   9,
+   12,
+   15,
+   18,
+   21,
+   24
+  ],
+  "layer_digests_sha256": "b89ee590d15019627c3b032381e956a68ac4156ad4725e809266000d04b7f78c"
+ },
+ "eingaben_sha256": {
+  "cbet_de_2024.json": "a0397ad4936b2349568bdcc3d44f8cdf61a5b73110677dc10c887ece6427a56b",
+  "cbet_de_2025.json": "ae2e44c590eedd1b58b9090a24e86cc69a5366a74ac5ea812eedfa9822898351",
+  "ipy_at.json": "e9bd38b1b4526f331a581efe30995d906d46c9b7eac12cc518167870d54b6821",
+  "ipy_be.json": "63ee8ad550964130687f5f6ee991c934bc11186aa52d2f9fa026717906ed8250",
+  "ipy_ch.json": "32cf331a7e3ad739a2d6c719a26b2aa668b8954bedf150e6514073dc40ff32f2",
+  "ipy_cz.json": "557828380bca971f872dd7f971c4d479385f8949a3253220ac188ec41049dfc1",
+  "ipy_de.json": "592f93a37d7aba04cdea1a5c8a78ccd3a157db83d87f73bd14e31f8815e08a6e",
+  "ipy_dk.json": "80b3638febbab86ad70d05c67bbb0bfe05ef4d7ebf3affcdea384aac3058d59a",
+  "ipy_fr.json": "5e55c58032b77eb8e0fc3c89e5b373285622e1ffaf6011a8b42d79247b757ef8",
+  "ipy_nl.json": "b722859540ba164ca969f328b4e8a1f8a179c3f69d53051587a3675b2d932755",
+  "ipy_no.json": "c4c606a9e4618691e0cc53da1baf99fafdd1898603d9ac3e7bbee9f150980421",
+  "ipy_pl.json": "fd1cff62d538300768eb7799daf3adf7e4daaa3b4ce4c60fed38baeb5713a5d5",
+  "ipy_se.json": "4b6d72ec77519f99ddd6b47142c26ce4f8cc2d1b440fbe03ac7bd21e5d1b4634",
+  "pp_at_2024.json": "15d62cda109a913390814d22e05d7985716a9326eac8a8ed3478e9eb166be5b8",
+  "pp_at_2025.json": "a1db7c89ce8b9431456229f40598d12fe8493adf28fc9398f8d000a21f4ce76f",
+  "pp_be_2024.json": "8e8d0ecdc4fe00fe3d199a4142cca8602c3d691092f703aeb8b4af7d7c0126ad",
+  "pp_be_2025.json": "7e6bfb48f6abafff8d297ba8d9d786a8a9d5d6c1542667c9a675825a147f0a76",
+  "pp_ch_2024.json": "16585b617ab734edf1d090c7d6ba75e08d82d56217792b20737c8c8cc52591ca",
+  "pp_ch_2025.json": "bedb29eaea86d760588d0616127c40b295b30b513dc3977535c21417986a71f9",
+  "pp_cz_2024.json": "8fb66f512670c00fce79659e57cb3912734deb0a9d2f71103d07729fd841a194",
+  "pp_cz_2025.json": "2e34112ddec19432bfd0e219b273873742ec88f993b1cd14ba0d13f790d16f27",
+  "pp_de_2024.json": "389a7a15f03b82c801bba8458169ea529918d1102a4cd8aef25badb247df84f6",
+  "pp_de_2025.json": "492da76ef128cc742997ee20d94957b84248b69b47011dc0bf9320b1602626de",
+  "pp_dk_2024.json": "350f48cea8e8e397895014261d92a4c9f782e09c298885537e76d42e159462f0",
+  "pp_dk_2025.json": "eae296936c297277212e1d7523164b60bdb2f22eaa56a6b8b05f9958ae24b373",
+  "pp_fr_2024.json": "d4f3951138a101f407d82ed63841f284b14b3d8ba2668ebbc6103d20e5e1aeae",
+  "pp_fr_2025.json": "8f3a8b36a9422708d0965464680b68d549035f468243e9e2c0f0adcdcea1fca2",
+  "pp_nl_2024.json": "296369482698330d248aa592f5709ce20bf5d96059c67d44d70e76b1678a0cb4",
+  "pp_nl_2025.json": "48962a4feee6960f4369b49a28d83e09cd4eea4ae58099d4cef18f2ca4093132",
+  "pp_no_2024.json": "ab9dae420f5fdc1f78f03758e4488ebcc268dc4ff6caf5e0b0adb1eaf39379ac",
+  "pp_no_2025.json": "1667c3e1bc690f1b922d5a3ecc4d1b9539ab006089ffa152e5d9a99ddcca374c",
+  "pp_pl_2024.json": "95aa46953d9e848fb602c6663ff0db36e6fbf8d22cd07703093ddfeda4b2f10f",
+  "pp_pl_2025.json": "ba169c12f761684d0cad590b84cb2945cfcdff549bf1c0403b7d640f1a53f963",
+  "pp_se_2024.json": "8218e1939dc59b9f554e1d15d1c68927753d8a07cf7edbc5536832c7b9f214cd",
+  "pp_se_2025.json": "108c9a35fc3c502dca3eb841b06a59072739b38069ac37728a248c1848ead348",
+  "price_de_lu_2024.json": "a342331bbb1dac9236fe0d19bb2654c6f525512b2f1836d470c8742fabfdff40",
+  "price_de_lu_2025.json": "1c6800e068631c6ae159bc297350617825c56f708de257131c4f6b46ac740ff0"
+ },
+ "regionen_sha256": "11d60ff6c6111a13ae6201bca44dec4ac73207867e81187cf58347597fc44663",
+ "bloecke_gesamt": 5848,
+ "bloecke_vollstaendig": 5845,
+ "bloecke_2024": 2928,
+ "bloecke_2025": 2917,
+ "laender": [
+  "de",
+  "at",
+  "be",
+  "ch",
+  "cz",
+  "dk",
+  "fr",
+  "nl",
+  "no",
+  "pl",
+  "se"
+ ],
+ "techniken_je_land": {
+  "at": [
+   "pv",
+   "wind_on"
+  ],
+  "be": [
+   "pv",
+   "wind_off",
+   "wind_on"
+  ],
+  "ch": [
+   "pv",
+   "wind_on"
+  ],
+  "cz": [
+   "pv",
+   "wind_on"
+  ],
+  "dk": [
+   "pv",
+   "wind_off",
+   "wind_on"
+  ],
+  "fr": [
+   "pv",
+   "wind_off",
+   "wind_on"
+  ],
+  "nl": [
+   "pv",
+   "wind_off",
+   "wind_on"
+  ],
+  "no": [
+   "wind_on"
+  ],
+  "pl": [
+   "pv",
+   "wind_on"
+  ],
+  "se": [
+   "pv",
+   "wind_on"
+  ]
+ },
+ "ohne_kapazitaetsangabe": [
+  "be_wind_off",
+  "nl_wind_off",
+  "no_wind_on"
+ ],
+ "fehlende_rohwerte_energy_charts": {
+  "pp_cz:Wind onshore": 1,
+  "pp_cz:Solar": 1,
+  "pp_dk:Wind onshore": 5,
+  "pp_dk:Wind offshore": 6,
+  "pp_dk:Solar": 8,
+  "pp_fr:Wind onshore": 5,
+  "pp_fr:Wind offshore": 5,
+  "pp_fr:Solar": 5,
+  "pp_no:Wind onshore": 1,
+  "pp_no:Solar": 3047
+ },
+ "schritte_zeitlich_interpoliert": {},
+ "annahmen": {
+  "bloecke": "Ist-Mittel über Intervalle mit Beginn in (Schritt - 3 h, Schritt]",
+  "kapazitaet": "Jahresendwerte /installed_power linear interpoliert",
+  "gfs_wind": "CF an beiden Blockgrenzen gemittelt, Leistungskurve 3/12/25 m/s",
+  "gfs_pv": "PvModel auf dswrf (3-h-Mittel) und t2m, Gewichte nur auf Tagblöcken gelernt",
+  "gewichte": "NNLS auf 1°-Blöcke, λ = 0.03, im Trainingsjahr gelernt",
+  "luxemburg": "gehört zur Gebotszone DE-LU, nicht als Nachbar geführt"
+ }
+}
