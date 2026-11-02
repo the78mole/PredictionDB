@@ -1,9 +1,9 @@
 {
  "job": "austausch-nachbarlaender",
  "job_sha256": "78725a7f6d4de8e0c0794ed0a5ad1a6fda484fc75363a133037dfcb3bdb91444",
- "git_commit": "c6e3334f349776c715a4058cb395a646f804c818",
- "gestartet": "2026-11-02T09:51:36+00:00",
- "beendet": "2026-11-02T09:52:41+00:00",
+ "git_commit": "13c2999864368536a547f3f4fd3b0d11c5de49e8",
+ "gestartet": "2026-11-02T09:53:51+00:00",
+ "beendet": "2026-11-02T09:54:57+00:00",
  "zeitraum": {
   "von": "2024-01-01",
   "bis": "2026-01-01"
@@ -128,11 +128,7 @@
    "wind_on"
   ]
  },
- "ohne_kapazitaetsangabe": [
-  "be_wind_off",
-  "nl_wind_off",
-  "no_wind_on"
- ],
+ "ohne_kapazitaetsangabe": [],
  "fehlende_rohwerte_energy_charts": {
   "pp_cz:Wind onshore": 1,
   "pp_cz:Solar": 1,
