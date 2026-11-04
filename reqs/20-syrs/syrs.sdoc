@@ -679,7 +679,7 @@ RELATIONS:
 [REQUIREMENT]
 UID: SYSR-SEC-002
 ART: Qualität
-STATUS: Teilweise
+STATUS: Umgesetzt
 NACHWEIS: Inspektion
 TITLE: Minimale Token-Rechte
 STATEMENT: >>>
@@ -688,8 +688,8 @@ Jeder Workflow muss auf oberster Ebene höchstens Leserechte vergeben. Schreibre
 erhalten, die sie brauchen.
 <<<
 RATIONALE: >>>
-Offen: ``gfs-templates.yml``, ``gfs-history-block.yml`` und ``ghcr-cleanup.yml`` vergeben
-Schreibrechte noch auf oberster Ebene.
+Alle Workflows vergeben oben nur ``contents: read`` (``scorecard.yml``: ``read-all``);
+Schreibrechte stehen nur an den Jobs, die schreiben.
 <<<
 QUELLE: OpenSSF Scorecard Token-Permissions
 RELATIONS:
@@ -699,7 +699,7 @@ RELATIONS:
 [REQUIREMENT]
 UID: SYSR-SEC-003
 ART: Qualität
-STATUS: Teilweise
+STATUS: Umgesetzt
 NACHWEIS: Inspektion
 TITLE: Abhängigkeiten fest gepinnt
 STATEMENT: >>>
@@ -708,7 +708,10 @@ GitHub Actions über den vollständigen Commit-Hash, Container-Basisimages über
 Renovate muss diese Festlegungen aktuell halten.
 <<<
 RATIONALE: >>>
-Offen: Actions und Basisimages stehen noch auf Versions-Tags.
+Actions stehen als ``@<sha> # vX.Y.Z``, die Images in ``docker/Dockerfile`` und
+``predict/Dockerfile`` als ``Tag@sha256:…``; Renovate (``helpers:pinGitHubActionDigests``,
+``pinDigests`` für Dockerfiles) aktualisiert beides in den Minor-/Patch-Gruppen. Images in den
+Compose-Dateien laufen weiter über Tags, sie sind keine Basisimages eines Builds.
 <<<
 QUELLE: OpenSSF Scorecard Pinned-Dependencies; renovate.json
 RELATIONS:
@@ -735,13 +738,18 @@ RELATIONS:
 [REQUIREMENT]
 UID: SYSR-SEC-005
 ART: Qualität
-STATUS: Geplant
+STATUS: Teilweise
 NACHWEIS: Inspektion
 TITLE: Herkunftsnachweis für Veröffentlichungen
 STATEMENT: >>>
 Container-Images, Modellartefakte und Silber-Artefakte auf GHCR sowie Release-Anhänge müssen
 einen prüfbaren Herkunftsnachweis tragen (Build-Provenance bzw. Signatur), der sie einem Commit
 und Workflow-Lauf dieses Repositorys zuordnet.
+<<<
+RATIONALE: >>>
+Umgesetzt für die Images ``predictiondb`` und ``predictiondb-predict`` (Attestation per
+``actions/attest-build-provenance`` an GHCR) und für die Analyse-PDFs der Releases (Bundle
+``analysen-pdf.intoto.jsonl`` als Release-Anhang). Offen: Modell- und Silber-Artefakte auf GHCR.
 <<<
 QUELLE: OpenSSF Scorecard Signed-Releases
 RELATIONS:

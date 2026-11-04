@@ -35,7 +35,7 @@ jobs:
     steps:
       # Default-Branch auschecken, dann nur auf einen Commit wechseln, der auf
       # main liegt (SYSR-SEC-001, kein Checkout von head_sha im workflow_run)
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - name: Commit von main auschecken
@@ -59,6 +59,8 @@ jobs:
     if: needs.version.outputs.version != ''
     permissions:
       contents: write
+      id-token: write      # Provenance der PDFs (Sigstore)
+      attestations: write
     uses: ./.github/workflows/analysen-pdf.yml
     with:
       tag: ${{ needs.version.outputs.version }}
