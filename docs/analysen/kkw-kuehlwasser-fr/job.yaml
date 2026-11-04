@@ -55,7 +55,8 @@ method:
     wassertemperatur_aus_gfs: lineare Regression Wassertemperatur ~ gleitende Lufttemperaturen + log(Abfluss),
       zeitlich geteilt, erste 60 % der Tage je Station lernen, Rest prüfen (R², MAE)
     austausch: OLS je Tag Netto-Import FR, Fluss DE→FR und Preisdifferenz FR−DE ~ umwelt_mw +
-      Monat + Wochentag + Kernkraft-Verfügbarkeit ohne Umwelt (Koeffizient MW/MW bzw. EUR/MWh je GW)
+      Monat + Wochentag + Jahr + Last + Wind + PV + übrige Ausfälle (Koeffizient MW/MW bzw. EUR/MWh
+      je GW), Gegenprobe nur 2021 bis 2025
   group_by: [gruppe, standort, faktor]
 outputs:
   tables: [standorte, stationen, korrelation, schwellen, wassertemperatur_modell, umweltereignisse, austausch, monate]

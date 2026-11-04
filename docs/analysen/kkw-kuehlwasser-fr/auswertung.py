@@ -419,26 +419,33 @@ def austausch(df: pd.DataFrame) -> pd.DataFrame:
         ("spread", "EUR/MWh je GW"),
         ("kern_mw", "MW je MW"),
     ):
-        y = sommer[ziel]
-        for variante, x in (
-            ("nur umwelt", pd.DataFrame({"umwelt_gw": sommer["umwelt_mw"] / 1000})),
-            (
-                "mit kalender, last, ee, sonst. ausfall",
-                pd.concat(
-                    [
-                        pd.DataFrame(
-                            {
-                                "umwelt_gw": sommer["umwelt_mw"] / 1000,
-                                "sonst_gw": sommer["sonst_mw"] / 1000,
-                                "last_gw": sommer["last_mw"] / 1000,
-                                "wind_gw": sommer["wind_mw"] / 1000,
-                                "pv_gw": sommer["pv_mw"] / 1000,
-                            }
-                        ),
-                        kal,
-                    ],
-                    axis=1,
+        voll = pd.concat(
+            [
+                pd.DataFrame(
+                    {
+                        "umwelt_gw": sommer["umwelt_mw"] / 1000,
+                        "sonst_gw": sommer["sonst_mw"] / 1000,
+                        "last_gw": sommer["last_mw"] / 1000,
+                        "wind_gw": sommer["wind_mw"] / 1000,
+                        "pv_gw": sommer["pv_mw"] / 1000,
+                    }
                 ),
+                kal,
+            ],
+            axis=1,
+        )
+        bis_2025 = voll.drop(columns=[c for c in voll.columns if c == "j_2026"])
+        for variante, x, y in (
+            (
+                "nur umwelt",
+                pd.DataFrame({"umwelt_gw": sommer["umwelt_mw"] / 1000}),
+                sommer[ziel],
+            ),
+            ("mit kalender, last, ee, sonst. ausfall", voll, sommer[ziel]),
+            (
+                "wie oben, nur 2021 bis 2025",
+                bis_2025,
+                sommer[ziel].where(sommer.index.year <= 2025),
             ),
         ):
             beta, se, r2, n = ols(y, x)
