@@ -1,0 +1,60 @@
+{
+ "job": "kkw-kuehlwasser-fr",
+ "job_sha256": "f67b17d11e58e530792f7062ab64f83b49e6c5641a4fe25fdc38fd2641e73e2e",
+ "git_commit": "8e73864cc3a577f978222f79cfeccfe7b25aefac",
+ "gestartet": "2026-11-04T19:31:11+00:00",
+ "beendet": "2026-11-04T19:31:31+00:00",
+ "zeitraum": {
+  "von": "2021-03-01",
+  "bis": "2026-10-31"
+ },
+ "sommer_monate": [
+  5,
+  6,
+  7,
+  8,
+  9
+ ],
+ "umfang": {
+  "tage": 2071,
+  "gfs_laeufe": 2049,
+  "standorte": 18,
+  "a73_stunden_zeilen": 2829421,
+  "a73_bloecke": 59,
+  "a73_bloecke_ohne_standort": [
+   "FESSENHEIM 1",
+   "FESSENHEIM 2"
+  ],
+  "a80_meldungen_kernkraft": 7020,
+  "a80_meldungen_umwelt": 264,
+  "hubeau_temperatur_stationen": [
+   "04051850",
+   "05152000",
+   "06121500"
+  ],
+  "hubeau_abfluss_pegel": [
+   "A8500610",
+   "B7200000",
+   "H1700010",
+   "K4080010",
+   "K4180010",
+   "K4470010",
+   "L1400610",
+   "L8000010",
+   "O6140010",
+   "V1630020",
+   "V3440001",
+   "V4530010"
+  ]
+ },
+ "fehlend": {
+  "gfs_tage_ohne_lauf": 22,
+  "a73_tage_ohne_daten": 0
+ },
+ "interpoliert": "keine; gleitende Mittel mit min_periods (halbes Fenster)",
+ "annahmen": [
+  "Umweltgrund per Schlüsselwortsuche im Reason-Text der A80-Meldung",
+  "Standortleistung = Summe der 99,5-%-Quantile der Blöcke je Jahr (A73)",
+  "GFS-Tageswerte aus f003 bis f024 des 00Z-Laufs (Vorhersage, keine Analyse)"
+ ]
+}

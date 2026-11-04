@@ -1,0 +1,13 @@
+ziel,variante,einheit,koeff_umwelt,se,r2,n_tage
+import_mw,nur umwelt,MW je MW,-0.108,0.109,0.001,918
+import_mw,"mit kalender, last, ee, sonst. ausfall",MW je MW,0.519,0.039,0.94,918
+import_mw,"wie oben, nur 2021 bis 2025",MW je MW,0.873,0.182,0.942,765
+import_de_mw,nur umwelt,MW je MW,0.036,0.028,0.002,918
+import_de_mw,"mit kalender, last, ee, sonst. ausfall",MW je MW,0.015,0.024,0.652,918
+import_de_mw,"wie oben, nur 2021 bis 2025",MW je MW,0.194,0.108,0.69,765
+spread,nur umwelt,EUR/MWh je GW,1.05,0.727,0.002,918
+spread,"mit kalender, last, ee, sonst. ausfall",EUR/MWh je GW,4.628,0.67,0.597,918
+spread,"wie oben, nur 2021 bis 2025",EUR/MWh je GW,6.022,3.172,0.592,765
+kern_mw,nur umwelt,MW je MW,0.089,0.102,0.001,918
+kern_mw,"mit kalender, last, ee, sonst. ausfall",MW je MW,-0.703,0.03,0.959,918
+kern_mw,"wie oben, nur 2021 bis 2025",MW je MW,-1.064,0.138,0.962,765
