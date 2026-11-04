@@ -84,9 +84,12 @@ def write_package(
 
     @relation(SWR-MLT-070, scope=function)
     """
-    out.mkdir(parents=True, exist_ok=True)
     spec = json.loads((model_dir / "model.json").read_text())
     variant = Variant.model_validate(spec["variant"])
+    if "nachbarwetter" in variant.groups:
+        # predict/ rechnet nur das DE-Wetter selbst (pdb_predict.weather); Nachbarzonen fehlen dort
+        raise ValueError(f"Variante {variant.name}: Nachbarwetter kann predict/ noch nicht rechnen")
+    out.mkdir(parents=True, exist_ok=True)
     files = ["model.json"]
     for stage in ("stage1", "stage2"):
         for m in spec[stage].values():

@@ -213,6 +213,21 @@ RELATIONS:
 - TYPE: Parent
   VALUE: SYSR-PR-001
 
+[REQUIREMENT]
+UID: SWR-MLT-028
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Wetter der Nachbarzonen
+STATEMENT: >>>
+Wetter-Features fester Nachbarzonen aus dem Gold einer zweiten Quelle (GFS Europa, Wind- und
+PV-Index je Zone) müssen als eigene Merkmalsgruppe ``nachbarwetter`` konfigurierbar sein. Sie
+müssen aus demselben Lauf wie das DE-Wetter stammen und gleich auf Stunden ausgerichtet werden.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-001
+
 [[/SECTION]]
 
 [[SECTION]]

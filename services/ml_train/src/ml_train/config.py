@@ -18,7 +18,15 @@ import yaml
 from pydantic import BaseModel, Field, model_validator
 
 #: Feste Gruppen; dazu kommen die Reihengruppen aus ``series_groups`` unter ihrem Namen
-BUILTIN_GROUPS = ("calendar", "lags", "capacity", "weather", "nwp_version", "stage1")
+BUILTIN_GROUPS = (
+    "calendar",
+    "lags",
+    "capacity",
+    "weather",
+    "nachbarwetter",
+    "nwp_version",
+    "stage1",
+)
 FeatureGroup = str
 
 
@@ -141,6 +149,36 @@ class LgbmParams(BaseModel):
     n_jobs: int = 0
 
 
+class NeighbourWeather(BaseModel):
+    """Wetter-Features der Nachbarzonen aus dem Gold einer zweiten Quelle (GFS Europa).
+
+    Die Zonen sind die festen Regionen von ``wx-process`` (``config/gefs/regions_v2.json.gz``,
+    Codes ``gefs:<zone>:area`` in ``meta.region``). Im Snapshot stehen sie als Wetter-Features
+    ``nb_<zone>_<feature>``, in den Merkmalen als Gruppe ``nachbarwetter``
+    (docs/analysen/austausch-nachbarlaender).
+
+    @relation(SWR-MLT-028, scope=class)
+    """
+
+    source: str = "gfs_0p5"
+    #: Zonen wie in ``regions_v2`` ohne Präfix und Technik, z. B. ``FR``, ``DK1``, ``NO2``
+    zones: list[str]
+    features: list[str] = Field(default_factory=lambda: ["wind_cf", "pv_cf"])
+
+    def region_codes(self) -> list[str]:
+        return [f"gefs:{z}:area" for z in self.zones]
+
+
+#: Präfix der Nachbarzonen-Features im Snapshot (``weather.parquet``)
+NEIGHBOUR_PREFIX = "nb_"
+
+
+def neighbour_feature(region_code: str, feature: str) -> str:
+    """Name im Snapshot: ``gefs:DK1:area`` und ``wind_cf`` -> ``nb_dk1_wind_cf``."""
+    zone = region_code.split(":")[1].lower().replace("-", "_")
+    return f"{NEIGHBOUR_PREFIX}{zone}_{feature}"
+
+
 class Variant(BaseModel):
     """Eine Modellvariante (Feature-Gruppen); jede Variante wird getrennt trainiert."""
 
@@ -222,6 +260,8 @@ class ModelConfig(BaseModel):
     lag_local_time: list[str] = Field(default_factory=list)
     #: Wetter-Merkmale aus dem Snapshot (``<technologie>_<feature>``); leer = alle
     weather_features: list[str] = Field(default_factory=list)
+    #: Wetter der Nachbarzonen (Gruppe ``nachbarwetter``); ohne Angabe bleibt die Gruppe leer
+    neighbour_weather: NeighbourWeather | None = None
     #: weitere Merkmalsgruppen aus Energie- und Preisreihen, Name -> Gruppe
     series_groups: dict[str, SeriesGroup] = Field(default_factory=dict)
 
