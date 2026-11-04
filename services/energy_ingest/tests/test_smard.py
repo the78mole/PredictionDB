@@ -8,6 +8,7 @@ from energy_ingest.sources.smard import Smard
 
 Q = datetime(2025, 9, 28, 22, 0, tzinfo=UTC)  # erster Viertelstundenblock (Mo 00:00 MESZ)
 H_PREV = Q - timedelta(days=7)
+QH = timedelta(minutes=15)
 
 
 def ms(ts: datetime) -> int:
@@ -85,3 +86,51 @@ def test_empty_index(make_http: Callable[..., Http]) -> None:
     """@relation(SWR-ENI-040, scope=function)"""
     out = Smard(make_http(lambda r: httpx.Response(404))).fetch("gen_solar", Q, Q + timedelta(1))
     assert out == []
+
+
+def test_imbalance_volume_sums_control_areas(make_http: Callable[..., Http]) -> None:
+    """Volumen für DE endet 2022; danach Summe der vier Regelzonen.
+
+    @relation(SWR-ENI-040, scope=function)
+    """
+    zones = {"50Hertz": 10.0, "Amprion": 20.0, "TenneT": 30.0, "TransnetBW": 40.0}
+
+    def h(req: httpx.Request) -> httpx.Response:
+        path = req.url.path
+        region = path.split("/")[-2]
+        if path.endswith("index_quarterhour.json"):
+            return httpx.Response(200, json={"timestamps": [ms(Q)]})
+        if path.endswith("index_hour.json"):
+            return httpx.Response(404)
+        if region == "DE":  # DE nur noch für die erste Viertelstunde
+            return httpx.Response(200, json={"series": [[ms(Q), 5.0], [ms(Q + QH), None]]})
+        if region in zones:
+            if region == "TenneT":  # dritte Viertelstunde fehlt in einer Zone
+                pts = [[ms(Q + i * QH), zones[region]] for i in range(2)]
+            else:
+                pts = [[ms(Q + i * QH), zones[region]] for i in range(3)]
+            return httpx.Response(200, json={"series": pts})
+        return httpx.Response(404)
+
+    out = Smard(make_http(h)).fetch("imbalance_volume_pos", Q, Q + timedelta(hours=1))
+    assert len(out) == 1
+    values = dict(out[0].points)
+    assert values[Q] == 20.0  # DE: 5 MWh je 15 min = 20 MW
+    assert values[Q + QH] == 400.0  # Summe 100 MWh je 15 min
+    assert Q + 2 * QH not in values  # nicht alle Zonen da
+
+
+def test_imbalance_price_is_not_rescaled(make_http: Callable[..., Http]) -> None:
+    """@relation(SWR-ENI-040, scope=function)"""
+
+    def h(req: httpx.Request) -> httpx.Response:
+        path = req.url.path
+        if path.endswith("/4382/DE/index_quarterhour.json"):
+            return httpx.Response(200, json={"timestamps": [ms(Q)]})
+        if path.endswith(f"4382_DE_quarterhour_{ms(Q)}.json"):
+            return httpx.Response(200, json={"series": [[ms(Q), 123.4]]})
+        return httpx.Response(404)
+
+    out = Smard(make_http(h)).fetch("imbalance_price", Q, Q + QH)
+    assert out[0].points == [(Q, 123.4)]
+    assert out[0].info.unit == "EUR/MWh"

@@ -46,6 +46,7 @@ RIVER_DAY_DELAY = timedelta(days=1)
 RIVER_RT_DELAY = timedelta(hours=3)
 
 UNIT_MW = "MW"
+UNIT_EUR_MW_H = "EUR/MW/h"  # Leistungspreis je MW und Stunde (Regelleistung)
 UNIT_EUR_MWH = "EUR/MWh"
 UNIT_EUR_L = "EUR/l"
 UNIT_USD_BBL = "USD/bbl"
@@ -262,6 +263,7 @@ class Kind(StrEnum):
     OUTLOOK_MONTHLY = "outlook_monthly"  # Prognose je Ausgabe, Zeitstempel = Ausgabemonat (STEO)
     RIVER_DAY = "river_day"  # Tagesmittel des Abflusses (Hub'eau, Tag in UTC)
     RIVER_RT = "river_rt"  # Stundenmittel aus den Echtzeitwerten (Hub'eau)
+    RESERVE_CAPACITY = "reserve_capacity"  # Regelleistungsauktion am Vortag (regelleistung.net)
 
 
 @dataclass(frozen=True)
@@ -295,6 +297,25 @@ SERIES: dict[str, SeriesInfo] = {
             for z in NEIGHBOUR_ZONES.values()
         ),
         SeriesInfo("load_actual", Kind.ACTUAL, UNIT_MW),
+        # Ausgleichsenergie DE (SMARD): Preis je Viertelstunde (reBAP) und Volumen als mittlere
+        # Leistung, + bei Unterspeisung, - bei Überspeisung
+        SeriesInfo("imbalance_price", Kind.ACTUAL, UNIT_EUR_MWH),
+        SeriesInfo("imbalance_volume_pos", Kind.ACTUAL, UNIT_MW),
+        SeriesInfo("imbalance_volume_neg", Kind.ACTUAL, UNIT_MW),
+        # Regelleistung DE (regelleistung.net, nur Training): Leistungspreise je MW und Stunde,
+        # Bedarf bzw. angebotene und zugeschlagene Leistung, je Stunde der Zeitscheibe
+        SeriesInfo("rl_fcr_price", Kind.RESERVE_CAPACITY, UNIT_EUR_MW_H),
+        SeriesInfo("rl_fcr_demand", Kind.RESERVE_CAPACITY, UNIT_MW),
+        *(
+            SeriesInfo(f"rl_{p}_{d}_{q}", Kind.RESERVE_CAPACITY, unit)
+            for p, qs in [
+                ("afrr", ["price_avg", "price_marginal", "volume", "offered"]),
+                ("mfrr", ["price_avg", "price_marginal", "offered"]),
+            ]
+            for d in ("pos", "neg")
+            for q in qs
+            for unit in [UNIT_EUR_MW_H if q.startswith("price") else UNIT_MW]
+        ),
         SeriesInfo("residual_load", Kind.ACTUAL, UNIT_MW),
         SeriesInfo("load_da_forecast", Kind.LOAD_DA_FORECAST, UNIT_MW),
         SeriesInfo("residual_load_da_forecast", Kind.LOAD_DA_FORECAST, UNIT_MW),
@@ -496,6 +517,8 @@ def estimate_published(kind: Kind, ts: datetime, resolution: timedelta) -> datet
     - STEO-Prognosen (Zeitstempel am Beginn des Ausgabemonats): 14 Tage danach.
     - Abfluss (Hub'eau): Tagesmittel einen Tag nach Ende des Tages, Stundenmittel drei
       Stunden nach Ende der Stunde.
+    - Regelleistungsauktionen: bis 12:00 Ortszeit am Vortag des Liefertags (FCR, aFRR und mFRR
+      schließen vor der Day-Ahead-Auktion).
 
     @relation(SWR-ENI-021, scope=function)
     """
@@ -534,6 +557,8 @@ def estimate_published(kind: Kind, ts: datetime, resolution: timedelta) -> datet
             return ts + resolution + RIVER_DAY_DELAY
         case Kind.RIVER_RT:
             return ts + resolution + RIVER_RT_DELAY
+        case Kind.RESERVE_CAPACITY:
+            return _at_berlin(ts, 12)
 
 
 def published_at(kind: Kind, ts: datetime, resolution: timedelta, fetched: datetime) -> datetime:

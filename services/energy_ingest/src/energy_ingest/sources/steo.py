@@ -177,6 +177,7 @@ class EiaSteo:
     )
     priority = 10
     free = True
+    train = True
     # Abgleich: die beiden letzten Ausgaben, falls eine später erschienen ist
     sync_lookback: ClassVar[dict[str, timedelta]] = {"outlook": timedelta(days=62)}
 
