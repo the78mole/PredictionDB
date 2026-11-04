@@ -127,7 +127,7 @@ jobs:
             org.opencontainers.image.version=${{ steps.version.outputs.nummer }}
             org.opencontainers.image.title=PredictionDB Prognose-Stack
             org.opencontainers.image.description=Schlanker Prognose-Dienst: Last DE und Day-Ahead-Preis DE-LU aus einem Modellpaket, Eingänge von freien Quellen
-            org.opencontainers.image.licenses=BUSL-1.1
+            org.opencontainers.image.licenses=AGPL-3.0-only
           cache-from: type=gha,scope=predict
           cache-to: type=gha,scope=predict,mode=max
       # Build-Provenance (SLSA) als signierte Attestation am Image in GHCR (SYSR-SEC-005),

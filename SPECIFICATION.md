@@ -35,8 +35,8 @@ und prognostiziert damit:
 
 Rahmenbedingungen: Python mit uv, nur kostenfreie Datenquellen (mehrere je Datenart für
 Redundanz), Betrieb als Docker-Compose-Stack in einer VM auf Proxmox VE, S3 über Garage
-(Single Node), PostgreSQL + TimescaleDB, später migrierbar in die Cloud (A 9). Lizenz: Business
-Source License 1.1 mit Additional Use Grant für interne Nutzung ([LICENSE](LICENSE)).
+(Single Node), PostgreSQL + TimescaleDB, später migrierbar in die Cloud (A 9). Lizenz: AGPL-3.0-only
+oder kommerziell (Dual Licensing, [LICENSING.md](LICENSING.md)).
 
 ## 2. Begriffe
 

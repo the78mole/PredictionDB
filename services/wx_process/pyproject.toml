@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Bronze → Silber → Gold: GRIB2 nach Zarr und Wetter-Features je Anlagen-Cluster"
 readme = "README.md"
 requires-python = ">=3.12"
-license = "LicenseRef-BUSL-1.1"
+license = "AGPL-3.0-only"
 dependencies = [
     "gribkit~=0.2",
     "predictiondb-core",

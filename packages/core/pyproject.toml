@@ -3,7 +3,7 @@ name = "predictiondb-core"
 version = "0.1.0"
 description = "Gemeinsame Basis: Konfiguration, Logging, S3- und Datenbankzugriff"
 requires-python = ">=3.12"
-license = "LicenseRef-BUSL-1.1"
+license = "AGPL-3.0-only"
 dependencies = [
     "alembic>=1.14",
     "httpx>=0.28",
