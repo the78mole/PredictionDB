@@ -51,7 +51,7 @@ jobs:
     outputs:
       rendern: ${{ steps.uebernehmen.outputs.rendern }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.release.tag_name || inputs.tag || github.sha }}
           fetch-depth: 0  # vorheriger Tag und Diff je Analyse
@@ -111,7 +111,7 @@ jobs:
     permissions:
       contents: write  # gh release upload
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.release.tag_name || inputs.tag || github.sha }}
           fetch-depth: 0  # Stand je Analyse aus git log, Version aus git describe
@@ -125,7 +125,7 @@ jobs:
         run: |
           read -ra namen <<<"$RENDERN"
           scripts/analysen-pdf.sh dist/analysen "${namen[@]}"
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: analysen-pdf
           path: dist/analysen/*.pdf
@@ -135,3 +135,39 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$TAG" dist/analysen/*.pdf --clobber
+
+  provenienz:
+    # Build-Provenance (SLSA, Sigstore) über alle PDFs des Releases, auch die aus dem
+    # vorherigen Release übernommenen; das Bundle hängt als analysen-pdf.intoto.jsonl
+    # am Release (OpenSSF Scorecard, Signed-Releases; SYSR-SEC-005). Prüfen mit
+    #   gh attestation verify analyse-<name>.pdf -R the78mole/PredictionDB
+    name: Provenance der Analysen-PDFs
+    needs: [auswahl, pdf]
+    if: >-
+      always() && needs.auswahl.result == 'success' &&
+      needs.pdf.result != 'failure' && needs.pdf.result != 'cancelled' &&
+      github.event_name != 'pull_request'
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: write      # gh release download/upload
+      id-token: write      # Sigstore-Zertifikat (keyless)
+      attestations: write  # Attestation im Repo ablegen
+    steps:
+      - name: PDFs des Releases laden
+        if: env.TAG != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p 'analyse-*.pdf' -D dist/analysen
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        id: attest
+        if: env.TAG != ''
+        with:
+          subject-path: dist/analysen/*.pdf
+      - name: Bundle an das Release hängen
+        if: env.TAG != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          cp "$BUNDLE" analysen-pdf.intoto.jsonl
+          gh release upload "$TAG" -R "$GITHUB_REPOSITORY" analysen-pdf.intoto.jsonl --clobber

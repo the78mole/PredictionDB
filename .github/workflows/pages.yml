@@ -37,12 +37,12 @@ jobs:
     steps:
       # Default-Branch auschecken, dann nur auf einen Commit wechseln, der auf
       # main liegt (SYSR-SEC-001, kein Checkout von head_sha im workflow_run)
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - name: Commit von main auschecken
         run: scripts/main-commit-auschecken.sh "$SHA"
-      - uses: astral-sh/setup-uv@v10.3.3
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           enable-cache: true
           save-cache: false
@@ -64,7 +64,7 @@ jobs:
               --json databaseId -q '.[0].databaseId')
           fi
           echo "id=$RUN_ID" >> "$GITHUB_OUTPUT"
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         continue-on-error: true  # fehlt ein Bericht, zeigt die Kachel das an
         with:
           pattern: testbericht-*
@@ -78,8 +78,8 @@ jobs:
           CI_RUN_ID: ${{ steps.lauf.outputs.id }}
           COMMIT_SHA: ${{ env.SHA }}
         run: uv run python pages/build_site.py build/pages
-      - uses: actions/configure-pages@v6
-      - uses: actions/upload-pages-artifact@v5
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: build/pages
 
@@ -95,4 +95,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

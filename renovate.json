@@ -1,10 +1,11 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended"],
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
   "description": [
     "Grüne Minor-/Patch-Gruppen und die Lockfile-Wartung mergt Renovate selbst.",
     "platformAutomerge ist aus, damit Renovate vor dem Merge alle Checks selbst prüft, auch ohne Pflicht-Checks im Branchschutz.",
-    "Major-Updates und die Python-Laufzeit brauchen eine Entscheidung und werden nie automatisch gemergt."
+    "Major-Updates und die Python-Laufzeit brauchen eine Entscheidung und werden nie automatisch gemergt.",
+    "Actions laufen per Commit-SHA, Basis-Images in Dockerfiles per Digest (OpenSSF Scorecard, Pinned-Dependencies); Renovate hält beide aktuell."
   ],
   "platformAutomerge": false,
   "dependencyDashboard": true,
@@ -18,6 +19,11 @@
   },
   "packageRules": [
     {
+      "description": "Basis-Images in Dockerfiles per Digest pinnen (Compose bleibt bei Tags)",
+      "matchManagers": ["dockerfile"],
+      "pinDigests": true
+    },
+    {
       "description": "Python-Pakete (uv-Workspace): Minor und Patch in einem PR",
       "matchManagers": ["pep621"],
       "matchUpdateTypes": ["minor", "patch"],
@@ -28,7 +34,7 @@
     {
       "description": "Container-Images (Dockerfiles, Compose): Minor und Patch in einem PR",
       "matchManagers": ["dockerfile", "docker-compose"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
       "groupName": "Container-Images (minor/patch)",
       "groupSlug": "docker-minor-patch",
       "automerge": true
@@ -36,7 +42,7 @@
     {
       "description": "GitHub Actions: Minor und Patch in einem PR",
       "matchManagers": ["github-actions"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
       "groupName": "GitHub Actions (minor/patch)",
       "groupSlug": "actions-minor-patch",
       "automerge": true
@@ -52,6 +58,14 @@
       "groupName": "Python-Laufzeit",
       "groupSlug": "python-runtime",
       "automerge": false
+    },
+    {
+      "description": "Neuer Digest derselben Python-Version (Rebuild des Basis-Images) darf automatisch mit den übrigen Images rein",
+      "matchDepNames": ["python"],
+      "matchUpdateTypes": ["digest", "pin", "pinDigest"],
+      "groupName": "Container-Images (minor/patch)",
+      "groupSlug": "docker-minor-patch",
+      "automerge": true
     },
     {
       "description": "Major-Updates bleiben einzelne PRs und werden markiert",

@@ -18,11 +18,13 @@ on:
           - gfs-0p25-gdex-idx
 
 permissions:
-  packages: write
+  contents: read
 
 jobs:
   cleanup:
     runs-on: ubuntu-latest
+    permissions:
+      packages: write
     steps:
       # actions/delete-package-versions löscht höchstens 100 Versionen je Lauf; nach Neubauten
       # sind es mehr. Daher erst alle untagged IDs einsammeln, dann einzeln löschen.
