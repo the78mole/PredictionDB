@@ -60,6 +60,7 @@ jobs:
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ env.SHA }}
+            org.opencontainers.image.licenses=AGPL-3.0-only
           cache-from: type=gha
           cache-to: type=gha,mode=max
       # Build-Provenance (SLSA) als signierte Attestation am Image in GHCR (SYSR-SEC-005),

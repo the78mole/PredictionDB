@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Prognosemodelle für Netzlast und Day-Ahead-Preis DE-LU: Snapshot, Training, Backtest, Registry und Inferenz"
 readme = "README.md"
 requires-python = ">=3.12"
-license = "LicenseRef-BUSL-1.1"
+license = "AGPL-3.0-only"
 dependencies = [
     "predictiondb-core",
     "holidays>=0.60",

@@ -264,10 +264,11 @@ ART: Randbedingung
 STATUS: Umgesetzt
 TITLE: Lizenz des Codes
 STATEMENT: >>>
-Der Code steht unter der Business Source License 1.1 mit Additional Use Grant für interne Nutzung
-und eigene Energieanlagen. Change Date nach vier Jahren, Change License AGPL-3.0-or-later.
+Der Code steht doppelt lizenziert unter der GNU AGPL-3.0 (``AGPL-3.0-only``, ohne „or later“) oder
+einer kommerziellen Lizenz des Lizenzgebers. Frühere Stände wurden unter der Business Source
+License 1.1 veröffentlicht.
 <<<
-QUELLE: LICENSE
+QUELLE: LICENSE; LICENSING.md
 
 [REQUIREMENT]
 UID: STK-034

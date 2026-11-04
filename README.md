@@ -6,7 +6,7 @@
 [![CodeQL](https://github.com/the78mole/PredictionDB/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/the78mole/PredictionDB/actions/workflows/github-code-scanning/codeql)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/the78mole/PredictionDB/badge)](https://scorecard.dev/viewer/?uri=github.com/the78mole/PredictionDB)
 [![Security Policy](https://img.shields.io/badge/Security-Policy-brightgreen?logo=github)](SECURITY.md)
-[![Lizenz: BSL 1.1](https://img.shields.io/badge/Lizenz-BSL%201.1-blue)](LICENSE)
+[![Lizenz: AGPL-3.0](https://img.shields.io/badge/Lizenz-AGPL--3.0-blue)](LICENSING.md)
 [![Python 3.14](https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white)](.python-version)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
@@ -117,4 +117,6 @@ insbesondere die Einräumung von Nutzungsrechten an den Projektinhaber.
 
 ## Lizenz
 
-Business Source License 1.1, siehe [LICENSE](LICENSE).
+Doppelt lizenziert: [GNU AGPL-3.0](LICENSE) (`AGPL-3.0-only`) oder kommerziell, siehe
+[LICENSING.md](LICENSING.md). Daten und Modelle stehen unter CC BY 4.0. Frühere Stände wurden unter
+der Business Source License 1.1 veröffentlicht.

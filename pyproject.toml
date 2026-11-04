@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Strombedarfs- und Strompreisprognose für Deutschland auf Basis kostenfreier Wetter- und Energiedaten"
 readme = "README.md"
 requires-python = ">=3.12"
-license = "LicenseRef-BUSL-1.1"
+license = "AGPL-3.0-only"
 license-files = ["LICENSE"]
 dependencies = ["predictiondb-core"]
 
