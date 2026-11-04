@@ -68,6 +68,30 @@ den Bestand je Technologie aus dem MaStR (letzte 400 Tage, danach gilt der letzt
 Training) und bei Wetter-Varianten die Gitter-Gewichte der Cluster, mit denen trainiert wurde.
 Backtest-Prognosen mit Ist-Preisen sind nicht enthalten. Aufbau: `services/ml_train/src/ml_train/bundle.py`.
 
+### Was der schlanke Stack nicht rechnet
+
+Der Stack rechnet nur das **DE-Wetter** selbst (GFS 0,25° im Ausschnitt um Deutschland, Cluster
+aus dem MaStR). Varianten mit der Merkmalsgruppe `nachbarwetter` (Wind- und PV-Index der
+Nachbarzonen aus GFS Europa 0,5°, z. B. `wetter_nachbarwetter` in `de_lu_v2`) brauchen das Gold
+von `gfs_0p5` je Zone und lassen sich deshalb nicht paketieren: `ml-train bundle` bricht mit
+„Nachbarwetter kann predict/ noch nicht rechnen" ab.
+
+| Variante | schlanker Stack | voller Stack (`ml-predict`) |
+|---|---|---|
+| ohne Wetter (`kalender`, `frei`, …) | ja | ja |
+| mit DE-Wetter (`wetter`, `wetter_frei_gk_skaliert`, …) | ja | ja |
+| mit `nachbarwetter` | nein | ja |
+
+So lässt sich die Einschränkung umgehen:
+
+- **Voller Stack:** `ml-predict` rechnet alle Varianten aus der Datenbank, auch solche mit
+  Nachbarwetter (Compose-Profil `ml` im Wurzelordner).
+- **Variante ohne Nachbarwetter paketieren:** Für den schlanken Stack die nächstbeste Variante
+  ohne `nachbarwetter` wählen (z. B. `wetter_frei_gk_skaliert` statt
+  `wetter_frei_gk_skaliert_nachbarwetter`).
+
+Umsetzung im schlanken Stack: [#244](https://github.com/the78mole/PredictionDB/issues/244).
+
 ## Ausgabe
 
 Gewählt sind **Dateien als Quelle der Wahrheit und eine kleine, nur lesende HTTP-Schnittstelle
