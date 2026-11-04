@@ -75,6 +75,8 @@ ignore_missing_imports = true
 testpaths = ["packages", "services", "predict", "tests"]
 addopts = ["-ra", "-m", "not network"]
 asyncio_mode = "auto"
+# pytest-asyncio ab 1.4.1.post1 warnt sonst (wird durch filterwarnings zum Fehler).
+asyncio_default_fixture_loop_scope = "function"
 # Veraltete APIs sollen im Test auffallen, nicht erst beim Entfernen.
 filterwarnings = [
     "error::DeprecationWarning",

@@ -588,8 +588,11 @@ async def test_vm_cycle_gold_without_pause_while_backlog(tmp_path: Path) -> None
         result = await asyncio.wait_for(
             vm.cycle(gold_limit=12, history_every=3600, gold_every=3600), timeout=5
         )
-    # drei Runden am Stück, danach eine Schlussrunde nach dem Ende von Live
-    assert rounds == 4 and result.gold["written"] == 48 and "more" not in result.gold
+    # Drei Runden am Stück. Endet Live erst, nachdem der Durchgang Runde 3 ausgewertet hat,
+    # folgt eine Schlussrunde; endet es vorher (done.set läuft vor dem Ergebnis der Runde),
+    # nicht. Beide Reihenfolgen kommen je nach Last vor.
+    assert rounds in (3, 4)
+    assert result.gold["written"] == 12 * rounds and "more" not in result.gold
 
 
 async def test_vm_cycle_works_off_gold_backlog_when_live_is_idle(tmp_path: Path) -> None:

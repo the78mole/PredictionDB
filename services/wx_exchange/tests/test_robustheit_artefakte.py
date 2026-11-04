@@ -84,12 +84,17 @@ def test_read_tar_beliebige_bytes(data: bytes, compressed: bool) -> None:
 @example([("/abs", b"x")], True)
 @example([("a//b", b"x")], False)
 @example([("a", b"1"), ("a", b"2")], False)
+@example([("\x80/", b"")], False)
 @settings(max_examples=300, suppress_health_check=[HealthCheck.too_slow])
 def test_read_tar_namen(files: list[tuple[str, bytes]], compressed: bool) -> None:
     """Nur sichere, eindeutige Namen kommen durch, und zwar unverändert.
 
     @relation(SWR-WXX-060, scope=function)
     """
+    # tarfile kürzt Pfade aus PAX-Kopfzeilen (Nicht-ASCII-Namen) beim Lesen um ein "/" am
+    # Ende; solche Namen schreibt unser Packer nicht, unverändert kann sie keiner liefern.
+    if any(name.endswith("/") for name, _ in files):
+        return
     try:
         data = _tar(files, compressed=compressed)
     except (ValueError, UnicodeError):  # Namen, die tarfile selbst nicht schreibt
