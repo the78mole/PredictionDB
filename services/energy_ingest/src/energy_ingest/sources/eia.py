@@ -151,6 +151,7 @@ class Eia:
     license = "Public Domain, U.S. Energy Information Administration (EIA)"
     priority = 10
     free = True
+    train = True
     series_map: ClassVar[dict[str, EiaSeries]] = FREE_SERIES
     # Die EIA veröffentlicht mit zwei bis drei Werktagen Verzug
     sync_lookback: ClassVar[dict[str, timedelta]] = {"prices": timedelta(days=10)}
@@ -216,4 +217,5 @@ class EiaReuters(Eia):
     license = "Thomson Reuters über EIA, urheberrechtlich geschützt (nur mit Freigabe)"
     priority = 10
     free = False
+    train = False
     series_map: ClassVar[dict[str, EiaSeries]] = REUTERS_SERIES

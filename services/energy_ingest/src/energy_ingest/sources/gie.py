@@ -120,6 +120,7 @@ class _Gie:
     license = "GIE AGSI+/ALSI, Weiterverwendung frei mit Quellenangabe (GIE)"
     priority = 10
     free = True
+    train = True
     url: ClassVar[str]
     prefix: ClassVar[str]  # Datensatz <prefix>_<gebiet>
     areas: ClassVar[dict[str, dict[str, str]]]

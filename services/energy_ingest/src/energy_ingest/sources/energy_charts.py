@@ -106,6 +106,7 @@ class EnergyCharts:
     )
     priority = 30
     free = True
+    train = True
 
     def __init__(
         self, http: Http, base_url: str = BASE_URL, bzn: str = "DE-LU", country: str = "de"

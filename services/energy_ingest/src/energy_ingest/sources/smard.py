@@ -37,6 +37,12 @@ class Filter:
     id: int
     region: str
     code: str
+    #: Regionen, deren Summe die Reihe dort fortsetzt, wo ``region`` keine Werte hat
+    parts: tuple[str, ...] = ()
+
+
+#: Regelzonen der vier deutschen ÜNB (SMARD-Regionen)
+CONTROL_AREAS = ("50Hertz", "Amprion", "TenneT", "TransnetBW")
 
 
 # Filter-IDs der SMARD-Oberfläche (Marktdaten visualisieren)
@@ -64,6 +70,12 @@ FILTERS: list[Filter] = [
     Filter(5097, "DE", "gen_da_forecast_wind_solar"),
     Filter(715, "DE", "gen_da_forecast_other"),
     Filter(122, "DE", "gen_da_forecast_total"),
+    # Ausgleichsenergie (ENTSO-E 17.1.G/H): Preis (reBAP) ab 2015, Volumen bei Unterspeisung (+)
+    # bzw. Überspeisung (-). Das Volumen für DE endet am 02.09.2022, danach gibt es es nur je
+    # Regelzone (ab Mitte 2022); DE ist dann die Summe der vier Zonen.
+    Filter(4382, "DE", "imbalance_price"),
+    Filter(4383, "DE", "imbalance_volume_pos", CONTROL_AREAS),
+    Filter(4384, "DE", "imbalance_volume_neg", CONTROL_AREAS),
 ]
 
 INDEX_TTL_S = 900.0
@@ -86,6 +98,7 @@ class Smard:
     license = "CC BY 4.0, Bundesnetzagentur | SMARD.de"
     priority = 10
     free = True
+    train = True
 
     def __init__(self, http: Http, base_url: str = BASE_URL) -> None:
         self.http = http
@@ -123,6 +136,20 @@ class Smard:
 
     def fetch(self, dataset: str, start: datetime, end: datetime) -> list[SeriesData]:
         f = self._filters[dataset]
+        points, finest = self._points(f, start, end)
+        if f.parts:
+            zones = [self._points(Filter(f.id, r, f.code), start, end) for r in f.parts]
+            common = set.intersection(*(set(z[0]) for z in zones)) - set(points)
+            for ts in common:
+                points[ts] = sum(z[0][ts] for z in zones)
+            finest = finest or next((z[1] for z in zones if z[1]), None)
+        pts = clip(sorted(points.items()), start, end)
+        return [SeriesData(series(f.code), finest or HOUR, pts)] if pts else []
+
+    def _points(
+        self, f: Filter, start: datetime, end: datetime
+    ) -> tuple[dict[datetime, float], timedelta | None]:
+        """Werte von ``f`` in ``[start, end)``, feinste Auflösung zuerst."""
         info = series(f.code)
         points: dict[datetime, float] = {}
         finest: timedelta | None = None
@@ -146,5 +173,4 @@ class Smard:
             covered_from = min(covered_from, _from_ms(stamps[0]))
             if covered_from <= start:
                 break
-        pts = clip(sorted(points.items()), start, end)
-        return [SeriesData(info, finest or HOUR, pts)] if pts else []
+        return points, finest

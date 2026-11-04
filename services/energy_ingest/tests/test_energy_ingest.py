@@ -14,6 +14,7 @@ NOW = datetime(2026, 10, 20, 23, 0, tzinfo=UTC)
 class FakeSource:
     license = "test"
     free = True
+    train = True
 
     def __init__(
         self, code: str, priority: int = 50, fail: bool = False, bad_format: bool = False
