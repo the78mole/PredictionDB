@@ -1,0 +1,63 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; ausgeführt von abruf.py, abruf_entsoe.py und auswertung.py im selben Ordner
+id: kkw-kuehlwasser-fr
+title: Kühlwasserbedingte Drosselung französischer Kernkraftwerke
+question: >
+  In FR werden fast schon regelmäßig Kraftwerke (insbesondere Kernkraftwerke) gedrosselt oder
+  abgeschalten, um die Erwärmung der Gewässer zu limitieren. Kannst Du anhand der Wetterdaten
+  (insbesondere Niederschlag, Luft- und Wasser-Temperatur und ggf. anderer Wetterdaten und deren
+  Historie) nachvollziehen, wie sich dies auf Erzeugung sowie Im- und Export auswirkt? Mache
+  zunächst eine einfache Korrelationsanalyse der möglichen Einflussfaktoren und bewerte auch,
+  inwieweit wir weitere Wetterdatenpunkte einbeziehen müssten oder ob die aktuell gesammelten
+  Silver- und Gold-Daten dafür ausreichen. Nachtrag: Eventuell gibt es auch
+  Gewässerdatenaufzeichnungen mit freier Lizenz; prüfen, inwieweit man diese ebenfalls
+  abspeichert und mit den Wetterdaten in Einklang bringt.
+requested_by: Maulwurf
+kind: custom                   # Korrelationsanalyse, Machbarkeit
+inputs:
+  period: {from: 2021-03-01, to: 2026-11-01}      # Beginn des GFS-0p5-Silbers auf GHCR
+  forecast:
+    source: ghcr.io/the78mole/predictiondb-data/gfs-0p5-silver   # CC BY 4.0, NOAA gemeinfrei
+    runs: [0]
+    steps_h: [3, 6, 9, 12, 15, 18, 21, 24]         # Tageswerte aus den ersten 24 h des 00Z-Laufs
+    variables: [t2m, tp, dswrf, r2m, soilw_0_10, weasd, u10, v10]
+    points: Gitterpunkt am Kraftwerk (0,5°) und Kasten über dem Einzugsgebiet (daten.py)
+  gold: feat.* der Zone gefs:FR:area (Flächenmittel FR) nur zur Bewertung, nicht gerechnet
+  hubeau:                      # Licence Ouverte 2.0 (Etalab), API ohne Schlüssel
+    temperature: /api/v1/temperature/chronique, Stationen am selben Fluss ≤ 1° um das Kraftwerk, Daten ab 2021
+    hydrometrie: /api/v2/hydrometrie/obs_elab QmnJ, Pegel am selben Fluss ≤ 0,6°, größtes Einzugsgebiet
+  energy_charts:               # CC BY 4.0 laut API-Dokumentation; FR-Reihen stammen von ENTSO-E
+    public_power: {country: [fr]}
+    cbet: {country: fr}        # Handel je Grenze, + = Import nach FR
+    price: {bzn: [FR, DE-LU]}
+  entsoe:                      # Token auf der VM, Rohdaten nur lokal (nicht auf der Liste freier Daten)
+    a73: Ist-Erzeugung je Block, Kernkraft (16.1.A)
+    a80: Nichtverfügbarkeit der Erzeugungseinheiten mit Grund (15.1.A/B)
+  manual: daten.py             # Standorte, Fluss, Kühlart, Einzugsgebiets-Kästen; je Eintrag mit Quelle
+method:
+  raster: Tage (UTC), Sommerhalbjahr Mai bis September für die Korrelationen, Winter als Gegenprobe
+  gruppen:
+    fluss_offen: Durchlaufkühlung an Flüssen (Bugey, Saint-Alban, Tricastin) und Ästuar (Blayais)
+    fluss_turm: Kühltürme an Flüssen (übrige Binnenstandorte)
+    kueste: Meerwasser (Gravelines, Penly, Paluel, Flamanville), Vergleichsgruppe
+  zielgroessen:
+    umwelt_mw: ENTSO-E-A80-Meldungen mit Umweltgrund (Reason-Text enthält environment, température,
+      thermal, débit, river, cooling o. ä.), nicht verfügbare MW je Tag und Standort
+    ausnutzung: Erzeugung je Standort / Höchstwert des Standorts (99,5-%-Quantil im Jahr)
+    luecke_fluss: Ausnutzung fluss_offen − Ausnutzung kueste (bereinigt Revisionen nicht, nur Hinweis)
+  faktoren:
+    - Lufttemperatur Tagesmittel und -maximum am Standort, gleitend 3, 7, 14, 30 Tage
+    - Niederschlag Einzugsgebiet, Summe 7, 30, 90 Tage
+    - Schneewasser Einzugsgebiet (Rhône), Globalstrahlung, relative Feuchte, Bodenfeuchte
+    - Wassertemperatur (Hub'eau) und Abfluss (Hub'eau), wo vorhanden
+  kennzahlen:
+    korrelation: Spearman je Faktor und Zielgröße, je Gruppe
+    schwellen: Anteil der Tage mit Umweltmeldung je Klasse der Lufttemperatur (7 Tage) und Wassertemperatur
+    wassertemperatur_aus_gfs: lineare Regression Wassertemperatur ~ gleitende Lufttemperaturen + log(Abfluss),
+      Train 2021–2023, Test 2024–2026 (R², MAE)
+    austausch: OLS je Tag Netto-Import FR, Fluss DE→FR und Preisdifferenz FR−DE ~ umwelt_mw +
+      Monat + Wochentag + Kernkraft-Verfügbarkeit ohne Umwelt (Koeffizient MW/MW bzw. EUR/MWh je GW)
+  group_by: [gruppe, standort, faktor]
+outputs:
+  tables: [standorte, stationen, korrelation, schwellen, wassertemperatur_modell, umweltereignisse, austausch, tage]
+  figures: [ueberblick_2022, korrelation, schwellen, austausch]
+schedule: once

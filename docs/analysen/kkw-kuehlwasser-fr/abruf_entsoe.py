@@ -6,7 +6,8 @@ Nur Standardbibliothek, damit es ohne Umgebung auf der VM läuft, wo der Token l
         < docs/analysen/kkw-kuehlwasser-fr/abruf_entsoe.py
 
 - 16.1.A Ist-Erzeugung je Block (A73, Kernkraft B14) für FR, Tag für Tag
-  -> ZIEL/a73/<JJJJ-MM-TT>.csv (Block-mRID, Name, Stunde UTC, MW als Stundenmittel)
+  -> ZIEL/a73/<JJJJ-MM-TT>.csv (Block-mRID, Name, Stunde UTC, MW als Stundenmittel; Kurventyp
+  A03 innerhalb jeder Period vorwärts gefüllt, Stunden ohne Period fehlen)
 - 15.1.A/B Nichtverfügbarkeit der Erzeugungseinheiten (A80) für FR, monatsweise mit Offset
   -> ZIEL/a80/<JJJJ-MM>_<offset>.zip (Originalantworten)
 
@@ -100,14 +101,24 @@ def a73(tag: dt.date, ziel: Path) -> None:
                 if lokal(per.tag) != "Period":
                     continue
                 t0 = dt.datetime.strptime(text(per, "timeInterval", "start"), "%Y-%m-%dT%H:%MZ")
+                t1 = dt.datetime.strptime(text(per, "timeInterval", "end"), "%Y-%m-%dT%H:%MZ")
                 schritt = dauer_min(text(per, "resolution"))
+                anzahl = int((t1 - t0).total_seconds() // 60 // schritt)
+                punkte = {
+                    int(text(pt, "position")): float(text(pt, "quantity"))
+                    for pt in per
+                    if lokal(pt.tag) == "Point"
+                }
+                # Kurventyp A03: Punkte nur an Änderungen, dazwischen gilt der vorige Wert
+                werte: list[float] = []
+                letzter = float("nan")
+                for pos in range(1, anzahl + 1):
+                    letzter = punkte.get(pos, letzter)
+                    werte.append(letzter)
                 summe: dict[dt.datetime, list[float]] = {}
-                for pt in per:
-                    if lokal(pt.tag) != "Point":
-                        continue
-                    t = t0 + dt.timedelta(minutes=schritt * (int(text(pt, "position")) - 1))
-                    h = t.replace(minute=0)
-                    summe.setdefault(h, []).append(float(text(pt, "quantity")))
+                for i, w in enumerate(werte):
+                    h = (t0 + dt.timedelta(minutes=schritt * i)).replace(minute=0)
+                    summe.setdefault(h, []).append(w)
                 for h, w in sorted(summe.items()):
                     zeilen.append(f"{mrid},{name},{h:%Y-%m-%dT%H:00Z},{sum(w) / len(w):.1f}")
     datei.write_text("\n".join(zeilen) + "\n")
