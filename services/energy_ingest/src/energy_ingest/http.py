@@ -29,8 +29,12 @@ Params = dict[str, Any] | list[tuple[str, Any]]
 
 #: Mindestabstand zwischen zwei Abrufen je Host in Sekunden. Energy-Charts antwortet bei vielen
 #: Abrufen nacheinander (Nachbarzonen, Kaltstart nach dem Deploy) sonst mit 429; AGSI+ sperrt
-#: ab 60 Abrufen je Minute.
-PACE_S: dict[str, float] = {"api.energy-charts.info": 2.0, "agsi.gie.eu": 1.1}
+#: ab 60 Abrufen je Minute. Hub'eau ist ohne feste Grenze, aber langsam.
+PACE_S: dict[str, float] = {
+    "api.energy-charts.info": 2.0,
+    "agsi.gie.eu": 1.1,
+    "hubeau.eaufrance.fr": 0.5,
+}
 #: Obergrenze für eine vom Server per Retry-After verlangte Wartezeit
 RETRY_AFTER_MAX_S = 120.0
 

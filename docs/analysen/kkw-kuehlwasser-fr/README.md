@@ -44,7 +44,10 @@ GFS nur grob ersetzen (ρ −0,42 statt −0,61 in Saint-Alban).
 
 **Vorschlag:** (1) Hub'eau-Abfluss als neue freie Quelle aufnehmen (Licence Ouverte 2.0, API ohne
 Schlüssel, Tagesmittel und Echtzeitwerte), zunächst die 12 Pegel aus
-[tabellen/stationen.csv](tabellen/stationen.csv), wenige KB je Tag. (2) Gold um Standortmerkmale
+[tabellen/stationen.csv](tabellen/stationen.csv), wenige KB je Tag. Umgesetzt als Quelle
+`hubeau` in `energy_ingest` (Reihen `river_flow_<pegel>` und `river_flow_<pegel>_h`), dazu
+Ternay für die Historie von Saint-Alban und Onzain, weil Blois seit 09/2026 keine Werte mehr
+liefert. (2) Gold um Standortmerkmale
 für die 14 Binnenkraftwerke ergänzen: Lufttemperatur am Gitterpunkt (gleitend 3/7/14/30 Tage)
 und Niederschlag und Schnee über dem Einzugsgebiet, gerechnet aus dem vorhandenen Silber.
 (3) Wassertemperatur nicht als Quelle speichern, sie ist aus (2) und (1) ableitbar. Die

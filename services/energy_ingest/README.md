@@ -25,6 +25,7 @@ Gasbilanz“).
 | GIE AGSI+ (`gie_agsi`) | kostenloser Schlüssel, `PDB_GIE_API_KEY` | `storage_de`, `storage_at`, `storage_nl`, `storage_cz`, `storage_eu` (Gasspeicher je Gastag) | 10 | ja, Weiterverwendung frei mit Quellenangabe „GIE AGSI+“ |
 | GIE ALSI (`gie_alsi`) | wie `gie_agsi` | `lng_de`, `lng_nl`, `lng_be`, `lng_fr`, `lng_eu` (LNG-Terminals je Gastag) | 10 | ja, wie AGSI+ |
 | Eurostat (`eurostat`) | offen | `gas_stock` (Bestand am Monatsende), `gas_balance` (Monatsbilanz), `gas_import_origin` (Importe nach Herkunft), `oil_crude_import` (Rohöl-Einfuhrpreis DE), `oil_crude_balance`, `oil_stock`, `oil_import_origin`, `coal_balance`, `coal_stock` | 10 | ja, CC BY 4.0 |
+| Hub'eau Hydrométrie (`hubeau`) | offen | `flow_day_<pegel>` (Tagesmittel QmnJ als `river_flow_<pegel>`), `flow_hour_<pegel>` (Stundenmittel der Echtzeitwerte als `river_flow_<pegel>_h`, nur gut ein Monat zurück); 14 Pegel an den französischen Kernkraftwerken mit Flusskühlung (`model.RIVER_GAUGES`), m³/s | 10 | ja, Licence Ouverte 2.0 |
 | EIA Short-Term Energy Outlook (`eia_steo`) | offen, xlsx je Ausgabe | `outlook` (Monatsprognosen Brent und Henry Hub je Ausgabe und Vorlauf) | 10 | ja, Public Domain (nur Prognosen) |
 
 **Nur freie Quellen als Standard.** Unfreie Quellen laufen nur mit ausdrücklicher Freigabe:

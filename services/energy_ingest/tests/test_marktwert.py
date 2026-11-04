@@ -122,6 +122,7 @@ def test_unfree_sources_need_allow(monkeypatch: pytest.MonkeyPatch) -> None:
         "gie_agsi",
         "gie_alsi",
         "eurostat",
+        "hubeau",
         "entsoe_last",
         "pdb_marktwert",
     ]

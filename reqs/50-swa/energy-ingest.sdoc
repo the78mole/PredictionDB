@@ -338,6 +338,19 @@ RELATIONS:
 - TYPE: Parent
   VALUE: SWR-ENI-052
 
+[ELEMENT]
+UID: SWA-ENI-SRC-HUBEAU
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Quelle Hub'eau Hydrométrie
+STATEMENT: >>>
+Abruf, Formatprüfung und Umrechnung der Quelle Hub'eau Hydrométrie.
+<<<
+ORT: services/energy_ingest/src/energy_ingest/sources/hubeau.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-ENI-053
+
 [[/SECTION]]
 
 [[SECTION]]
