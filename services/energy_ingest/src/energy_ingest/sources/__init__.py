@@ -41,6 +41,10 @@ class SourceMeta(Protocol):
     #: Nutzungsbedingungen erlauben freie Weitergabe (meta.source.free); unfreie Quellen
     #: laufen nur mit Freigabe (``EnergySettings.allowed``)
     free: bool
+    #: Ein veröffentlichtes Modell darf aus der Quelle lernen (meta.source.train). Bei
+    #: ``free = False`` heißt das: nur Training, die Reihen selbst werden nicht weitergegeben
+    #: (kein Export, kein öffentliches Dashboard; docs/ARCHITEKTUR.md 7.11.1)
+    train: bool
 
 
 class Source(SourceMeta, Protocol):

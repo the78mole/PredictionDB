@@ -28,6 +28,7 @@ T0 = datetime(2020, 3, 2, 12, 0, tzinfo=UTC)
 class Src:
     license = "test"
     free = True
+    train = True
 
     def __init__(self, priority: int) -> None:
         self.code = f"test_{uuid.uuid4().hex[:8]}"

@@ -68,6 +68,7 @@ class FakeSource:
     license = "Testlizenz"
     priority = 10
     free = True
+    train = True
 
     def __init__(self, code: str, energy: pd.DataFrame, broken: set[str] | None = None) -> None:
         self.code = code

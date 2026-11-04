@@ -14,7 +14,8 @@ werden (lokal, im LAN oder auf einer Miet-GPU).
                           mit ``neighbour_weather`` zusätzlich ``nb_<zone>_<feature>`` je
                           Nachbarzone aus dem Gold der zweiten Quelle (GFS Europa)
 ``capacity.parquet``      ``day``, ``technology``, ``capacity_mw``: installierte Leistung DE
-``manifest.json``         Zeiträume, Clusterung, Zeilenzahlen, SHA-256 je Datei, ``snapshot_id``
+``manifest.json``         Zeiträume, Clusterung, Zeilenzahlen, SHA-256 je Datei, ``snapshot_id``,
+                          Lizenzklasse je Energiequelle (``sources``) und ``publishable``
 ========================= ===================================================================
 
 @relation(SWA-MLT-SNAPSHOT, scope=file)
@@ -134,6 +135,28 @@ ENERGY_SQL = text("""
     FROM energy.value_best
     WHERE code = :code AND ts >= :a AND ts < :b
     GROUP BY 1 ORDER BY 1""")
+
+# Lizenzklasse aller freigegebenen Quellen, die eine der Reihen liefern (vorsichtig: auch
+# Quellen, die in ``energy.value_best`` nur nachrangig stehen). ``train`` = ein veröffentlichtes
+# Modell darf daraus lernen; die Reihen unfreier Quellen gehen trotzdem nie in eine Veröffentlichung
+# (docs/ARCHITEKTUR.md 7.11.1).
+SOURCES_SQL = text("""
+    SELECT DISTINCT src.code, src.free, src.train
+    FROM energy.series s JOIN meta.source src ON src.source_id = s.source_id
+    WHERE src.enabled AND s.code = ANY(:codes)
+    ORDER BY 1""")
+
+
+def source_classes(rows: Iterable[tuple[str, bool, bool]]) -> dict[str, str]:
+    """Quelle -> ``frei``, ``nur Training`` oder ``unfrei``.
+
+    @relation(SWR-MLT-010, scope=function)
+    """
+    return {
+        code: "frei" if free else "nur Training" if train else "unfrei"
+        for code, free, train in rows
+    }
+
 
 # *_power als Summe über die Cluster, sonst nach Clusterleistung (Gitter-Gewichte) gemittelt.
 # feat.nwp_value ist nach valid_time partitioniert: Die Grenzen auf valid_time (konstant,
@@ -261,6 +284,7 @@ def export_snapshot(
             df["code"] = code
             energy_parts.append(df)
             log.info("snapshot.energy", code=code, rows=len(df))
+        sources = source_classes(c.execute(SOURCES_SQL, {"codes": codes}).tuples())
         if cv is not None:
             wx_start = max(start, weather_from or start)
             wx_end = min(end, weather_to) if weather_to is not None else end
@@ -307,6 +331,9 @@ def export_snapshot(
         "created": datetime.now(UTC).isoformat(),
         "range": [start.isoformat(), end.isoformat()],
         "codes": codes,
+        "sources": sources,
+        # Darf ein Modell aus diesem Snapshot veröffentlicht werden? Nur ohne ``unfrei``.
+        "publishable": "unfrei" not in sources.values(),
         "clustering_version": cv,
         "weather": {"source": source, "grid": grid, "run_hours": hours, "max_lead_h": max_lead_h},
     }

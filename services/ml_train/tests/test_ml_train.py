@@ -718,3 +718,16 @@ def test_calibration_widens_bands_per_lead_day(snap, cfg, tmp_path) -> None:  # 
     pd.testing.assert_frame_equal(
         m.predict(test)["da_price_de_lu"], loaded.predict(test)["da_price_de_lu"]
     )
+
+
+def test_snapshot_source_classes() -> None:
+    """Lizenzklasse je Energiequelle im Snapshot-Manifest.
+
+    @relation(SWR-MLT-010, scope=function)
+    """
+    from ml_train.snapshot import source_classes
+
+    classes = source_classes(
+        [("smard", True, True), ("regelleistung", False, True), ("entsoe", False, False)]
+    )
+    assert classes == {"smard": "frei", "regelleistung": "nur Training", "entsoe": "unfrei"}
