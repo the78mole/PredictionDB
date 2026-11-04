@@ -95,6 +95,15 @@ series_groups:
             jw_wind_offshore, jw_solar]
     change_days: 35
 
+# Wind- und PV-Index der Nachbarzonen aus dem Gold von GFS Europa (gfs_0p5, Flächenmittel je
+# Zone aus regions_v2), Gruppe nachbarwetter. Im Analyse-Backtest erklärte das Netto-Import und
+# Grenzflüsse deutlich besser, den Preis etwas (docs/analysen/austausch-nachbarlaender).
+# Zonen mit Grenze bzw. Kabel zu DE-LU; predict/ kann die Gruppe noch nicht rechnen.
+neighbour_weather:
+  source: gfs_0p5
+  zones: [AT, BE, CH, CZ, DK1, DK2, FR, NL, NO2, PL, SE4]
+  features: [wind_cf, pv_cf]
+
 variants:
   # Maßstab wie de_lu_v1/kalender: Kalender, Lags, Bestand; ab Start der Gebotszone DE-LU
   - name: kalender
@@ -159,6 +168,17 @@ variants:
   - name: wetter_frei_gk_skaliert
     groups: [calendar, lags, capacity, weather, nachbarn, lastprognose, brennstoffe, marktwerte,
              grenzkosten, stage1]
+    scale: {da_price_de_lu: gk_niveau}
+    requires_weather: true
+    train_from: 2021-03-23
+  # dazu Wind und PV der Nachbarzonen (Ablation gegen wetter bzw. wetter_frei_gk_skaliert)
+  - name: wetter_nachbarwetter
+    groups: [calendar, lags, capacity, weather, nachbarwetter, stage1]
+    requires_weather: true
+    train_from: 2021-03-23
+  - name: wetter_frei_gk_skaliert_nachbarwetter
+    groups: [calendar, lags, capacity, weather, nachbarwetter, nachbarn, lastprognose,
+             brennstoffe, marktwerte, grenzkosten, stage1]
     scale: {da_price_de_lu: gk_niveau}
     requires_weather: true
     train_from: 2021-03-23

@@ -10,7 +10,9 @@ werden (lokal, im LAN oder auf einer Miet-GPU).
                           gemittelt), ``published`` als spätester Wert der Stunde
 ``weather.parquet``       ``run_time``, ``valid_time``, ``feature``, ``value``: Wetter-Features
                           je Technologie, über die Cluster zusammengefasst (``*_power`` als
-                          Summe, alles andere leistungsgewichtet gemittelt), Schritte nativ
+                          Summe, alles andere leistungsgewichtet gemittelt), Schritte nativ;
+                          mit ``neighbour_weather`` zusätzlich ``nb_<zone>_<feature>`` je
+                          Nachbarzone aus dem Gold der zweiten Quelle (GFS Europa)
 ``capacity.parquet``      ``day``, ``technology``, ``capacity_mw``: installierte Leistung DE
 ``manifest.json``         Zeiträume, Clusterung, Zeilenzahlen, SHA-256 je Datei, ``snapshot_id``
 ========================= ===================================================================
@@ -31,6 +33,7 @@ from typing import Any
 import pandas as pd
 from sqlalchemy import Engine, text
 
+from ml_train.config import NeighbourWeather, neighbour_feature
 from ml_train.jobs import Progress, no_progress
 from predictiondb_core.log import get_logger
 
@@ -155,10 +158,55 @@ WEATHER_SQL = text("""
       AND n.valid_time <= n.run_time + make_interval(hours => :max_lead)
     GROUP BY n.run_time, n.valid_time, w.technology, f.code""")
 
+# Nachbarzonen: feste Regionen (eine Zone = ein Wert je Feature), also ohne Zusammenfassen
+NEIGHBOUR_SQL = text("""
+    SELECT n.run_time, n.valid_time, r.code AS region, f.code AS feature, n.value
+    FROM feat.nwp_value n
+    JOIN meta.region r USING (region_id)
+    JOIN meta.feature f USING (feature_id)
+    JOIN meta.source s ON s.source_id = f.source_id AND s.code = :source
+    WHERE n.run_time >= :a AND n.run_time < :b
+      AND n.valid_time >= :a AND n.valid_time < :valid_to
+      AND extract(hour FROM n.run_time AT TIME ZONE 'UTC') = ANY(:hours)
+      AND n.valid_time <= n.run_time + make_interval(hours => :max_lead)
+      AND r.code = ANY(:regions) AND f.code = ANY(:features)""")
+
 CAPACITY_SQL = text("""
     SELECT day, technology, sum(capacity_mw) AS capacity_mw
     FROM assets.capacity_daily WHERE clustering_version = :cv
     GROUP BY 1, 2 ORDER BY 1, 2""")
+
+
+def neighbour_rows(
+    c: Any,
+    nb: NeighbourWeather,
+    a: datetime,
+    b: datetime,
+    hours: list[int],
+    max_lead_h: int,
+) -> pd.DataFrame:
+    """Features der Nachbarzonen eines Monats in der Form von ``weather.parquet``.
+
+    @relation(SWR-MLT-028, scope=function)
+    """
+    df = pd.read_sql(
+        NEIGHBOUR_SQL,
+        c,
+        params={
+            "source": nb.source,
+            "a": a,
+            "b": b,
+            "valid_to": b + timedelta(hours=max_lead_h),
+            "hours": hours,
+            "max_lead": max_lead_h,
+            "regions": nb.region_codes(),
+            "features": nb.features,
+        },
+    )
+    df["feature"] = [
+        neighbour_feature(r, f) for r, f in zip(df["region"], df["feature"], strict=True)
+    ]
+    return df[["run_time", "valid_time", "feature", "value"]]
 
 
 def latest_clustering(engine: Engine) -> str | None:
@@ -191,14 +239,16 @@ def export_snapshot(
     clustering_version: str | None = None,
     source: str = "gfs_0p25",
     grid: str = "gfs_0p25",
+    neighbour: NeighbourWeather | None = None,
     progress: Progress = no_progress,
 ) -> Snapshot:
     """Liest Energie, Wetter-Features und Bestand für ``[start, end)`` aus der Datenbank.
 
     Wetterläufe nur mit ``run_time`` in ``[weather_from, weather_to)`` (Vorgabe: ``start``,
-    ``end``); ``weather_to <= weather_from`` lässt das Wetter ganz weg.
+    ``end``); ``weather_to <= weather_from`` lässt das Wetter ganz weg. ``neighbour`` holt für
+    dieselben Läufe die Features der Nachbarzonen dazu.
 
-    @relation(SWR-MLT-010, scope=function)
+    @relation(SWR-MLT-010, SWR-MLT-028, scope=function)
     """
     cv = clustering_version or latest_clustering(engine)
     hours = run_hours or [0, 12]
@@ -233,6 +283,10 @@ def export_snapshot(
                 )
                 weather_parts.append(df)
                 log.info("snapshot.weather", month=a.strftime("%Y-%m"), rows=len(df))
+                if neighbour is not None:
+                    nb = neighbour_rows(c, neighbour, a, b, hours, max_lead_h)
+                    weather_parts.append(nb)
+                    log.info("snapshot.neighbour", month=a.strftime("%Y-%m"), rows=len(nb))
             progress("Bestand")
             capacity = pd.read_sql(CAPACITY_SQL, c, params={"cv": cv})
         else:
@@ -256,6 +310,8 @@ def export_snapshot(
         "clustering_version": cv,
         "weather": {"source": source, "grid": grid, "run_hours": hours, "max_lead_h": max_lead_h},
     }
+    if neighbour is not None:
+        manifest["neighbour_weather"] = neighbour.model_dump()
     return Snapshot(energy, weather, capacity, manifest)
 
 

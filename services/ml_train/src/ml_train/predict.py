@@ -168,6 +168,7 @@ def live_snapshot(
         weather_from=wx_from,
         weather_to=(issue + timedelta(hours=1)).to_pydatetime() if weather else wx_from,
         max_lead_h=24 * (max(cfg.issue.lead_days) + 2),
+        neighbour=cfg.neighbour_weather,
     )
 
 

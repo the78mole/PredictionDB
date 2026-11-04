@@ -41,7 +41,7 @@ import numpy as np
 import pandas as pd
 
 from ml_train.calendar import BERLIN, CALENDAR_COLUMNS, calendar_features
-from ml_train.config import FeatureGroup, ModelConfig, SeriesGroup
+from ml_train.config import NEIGHBOUR_PREFIX, FeatureGroup, ModelConfig, SeriesGroup
 from ml_train.snapshot import Snapshot
 
 H = pd.Timedelta(hours=1)
@@ -204,7 +204,12 @@ class FeatureBuilder:
         self.energy = snapshot.energy_wide()
         self.energy_long = snapshot.energy
         self.capacity = snapshot.capacity_wide()
-        self.weather = WeatherTable(snapshot.weather, cfg.weather_features)
+        wx = snapshot.weather
+        nb = wx["feature"].astype(str).str.startswith(NEIGHBOUR_PREFIX)
+        self.weather = WeatherTable(wx[~nb], cfg.weather_features)
+        # Nachbarzonen: eigene Tabelle, damit wx_interp und die Stunden des DE-Wetters gleich
+        # bleiben; gewählt wird derselbe Lauf wie fürs DE-Wetter
+        self.neighbour = WeatherTable(wx[nb])
         local = self.energy.index.tz_convert(BERLIN)
         self.local_day = pd.DatetimeIndex(local.normalize().tz_localize(None))
         self.daily_mean = self.energy.groupby(self.local_day).mean()
@@ -306,6 +311,9 @@ class FeatureBuilder:
         wx = self._weather(meta, runs)
         groups["weather"] = list(wx.columns)
         parts.append(wx)
+        nbw = self._neighbour_weather(meta, runs)
+        groups["nachbarwetter"] = list(nbw.columns)
+        parts.append(nbw)
         ver = pd.DataFrame({"wx_gfs_v": gfs_version(runs)}, index=meta.index)
         groups["nwp_version"] = list(ver.columns)
         parts.append(ver)
@@ -643,6 +651,22 @@ class FeatureBuilder:
             )
             vals = self.weather.table.reindex(key)[cols].to_numpy()
             out.loc[valid, cols] = vals
+        return out
+
+    def _neighbour_weather(self, meta: pd.DataFrame, runs: pd.Series) -> pd.DataFrame:
+        """Features der Nachbarzonen aus dem Lauf des DE-Wetters (fehlt er dort: leer).
+
+        @relation(SWR-MLT-028, scope=function)
+        """
+        cols = self.neighbour.columns
+        out = pd.DataFrame(np.nan, index=meta.index, columns=cols, dtype=np.float32)
+        valid = runs.notna().to_numpy()
+        if cols and valid.any():
+            key = pd.MultiIndex.from_arrays(
+                [pd.DatetimeIndex(runs[valid]), pd.DatetimeIndex(meta["ts"][valid])],
+                names=["run_time", "ts"],
+            )
+            out.loc[valid, cols] = self.neighbour.table.reindex(key)[cols].to_numpy()
         return out
 
 

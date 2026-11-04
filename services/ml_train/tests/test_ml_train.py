@@ -12,7 +12,7 @@ import pytest
 
 from ml_train.backtest import backtest_steps, make_folds, run_backtest
 from ml_train.calendar import calendar_features
-from ml_train.config import ModelConfig, load_config
+from ml_train.config import ModelConfig, NeighbourWeather, load_config, neighbour_feature
 from ml_train.dataset import (
     FeatureBuilder,
     WeatherTable,
@@ -320,6 +320,29 @@ def test_gfs_version_by_run(snap, cfg) -> None:  # type: ignore[no-untyped-def]
     frame = FeatureBuilder(snap, cfg).build([date(2023, 5, 10)])
     assert frame.groups["nwp_version"] == ["wx_gfs_v"]
     assert frame.X["wx_gfs_v"].eq(16).all()
+
+
+def test_neighbour_weather_group_same_run(snap, cfg) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-028, scope=function)"""
+    assert neighbour_feature("gefs:DK1:area", "wind_cf") == "nb_dk1_wind_cf"
+    assert neighbour_feature("gefs:IT-Nord:area", "pv_cf") == "nb_it_nord_pv_cf"
+    w = snap.weather
+    src = w[w["feature"] == w["feature"].iloc[0]].copy()
+    # Nachbarzone dreistündlich, Wert = Stunden seit Lauf (prüft Lauf und Ausrichtung)
+    src = src[(src["valid_time"] - src["run_time"]) / pd.Timedelta(hours=1) % 3 == 0]
+    src["feature"] = "nb_fr_wind_cf"
+    src["value"] = ((src["valid_time"] - src["run_time"]) / pd.Timedelta(hours=1)).astype("float32")
+    with_nb = Snapshot(snap.energy, pd.concat([w, src]), snap.capacity, snap.manifest)
+    cfg.neighbour_weather = NeighbourWeather(zones=["FR"])
+    assert cfg.neighbour_weather.region_codes() == ["gefs:FR:area"]
+    base = FeatureBuilder(snap, cfg).build([date(2023, 5, 10)])
+    frame = FeatureBuilder(with_nb, cfg).build([date(2023, 5, 10)])
+    assert frame.groups["nachbarwetter"] == ["wx_nb_fr_wind_cf"]
+    assert base.groups["nachbarwetter"] == []
+    assert "wx_nb_fr_wind_cf" not in frame.groups["weather"]
+    # DE-Wetter unverändert, Nachbarzone aus demselben Lauf (Momentanwert: Stundenmitte)
+    pd.testing.assert_frame_equal(frame.X[base.groups["weather"]], base.X[base.groups["weather"]])
+    np.testing.assert_allclose(frame.X["wx_nb_fr_wind_cf"], frame.X["wx_lead_h"] + 0.5)
 
 
 def test_weather_alignment_interval_and_instant() -> None:

@@ -45,6 +45,11 @@ flowchart LR
   ÜNB-Lastprognose, Brennstoffe, Marktwerte, Preisniveau, EIA STEO (`outlook`) und der
   Grenzkostenindex aus SMARD (`grenzkosten`); Varianten mit `scale` lernen den Preis relativ zu
   `gk_niveau`. Einzelheiten in `docs/PROGNOSEMODELLE.md` Kap. 10.2.
+- **Nachbarwetter (`neighbour_weather`):** Wind- und PV-Index je Nachbarzone aus dem Gold von
+  GFS Europa (`gfs_0p5`, feste Regionen `gefs:<zone>:area`). Der Snapshot führt sie als
+  `nb_<zone>_<feature>`, die Merkmale als Gruppe `nachbarwetter` (`wx_nb_…`), immer aus
+  demselben Lauf wie das DE-Wetter. Grundlage: `docs/analysen/austausch-nachbarlaender`.
+  `predict/` rechnet diese Gruppe noch nicht; `ml-train bundle` lehnt solche Varianten ab.
 
 ## Aufruf
 
