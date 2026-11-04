@@ -6,7 +6,7 @@
 [![CodeQL](https://github.com/the78mole/PredictionDB/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/the78mole/PredictionDB/actions/workflows/github-code-scanning/codeql)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/the78mole/PredictionDB/badge)](https://scorecard.dev/viewer/?uri=github.com/the78mole/PredictionDB)
 [![Security Policy](https://img.shields.io/badge/Security-Policy-brightgreen?logo=github)](SECURITY.md)
-[![Lizenz: BSL 1.1](https://img.shields.io/badge/Lizenz-BSL%201.1-blue)](LICENSE)
+[![Lizenz: AGPL-3.0-only](https://img.shields.io/badge/Lizenz-AGPL--3.0--only-blue)](LICENSE)
 [![Python 3.14](https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white)](.python-version)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
@@ -117,4 +117,14 @@ insbesondere die Einräumung von Nutzungsrechten an den Projektinhaber.
 
 ## Lizenz
 
-Business Source License 1.1, siehe [LICENSE](LICENSE).
+Der Code steht unter der [GNU Affero General Public License v3.0](LICENSE) (`AGPL-3.0-only`),
+wahlweise unter einer kommerziellen Lizenz (Dual Licensing). Wer eine geänderte Fassung Nutzern
+über ein Netzwerk anbietet, muss ihnen nach § 13 AGPL den Quellcode dieser Fassung anbieten.
+
+Eine kommerzielle Lizenz ist für Fälle gedacht, in denen die AGPL nicht passt, etwa geänderten
+Code nicht offenzulegen oder ihn in ein geschlossenes Produkt einzubauen. Lizenzgeber ist Daniel
+(the78mole) Glaser, Anfragen bitte über das [GitHub-Profil](https://github.com/the78mole).
+
+Ältere Versionen bleiben unter der Lizenz, mit der sie veröffentlicht wurden (Business Source
+License 1.1, siehe die `LICENSE` im jeweiligen Tag). Die veröffentlichten Daten und Modellpakete
+stehen unabhängig davon unter CC BY 4.0.

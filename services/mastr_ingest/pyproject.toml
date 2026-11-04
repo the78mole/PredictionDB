@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Quartalsweiser Import des Marktstammdatenregisters, Bestandsrekonstruktion und Gebietscluster je Technologie"
 readme = "README.md"
 requires-python = ">=3.12"
-license = "LicenseRef-BUSL-1.1"
+license = "AGPL-3.0-only"
 dependencies = [
     "predictiondb-core",
     "httpx>=0.28",

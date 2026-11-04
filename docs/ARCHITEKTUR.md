@@ -667,7 +667,7 @@ flowchart LR
 | Open-Meteo, Energie- und Marktdaten | nicht vorgesehen | — |
 
   Jedes Manifest trägt den Quellenvermerk in `org.predictiondb.attribution`, zusätzlich liegt ein `ATTRIBUTION.md` als eigener Layer im Index-Artefakt. Weitere Modelle bekommen eigene Artefakt-Repositories (`ecmwf-ifs-0p25-silver` usw.), damit Lizenzen nicht gemischt werden.
-- **Lizenz der Daten selbst:** Die BSL 1.1 gilt für den Code. Die veröffentlichten Daten stehen unter **CC BY 4.0** (`org.opencontainers.image.licenses: CC-BY-4.0`), Namensnennung: „PredictionDB (the78mole)“ plus die Quellenvermerke der Tabelle oben (12.9).
+- **Lizenz der Daten selbst:** Die AGPL-3.0-only (oder eine kommerzielle Lizenz) gilt für den Code. Die veröffentlichten Daten stehen unter **CC BY 4.0** (`org.opencontainers.image.licenses: CC-BY-4.0`), Namensnennung: „PredictionDB (the78mole)“ plus die Quellenvermerke der Tabelle oben (12.9).
 
 ### 5.6 GEFS-Ensemble: Silber im Runner, je Region und Mitglied
 
@@ -1071,7 +1071,7 @@ Umgesetzt in Revision `0002_assets` mit einigen Ergänzungen: `assets.clustering
 
 ### 7.6 Prognose für eigene Anlagen (PV, Wind, Wasserkraft) über die API
 
-Ziel: Über die API lässt sich eine einzelne PV-, Windkraft- oder Wasserkraftanlage (vom großen Laufwasserkraftwerk bis zur privaten Kleinanlage) mit ihren Stammdaten anlegen, optional mit rund einem Jahr Messwerten. Die API liefert dann laufend eine Erzeugungsprognose aus den Wetterdaten, die ohnehin geladen werden. Das passt zum Additional Use Grant der Lizenz (Prognose eigener Anlagen an eigenen Standorten, Kap. 12).
+Ziel: Über die API lässt sich eine einzelne PV-, Windkraft- oder Wasserkraftanlage (vom großen Laufwasserkraftwerk bis zur privaten Kleinanlage) mit ihren Stammdaten anlegen, optional mit rund einem Jahr Messwerten. Die API liefert dann laufend eine Erzeugungsprognose aus den Wetterdaten, die ohnehin geladen werden. Die Code-Lizenz (AGPL-3.0-only, Kap. 12) schränkt das nicht ein.
 
 Der Ansatz ist zweistufig: Ein **physikalisches Modell** liefert sofort nach dem Anlegen eine Prognose. Sobald Messwerte vorliegen, korrigiert eine **Kalibrierung** dessen systematische Fehler.
 
@@ -1829,14 +1829,14 @@ flowchart LR
 
 ## 12. Offene Punkte und Entscheidungen
 
-1. ~~Lizenz~~ **Entschieden (2026-10-20):** Business Source License 1.1 (`LICENSE`). Produktive Nutzung nur intern, für eigene Energieanlagen an eigenen Standorten; ausgeschlossen sind SaaS für Dritte, Steuerung fremder Anlagen, kommerzielles Flottenmanagement und der Verkauf von Prognosedaten. Change Date vier Jahre nach Veröffentlichung, Change License AGPL-3.0-or-later. Lizenzgeber: Daniel (the78mole) Glaser; ein späterer Übergang der kommerziellen Lizenzierung auf die Bizzmark UG (haftungsbeschränkt) ist offen.
+1. ~~Lizenz~~ **Entschieden (2026-11-05):** AGPL-3.0-only (`LICENSE`), wahlweise kommerzielle Lizenzen (Dual Licensing). Das löst die Business Source License 1.1 vom 2026-10-20 ab, ältere Versionen bleiben unter ihr. Damit entfallen deren Ausschlüsse (SaaS für Dritte, Steuerung fremder Anlagen, kommerzielles Flottenmanagement, Verkauf von Prognosedaten). „Or later“ ist bewusst nicht enthalten, eine neuere AGPL-Version bleibt eine eigene Entscheidung; die Beitragsbedingungen erlauben sie. Lizenzgeber: Daniel (the78mole) Glaser; ein späterer Übergang der kommerziellen Lizenzierung auf die Bizzmark UG (haftungsbeschränkt) ist offen.
 2. ~~Verhältnis zu PredictionDB~~ **Entschieden (2026-10-20):** Das Projekt wird im Repo `the78mole/PredictionDB` fortgeführt. Dieser Entwurf liegt dort als `docs/ARCHITEKTUR.md` und ersetzt die Teile der `SPECIFICATION.md` v0.1, die ihm widersprechen (MariaDB, Gitterwerte als Zeilen, Celery).
 3. **Kommerzielle Nutzung?** Entscheidet, ob Open-Meteo produktiv genutzt werden darf und ob bestimmte Lizenzauflagen (ENTSO-E-Bedingungen) relevant werden.
 4. **Zielauflösung des Preises:** 15 min (aktueller Markt) oder Stunde (einfacher, längere homogene Historie)? Vorschlag: 15 min als Ausgabe, Training mit Stundenmitteln vor Okt. 2025 und Upsampling-Kennzeichnung.
 5. **Ausschnitt:** Nur DE oder Mitteleuropa (Nachbarländer beeinflussen Preis über Kuppelflüsse)? Vorschlag: 44–58° N, 0–20° E.
 6. **GPU:** Steht auf dem PVE-Host eine GPU für Passthrough bereit? Ohne lokale GPU startet das Training auf CPU, Hyperparameter-Suchen laufen auf stundenweise gemieteten GPUs (7.7).
 7. Zu verifizierende Detailwerte vor der Implementierung: exakte NOMADS-Rate-Limits, aktuelle Vorhaltezeiten auf opendata.dwd.de und data.ecmwf.int, Beginn der Archive auf AWS, aktuelle Garage- und TimescaleDB-Versionen, Zugang und Lizenz von GloFAS/EFAS sowie Schnittstellen der Pegelportale der Länder.
-8. **Anlagen-API (7.6):** Nur eigene Anlagen oder auch Anlagen weiterer Nutzer? Mehrere Nutzer bzw. fremde Anlagen fallen nicht unter den Additional Use Grant (nur intern). Lizenz der Turbinen-Leistungskurven (oedb) vor Übernahme prüfen.
-9. ~~Datenlizenz der GHCR-Artefakte~~ **Entschieden (2026-10-23):** Die aufbereiteten Daten in GHCR (Silber, Bronze, Features, 5.5) stehen unter CC BY 4.0, mit Weitergabe der Quellenvermerke; die BSL gilt nur für den Code. Namensraum: unter dem Konto `the78mole` (`ghcr.io/the78mole/predictiondb-data/*` und `…/predictiondb-models/<markt>`), nicht unter der Bizzmark UG.
+8. **Anlagen-API (7.6):** Nur eigene Anlagen oder auch Anlagen weiterer Nutzer? Die Code-Lizenz steht mehreren Nutzern bzw. fremden Anlagen nicht entgegen. Lizenz der Turbinen-Leistungskurven (oedb) vor Übernahme prüfen.
+9. ~~Datenlizenz der GHCR-Artefakte~~ **Entschieden (2026-10-23):** Die aufbereiteten Daten in GHCR (Silber, Bronze, Features, 5.5) stehen unter CC BY 4.0, mit Weitergabe der Quellenvermerke; die Code-Lizenz gilt nur für den Code. Namensraum: unter dem Konto `the78mole` (`ghcr.io/the78mole/predictiondb-data/*` und `…/predictiondb-models/<markt>`), nicht unter der Bizzmark UG.
 10. ~~Lizenz veröffentlichter Modelle~~ **Entschieden (2026-10-23):** CC BY 4.0, wie die Daten. Die Modelle sollen frei sein; Voraussetzung ist das Training nur aus freien Quellen (7.11.1). Offen bleiben die Bedingungen von Netztransparenz; bis dahin rechnet `pdb_marktwert` die Marktwerte selbst.
 11. **Steuer-UI (optional):** Konzept in [STEUER-UI.md](STEUER-UI.md), noch nicht umgesetzt. Festgelegt: ENV-Variablen haben Vorrang, die UI ist zuschaltbar und das System läuft ohne sie; Grafana bleibt für Monitoring; Auth zunächst zurückgestellt, später Keycloak per OIDC mit Rollen aus Claims. Entschieden (2026-10-25): Unfreie Quellen werden ausschließlich per ENV (`PDB_ALLOW_*`) freigegeben, die UI kann sie nur ausschließen. Offen: SPA-Framework, eine UI je Instanz oder instanzübergreifend, Zeitpunkt der Auth-Pflicht (STEUER-UI Kap. 10).

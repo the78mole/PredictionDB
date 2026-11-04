@@ -264,8 +264,8 @@ ART: Randbedingung
 STATUS: Umgesetzt
 TITLE: Lizenz des Codes
 STATEMENT: >>>
-Der Code steht unter der Business Source License 1.1 mit Additional Use Grant für interne Nutzung
-und eigene Energieanlagen. Change Date nach vier Jahren, Change License AGPL-3.0-or-later.
+Der Code steht unter der GNU Affero General Public License v3.0 (AGPL-3.0-only), wahlweise unter
+einer kommerziellen Lizenz (Dual Licensing).
 <<<
 QUELLE: LICENSE
 

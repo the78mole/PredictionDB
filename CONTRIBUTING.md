@@ -2,8 +2,8 @@
 
 Beiträge sind willkommen. Bevor ein Beitrag übernommen werden kann, müssen die
 folgenden Bedingungen akzeptiert werden. Sie stellen sicher, dass das Projekt
-seinen Lizenzweg (Business Source License 1.1, später AGPL-3.0-or-later sowie
-kommerzielle Lizenzen) rechtssicher gehen kann.
+seinen Lizenzweg (AGPL-3.0-only und kommerzielle Lizenzen, gegebenenfalls später
+weitere Lizenzen wie eine neuere AGPL-Version) rechtssicher gehen kann.
 
 *An English summary follows the German text. The German version is authoritative.*
 
@@ -19,8 +19,8 @@ Patches, Issues oder Kommentare im Repository.
 
 Mit dem Einreichen eines Beitrags erklärst Du Dich damit einverstanden, dass
 Dein Beitrag Teil des Licensed Work wird und unter der jeweils für das Projekt
-geltenden Lizenz verbreitet wird, derzeit der Business Source License 1.1
-(siehe [LICENSE](LICENSE)) mit der dort genannten Change License.
+geltenden Lizenz verbreitet wird, derzeit der GNU Affero General Public License
+v3.0 (`AGPL-3.0-only`, siehe [LICENSE](LICENSE)).
 
 ### 2. Einräumung von Nutzungsrechten
 
@@ -109,8 +109,8 @@ By submitting a contribution (code, documentation, tests, data or other
 material) you agree that
 
 1. your contribution becomes part of the Licensed Work and is distributed under
-   the project's current license (Business Source License 1.1, see
-   [LICENSE](LICENSE)) and its Change License;
+   the project's current license (GNU Affero General Public License v3.0,
+   `AGPL-3.0-only`, see [LICENSE](LICENSE));
 2. you grant the project owner, Daniel (the78mole) Glaser, and any successor in
    title a non-exclusive, worldwide, perpetual, irrevocable, royalty-free,
    sublicensable license to use, modify, distribute and relicense your
