@@ -1,0 +1,21 @@
+standort,name,variante,n_train,n_test,r2_test,mae_test_k,mae_test_sommer_k
+TRI,Tricastin,luft_t7,694,464,0.947,1.2,1.54
+TRI,Tricastin,luft_t3_t14_t30,694,464,0.97,0.84,1.07
+TRI,Tricastin,luft + abfluss,694,464,0.979,0.68,0.93
+TRI,Tricastin,luft + abfluss + strahlung,694,464,0.98,0.68,0.89
+CRU,Cruas,luft_t7,694,464,0.939,1.3,1.67
+CRU,Cruas,luft_t3_t14_t30,694,464,0.967,0.9,1.19
+CRU,Cruas,luft + abfluss,694,464,0.977,0.75,1.0
+CRU,Cruas,luft + abfluss + strahlung,694,464,0.979,0.72,0.91
+GOL,Golfech,luft_t7,652,436,0.935,1.15,1.35
+GOL,Golfech,luft_t3_t14_t30,645,431,0.946,1.03,1.33
+GOL,Golfech,luft + abfluss,645,431,0.939,1.11,1.44
+GOL,Golfech,luft + abfluss + strahlung,645,431,0.954,0.93,1.26
+DAM,Dampierre,luft_t7,1027,685,0.906,1.68,1.72
+DAM,Dampierre,luft_t3_t14_t30,1020,680,0.92,1.51,1.39
+DAM,Dampierre,luft + abfluss,1020,680,0.916,1.53,1.25
+DAM,Dampierre,luft + abfluss + strahlung,1020,680,0.959,1.08,1.06
+SLB,Saint-Laurent,luft_t7,1027,685,0.91,1.65,1.73
+SLB,Saint-Laurent,luft_t3_t14_t30,1020,680,0.924,1.48,1.43
+SLB,Saint-Laurent,luft + abfluss,1002,669,0.923,1.52,1.27
+SLB,Saint-Laurent,luft + abfluss + strahlung,1002,669,0.966,1.03,1.11

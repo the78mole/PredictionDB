@@ -45,6 +45,7 @@ Betreiber unter Nennung der Quellen frei veröffentlichen.
 | GIE AGSI+ (`gie_agsi`) | Gasspeicher je Gastag: Füllstand, Füllgrad, Ein-/Ausspeisung (DE, AT, NL, CZ, EU) | ja, kostenlos (siehe unten) | frei weiterverwendbar, Quellenangabe „GIE AGSI+“ Pflicht |
 | GIE ALSI (`gie_alsi`) | LNG-Terminals je Gastag: Bestand, Ausspeisung, Kapazität (DE, NL, BE, FR, EU) | wie AGSI+ | wie AGSI+, Quellenangabe „GIE ALSI“ |
 | Eurostat (`eurostat`) | monatlich: Gas (Bestand, Bilanz, Importe nach Herkunft), Rohöl-Einfuhrpreis DE, Öl (Bilanz, Bestände, Rohöl nach Herkunft), Steinkohle (Einfuhr, Kraftwerkseinsatz, EU-Bestand) | nein | CC BY 4.0, „Eurostat“ |
+| Hub'eau Hydrométrie (`hubeau`) | Abfluss an 14 Pegeln der französischen Kernkraftwerke mit Flusskühlung: Tagesmittel und Stundenmittel der Echtzeitwerte | nein | Licence Ouverte 2.0 (Etalab), „Hub'eau / eaufrance“ |
 
 ### Energy-Charts: Lizenz je Reihe
 

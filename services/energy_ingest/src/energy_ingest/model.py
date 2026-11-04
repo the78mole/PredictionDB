@@ -40,6 +40,10 @@ MONTHLY_STAT_DELAY = timedelta(days=90)
 MONTHLY_STAT_DELAY_SLOW = timedelta(days=150)
 # Short-Term Energy Outlook der EIA: erscheint in der ersten Monatshälfte (meist 6.-12.)
 OUTLOOK_DELAY = timedelta(days=14)
+# Abfluss (Hub'eau): Tagesmittel meist am Folgetag, an einzelnen Pegeln Tage später;
+# Echtzeitwerte kommen je nach Pegel nach Minuten bis Stunden
+RIVER_DAY_DELAY = timedelta(days=1)
+RIVER_RT_DELAY = timedelta(hours=3)
 
 UNIT_MW = "MW"
 UNIT_EUR_MWH = "EUR/MWh"
@@ -55,6 +59,7 @@ UNIT_GWH_D = "GWh/d"
 UNIT_PERCENT = "%"
 UNIT_KT = "kt"
 UNIT_KBBL = "kbbl"
+UNIT_M3_S = "m3/s"
 
 
 #: Nachbarzonen, deren Day-Ahead-Preise Energy-Charts unter CC BY 4.0 (SMARD) ausliefert:
@@ -119,6 +124,29 @@ GAS_STORAGE_AREAS: dict[str, tuple[dict[str, str], str]] = {
     "nl": ({"country": "NL"}, "NL"),
     "cz": ({"country": "CZ"}, "CZ"),
     "eu": ({"type": "eu"}, "EU27_2020"),
+}
+
+#: Abflusspegel an den französischen Kernkraftwerken mit Flusskühlung (Hub'eau, Code des
+#: Standorts) -> Kraftwerke dahinter. Auswahl und Begründung in
+#: docs/analysen/kkw-kuehlwasser-fr (Tabelle stationen.csv): je Kraftwerk der nächste Pegel mit
+#: vollständigem Einzugsgebiet; für Tricastin und Cruas Viviers oberhalb der Kanalabzweigung.
+#: Saint-Rambert misst erst seit 07/2024, für die Historie dazu Ternay (unterhalb der Saône);
+#: Blois liefert seit 09/2026 nicht mehr, dazu Onzain weiter flussab.
+RIVER_GAUGES: dict[str, tuple[str, str]] = {
+    "rhone_lagnieu": ("V1630020", "Bugey"),
+    "rhone_ternay": ("V3030020", "Saint-Alban"),
+    "rhone_st_rambert": ("V3440001", "Saint-Alban"),
+    "rhone_viviers": ("V4530010", "Cruas, Tricastin"),
+    "garonne_lamagistere": ("O6140010", "Golfech"),
+    "loire_st_satur": ("K4080010", "Belleville"),
+    "loire_gien": ("K4180010", "Dampierre"),
+    "loire_blois": ("K4470010", "Saint-Laurent"),
+    "loire_onzain": ("K4800010", "Saint-Laurent"),
+    "loire_saumur": ("L8000010", "Chinon"),
+    "vienne_lussac": ("L1400610", "Civaux"),
+    "moselle_uckange": ("A8500610", "Cattenom"),
+    "meuse_chooz": ("B7200000", "Chooz"),
+    "seine_pont_sur_seine": ("H1700010", "Nogent"),
 }
 
 #: Gebiete der LNG-Reihen (GIE ALSI): DE und die Terminals, über die LNG nach Deutschland
@@ -232,6 +260,8 @@ class Kind(StrEnum):
     STOCK_MONTHLY_SLOW = "stock_monthly_slow"  # wie STOCK_MONTHLY, später veröffentlicht
     FLOW_MONTHLY_SLOW = "flow_monthly_slow"  # wie FLOW_MONTHLY, später veröffentlicht
     OUTLOOK_MONTHLY = "outlook_monthly"  # Prognose je Ausgabe, Zeitstempel = Ausgabemonat (STEO)
+    RIVER_DAY = "river_day"  # Tagesmittel des Abflusses (Hub'eau, Tag in UTC)
+    RIVER_RT = "river_rt"  # Stundenmittel aus den Echtzeitwerten (Hub'eau)
 
 
 @dataclass(frozen=True)
@@ -424,6 +454,9 @@ SERIES: dict[str, SeriesInfo] = {
             for n, unit in OUTLOOK_SERIES.items()
             for k in OUTLOOK_HORIZONS
         ),
+        # Abfluss an den Pegeln der Kernkraftwerke (Hub'eau): Tagesmittel und Stundenmittel
+        *(SeriesInfo(f"river_flow_{g}", Kind.RIVER_DAY, UNIT_M3_S) for g in RIVER_GAUGES),
+        *(SeriesInfo(f"river_flow_{g}_h", Kind.RIVER_RT, UNIT_M3_S) for g in RIVER_GAUGES),
     ]
 }
 
@@ -461,6 +494,8 @@ def estimate_published(kind: Kind, ts: datetime, resolution: timedelta) -> datet
       Monatsende.
     - Öl- und Kohlebilanz der EU, Kohle je Land (Eurostat): wie oben, aber 150 Tage.
     - STEO-Prognosen (Zeitstempel am Beginn des Ausgabemonats): 14 Tage danach.
+    - Abfluss (Hub'eau): Tagesmittel einen Tag nach Ende des Tages, Stundenmittel drei
+      Stunden nach Ende der Stunde.
 
     @relation(SWR-ENI-021, scope=function)
     """
@@ -495,6 +530,10 @@ def estimate_published(kind: Kind, ts: datetime, resolution: timedelta) -> datet
             return next_period(ts, 1) + MONTHLY_STAT_DELAY_SLOW
         case Kind.OUTLOOK_MONTHLY:
             return ts + OUTLOOK_DELAY
+        case Kind.RIVER_DAY:
+            return ts + resolution + RIVER_DAY_DELAY
+        case Kind.RIVER_RT:
+            return ts + resolution + RIVER_RT_DELAY
 
 
 def published_at(kind: Kind, ts: datetime, resolution: timedelta, fetched: datetime) -> datetime:

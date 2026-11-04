@@ -38,6 +38,7 @@ from energy_ingest.sources.energy_charts import EnergyCharts
 from energy_ingest.sources.entsoe import Entsoe, EntsoeLast
 from energy_ingest.sources.eurostat import Eurostat
 from energy_ingest.sources.gie import GieAgsi, GieAlsi
+from energy_ingest.sources.hubeau import Hubeau
 from energy_ingest.sources.marktwert import Marktwert
 from energy_ingest.sources.netztransparenz import Netztransparenz
 from energy_ingest.sources.oil_bulletin import OilBulletin
@@ -169,6 +170,8 @@ def build_sources(
             sources.append((GieAgsi if code == "gie_agsi" else GieAlsi)(http, gie_key))
         elif code == "eurostat":
             sources.append(Eurostat(http))
+        elif code == "hubeau":
+            sources.append(Hubeau(http))
         else:
             raise ValueError(f"unbekannte Quelle {code!r}")
     # Eigene Marktwerte, solange die amtlichen von Netztransparenz nicht geladen werden

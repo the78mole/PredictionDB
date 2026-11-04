@@ -45,6 +45,8 @@ ALL_SOURCES = [
     "gie_agsi",
     "gie_alsi",
     "eurostat",
+    # Abfluss an den Pegeln der französischen Kernkraftwerke
+    "hubeau",
     # ENTSO-E (Last-Prognosen der Nachbarländer, ggf. unfreie Reihen)
     "entsoe",
     "entsoe_last",

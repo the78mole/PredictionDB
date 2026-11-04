@@ -558,5 +558,21 @@ RELATIONS:
 - TYPE: Parent
   VALUE: SYSR-EN-005
 
+[REQUIREMENT]
+UID: SWR-ENI-053
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Abfluss französischer Flüsse (Hub'eau)
+STATEMENT: >>>
+Der Dienst muss den Abfluss an den Pegeln der französischen Kernkraftwerke mit Flusskühlung
+von Hub'eau laden, als Tagesmittel mit Historie und als Stundenmittel der Echtzeitwerte, in
+m³/s.
+<<<
+QUELLE: docs/analysen/kkw-kuehlwasser-fr
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-001
+
 [[/SECTION]]
 
