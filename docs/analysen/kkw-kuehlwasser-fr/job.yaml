@@ -51,13 +51,13 @@ method:
     - Wassertemperatur (Hub'eau) und Abfluss (Hub'eau), wo vorhanden
   kennzahlen:
     korrelation: Spearman je Faktor und Zielgröße, je Gruppe
-    schwellen: Anteil der Tage mit Umweltmeldung je Klasse der Lufttemperatur (7 Tage) und Wassertemperatur
+    schwellen: Anteil der Tage mit Umweltmeldung je Klasse der Lufttemperatur (7 Tage), Wassertemperatur und Abfluss relativ zum Median
     wassertemperatur_aus_gfs: lineare Regression Wassertemperatur ~ gleitende Lufttemperaturen + log(Abfluss),
-      Train 2021–2023, Test 2024–2026 (R², MAE)
+      zeitlich geteilt, erste 60 % der Tage je Station lernen, Rest prüfen (R², MAE)
     austausch: OLS je Tag Netto-Import FR, Fluss DE→FR und Preisdifferenz FR−DE ~ umwelt_mw +
       Monat + Wochentag + Kernkraft-Verfügbarkeit ohne Umwelt (Koeffizient MW/MW bzw. EUR/MWh je GW)
   group_by: [gruppe, standort, faktor]
 outputs:
-  tables: [standorte, stationen, korrelation, schwellen, wassertemperatur_modell, umweltereignisse, austausch, tage]
-  figures: [ueberblick_2022, korrelation, schwellen, austausch]
+  tables: [standorte, stationen, korrelation, schwellen, wassertemperatur_modell, umweltereignisse, austausch, monate]
+  figures: [ueberblick_2022, ueberblick_2026, korrelation, schwellen, austausch]
 schedule: once

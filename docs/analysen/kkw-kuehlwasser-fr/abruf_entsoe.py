@@ -100,8 +100,8 @@ def a73(tag: dt.date, ziel: Path) -> None:
             for per in ts:
                 if lokal(per.tag) != "Period":
                     continue
-                t0 = dt.datetime.strptime(text(per, "timeInterval", "start"), "%Y-%m-%dT%H:%MZ")
-                t1 = dt.datetime.strptime(text(per, "timeInterval", "end"), "%Y-%m-%dT%H:%MZ")
+                t0 = dt.datetime.strptime(text(per, "timeInterval", "start"), "%Y-%m-%dT%H:%MZ")  # noqa: DTZ007
+                t1 = dt.datetime.strptime(text(per, "timeInterval", "end"), "%Y-%m-%dT%H:%MZ")  # noqa: DTZ007
                 schritt = dauer_min(text(per, "resolution"))
                 anzahl = int((t1 - t0).total_seconds() // 60 // schritt)
                 punkte = {
