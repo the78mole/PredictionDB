@@ -87,12 +87,14 @@ letzten neun Tage nach). Der Trainings-Container hat eine feste CPU-Grenze
 
 ## Registry und Champion/Challenger
 
-Bis MLflow läuft, ist die Registry ein Verzeichnisbaum (lokal oder in Garage) mit
+Die Registry ist ein Verzeichnisbaum (lokal oder in Garage) mit
 `registry.json` je Konfiguration und einem Ordner je Version (LightGBM-Modelle als Text,
 `manifest.json` mit Konfig-Hash, Snapshot-ID, Git-Commit und Backtest-Kennzahlen,
 `backtest.parquet`). Rollen: `champion`, `challengers`, `baseline`, `previous`. `predict`
 inferiert Champion, Challenger, Baseline und den letzten Vorgänger nebeneinander, jede Version
 mit eigenem `model_version` in `fcst.prediction`.
+Ist `MLFLOW_TRACKING_URI` gesetzt, spiegelt jeder Abgleich Versionen und Rollen nach MLflow und
+`backtest`/`fit` melden ihre Läufe dorthin (`tracking.py`, [docs/MLFLOW.md](../../docs/MLFLOW.md)).
 
 `promote` prüft auf den gemeinsamen Backtest-Zeilen beider Versionen: Der Challenger muss je
 Ziel im Mittel (Pinball-Loss über P10/P50/P90) besser sein und darf in keiner Gruppe aus Ziel,
@@ -141,5 +143,5 @@ Ausrichtung der Wetterintervalle, Faltungen, Speichern/Laden und die Champion/Ch
   Lastprognosen der Nachbarn (seit #159 in `energy.value_best`) als Merkmale.
 - Reaktion auf `NOTIFY features_ready` statt stündlicher Inferenz; Ausgabe auch nach dem
   06Z-Lauf.
-- MLflow statt Datei-Registry; Snapshot-Austausch über `ml-exchange` mit presigned URLs.
+- MLflow als Quelle statt Spiegel der Datei-Registry (heute: Spiegel, [docs/MLFLOW.md](../../docs/MLFLOW.md)); Snapshot-Austausch über `ml-exchange` mit presigned URLs.
 - Neuronales Netz (TFT/TiDE) gegen diesen LightGBM-Champion, sobald die Wetterhistorie da ist.

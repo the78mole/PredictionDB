@@ -1,6 +1,6 @@
 # MLflow: Bewertung und Integrationsvorschlag
 
-**Status:** Vorschlag, nicht umgesetzt, auf der VM nichts installiert · **Stand:** 2026-11-05
+**Status:** Dienst und Tracking umgesetzt (Profil `mlflow`, Kap. 7), Backtest-Ordner noch auf dem Volume `ml-data` · **Stand:** 2026-11-05
 
 Frage: Was ist MLflow, kann PredictionDB es nutzen, und wie passt es zu `ml-train`, zur
 Datei-Registry und zu `meta.model_version`? Ziel ist, Backtests und trainierte Modelle bequem
@@ -220,49 +220,102 @@ und `predict/` lesen weiter Dateien.
 
 ## 7. Betrieb auf der VM
 
-Skizze für `compose.yaml` (Profil `mlflow`, nur nach Freigabe aufgesetzt):
+Umgesetzt in `compose.yaml`, Profil `mlflow` (`COMPOSE_PROFILES=…,mlflow`):
 
-```yaml
-  mlflow:
-    profiles: [mlflow]
-    build: docker/mlflow          # FROM ghcr.io/mlflow/mlflow:v3.18.0 + psycopg2-binary, boto3
-    command: >
-      mlflow server --host 0.0.0.0 --port 5000
-      --backend-store-uri postgresql://mlflow:${MLFLOW_DB_PASSWORD}@postgres:5432/mlflow
-      --artifacts-destination s3://ml-artifacts
-    environment:
-      MLFLOW_S3_ENDPOINT_URL: http://garage:3900
-      AWS_ACCESS_KEY_ID: ${MLFLOW_S3_KEY_ID}         # Garage-Schlüssel nur für ml-artifacts
-      AWS_SECRET_ACCESS_KEY: ${MLFLOW_S3_SECRET}
-      AWS_DEFAULT_REGION: garage
-    depends_on:
-      postgres: {condition: service_healthy}
-      garage: {condition: service_healthy}
-    ports: ["127.0.0.1:5000:5000"]
-    mem_limit: 1g
+| Dienst | Image | Aufgabe |
+|---|---|---|
+| `mlflow-db-init` | TimescaleDB (wie `postgres`) | legt einmalig Rolle und Datenbank `mlflow` an und setzt das Passwort aus `MLFLOW_DB_PASSWORD` (idempotent) |
+| `mlflow` | `ghcr.io/mlflow/mlflow:v3.18.0-full` | Tracking-Server und Modell-Registry, 2 Worker, `mem_limit: 1g`, nur im Netz `backend` |
+| `mlflow-auth` | `quay.io/oauth2-proxy/oauth2-proxy:v7.15.6` | Anmeldung über OIDC (Keycloak) vor der Oberfläche, veröffentlicht auf `MLFLOW_PUBLISH` |
+
+```mermaid
+flowchart LR
+    B[Browser] -->|https| RP[Reverse Proxy]
+    RP -->|MLFLOW_PUBLISH :4180| A[mlflow-auth<br/>oauth2-proxy]
+    A <-->|OIDC| K[Keycloak]
+    A -->|angemeldet| M[mlflow :5000]
+    T[ml-train / ml-predict] -->|Netz backend,<br/>ohne Anmeldung| M
+    M --> P[(Postgres<br/>DB mlflow)]
+    M --> G[(Garage<br/>ml-artifacts/mlflow)]
 ```
 
 - **Datenbank:** eigene Datenbank `mlflow` mit eigenem Benutzer im vorhandenen Postgres, nicht im
-  Schema von PredictionDB. MLflow verwaltet sein Schema selbst (Alembic, `mlflow db upgrade` bei
-  Versionswechseln). Größenordnung: wenige MB je tausend Läufe.
-- **Artefakte:** ein gemeinsamer Bucket `ml-artifacts` mit den Präfixen `mlflow/` (Ansicht,
-  wenige hundert kB je Lauf), `models/` (Datei-Registry wie heute) und `backtests/` (Backtest-Ordner,
-  bisher auf dem Volume `ml-data`). Große Dateien liegen nur einmal vor.
-- **IO:** je Backtest einige hundert Zeilen in wenigen Transaktionen. Das liegt weit unter dem,
-  was Ingest und `ml-predict` stündlich schreiben (der Engpass der VM liegt bei WAL und
-  IOPS der Datenplatte, gemessen am 2026-10-30).
-- **Geheimnisse:** `MLFLOW_DB_PASSWORD` und der Garage-Schlüssel sind echte Geheimnisse
-  (OpenBao, `env-aus-openbao.sh`); Port und URL (`MLFLOW_TRACKING_URI=http://mlflow:5000`) stehen
-  als normale Werte in der `.env`.
-- **Zugang:** zunächst nur `127.0.0.1` auf der VM, vom Laptop per SSH-Tunnel
-  (`ssh -L 5000:127.0.0.1:5000 …`). MLflow hat ohne Zusatz keine Anmeldung; wenn es über das LAN
-  erreichbar sein soll, dann hinter einem Reverse Proxy mit Anmeldung, später Keycloak wie in
-  [STEUER-UI.md](STEUER-UI.md) Kap. 8.
-- **Lizenzen der Daten:** MLflow ist intern. Artefakte und Kennzahlen dürfen deshalb auch aus der
-  Klasse „nur Training“ stammen. MLflow wird nicht öffentlich gemacht und nicht über GHCR
-  exportiert; öffentlich bleiben nur Modelle und Kennzahlen nach 7.11.
-- **Lizenz von MLflow:** Apache 2.0, verträglich mit AGPL-3.0-only für unseren Code, da MLflow nur
-  als Client-Bibliothek eingebunden bzw. als eigener Dienst betrieben wird.
+  Schema von PredictionDB. MLflow legt sein Schema beim Start selbst an und hebt es bei
+  Versionswechseln an. Größenordnung: wenige MB je tausend Läufe.
+- **Artefakte:** gemeinsamer Bucket `ml-artifacts`, MLflow schreibt unter `mlflow/` (wenige
+  hundert kB je Lauf). Modellversionen verweisen auf die Ordner der Datei-Registry unter
+  `models/`, ohne Kopie. Der Server nutzt den Garage-Schlüssel der Dienste
+  (`PDB_S3_ACCESS_KEY_ID`). Die Backtest-Ordner bleiben vorerst auf dem Volume `ml-data`; der
+  Lauf trägt ihren Pfad im Tag `backtest_uri`.
+- **ml-train** meldet sich, sobald in der `.env` `MLFLOW_TRACKING_URI=http://mlflow:5000` steht
+  (`ml_train/tracking.py`): `ml-train backtest` als Elternlauf mit Unterläufen je Verfahren,
+  `ml-train fit` als Lauf je Version, und jeder Registry-Abgleich (`registry sync`, nach `fit`,
+  `promote`, `attach-backtest` und in `ml-predict`) spiegelt Versionen, Tag `role` und die Aliase
+  `champion`, `baseline`, `previous`. Fehler werden nur protokolliert (`mlflow.failed`).
+- **Host-Header:** MLflow 3 lehnt Anfragen mit fremdem Host-Header ab (Schutz vor
+  DNS-Rebinding). Erlaubt sind `mlflow`, `mlflow:5000`, `localhost:*` und `MLFLOW_HOSTNAME`.
+- **IO:** je Backtest einige hundert Zeilen in wenigen Transaktionen, weit unter dem, was Ingest
+  und `ml-predict` stündlich schreiben.
+- **Lizenzen der Daten:** MLflow ist intern. Kennzahlen dürfen deshalb auch aus der Klasse „nur
+  Training“ stammen. MLflow wird nicht öffentlich gemacht und nicht über GHCR exportiert.
+- **Lizenzen der Werkzeuge:** MLflow Apache 2.0, oauth2-proxy MIT; beide laufen als eigene
+  Dienste, `mlflow-skinny` ist Client-Bibliothek von `ml_train`.
+
+### 7.1 Anmeldung über Keycloak
+
+MLflow selbst kann kein OIDC. `mlflow-auth` (oauth2-proxy, Anbieter `keycloak-oidc`, PKCE)
+leitet zur Anmeldung an Keycloak weiter und reicht danach alle Anfragen an `mlflow:5000` durch.
+Wer angemeldet ist, darf alles; feinere Rechte je Experiment gäbe es mit dem Plugin
+`mlflow-oidc-auth`, das ist bewusst nicht vorgesehen. `ml-train` braucht keine Anmeldung, weil
+es den Server im internen Netz direkt anspricht und `mlflow:5000` nicht veröffentlicht ist.
+
+In Keycloak (Realm nach Wahl):
+
+1. **Client anlegen:** Client-ID `predb-mlflow` (oder `MLFLOW_OIDC_CLIENT_ID`), Typ OpenID
+   Connect, *Client authentication* an, *Standard flow* an, sonst nichts.
+2. **Redirect-URI:** `https://<MLFLOW_HOSTNAME>/oauth2/callback`, *Web origins*
+   `https://<MLFLOW_HOSTNAME>`.
+3. **Audience:** Unter *Client scopes → predb-mlflow-dedicated* einen Mapper *Audience* mit
+   *Included Client Audience* `predb-mlflow` anlegen; oauth2-proxy prüft, dass das Token für
+   diesen Client ausgestellt ist.
+4. **Secret:** Unter *Credentials* das Client-Secret kopieren und nach OpenBao legen.
+5. **Benutzer:** Konten brauchen eine bestätigte E-Mail-Adresse. Wer nicht jeden Benutzer des
+   Realms zulassen will, legt eine Gruppe an, fügt einen Mapper *Group Membership* (Claim
+   `groups`) hinzu und ergänzt in `compose.yaml` bei `mlflow-auth`
+   `OAUTH2_PROXY_ALLOWED_GROUPS: /<gruppe>`.
+
+In der `.env`:
+
+```sh
+COMPOSE_PROFILES=…,mlflow
+MLFLOW_TRACKING_URI=http://mlflow:5000
+MLFLOW_HOSTNAME=predb-mlflow.intern.example.org
+MLFLOW_PUBLISH=<IP der VM im Proxy-Netz>:4180
+MLFLOW_OIDC_ISSUER=https://keycloak.example.org/realms/<realm>
+MLFLOW_OIDC_CLIENT_ID=predb-mlflow
+# Geheimnisse aus OpenBao
+MLFLOW_DB_PASSWORD=...        # openssl rand -hex 24
+MLFLOW_OIDC_CLIENT_SECRET=... # aus Keycloak
+MLFLOW_COOKIE_SECRET=...      # openssl rand -hex 16
+```
+
+### 7.2 Reverse Proxy
+
+Der Reverse Proxy (z. B. Nginx Proxy Manager) bekommt einen Eintrag für `MLFLOW_HOSTNAME` mit
+Ziel `http://<MLFLOW_PUBLISH>`, TLS erzwungen, Websockets an. Der Host-Header muss erhalten
+bleiben (Standard bei Nginx Proxy Manager). Weitere Anmeldung im Proxy ist nicht nötig.
+
+### 7.3 Start und Kontrolle
+
+```sh
+docker compose up -d mlflow-db-init mlflow mlflow-auth
+docker compose logs -f mlflow mlflow-auth
+docker compose --profile ml run --rm ml-train registry sync   # Versionen erstmals spiegeln
+```
+
+`registry sync` meldet unter `mlflow` die Zahl der gespiegelten Versionen. Vorhandene
+Backtest-Ordner trägt erst ein späterer Nachtrag ein (Kap. 8, Schritt 5); neue Läufe erscheinen
+ab sofort.
 
 ## 8. Aufwand
 
@@ -301,8 +354,9 @@ wenn MLflow nicht kommt.
 4. Nach einigen Wochen prüfen, ob die Oberfläche tatsächlich genutzt wird. Wenn nicht, Profil
    abschalten; die Datei-Registry und Grafana laufen unverändert weiter.
 
-Zu entscheiden: ob MLflow auf der VM aufgesetzt werden soll, und ob es nur per SSH-Tunnel oder
-im LAN erreichbar sein soll.
+Entschieden 2026-11-05: MLflow wird über den internen Reverse Proxy erreichbar gemacht, die
+Anmeldung läuft über Keycloak (Kap. 7.1). Offen sind der Nachtrag vorhandener Backtests und
+die Ablage der Backtest-Ordner in Garage.
 
 ## 11. Quellen
 
@@ -312,3 +366,5 @@ im LAN erreichbar sein soll.
 - Paket und Version: <https://pypi.org/project/mlflow/> (3.18.0, abgerufen 2026-11-05)
 - ClearML Server, Lizenz SSPL: <https://github.com/clearml/clearml-server>
 - Aim: <https://github.com/aimhubio/aim>
+- oauth2-proxy, Anbieter Keycloak OIDC: <https://oauth2-proxy.github.io/oauth2-proxy/configuration/providers/keycloak_oidc> (MIT)
+- MLflow, Schutz über `--allowed-hosts`: <https://mlflow.org/docs/latest/self-hosting/security/network/>

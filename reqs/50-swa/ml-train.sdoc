@@ -224,6 +224,19 @@ RELATIONS:
   VALUE: SWR-MLT-003
 
 [ELEMENT]
+UID: SWA-MLT-TRACKING
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: MLflow-Anbindung
+STATEMENT: >>>
+Backtests, Fits und Registry-Rollen nach MLflow melden, nur mit ``MLFLOW_TRACKING_URI``.
+<<<
+ORT: services/ml_train/src/ml_train/tracking.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MLT-047
+
+[ELEMENT]
 UID: SWA-MLT-PREDICT
 ART: Komponente
 STATUS: Umgesetzt
