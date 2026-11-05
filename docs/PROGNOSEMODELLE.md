@@ -567,7 +567,7 @@ Eingerichtet wird das erst, wenn mindestens drei Jahre GFS-Trainingsdaten vorlie
 | **Neuronales Netz** (TFT, TiDE oder N-HiTS mit bekannten Zukunftskovariaten) | muss den LightGBM-Champion im selben Backtest schlagen |
 | **Streuung der aktiven Versionen** (`fcst.model_spread`) und gewichtetes Ensemble | Unsicherheitssignal und mögliche Kombination der Versionen |
 | **Inferenz bei `NOTIFY features_ready`** statt stündlich, zusätzliche Ausgabe nach dem 06Z-Lauf | frischere Wetterdaten vor Gebotsschluss |
-| **MLflow** statt Datei-Registry | Versionen, Metriken und Artefakte in einer Oberfläche |
+| **MLflow** für Backtests und Fits, Registry als Spiegel ([MLFLOW.md](MLFLOW.md)) | Läufe, Kennzahlen und Versionen in einer Oberfläche vergleichen |
 
 ## 10. Modellkonfigurationen und Varianten
 
