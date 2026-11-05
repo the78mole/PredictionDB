@@ -500,6 +500,11 @@ Eingerichtet wird das erst, wenn mindestens drei Jahre GFS-Trainingsdaten vorlie
   hängt die Prognosen eines Backtests derselben Konfiguration und Variante an eine schon
   registrierte Version; der nächste Abgleich füllt `meta.model_metric`.
 
+- **Wichtigkeit der Merkmale:** `ml-train importance <version>` zeigt den Gain je Ziel und
+  Merkmalsgruppe, `--by feature` je Spalte, ohne Datenbank und ohne Backtest. Das ist ein schneller
+  Hinweis, worauf ein Modell im Training baut, kein Ersatz für den Backtest: Ähnliche Spalten
+  teilen sich den Gain, und Gain im Training ist noch keine bessere Prognose.
+
 - **Prognosepaket für den schlanken Stack:** `ml-train bundle <version> --out <ordner>` legt
   eine Version mit Konfiguration, Bestand aus dem MaStR und bei Wetter-Varianten den
   Gitter-Gewichten der Cluster als Ordner ab (ohne Backtest-Prognosen). Der Stack

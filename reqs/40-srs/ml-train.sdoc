@@ -450,6 +450,25 @@ RELATIONS:
 [[/SECTION]]
 
 [[SECTION]]
+TITLE: Auswertung
+
+[REQUIREMENT]
+UID: SWR-MLT-072
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Wichtigkeit der Merkmale
+STATEMENT: >>>
+``importance`` muss für eine Version ohne Datenbank und ohne Backtest den Gain je Ziel als Anteil
+je Merkmal und Merkmalsgruppe ausgeben, gemittelt über die Quantile.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-003
+
+[[/SECTION]]
+
+[[SECTION]]
 TITLE: Veröffentlichung
 
 [REQUIREMENT]
