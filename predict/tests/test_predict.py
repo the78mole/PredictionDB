@@ -391,10 +391,29 @@ def test_neighbour_package_and_predict(tmp_path: Path) -> None:
     cache = EnergyCache(tmp_path, {"smard": FakeSource("smard", snap.energy)})
     with_nb = Predictor(lambda: pkg, cache, lambda p: Weather(train.weather)).run(issue)  # type: ignore[arg-type, return-value]
     assert "nachbarwetter" not in with_nb["inputs_missing"]
+    assert any(s["code"] == "natural_earth" for s in with_nb["sources"])
+    assert with_nb["model"]["neighbour_weather"]["zones"] == ["FR", "DK1"]
     assert with_nb["targets"]["da_price_de_lu"]
     without = Predictor(lambda: pkg, cache, lambda p: Weather(w)).run(issue)  # type: ignore[arg-type, return-value]
     assert "nachbarwetter" in without["inputs_missing"]
     assert without["targets"]["da_price_de_lu"]
+
+    # Der Wetter-Cache entsteht je Paketversion neu, nicht bei jedem Lauf
+    built: list[str] = []
+
+    def factory(p: Any) -> Any:
+        built.append(p.version)
+        return Weather(train.weather)
+
+    other = load_package(out)
+    other.info = {**other.info, "version": "andere"}
+    current = [pkg]
+    predictor = Predictor(lambda: current[0], cache, factory)
+    predictor.run(issue)
+    predictor.run(issue)
+    current[0] = other
+    predictor.run(issue)
+    assert built == [pkg.version, "andere"]
 
 
 def test_oci_pull_and_refresh(package: Path, tmp_path: Path) -> None:

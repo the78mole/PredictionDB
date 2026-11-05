@@ -137,6 +137,7 @@ Merkmal leer und `inputs_missing` nennt sie.
 | Heizöl, Diesel DE | EU Weekly Oil Bulletin | CC BY 4.0 |
 | Wetter (nur Wetter-Varianten) | NOAA GFS 0,25°, NOMADS-Filter bzw. AWS/Google | gemeinfrei |
 | Wetter der Nachbarzonen (nur `nachbarwetter`) | NOAA GFS 0,5°, AWS/Google | gemeinfrei |
+| Zonengrenzen (nur `nachbarwetter`) | im Paket, aus Natural Earth | gemeinfrei |
 | Bestand, Cluster | im Paket, aus dem MaStR | Datenlizenz Deutschland – Namensnennung 2.0 |
 
 Die Prognosen stehen wie die Modelle unter **CC BY 4.0**. Namensnennung: „PredictionDB

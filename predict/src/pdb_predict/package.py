@@ -81,6 +81,7 @@ class ModelPackage:
             "train_issue_days": self.manifest.get("train_issue_days"),
             "capacity_until": self.info.get("capacity_until"),
             "requires_weather": self.requires_weather,
+            "neighbour_weather": self.info.get("neighbour_weather"),
             "backtest_metrics": self.manifest.get("backtest_metrics", []),
         }
 
