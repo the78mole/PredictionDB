@@ -151,6 +151,13 @@ def build_parser() -> argparse.ArgumentParser:
     bu.add_argument("--registry", default=DEFAULT_REGISTRY)
     bu.add_argument("--snapshot", type=Path, help="Bestand aus dem Snapshot statt der Datenbank")
     bu.add_argument("--wx-config", type=Path, default=Path("config/process/gfs_0p25.yaml"))
+
+    im = cmd.add_parser("importance", help="Wichtigkeit der Merkmale einer Version (Gain)")
+    im.add_argument("version")
+    im.add_argument("--registry", default=DEFAULT_REGISTRY)
+    im.add_argument("--by", choices=["group", "feature"], default="group")
+    im.add_argument("--top", type=int, default=15, help="Zeilen je Ziel bei --by feature")
+    im.add_argument("--out", type=Path, help="alle Merkmale zusätzlich als CSV")
     return p
 
 
@@ -507,6 +514,20 @@ def run_job(cfg: ModelConfig, sha: str, a: argparse.Namespace) -> int:
     return rc
 
 
+def cmd_importance(cfg: ModelConfig, a: argparse.Namespace) -> int:
+    """@relation(SWR-MLT-072, scope=function)"""
+    from ml_train.importance import by_group, feature_importance
+
+    model = Registry(a.registry, cfg).load(a.version, Path(DEFAULT_CACHE))
+    table = feature_importance(model)
+    if a.out:
+        a.out.parent.mkdir(parents=True, exist_ok=True)
+        table.to_csv(a.out, index=False)
+    show = by_group(table) if a.by == "group" else table.groupby("target").head(a.top)
+    print(show.round(2).to_string(index=False))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """@relation(SWR-MLT-001, scope=function)"""
     a = build_parser().parse_args(argv)
@@ -520,6 +541,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_predict(cfg, a)
     if a.cmd == "bundle":
         return cmd_bundle(cfg, a)
+    if a.cmd == "importance":
+        return cmd_importance(cfg, a)
     return 2
 
 

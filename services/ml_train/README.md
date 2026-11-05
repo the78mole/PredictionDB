@@ -65,6 +65,7 @@ uv run ml-train fit --snapshot .ml-data/snap --variant kalender --backtest .ml-d
 uv run ml-train registry list
 uv run ml-train registry evaluate <version>                        # Champion/Challenger
 uv run ml-train registry promote <version>
+uv run ml-train importance <version>                               # Gain je Ziel und Merkmalsgruppe
 uv run ml-train registry sync                                      # Spiegel für Grafana
 uv run ml-train registry attach-backtest <version> --backtest .ml-data/bt # Backtest nachreichen
 uv run ml-train predict --dry-run                                  # aktive Versionen, jetzt

@@ -12,14 +12,16 @@ import pytest
 
 from ml_train.backtest import backtest_steps, make_folds, run_backtest
 from ml_train.calendar import calendar_features
-from ml_train.config import ModelConfig, NeighbourWeather, load_config, neighbour_feature
+from ml_train.config import ModelConfig, NeighbourWeather, Variant, load_config, neighbour_feature
 from ml_train.dataset import (
     FeatureBuilder,
     WeatherTable,
     gfs_version,
+    issue_days_between,
     local_day_hours,
     same_local_time,
 )
+from ml_train.importance import by_group, feature_group, feature_importance
 from ml_train.jobs import JobLog
 from ml_train.models import TwoStageModel
 from ml_train.predict import by_issue, compare_issue, due_issues, needs_weather, next_wake
@@ -718,3 +720,46 @@ def test_calibration_widens_bands_per_lead_day(snap, cfg, tmp_path) -> None:  # 
     pd.testing.assert_frame_equal(
         m.predict(test)["da_price_de_lu"], loaded.predict(test)["da_price_de_lu"]
     )
+
+
+def test_feature_importance_by_group(snap, cfg) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-072, scope=function)"""
+    cfg.lgbm.n_estimators = 10
+    cfg.lgbm.n_jobs = 1
+    variant = Variant(name="t", groups=["calendar", "lags", "capacity", "weather", "stage1"])
+    frame = FeatureBuilder(snap, cfg).build(
+        issue_days_between(date(2023, 3, 1), date(2023, 5, 1), 7)
+    )
+    model = TwoStageModel(cfg, variant).fit(frame)
+    table = feature_importance(model)
+    assert set(table["target"]) == set(cfg.targets)
+    assert set(table["stage"]) == {"stage1", "stage2"}
+    np.testing.assert_allclose(table.groupby("target")["gain_pct"].sum(), 100.0)
+    groups = by_group(table)
+    assert set(groups["group"]) <= {"calendar", "lags", "capacity", "weather", "stage1"}
+    price = groups[groups["target"] == "da_price_de_lu"]
+    assert price["gain_pct"].is_monotonic_decreasing
+    assert price.loc[price["group"] == "stage1", "gain_pct"].iloc[0] > 0
+
+
+def test_feature_group_from_name(cfg) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-072, scope=function)"""
+    v2, _ = load_config(ROOT / "config/ml/de_lu_v2.yaml")
+    variant = v2.variant("wetter_frei_gk_skaliert_nachbarwetter")
+    expected = {
+        "hour": "calendar",
+        "lead_h": "calendar",
+        "s1_load_actual": "stage1",
+        "cap_pv": "capacity",
+        "wx_gfs_v": "nwp_version",
+        "wx_nb_fr_wind_cf": "nachbarwetter",
+        "wx_pv_roof_ghi": "weather",
+        "gk_niveau": "grenzkosten",
+        "lag_da_price_fr_mean_7d": "nachbarn",
+        "lag_da_price_de_lu_mean_day": "lags",
+        "fc_load_da_forecast": "lastprognose",
+        "asof_mw_base_chg": "marktwerte",
+        "asof_gas_eu_m": "brennstoffe",
+        "unbekannt": "sonstige",
+    }
+    assert {k: feature_group(k, v2, variant) for k in expected} == expected
