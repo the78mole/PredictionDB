@@ -145,6 +145,10 @@ jobs:
           fi
           uv run --only-group dev coverage combine --keep "${daten[@]}"
           uv run --only-group dev coverage xml -o build/coverage/coverage.xml
+          # Gesamtzeile auch im Log, z. B. für den Eintrag bei bestpractices.dev
+          uv run --only-group dev coverage report --skip-covered | tail -n 1
+          uv run --only-group dev coverage json -q -o build/coverage/coverage.json
+          python3 -c "import json; t = json.load(open('build/coverage/coverage.json'))['totals']; print(f\"Anweisungen {t['covered_lines']}/{t['num_statements']} = {100 * t['covered_lines'] / t['num_statements']:.1f} %, Zweige {t['covered_branches']}/{t['num_branches']}\")" | tee -a "$GITHUB_STEP_SUMMARY"
           {
             echo "## Testabdeckung (Unit + Integration)"
             echo
