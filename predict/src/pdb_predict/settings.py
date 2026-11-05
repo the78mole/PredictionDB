@@ -38,6 +38,8 @@ class PredictSettings(BaseSettings):
     model_refresh_h: float = Field(default=24.0, gt=0)
     #: Quellen-YAML von wx-ingest (Endpunkte, Gitterausschnitt) für Wetter-Varianten
     gfs_config: Path = Path("config/sources/gfs_0p25.yaml")
+    #: Quellen-YAML für das Nachbarwetter (GFS 0,5°, nur Pakete mit ``nachbarwetter``)
+    gfs_nb_config: Path = Path("config/sources/gfs_0p5.yaml")
     #: Eine Prognose gilt nach so vielen Stunden als veraltet (``/health`` meldet 503)
     stale_after_h: float = Field(default=3.0, gt=0)
     http_timeout_s: float = 60.0

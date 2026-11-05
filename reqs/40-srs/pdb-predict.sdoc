@@ -181,6 +181,22 @@ RELATIONS:
 - TYPE: Parent
   VALUE: SYSR-PR-003
 
+[REQUIREMENT]
+UID: SWR-PRD-025
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Wetter der Nachbarzonen
+STATEMENT: >>>
+Für Pakete mit der Gruppe ``nachbarwetter`` muss der Dienst zum Lauf des DE-Wetters denselben
+GFS-0,5°-Lauf laden und mit den Zonenzellen aus dem Paket die Flächenmittel je Nachbarzone so
+bilden wie das Gold ``gefs:<zone>:area`` von ``wx-process``. Fehlt der Lauf, bleiben die
+Merkmale leer und die Prognose läuft weiter.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-004
+
 [[/SECTION]]
 
 [[SECTION]]

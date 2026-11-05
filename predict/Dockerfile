@@ -23,6 +23,7 @@ WORKDIR /app
 COPY --from=build /app/.venv /app/.venv
 # Endpunkte und Gitterausschnitt für GFS (nur Wetter-Varianten)
 COPY config/sources/gfs_0p25.yaml config/sources/gfs_0p25.yaml
+COPY config/sources/gfs_0p5.yaml config/sources/gfs_0p5.yaml
 COPY LICENSE predict/README.md ./
 ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 \
     PDB_PREDICT_DATA_DIR=/data PDB_PREDICT_MODEL=/models

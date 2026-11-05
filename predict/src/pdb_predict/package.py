@@ -51,6 +51,9 @@ class ModelPackage:
     clusters: pd.DataFrame | None = None
     cluster_capacity: pd.DataFrame | None = None
     wx_process: dict[str, Any] | None = None
+    #: nur Gruppe ``nachbarwetter``: Zellen je Zone (``zone, lat, lon, share``) und Technik
+    neighbour_regions: pd.DataFrame | None = None
+    wx_process_nb: dict[str, Any] | None = None
     source: str = ""
     digest: str | None = None
 
@@ -66,6 +69,10 @@ class ModelPackage:
     def requires_weather(self) -> bool:
         return bool(self.info.get("requires_weather"))
 
+    @property
+    def requires_neighbour(self) -> bool:
+        return bool(self.info.get("neighbour_weather"))
+
     def describe(self) -> dict[str, Any]:
         """Kurzinfo für ``/v1/model`` und die Prognosedatei."""
         return {
@@ -79,6 +86,7 @@ class ModelPackage:
             "train_issue_days": self.manifest.get("train_issue_days"),
             "capacity_until": self.info.get("capacity_until"),
             "requires_weather": self.requires_weather,
+            "neighbour_weather": self.info.get("neighbour_weather"),
             "backtest_metrics": self.manifest.get("backtest_metrics", []),
         }
 
@@ -93,13 +101,17 @@ def load_package(path: Path, source: str = "", digest: str | None = None) -> Mod
     manifest = json.loads((path / "manifest.json").read_text())
     capacity = pd.read_parquet(path / "capacity.parquet")
     clusters = cluster_capacity = None
-    wx = None
+    wx = wx_nb = None
+    regions = None
     if info.get("requires_weather"):
         import yaml
 
         clusters = pd.read_parquet(path / "clusters.parquet")
         cluster_capacity = pd.read_parquet(path / "cluster_capacity.parquet")
         wx = yaml.safe_load((path / "wx_process.yaml").read_text())
+        if info.get("neighbour_weather"):
+            regions = pd.read_parquet(path / "neighbour_regions.parquet")
+            wx_nb = yaml.safe_load((path / "wx_process_nb.yaml").read_text())
     return ModelPackage(
         path,
         info,
@@ -110,6 +122,8 @@ def load_package(path: Path, source: str = "", digest: str | None = None) -> Mod
         clusters,
         cluster_capacity,
         wx,
+        regions,
+        wx_nb,
         source or str(path),
         digest,
     )

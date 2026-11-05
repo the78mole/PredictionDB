@@ -232,6 +232,8 @@ ORT: services/ml_train/src/ml_train/bundle.py
 RELATIONS:
 - TYPE: Parent
   VALUE: SWR-MLT-070
+- TYPE: Parent
+  VALUE: SWR-MLT-071
 
 [ELEMENT]
 UID: SWA-MLT-TESTING

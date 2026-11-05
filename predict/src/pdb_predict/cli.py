@@ -27,7 +27,7 @@ from pdb_predict.package import ModelPackage, PackageSource
 from pdb_predict.server import Api, serve
 from pdb_predict.service import Predictor, write_outputs
 from pdb_predict.settings import PredictSettings
-from pdb_predict.weather import WeatherCache
+from pdb_predict.weather import NeighbourCache, WeatherCache
 from predictiondb_core.log import configure_logging, get_logger
 from predictiondb_core.settings import get_settings
 from wx_ingest.config import GfsConfig
@@ -66,12 +66,22 @@ def make_predictor(s: PredictSettings, client: httpx.Client) -> tuple[Predictor,
 
     def weather(pkg: ModelPackage) -> WeatherCache:
         w = pkg.info.get("weather") or {}
+        max_lead_h = int(w.get("max_lead_h", 216))
+        nb = None
+        if pkg.requires_neighbour:
+            nb = NeighbourCache(
+                s.cache_dir,
+                GfsConfig.from_yaml(s.gfs_nb_config),
+                max_lead_h=max_lead_h,
+                timeout_s=s.http_timeout_s,
+            )
         return WeatherCache(
             s.cache_dir,
             GfsConfig.from_yaml(s.gfs_config),
             run_hours=w.get("run_hours", [0, 12]),
-            max_lead_h=int(w.get("max_lead_h", 216)),
+            max_lead_h=max_lead_h,
             timeout_s=s.http_timeout_s,
+            neighbour=nb,
         )
 
     return Predictor(source.get, energy, weather), source
