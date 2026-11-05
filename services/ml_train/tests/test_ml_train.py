@@ -479,6 +479,56 @@ def test_backtest_resumes_from_checkpoint(snap, tmp_path: Path, monkeypatch) -> 
         run_backtest(fb, c, ["kalender"], checkpoint=Checkpoint(tmp_path, "s2", c))
 
 
+def test_rolling_window_resolves_to_last_month_or_season() -> None:
+    """@relation(SWR-MLT-045, scope=function)"""
+    from ml_train.config import RollingWindow
+
+    w = RollingWindow(months=24, until="month").resolve(date(2026, 11, 5))
+    assert (w.start, w.end, w.name) == (
+        date(2024, 11, 1),
+        date(2026, 10, 31),
+        "roll_24m_202411_202610",
+    )
+    # Jahreswechsel und Monatserster: der laufende Monat gehört nie dazu
+    w = RollingWindow(months=12, until="month").resolve(date(2026, 1, 1))
+    assert (w.start, w.end) == (date(2025, 1, 1), date(2025, 12, 31))
+    # Jahreszeit: Ende der letzten vollen Jahreszeit (Herbst endet im November)
+    w = RollingWindow(months=24, until="season").resolve(date(2026, 11, 5))
+    assert (w.start, w.end) == (date(2024, 9, 1), date(2026, 8, 31))
+    w = RollingWindow(months=24, until="season").resolve(date(2026, 3, 1))
+    assert (w.start, w.end) == (date(2024, 3, 1), date(2026, 2, 28))
+    w = RollingWindow(months=12, until="season").resolve(date(2026, 1, 15))
+    assert (w.start, w.end) == (date(2024, 12, 1), date(2025, 11, 30))
+    v2, _ = load_config(ROOT / "config/ml/de_lu_v2.yaml")
+    names = [x.name for x in v2.compare_windows(date(2026, 11, 5))]
+    assert names == ["w2024_2025", "roll_24m_202411_202610"]
+
+
+def test_dbsync_rolling_window_rows() -> None:
+    """@relation(SWR-MLT-045, scope=function)"""
+    from ml_train.config import RollingWindow
+    from ml_train.dbsync import metric_rows
+
+    issue = pd.date_range("2025-12-01 08:00", "2026-03-10 08:00", freq="D", tz="UTC")
+    bt = pd.DataFrame(
+        {
+            "target": "load_actual",
+            "issue_time": issue,
+            "ts": issue + pd.Timedelta(hours=20),
+            "lead_day": 1,
+            "actual": 10.0,
+            "q50": 11.0,
+        }
+    )
+    w = RollingWindow(months=3, until="season").resolve(date(2026, 3, 10))
+    assert w.name == "roll_3m_202512_202602"
+    rows, checked = metric_rows("v", bt, [w], {"all"})
+    assert {r["scope"] for r in rows} == {w.name}
+    assert checked == [{"version": "v", "scope": w.name, "covered": True}]
+    n = next(r["n"] for r in rows if r["lead_day"] == -1 and r["season"] == "all")
+    assert n == 31 + 31 + 28  # Dez bis Feb, ein Ausgabetag je Tag
+
+
 def test_compare_window_config_checks() -> None:
     """@relation(SWR-MLT-042, scope=function)"""
     from pydantic import ValidationError
@@ -642,17 +692,17 @@ def test_dbsync_window_metrics_once() -> None:
         }
     )
     w = CompareWindow(name="w1", start=date(2024, 1, 6), end=date(2024, 1, 10))
-    rows, checked = metric_rows("v", bt, w)
+    rows, checked = metric_rows("v", bt, [w])
     win = {r["lead_day"]: r for r in rows if r["scope"] == "w1" and r["season"] == "all"}
     assert win[1]["n"] == 5 and win[1]["mae"] == 4.0
     assert {(c["scope"], c["covered"]) for c in checked} == {("all", True), ("w1", True)}
     # schon geprüfte Sichten werden nicht neu berechnet
-    assert metric_rows("v", bt, w, {"all", "w1"}) == ([], [])
-    rows, checked = metric_rows("v", bt, w, {"all"})
+    assert metric_rows("v", bt, [w], {"all", "w1"}) == ([], [])
+    rows, checked = metric_rows("v", bt, [w], {"all"})
     assert {r["scope"] for r in rows} == {"w1"}
     # Fenster über das Ende des Backtests hinaus: vermerkt, aber ohne Kennzahlen
     late = CompareWindow(name="w2", start=date(2024, 1, 6), end=date(2024, 1, 20))
-    rows, checked = metric_rows("v", bt, late, {"all"})
+    rows, checked = metric_rows("v", bt, [late], {"all"})
     assert rows == [] and checked == [{"version": "v", "scope": "w2", "covered": False}]
 
 

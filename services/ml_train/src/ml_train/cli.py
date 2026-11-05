@@ -41,7 +41,7 @@ from ml_train.backtest import (
     data_days,
     run_backtest,
 )
-from ml_train.config import ModelConfig, load_config
+from ml_train.config import CompareWindow, ModelConfig, RollingWindow, load_config
 from ml_train.dataset import FeatureBuilder, issue_days_between
 from ml_train.jobs import JobLog, open_job_log
 from ml_train.models import TwoStageModel
@@ -100,6 +100,17 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--fold-months", type=int)
     b.add_argument("--stride", type=int, help="nur jeden n-ten Ausgabetag trainieren")
     b.add_argument("--issue-hour", type=int, help="Ausgabestunde (UTC) statt issue.hour_utc")
+    b.add_argument(
+        "--rolling",
+        action="store_true",
+        help="Testzeitraum = mitlaufendes Fenster aus compare_rolling (z. B. 24 Monate)",
+    )
+    b.add_argument("--rolling-months", type=int, help="Länge des mitlaufenden Fensters in Monaten")
+    b.add_argument(
+        "--rolling-until",
+        choices=["month", "season"],
+        help="Ende: letzter voller Monat oder letzte volle Jahreszeit",
+    )
 
     f = cmd.add_parser("fit", help="Variante mit allen Daten trainieren und registrieren")
     f.add_argument("--snapshot", required=True, type=Path)
@@ -201,7 +212,34 @@ def cmd_snapshot(cfg: ModelConfig, a: argparse.Namespace, job: JobLog) -> int:
     return 0
 
 
-def write_backtest(res: BacktestResult, cfg: ModelConfig, out: Path, extra: dict[str, Any]) -> None:
+def _window_files(
+    res: BacktestResult, w: CompareWindow | None, out: Path, metrics: str, season: str
+) -> dict[str, Any] | None:
+    """Kennzahlen und Jahreszeitenvergleich in einem Vergleichsfenster; Angaben für lauf.json."""
+    if w is None:
+        return None
+    res.metrics_window(w, ("method", "target")).to_csv(out / f"metrics_{metrics}.csv", index=False)
+    res.metrics_window(w, ("method", "target", "lead_day")).to_csv(
+        out / f"metrics_{metrics}_lead.csv", index=False
+    )
+    res.season_comparison(w).to_csv(out / f"vergleich_jahreszeit_{season}.csv", index=False)
+    done = res.window_methods(w)
+    return {
+        "name": w.name,
+        "start": w.start,
+        "end": w.end,
+        "complete": sorted(m for m, ok in done.items() if ok),
+        "incomplete": sorted(m for m, ok in done.items() if not ok),
+    }
+
+
+def write_backtest(
+    res: BacktestResult,
+    cfg: ModelConfig,
+    out: Path,
+    extra: dict[str, Any],
+    today: date | None = None,
+) -> None:
     out.mkdir(parents=True, exist_ok=True)
     res.predictions.to_parquet(out / "predictions.parquet", index=False)
     res.metrics(("method", "target", "lead_day")).to_csv(out / "metrics_lead.csv", index=False)
@@ -216,26 +254,18 @@ def write_backtest(res: BacktestResult, cfg: ModelConfig, out: Path, extra: dict
         out / "metrics_common_lead.csv", index=False
     )
     res.season_comparison().to_csv(out / "vergleich_jahreszeit.csv", index=False)
-    compare: dict[str, Any] | None = None
-    if cfg.compare is not None:
-        w = cfg.compare
-        res.metrics_window(w, ("method", "target")).to_csv(out / "metrics_window.csv", index=False)
-        res.metrics_window(w, ("method", "target", "lead_day")).to_csv(
-            out / "metrics_window_lead.csv", index=False
+    w_today = today or datetime.now(UTC).date()
+    compare = _window_files(res, cfg.compare, out, "window", "fenster")
+    rolling = None
+    if cfg.compare_rolling is not None:
+        rolling = _window_files(
+            res, cfg.compare_rolling.resolve(w_today), out, "rolling", "rolling"
         )
-        res.season_comparison(w).to_csv(out / "vergleich_jahreszeit_fenster.csv", index=False)
-        done = res.window_methods(w)
-        compare = {
-            "name": w.name,
-            "start": w.start,
-            "end": w.end,
-            "complete": sorted(m for m, ok in done.items() if ok),
-            "incomplete": sorted(m for m, ok in done.items() if not ok),
-        }
     run = {
         **extra,
         "config": cfg.name,
         "compare": compare,
+        "compare_rolling": rolling,
         "folds": [
             {"no": f.no, "test_from": f.test_from, "test_to": f.test_to, "train_to": f.train_to}
             for f in res.folds
@@ -249,7 +279,7 @@ def write_backtest(res: BacktestResult, cfg: ModelConfig, out: Path, extra: dict
 
 
 def cmd_backtest(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: JobLog) -> int:
-    """@relation(SWR-MLT-040, SWR-MLT-042, SWR-MLT-043, SWR-MLT-044, scope=function)"""
+    """@relation(SWR-MLT-040, SWR-MLT-042, SWR-MLT-043, SWR-MLT-044, SWR-MLT-045, scope=function)"""
     if a.test_from:
         cfg.backtest.test_from = a.test_from
     if a.test_to:
@@ -261,6 +291,19 @@ def cmd_backtest(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: Job
     if a.issue_hour is not None:
         cfg.issue.hour_utc = a.issue_hour
         cfg.issue.hours_utc = []
+    today = datetime.now(UTC).date()
+    if a.rolling_months or a.rolling_until:
+        base = cfg.compare_rolling or RollingWindow()
+        cfg.compare_rolling = RollingWindow(
+            months=a.rolling_months or base.months, until=a.rolling_until or base.until
+        )
+    if a.rolling or a.rolling_months or a.rolling_until:
+        if cfg.compare_rolling is None:
+            raise SystemExit("--rolling braucht compare_rolling in der Konfiguration")
+        w = cfg.compare_rolling.resolve(today)
+        # Testzeitraum = mitlaufendes Fenster; Faltungen beginnen an seinem ersten Tag
+        cfg.backtest.test_from, cfg.backtest.test_to = w.start, w.end
+        log.info("backtest.rolling", window=w.name, start=w.start, end=w.end)
     job.step("Snapshot laden")
     snap = load_snapshot(a.snapshot)
     fb = FeatureBuilder(snap, cfg)
@@ -271,23 +314,23 @@ def cmd_backtest(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: Job
     res = run_backtest(fb, cfg, a.variant, job, ck)
     job.step("Ergebnisse schreiben")
     extra = {"snapshot_id": snap.snapshot_id, "config_sha256": cfg_sha, "reused_parts": ck.reused}
-    write_backtest(res, cfg, a.out, extra)
+    write_backtest(res, cfg, a.out, extra, today)
     shutil.rmtree(ck.root, ignore_errors=True)
     job.result = str(a.out)
     m = res.metrics(("method", "target"))
     print(m.to_string(index=False))
-    if cfg.compare is not None:
-        w = res.metrics_window(cfg.compare, ("method", "target"))
-        print(
-            f"\nVergleichsfenster {cfg.compare.name} ({cfg.compare.start} bis {cfg.compare.end}):"
-        )
-        print(w.to_string(index=False))
-    sc = res.season_comparison(cfg.compare)
-    if sc.empty and cfg.compare is not None:
-        sc = res.season_comparison()  # kein Verfahren deckt das Fenster ab
-    if not sc.empty:
-        cols = ["target", "season", "rank", "method", "n", "mae", "vs_best"]
-        print("\nVerfahren je Jahreszeit (gemeinsame Zeilen, Rang nach MAE):")
+    windows = cfg.compare_windows(today)
+    for w in windows:
+        print(f"\nVergleichsfenster {w.name} ({w.start} bis {w.end}):")
+        print(res.metrics_window(w, ("method", "target")).to_string(index=False))
+    cols = ["target", "season", "rank", "method", "n", "mae", "vs_best"]
+    shown: list[CompareWindow | None] = [*windows] or [None]
+    for sw in shown:
+        sc = res.season_comparison(sw)
+        if sc.empty:
+            continue  # kein Verfahren deckt das Fenster ab
+        label = sw.name if sw else "alle Testtage"
+        print(f"\nVerfahren je Jahreszeit, {label} (gemeinsame Zeilen, Rang nach MAE):")
         print(sc[cols].to_string(index=False))
     return 0
 

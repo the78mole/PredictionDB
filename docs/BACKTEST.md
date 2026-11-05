@@ -313,6 +313,29 @@ Korrekturen, `snapshot_id` in `lauf.json`). Das Fenster wird nur bewusst verscho
 neuem Namen; die Kennzahlen im alten Fenster bleiben in der Datenbank stehen. Die Freigabe
 (Kap. 10) bleibt beim Vergleich auf gemeinsamen Zeilen.
 
+**Mitlaufendes Vergleichsfenster.** Das feste Fenster hängt an Kalenderjahren und altert. Daneben
+gibt es ein Fenster, das der Zeit folgt:
+
+```yaml
+compare_rolling:
+  months: 24        # Länge
+  until: month      # Ende: letzter voller Monat (month) oder letzte volle Jahreszeit (season)
+```
+
+Zum Stichtag (Tag des Backtests bzw. des Registry-Abgleichs, UTC) ergibt das am 05.11.2026 mit
+`until: month` den 01.11.2024 bis 31.10.2026, mit `until: season` den 01.09.2024 bis 31.08.2026
+(Ende der letzten vollen Jahreszeit; Winter endet im Februar, Frühling im Mai, Sommer im August,
+Herbst im November). Der laufende Monat gehört nie dazu. Der Name enthält Länge und Grenzen, z. B.
+`roll_24m_202411_202610`; zwei Läufe sind im mitlaufenden Fenster vergleichbar, wenn der Name
+gleich ist. Der Backtest wertet es wie das feste Fenster aus (`metrics_rolling*.csv`,
+`vergleich_jahreszeit_rolling.csv`, `lauf.json` → `compare_rolling`).
+
+`ml-train backtest --rolling` setzt den Testzeitraum auf genau dieses Fenster (`test_from`,
+`test_to`); die Faltungen beginnen an seinem ersten Tag. `--rolling-months 12` und
+`--rolling-until season` ändern Länge und Ende für diesen Aufruf. Wer am Monatsersten rechnet,
+hat oft den Vortag noch nicht als Ausgabetag im Snapshot; das Fenster gilt dann als nicht
+abgedeckt.
+
 **Verfahren je Jahreszeit.** `BacktestResult.season_comparison` stellt die Verfahren je Ziel und
 Jahreszeit (Ortszeit des Liefertags) gegeneinander, über alle Vorlauftage zusammen und auf den
 gemeinsamen Zeilen der Verfahren. Spalten `rank` (1 = kleinster MAE in Ziel und Jahreszeit) und
@@ -336,6 +359,7 @@ gibt sie am Ende aus, im Fenster, sonst über alle Testtage.
 | `metrics_common_lead.csv` | wie `metrics_lead.csv`, aber nur auf gemeinsamen Zeilen aller Verfahren |
 | `vergleich_jahreszeit.csv` | Verfahren gegeneinander je Ziel und Jahreszeit auf gemeinsamen Zeilen, mit `rank` und `vs_best` (Kap. 7) |
 | `vergleich_jahreszeit_fenster.csv` | dasselbe nur im Vergleichsfenster und nur für Verfahren, die es abdecken |
+| `metrics_rolling.csv`, `metrics_rolling_lead.csv`, `vergleich_jahreszeit_rolling.csv` | dasselbe im mitlaufenden Fenster (`compare_rolling`) |
 | `metrics_window.csv` | Kennzahlen je Verfahren und Ziel nur im Vergleichsfenster (Kap. 7), mit Spalten `window` und `complete` |
 | `metrics_window_lead.csv` | … je Verfahren, Ziel und Vorlauftag |
 | `rank_corr.csv` | mittlere Rangkorrelation je Liefertag, je Verfahren, Ziel und Vorlauftag |
@@ -404,7 +428,10 @@ Die Kennzahlen entstehen dabei **einmal je Version** aus `backtest.parquet`
   (Ortszeit des Liefertags), je Vorlauftag und über alle Vorlauftage,
 - Spalte `scope`: `all` über alle Zeilen der Version; deckt ihr Backtest das Vergleichsfenster
   der Konfiguration ab (Kap. 7), zusätzlich dieselben Zeilen nur im Fenster unter dem Namen des
-  Fensters (z. B. `w2024_2025`).
+  Fensters (z. B. `w2024_2025`), ebenso für das mitlaufende Fenster (z. B.
+  `roll_24m_202411_202610`). Dessen Name wechselt jeden Monat bzw. jede Jahreszeit; der nächste
+  Abgleich rechnet die neue Sicht dann einmal für alle Versionen nach, ältere Sichten bleiben
+  stehen. Die Panels zeigen nur das jeweils jüngste mitlaufende Fenster.
 
 `meta.model_metric_scope` hält je Version und Sicht fest, ob sie geprüft wurde und ob das Fenster
 abgedeckt ist (`covered`). So liest `registry sync` `backtest.parquet` je Version und Sicht nur

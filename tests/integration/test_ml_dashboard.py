@@ -8,7 +8,7 @@ import json
 import os
 import re
 from collections.abc import Iterator
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -200,7 +200,11 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
             text("SELECT scope, covered FROM meta.model_metric_scope WHERE version = ANY(:v)"),
             {"v": versions},
         ).all()
-        assert sorted(scopes) == sorted([("all", True), ("w2024_2025", False)] * 2)
+        cfg = reg.cfg
+        assert cfg.compare_rolling is not None
+        roll = cfg.compare_rolling.resolve(datetime.now(UTC).date()).name
+        expected = [("all", True), ("w2024_2025", False), (roll, False)] * 2
+        assert sorted(scopes) == sorted(expected)
         err = c.execute(
             text(
                 "SELECT DISTINCT model_version, target, err FROM fcst.prediction_error"

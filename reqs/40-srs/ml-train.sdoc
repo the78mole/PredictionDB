@@ -365,6 +365,23 @@ RELATIONS:
 - TYPE: Parent
   VALUE: SYSR-PR-004
 
+[REQUIREMENT]
+UID: SWR-MLT-045
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Mitlaufendes Vergleichsfenster
+STATEMENT: >>>
+Die Modellkonfiguration muss ein mitlaufendes Vergleichsfenster erlauben (`compare_rolling`:
+Länge in Monaten, Ende am letzten vollen Monat oder an der letzten vollen Jahreszeit vor dem
+Stichtag). Backtest und Registry-Spiegel müssen es wie das feste Fenster auswerten, unter einem
+Namen, der seine Grenzen enthält. `ml-train backtest --rolling` muss den Testzeitraum auf genau
+dieses Fenster setzen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-004
+
 [[/SECTION]]
 
 [[SECTION]]

@@ -186,7 +186,9 @@ class Checkpoint:
     def __init__(self, root: Path, snapshot_id: str, cfg: ModelConfig) -> None:
         self.root = root
         # Was alle Verfahren gemeinsam betrifft; Varianten gehen je Teil einzeln ein
-        common = cfg.model_dump(mode="json", exclude={"variants", "compare", "promotion"})
+        common = cfg.model_dump(
+            mode="json", exclude={"variants", "compare", "compare_rolling", "promotion"}
+        )
         self._base = json.dumps({"snapshot": snapshot_id, "cfg": common}, sort_keys=True)
         self._variants = {v.name: v.model_dump(mode="json") for v in cfg.variants}
         self.reused = 0
