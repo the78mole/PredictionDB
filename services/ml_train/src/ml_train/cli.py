@@ -30,6 +30,7 @@ import time
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 from sqlalchemy import Engine
@@ -37,11 +38,12 @@ from sqlalchemy import Engine
 from ml_train.backtest import (
     BacktestResult,
     Checkpoint,
+    Paused,
     backtest_steps,
     data_days,
     run_backtest,
 )
-from ml_train.config import ModelConfig, load_config
+from ml_train.config import CompareWindow, ModelConfig, RollingWindow, load_config
 from ml_train.dataset import FeatureBuilder, issue_days_between
 from ml_train.jobs import JobLog, open_job_log
 from ml_train.models import TwoStageModel
@@ -56,10 +58,29 @@ DEFAULT_REGISTRY = os.environ.get("PDB_ML_REGISTRY", "s3://ml-artifacts/models")
 DEFAULT_CACHE = os.environ.get("PDB_ML_CACHE", "/tmp/ml-train-cache")
 #: Unterordner des Backtest-Ausgabeordners mit den Zwischenständen je Faltung und Verfahren
 CHECKPOINT_DIR = "teile"
+#: Rückgabewert, wenn der Backtest an seiner Frist anhält (EX_TEMPFAIL: später fortsetzen)
+EXIT_PAUSED = 75
+#: Zeitzone für ``--stop-at HH:MM``
+LOCAL_TZ = ZoneInfo(os.environ.get("PDB_LOCAL_TZ", "Europe/Berlin"))
 
 
 def parse_date(s: str) -> date:
     return date.fromisoformat(s)
+
+
+def parse_deadline(s: str, now: datetime | None = None) -> datetime:
+    """Frist als ``HH:MM`` (nächstes Auftreten in ``LOCAL_TZ``) oder ISO-Zeit mit Zeitzone."""
+    if len(s) <= 5 and ":" in s:
+        hh, mm = (int(x) for x in s.split(":"))
+        ref = (now or datetime.now(UTC)).astimezone(LOCAL_TZ)
+        at = ref.replace(hour=hh, minute=mm, second=0, microsecond=0)
+        return at if at > ref else at + timedelta(days=1)
+    at = datetime.fromisoformat(s)
+    if at.tzinfo is None:
+        raise argparse.ArgumentTypeError(
+            "Frist braucht eine Zeitzone, z. B. 2026-11-10T08:00+01:00"
+        )
+    return at
 
 
 def to_dt(d: date) -> datetime:
@@ -95,11 +116,34 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--snapshot", required=True, type=Path)
     b.add_argument("--out", required=True, type=Path)
     b.add_argument("--variant", action="append")
+    b.add_argument(
+        "--active",
+        action="store_true",
+        help="nur die Varianten der aktiven Registry-Versionen (Champion, Challenger, Baseline)",
+    )
+    b.add_argument("--registry", default=DEFAULT_REGISTRY)
     b.add_argument("--test-from", type=parse_date)
     b.add_argument("--test-to", type=parse_date)
     b.add_argument("--fold-months", type=int)
     b.add_argument("--stride", type=int, help="nur jeden n-ten Ausgabetag trainieren")
     b.add_argument("--issue-hour", type=int, help="Ausgabestunde (UTC) statt issue.hour_utc")
+    b.add_argument(
+        "--rolling",
+        action="store_true",
+        help="Testzeitraum = mitlaufendes Fenster aus compare_rolling (z. B. 24 Monate)",
+    )
+    b.add_argument("--rolling-months", type=int, help="Länge des mitlaufenden Fensters in Monaten")
+    b.add_argument(
+        "--rolling-until",
+        choices=["month", "season"],
+        help="Ende: letzter voller Monat oder letzte volle Jahreszeit",
+    )
+    b.add_argument(
+        "--stop-at",
+        type=parse_deadline,
+        help="keinen Teil mehr beginnen, der nicht bis dahin fertig wird (HH:MM oder ISO-Zeit); "
+        f"Rückgabewert {EXIT_PAUSED}, der nächste Aufruf setzt fort",
+    )
 
     f = cmd.add_parser("fit", help="Variante mit allen Daten trainieren und registrieren")
     f.add_argument("--snapshot", required=True, type=Path)
@@ -201,7 +245,34 @@ def cmd_snapshot(cfg: ModelConfig, a: argparse.Namespace, job: JobLog) -> int:
     return 0
 
 
-def write_backtest(res: BacktestResult, cfg: ModelConfig, out: Path, extra: dict[str, Any]) -> None:
+def _window_files(
+    res: BacktestResult, w: CompareWindow | None, out: Path, metrics: str, season: str
+) -> dict[str, Any] | None:
+    """Kennzahlen und Jahreszeitenvergleich in einem Vergleichsfenster; Angaben für lauf.json."""
+    if w is None:
+        return None
+    res.metrics_window(w, ("method", "target")).to_csv(out / f"metrics_{metrics}.csv", index=False)
+    res.metrics_window(w, ("method", "target", "lead_day")).to_csv(
+        out / f"metrics_{metrics}_lead.csv", index=False
+    )
+    res.season_comparison(w).to_csv(out / f"vergleich_jahreszeit_{season}.csv", index=False)
+    done = res.window_methods(w)
+    return {
+        "name": w.name,
+        "start": w.start,
+        "end": w.end,
+        "complete": sorted(m for m, ok in done.items() if ok),
+        "incomplete": sorted(m for m, ok in done.items() if not ok),
+    }
+
+
+def write_backtest(
+    res: BacktestResult,
+    cfg: ModelConfig,
+    out: Path,
+    extra: dict[str, Any],
+    today: date | None = None,
+) -> None:
     out.mkdir(parents=True, exist_ok=True)
     res.predictions.to_parquet(out / "predictions.parquet", index=False)
     res.metrics(("method", "target", "lead_day")).to_csv(out / "metrics_lead.csv", index=False)
@@ -216,26 +287,18 @@ def write_backtest(res: BacktestResult, cfg: ModelConfig, out: Path, extra: dict
         out / "metrics_common_lead.csv", index=False
     )
     res.season_comparison().to_csv(out / "vergleich_jahreszeit.csv", index=False)
-    compare: dict[str, Any] | None = None
-    if cfg.compare is not None:
-        w = cfg.compare
-        res.metrics_window(w, ("method", "target")).to_csv(out / "metrics_window.csv", index=False)
-        res.metrics_window(w, ("method", "target", "lead_day")).to_csv(
-            out / "metrics_window_lead.csv", index=False
+    w_today = today or datetime.now(UTC).date()
+    compare = _window_files(res, cfg.compare, out, "window", "fenster")
+    rolling = None
+    if cfg.compare_rolling is not None:
+        rolling = _window_files(
+            res, cfg.compare_rolling.resolve(w_today), out, "rolling", "rolling"
         )
-        res.season_comparison(w).to_csv(out / "vergleich_jahreszeit_fenster.csv", index=False)
-        done = res.window_methods(w)
-        compare = {
-            "name": w.name,
-            "start": w.start,
-            "end": w.end,
-            "complete": sorted(m for m, ok in done.items() if ok),
-            "incomplete": sorted(m for m, ok in done.items() if not ok),
-        }
     run = {
         **extra,
         "config": cfg.name,
         "compare": compare,
+        "compare_rolling": rolling,
         "folds": [
             {"no": f.no, "test_from": f.test_from, "test_to": f.test_to, "train_to": f.train_to}
             for f in res.folds
@@ -249,7 +312,11 @@ def write_backtest(res: BacktestResult, cfg: ModelConfig, out: Path, extra: dict
 
 
 def cmd_backtest(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: JobLog) -> int:
-    """@relation(SWR-MLT-040, SWR-MLT-042, SWR-MLT-043, SWR-MLT-044, scope=function)"""
+    """Backtest, wahlweise im mitlaufenden Fenster und mit Frist.
+
+    @relation(SWR-MLT-040, SWR-MLT-042, SWR-MLT-043, SWR-MLT-044, SWR-MLT-045, scope=function)
+    @relation(SWR-MLT-046, scope=function)
+    """
     if a.test_from:
         cfg.backtest.test_from = a.test_from
     if a.test_to:
@@ -261,6 +328,19 @@ def cmd_backtest(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: Job
     if a.issue_hour is not None:
         cfg.issue.hour_utc = a.issue_hour
         cfg.issue.hours_utc = []
+    today = datetime.now(UTC).date()
+    if a.rolling_months or a.rolling_until:
+        base = cfg.compare_rolling or RollingWindow()
+        cfg.compare_rolling = RollingWindow(
+            months=a.rolling_months or base.months, until=a.rolling_until or base.until
+        )
+    if a.rolling or a.rolling_months or a.rolling_until:
+        if cfg.compare_rolling is None:
+            raise SystemExit("--rolling braucht compare_rolling in der Konfiguration")
+        w = cfg.compare_rolling.resolve(today)
+        # Testzeitraum = mitlaufendes Fenster; Faltungen beginnen an seinem ersten Tag
+        cfg.backtest.test_from, cfg.backtest.test_to = w.start, w.end
+        log.info("backtest.rolling", window=w.name, start=w.start, end=w.end)
     job.step("Snapshot laden")
     snap = load_snapshot(a.snapshot)
     fb = FeatureBuilder(snap, cfg)
@@ -268,26 +348,32 @@ def cmd_backtest(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: Job
     job.total(2 + backtest_steps(fb, cfg, a.variant))
     # Zwischenstände je Faltung und Verfahren: ein abgebrochener Lauf setzt hier wieder an
     ck = Checkpoint(a.out / CHECKPOINT_DIR, snap.snapshot_id, cfg)
-    res = run_backtest(fb, cfg, a.variant, job, ck)
+    try:
+        res = run_backtest(fb, cfg, a.variant, job, ck, deadline=a.stop_at)
+    except Paused as e:
+        job.paused = str(e)
+        log.info("backtest.pause", out=str(a.out), parts=len(list(ck.root.glob("*.parquet"))))
+        print(f"Backtest {e}; fortsetzen mit demselben Aufruf")
+        return EXIT_PAUSED
     job.step("Ergebnisse schreiben")
     extra = {"snapshot_id": snap.snapshot_id, "config_sha256": cfg_sha, "reused_parts": ck.reused}
-    write_backtest(res, cfg, a.out, extra)
+    write_backtest(res, cfg, a.out, extra, today)
     shutil.rmtree(ck.root, ignore_errors=True)
     job.result = str(a.out)
     m = res.metrics(("method", "target"))
     print(m.to_string(index=False))
-    if cfg.compare is not None:
-        w = res.metrics_window(cfg.compare, ("method", "target"))
-        print(
-            f"\nVergleichsfenster {cfg.compare.name} ({cfg.compare.start} bis {cfg.compare.end}):"
-        )
-        print(w.to_string(index=False))
-    sc = res.season_comparison(cfg.compare)
-    if sc.empty and cfg.compare is not None:
-        sc = res.season_comparison()  # kein Verfahren deckt das Fenster ab
-    if not sc.empty:
-        cols = ["target", "season", "rank", "method", "n", "mae", "vs_best"]
-        print("\nVerfahren je Jahreszeit (gemeinsame Zeilen, Rang nach MAE):")
+    windows = cfg.compare_windows(today)
+    for w in windows:
+        print(f"\nVergleichsfenster {w.name} ({w.start} bis {w.end}):")
+        print(res.metrics_window(w, ("method", "target")).to_string(index=False))
+    cols = ["target", "season", "rank", "method", "n", "mae", "vs_best"]
+    shown: list[CompareWindow | None] = [*windows] or [None]
+    for sw in shown:
+        sc = res.season_comparison(sw)
+        if sc.empty:
+            continue  # kein Verfahren deckt das Fenster ab
+        label = sw.name if sw else "alle Testtage"
+        print(f"\nVerfahren je Jahreszeit, {label} (gemeinsame Zeilen, Rang nach MAE):")
         print(sc[cols].to_string(index=False))
     return 0
 
@@ -524,6 +610,16 @@ def _terminate(signum: int, _: object) -> None:
     raise SystemExit(128 + signum)
 
 
+def active_variants(cfg: ModelConfig, registry: str) -> list[str]:
+    """Varianten der aktiven Versionen in der Reihenfolge der Konfiguration.
+
+    @relation(SWR-MLT-046, scope=function)
+    """
+    reg = Registry(registry, cfg)
+    used = {reg.manifest(v)["variant"]["name"] for v in reg.active()}
+    return [v.name for v in cfg.variants if v.name in used]
+
+
 def run_job(cfg: ModelConfig, sha: str, a: argparse.Namespace) -> int:
     """Snapshot, Backtest oder Training mit Fortschritt in ``meta.ml_job``.
 
@@ -532,6 +628,11 @@ def run_job(cfg: ModelConfig, sha: str, a: argparse.Namespace) -> int:
     # nur der Eintrag des laufenden Befehls: snapshot hat kein --variant
     variants: list[str] = []
     if a.cmd == "backtest":
+        if a.active:
+            a.variant = [*(a.variant or []), *active_variants(cfg, a.registry)]
+            if not a.variant:
+                raise SystemExit(f"Keine aktive Version in {a.registry} für {cfg.name}")
+            a.variant = list(dict.fromkeys(a.variant))
         variants = a.variant or [v.name for v in cfg.variants]
     elif a.cmd == "fit":
         variants = [a.variant]
@@ -554,7 +655,10 @@ def run_job(cfg: ModelConfig, sha: str, a: argparse.Namespace) -> int:
             msg = f"{type(e).__name__}: {e}".strip().rstrip(":")
         job.finish(error=msg[:1000])
         raise
-    job.finish(error=None if rc == 0 else f"Rückgabewert {rc}")
+    if rc == EXIT_PAUSED and job.paused:
+        job.finish(error=job.paused, status="aborted")
+    else:
+        job.finish(error=None if rc == 0 else f"Rückgabewert {rc}")
     return rc
 
 

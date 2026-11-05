@@ -10,7 +10,8 @@ Vergleichsfenster) aus ``backtest.parquet``; eine Version ändert sich nach dem 
 from __future__ import annotations
 
 import json
-from datetime import date
+from collections.abc import Sequence
+from datetime import UTC, date, datetime
 from typing import Any
 
 import numpy as np
@@ -125,19 +126,19 @@ def _score_rows(version: str, scope: str, bt: pd.DataFrame) -> list[dict[str, An
 def metric_rows(
     version: str,
     bt: pd.DataFrame,
-    window: CompareWindow | None = None,
+    windows: Sequence[CompareWindow] = (),
     scopes: set[str] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Kennzahlen je Ziel und Vorlauftag sowie über alle Vorlauftage (``lead_day`` -1; 0 ist
     der Rest des Ausgabetags), je Jahreszeit und über alle (``season`` ``all``), dazu je
     geprüfter Sicht eine Zeile für ``meta.model_metric_scope``.
 
-    Einmal über alle Zeilen (``scope`` ``all``) und, wenn der Backtest das Vergleichsfenster
-    vollständig abdeckt, nur im Fenster (``scope`` = Name des Fensters). Deckt er es nicht ab,
-    wird das als ``covered = false`` vermerkt, damit der nächste Abgleich die Datei nicht erneut
-    liest. ``scopes`` nennt die schon geprüften Sichten.
+    Einmal über alle Zeilen (``scope`` ``all``) und je Vergleichsfenster (fest und
+    mitlaufend), das der Backtest vollständig abdeckt, nur im Fenster (``scope`` = Name).
+    Deckt er eines nicht ab, wird das als ``covered = false`` vermerkt, damit der nächste
+    Abgleich die Datei nicht erneut liest. ``scopes`` nennt die schon geprüften Sichten.
 
-    @relation(SWR-MLT-053, SWR-MLT-042, SWR-MLT-043, scope=function)
+    @relation(SWR-MLT-053, SWR-MLT-042, SWR-MLT-043, SWR-MLT-045, scope=function)
     """
     have = scopes or set()
     rows: list[dict[str, Any]] = []
@@ -145,15 +146,17 @@ def metric_rows(
     if SCOPE_ALL not in have:
         rows += _score_rows(version, SCOPE_ALL, bt)
         checked.append({"version": version, "scope": SCOPE_ALL, "covered": True})
-    if window is not None and window.name not in have:
-        ok = covers_window(bt, window.start, window.end)
+    for w in windows:
+        if w.name in have:
+            continue
+        ok = covers_window(bt, w.start, w.end)
         if ok:
-            rows += _score_rows(version, window.name, in_window(bt, window.start, window.end))
-        checked.append({"version": version, "scope": window.name, "covered": ok})
+            rows += _score_rows(version, w.name, in_window(bt, w.start, w.end))
+        checked.append({"version": version, "scope": w.name, "covered": ok})
     return rows, checked
 
 
-def sync_registry(engine: Engine, registry: Registry) -> int:
+def sync_registry(engine: Engine, registry: Registry, today: date | None = None) -> int:
     """Schreibt Versionen, Rollen, Verlauf und Kennzahlen; gibt die Zahl der Versionen zurück.
 
     @relation(SWR-MLT-053, scope=function)
@@ -161,8 +164,10 @@ def sync_registry(engine: Engine, registry: Registry) -> int:
     st = registry.state()
     config = registry.cfg.name
     by_role = roles(st)
-    window = registry.cfg.compare
-    wanted = {SCOPE_ALL} | ({window.name} if window else set())
+    # Das mitlaufende Fenster wechselt monatlich bzw. je Jahreszeit seinen Namen; jede neue
+    # Sicht wird einmal je Version nachgerechnet, ältere bleiben stehen
+    windows = registry.cfg.compare_windows(today or datetime.now(UTC).date())
+    wanted = {SCOPE_ALL} | {w.name for w in windows}
     have: dict[str, set[str]] = {}
     with engine.connect() as c:
         for v, sc in c.execute(
@@ -184,7 +189,7 @@ def sync_registry(engine: Engine, registry: Registry) -> int:
         if not wanted <= have.get(version, set()):
             bt = registry.backtest(version)
             if bt is not None and not bt.empty:
-                rows, checked = metric_rows(version, bt, window, have.get(version, set()))
+                rows, checked = metric_rows(version, bt, windows, have.get(version, set()))
                 metrics += rows
                 scopes += checked
     events = [{"config": config, **e} for e in st.get("history", [])]

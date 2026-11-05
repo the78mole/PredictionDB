@@ -704,4 +704,5 @@ Ablation; ihre Ergebnisse stehen noch aus.
 | `calibration` | `months` (Kalibriermenge am Ende des Trainings, 0 = aus), `min_rows` je Vorlauftag |
 | `backtest` | `test_from`, `test_to`, `fold_months`, `gap_days`, `oof_folds`, `train_issue_stride` |
 | `compare` | festes Vergleichsfenster: `name` (Kleinbuchstaben, Ziffern, `_`), `start`, `end` (Ausgabetage, einschließlich); Kennzahlen im Fenster sind zwischen Läufen vergleichbar ([BACKTEST.md](BACKTEST.md) Kap. 7) |
+| `compare_rolling` | mitlaufendes Vergleichsfenster: `months` (Länge), `until` (`month` = bis Ende Vormonat, `season` = bis Ende der letzten vollen Jahreszeit); `ml-train backtest --rolling` rechnet genau diesen Zeitraum |
 | `promotion` | `min_gain`, `max_group_loss`, `min_group_n` |

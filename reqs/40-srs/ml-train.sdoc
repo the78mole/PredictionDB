@@ -365,6 +365,41 @@ RELATIONS:
 - TYPE: Parent
   VALUE: SYSR-PR-004
 
+[REQUIREMENT]
+UID: SWR-MLT-045
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Mitlaufendes Vergleichsfenster
+STATEMENT: >>>
+Die Modellkonfiguration muss ein mitlaufendes Vergleichsfenster erlauben (`compare_rolling`:
+Länge in Monaten, Ende am letzten vollen Monat oder an der letzten vollen Jahreszeit vor dem
+Stichtag). Backtest und Registry-Spiegel müssen es wie das feste Fenster auswerten, unter einem
+Namen, der seine Grenzen enthält. `ml-train backtest --rolling` muss den Testzeitraum auf genau
+dieses Fenster setzen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-004
+
+[REQUIREMENT]
+UID: SWR-MLT-046
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Backtest im Zeitfenster
+STATEMENT: >>>
+`ml-train backtest --stop-at` muss vor jedem Teil (Faltung und Variante) prüfen, ob er nach der
+längsten bekannten Dauer eines Teils noch vor der Frist fertig wird, und sonst mit dem
+Rückgabewert 75 anhalten, ohne die fertigen Teile zu verwerfen. `--active` muss den Backtest auf
+die Varianten der aktiven Registry-Versionen beschränken. Der monatliche Lauf
+(`scripts/backtest-monatlich.sh`) muss Snapshot und Backtest je Konfiguration und Monat einmal
+erstellen und über mehrere Nächte fortsetzen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-004
+
 [[/SECTION]]
 
 [[SECTION]]

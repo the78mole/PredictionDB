@@ -78,6 +78,13 @@ compare:
   start: 2024-01-01
   end: 2025-12-31
 
+# Mitlaufendes Vergleichsfenster: die letzten 24 Monate bis zum Ende des Vormonats (until: month)
+# bzw. der letzten vollen Jahreszeit (until: season), Name z. B. roll_24m_202411_202610.
+# ml-train backtest --rolling rechnet genau diesen Zeitraum.
+compare_rolling:
+  months: 24
+  until: month
+
 promotion:
   min_gain: 0.0
   max_group_loss: 0.05

@@ -313,6 +313,29 @@ Korrekturen, `snapshot_id` in `lauf.json`). Das Fenster wird nur bewusst verscho
 neuem Namen; die Kennzahlen im alten Fenster bleiben in der Datenbank stehen. Die Freigabe
 (Kap. 10) bleibt beim Vergleich auf gemeinsamen Zeilen.
 
+**Mitlaufendes Vergleichsfenster.** Das feste Fenster hängt an Kalenderjahren und altert. Daneben
+gibt es ein Fenster, das der Zeit folgt:
+
+```yaml
+compare_rolling:
+  months: 24        # Länge
+  until: month      # Ende: letzter voller Monat (month) oder letzte volle Jahreszeit (season)
+```
+
+Zum Stichtag (Tag des Backtests bzw. des Registry-Abgleichs, UTC) ergibt das am 05.11.2026 mit
+`until: month` den 01.11.2024 bis 31.10.2026, mit `until: season` den 01.09.2024 bis 31.08.2026
+(Ende der letzten vollen Jahreszeit; Winter endet im Februar, Frühling im Mai, Sommer im August,
+Herbst im November). Der laufende Monat gehört nie dazu. Der Name enthält Länge und Grenzen, z. B.
+`roll_24m_202411_202610`; zwei Läufe sind im mitlaufenden Fenster vergleichbar, wenn der Name
+gleich ist. Der Backtest wertet es wie das feste Fenster aus (`metrics_rolling*.csv`,
+`vergleich_jahreszeit_rolling.csv`, `lauf.json` → `compare_rolling`).
+
+`ml-train backtest --rolling` setzt den Testzeitraum auf genau dieses Fenster (`test_from`,
+`test_to`); die Faltungen beginnen an seinem ersten Tag. `--rolling-months 12` und
+`--rolling-until season` ändern Länge und Ende für diesen Aufruf. Wer am Monatsersten rechnet,
+hat oft den Vortag noch nicht als Ausgabetag im Snapshot; das Fenster gilt dann als nicht
+abgedeckt.
+
 **Verfahren je Jahreszeit.** `BacktestResult.season_comparison` stellt die Verfahren je Ziel und
 Jahreszeit (Ortszeit des Liefertags) gegeneinander, über alle Vorlauftage zusammen und auf den
 gemeinsamen Zeilen der Verfahren. Spalten `rank` (1 = kleinster MAE in Ziel und Jahreszeit) und
@@ -336,6 +359,7 @@ gibt sie am Ende aus, im Fenster, sonst über alle Testtage.
 | `metrics_common_lead.csv` | wie `metrics_lead.csv`, aber nur auf gemeinsamen Zeilen aller Verfahren |
 | `vergleich_jahreszeit.csv` | Verfahren gegeneinander je Ziel und Jahreszeit auf gemeinsamen Zeilen, mit `rank` und `vs_best` (Kap. 7) |
 | `vergleich_jahreszeit_fenster.csv` | dasselbe nur im Vergleichsfenster und nur für Verfahren, die es abdecken |
+| `metrics_rolling.csv`, `metrics_rolling_lead.csv`, `vergleich_jahreszeit_rolling.csv` | dasselbe im mitlaufenden Fenster (`compare_rolling`) |
 | `metrics_window.csv` | Kennzahlen je Verfahren und Ziel nur im Vergleichsfenster (Kap. 7), mit Spalten `window` und `complete` |
 | `metrics_window_lead.csv` | … je Verfahren, Ziel und Vorlauftag |
 | `rank_corr.csv` | mittlere Rangkorrelation je Liefertag, je Verfahren, Ziel und Vorlauftag |
@@ -404,7 +428,10 @@ Die Kennzahlen entstehen dabei **einmal je Version** aus `backtest.parquet`
   (Ortszeit des Liefertags), je Vorlauftag und über alle Vorlauftage,
 - Spalte `scope`: `all` über alle Zeilen der Version; deckt ihr Backtest das Vergleichsfenster
   der Konfiguration ab (Kap. 7), zusätzlich dieselben Zeilen nur im Fenster unter dem Namen des
-  Fensters (z. B. `w2024_2025`).
+  Fensters (z. B. `w2024_2025`), ebenso für das mitlaufende Fenster (z. B.
+  `roll_24m_202411_202610`). Dessen Name wechselt jeden Monat bzw. jede Jahreszeit; der nächste
+  Abgleich rechnet die neue Sicht dann einmal für alle Versionen nach, ältere Sichten bleiben
+  stehen. Die Panels zeigen nur das jeweils jüngste mitlaufende Fenster.
 
 `meta.model_metric_scope` hält je Version und Sicht fest, ob sie geprüft wurde und ob das Fenster
 abgedeckt ist (`covered`). So liest `registry sync` `backtest.parquet` je Version und Sicht nur
@@ -496,6 +523,34 @@ Schlüssel im Dateinamen. Wer eine Variante ändert oder einen neuen Snapshot ni
 genau die betroffenen Teile neu. Die Merkmale werden bei jedem Start neu gebildet. Nach dem
 Schreiben der Ergebnisse wird `teile/` gelöscht; `lauf.json` vermerkt unter `reused_parts`, wie
 viele Teile übernommen wurden.
+
+**Zeitfenster.** Mit `--stop-at 08:00` (Ortszeit `PDB_LOCAL_TZ`, Vorgabe Europe/Berlin, oder
+eine ISO-Zeit mit Zeitzone) beginnt der Backtest keinen Teil mehr, der nach der längsten
+bisher gemessenen Dauer eines Teils über die Frist liefe. Er hält dann mit Rückgabewert 75 an,
+`meta.ml_job` zeigt den Lauf als `aborted` mit dem Grund. Derselbe Aufruf setzt später an den
+Zwischenständen fort. Die Dauer kennt er erst nach dem ersten fertigen Teil; der erste Teil
+einer Nacht startet deshalb immer, wenn noch keiner gemessen ist. `--active` beschränkt den
+Lauf auf die Varianten der aktiven Registry-Versionen (Champion, Challenger, Baseline, Vorgänger).
+
+**Monatlicher Lauf.** `scripts/backtest-monatlich.sh` rechnet jeden Monat für jede
+Konfiguration (`PDB_BT_CONFIGS`, Vorgabe `de_lu_v1 de_lu_v2`) einen Backtest der aktiven
+Varianten im mitlaufenden Fenster (`--rolling --active`). Ein systemd-Timer startet ihn
+werktags um 03:00, der Lauf hält vor 08:00 an (`PDB_BT_STOP`); am Wochenende ruht er. Je Monat
+und Konfiguration entsteht unter `/data/monatlich/<JJJJMM>/` im Volume `ml-data` einmal ein
+Snapshot `snap-<konfiguration>/` und der Backtest `<konfiguration>/`. Weil Snapshot und Fenster
+im ganzen Monat gleich bleiben, passen die Zwischenstände der Vornacht; ist alles fertig, tut
+das Skript bis zum Monatswechsel nichts mehr. Drei Monate bleiben liegen (`PDB_BT_KEEP`).
+Grob gerechnet braucht eine Variante mit vier Faltungen knapp 4 Stunden und ein Snapshot
+1,5 Stunden; bei fünf Nachtstunden schaffen vier bis fünf aktive Varianten je Konfiguration
+ihren Lauf in der ersten Woche. Alle Varianten (`PDB_BT_VARIANTS=all`, de_lu_v2 hat 17) passen
+nicht in einen Monat.
+
+```sh
+sudo cp deploy/systemd/predictiondb-backtest@.* /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now predictiondb-backtest@<benutzer>.timer
+journalctl -u 'predictiondb-backtest@*'        # Protokoll der Nächte
+```
 
 **Rechenaufwand.** Je Faltung und Variante wird ein vollständiges `TwoStageModel` trainiert,
 mit Kalibrierung zwei. Bei 6 Faltungen und 15 Varianten sind das 90 bzw. 180 Trainings. Der
