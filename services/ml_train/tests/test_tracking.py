@@ -26,6 +26,8 @@ pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def mlflow_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     d = tmp_path / "mlruns"
     monkeypatch.setenv("MLFLOW_TRACKING_URI", f"file://{d}")
+    # Registry sonst als sqlite im Arbeitsverzeichnis
+    monkeypatch.setenv("MLFLOW_REGISTRY_URI", f"sqlite:///{tmp_path / 'registry.db'}")
     monkeypatch.setenv("MLFLOW_ALLOW_FILE_STORE", "true")
     monkeypatch.setenv("MLFLOW_DISABLE_AGENT_HINT", "1")
     return d
