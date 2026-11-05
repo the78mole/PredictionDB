@@ -35,10 +35,11 @@ UPSERT_VERSION = text("""
       role = EXCLUDED.role, manifest = EXCLUDED.manifest, synced_at = now()""")
 
 INSERT_METRIC = text("""
-    INSERT INTO meta.model_metric (version, scope, target, lead_day, n, mae, rmse, bias, pinball,
-                                   coverage80)
-    VALUES (:version, :scope, :target, :lead_day, :n, :mae, :rmse, :bias, :pinball, :coverage80)
-    ON CONFLICT (version, scope, target, lead_day) DO NOTHING""")
+    INSERT INTO meta.model_metric (version, scope, season, target, lead_day, n, mae, rmse, bias,
+                                   pinball, coverage80)
+    VALUES (:version, :scope, :season, :target, :lead_day, :n, :mae, :rmse, :bias, :pinball,
+            :coverage80)
+    ON CONFLICT (version, scope, season, target, lead_day) DO NOTHING""")
 
 INSERT_SCOPE = text("""
     INSERT INTO meta.model_metric_scope (version, scope, covered)
@@ -47,6 +48,8 @@ INSERT_SCOPE = text("""
 
 #: ``meta.model_metric.scope`` für Kennzahlen über alle Backtest-Zeilen einer Version
 SCOPE_ALL = "all"
+#: ``meta.model_metric.season`` für Kennzahlen über alle Jahreszeiten
+SEASON_ALL = "all"
 
 INSERT_EVENT = text("""
     INSERT INTO meta.model_event (config, at, action, version, note)
@@ -93,8 +96,15 @@ def version_row(version: str, role: str, man: dict[str, Any], config: str) -> di
 
 
 def _score_rows(version: str, scope: str, bt: pd.DataFrame) -> list[dict[str, Any]]:
+    """Je Ziel und Vorlauftag (``lead_day`` -1 = alle), jeweils über alle Jahreszeiten
+    (``season`` ``all``) und je Jahreszeit."""
     ctx = add_context(bt)
-    parts = [score(ctx, ["target", "lead_day"]), score(ctx, ["target"]).assign(lead_day=-1)]
+    parts = [
+        score(ctx, ["target", "lead_day"]).assign(season=SEASON_ALL),
+        score(ctx, ["target"]).assign(lead_day=-1, season=SEASON_ALL),
+        score(ctx, ["target", "lead_day", "season"]),
+        score(ctx, ["target", "season"]).assign(lead_day=-1),
+    ]
     m = pd.concat(parts, ignore_index=True)
     cols = ["mae", "rmse", "bias", "pinball", "coverage80"]
     m[cols] = m[cols].astype(float).replace({np.nan: None})
@@ -102,6 +112,7 @@ def _score_rows(version: str, scope: str, bt: pd.DataFrame) -> list[dict[str, An
         {
             "version": version,
             "scope": scope,
+            "season": r["season"],
             "target": r["target"],
             "lead_day": int(r["lead_day"]),
             "n": int(r["n"]),
@@ -118,14 +129,15 @@ def metric_rows(
     scopes: set[str] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Kennzahlen je Ziel und Vorlauftag sowie über alle Vorlauftage (``lead_day`` -1; 0 ist
-    der Rest des Ausgabetags), dazu je geprüfter Sicht eine Zeile für ``meta.model_metric_scope``.
+    der Rest des Ausgabetags), je Jahreszeit und über alle (``season`` ``all``), dazu je
+    geprüfter Sicht eine Zeile für ``meta.model_metric_scope``.
 
     Einmal über alle Zeilen (``scope`` ``all``) und, wenn der Backtest das Vergleichsfenster
     vollständig abdeckt, nur im Fenster (``scope`` = Name des Fensters). Deckt er es nicht ab,
     wird das als ``covered = false`` vermerkt, damit der nächste Abgleich die Datei nicht erneut
     liest. ``scopes`` nennt die schon geprüften Sichten.
 
-    @relation(SWR-MLT-053, SWR-MLT-042, scope=function)
+    @relation(SWR-MLT-053, SWR-MLT-042, SWR-MLT-043, scope=function)
     """
     have = scopes or set()
     rows: list[dict[str, Any]] = []

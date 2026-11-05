@@ -313,6 +313,15 @@ Korrekturen, `snapshot_id` in `lauf.json`). Das Fenster wird nur bewusst verscho
 neuem Namen; die Kennzahlen im alten Fenster bleiben in der Datenbank stehen. Die Freigabe
 (Kap. 10) bleibt beim Vergleich auf gemeinsamen Zeilen.
 
+**Verfahren je Jahreszeit.** `BacktestResult.season_comparison` stellt die Verfahren je Ziel und
+Jahreszeit (Ortszeit des Liefertags) gegeneinander, über alle Vorlauftage zusammen und auf den
+gemeinsamen Zeilen der Verfahren. Spalten `rank` (1 = kleinster MAE in Ziel und Jahreszeit) und
+`vs_best` (MAE relativ zum besten Verfahren, 0,05 = 5 % schlechter), dazu je Verfahren eine Zeile
+`season = all`. Die ÜNB-Prognosen (`bench_*`) bleiben außen vor, weil es sie nur für D+1 gibt und
+sie die gemeinsamen Zeilen auf den Folgetag beschränken würden. Mit Vergleichsfenster rechnet
+dieselbe Tabelle nur im Fenster und nur mit den Verfahren, die es abdecken. `ml-train backtest`
+gibt sie am Ende aus, im Fenster, sonst über alle Testtage.
+
 ## 8. Ergebnisdateien
 
 `ml-train backtest --out <ordner>` schreibt:
@@ -325,10 +334,12 @@ neuem Namen; die Kennzahlen im alten Fenster bleiben in der Datenbank stehen. Di
 | `metrics_season.csv` | … je Verfahren, Ziel, Vorlauftag und Jahreszeit |
 | `metrics_year.csv` | … je Verfahren, Ziel und Jahr |
 | `metrics_common_lead.csv` | wie `metrics_lead.csv`, aber nur auf gemeinsamen Zeilen aller Verfahren |
+| `vergleich_jahreszeit.csv` | Verfahren gegeneinander je Ziel und Jahreszeit auf gemeinsamen Zeilen, mit `rank` und `vs_best` (Kap. 7) |
+| `vergleich_jahreszeit_fenster.csv` | dasselbe nur im Vergleichsfenster und nur für Verfahren, die es abdecken |
 | `metrics_window.csv` | Kennzahlen je Verfahren und Ziel nur im Vergleichsfenster (Kap. 7), mit Spalten `window` und `complete` |
 | `metrics_window_lead.csv` | … je Verfahren, Ziel und Vorlauftag |
 | `rank_corr.csv` | mittlere Rangkorrelation je Liefertag, je Verfahren, Ziel und Vorlauftag |
-| `lauf.json` | Snapshot-ID, Konfig-Hash, Vergleichsfenster (`compare`: Name, Grenzen, Verfahren mit und ohne vollständige Abdeckung), Faltungen mit `test_from`, `test_to`, `train_to`, Laufzeiten je Faltung und Variante, Zeilenzahl, Git-Commit, Ende des Laufs |
+| `lauf.json` | Snapshot-ID, Konfig-Hash, Zahl der übernommenen Zwischenstände (`reused_parts`), Vergleichsfenster (`compare`: Name, Grenzen, Verfahren mit und ohne vollständige Abdeckung), Faltungen mit `test_from`, `test_to`, `train_to`, Laufzeiten je Faltung und Variante, Zeilenzahl, Git-Commit, Ende des Laufs |
 
 Spalten von `predictions.parquet`:
 
@@ -389,6 +400,8 @@ Die Kennzahlen entstehen dabei **einmal je Version** aus `backtest.parquet`
 - je Ziel eine Zeile über alle Vorläufe mit `lead_day = -1` (0 ist seit `hours_utc` der Rest des
   Ausgabetags),
 - Spalten `n`, `mae`, `rmse`, `bias`, `pinball`, `coverage80`,
+- Spalte `season`: `all` über alle Jahreszeiten, sonst `Winter`, `Frühling`, `Sommer`, `Herbst`
+  (Ortszeit des Liefertags), je Vorlauftag und über alle Vorlauftage,
 - Spalte `scope`: `all` über alle Zeilen der Version; deckt ihr Backtest das Vergleichsfenster
   der Konfiguration ab (Kap. 7), zusätzlich dieselben Zeilen nur im Fenster unter dem Namen des
   Fensters (z. B. `w2024_2025`).
@@ -402,7 +415,9 @@ Die Kennzahlen mit `scope = 'all'` laufen über **alle** Zeilen der Version, nic
 gemeinsamen Zeilen mit anderen Versionen. Haben zwei Versionen Backtests über verschiedene
 Zeiträume, ist ihr Vergleich nur ein Anhaltspunkt. Vergleichbar sind die Zeilen im Fenster; das
 Panel „Champion und Challenger im Backtest“ zeigt beide Sichten (Spalte „Zeitraum“), die Zeilen
-im Fenster zuerst. Entscheidend für die Freigabe bleibt der Vergleich in Kap. 10. Versionen ohne
+im Fenster zuerst. Das Panel „Backtest je Jahreszeit im Vergleichsfenster“ zeigt je aktiver
+Version den MAE je Jahreszeit im Fenster und daneben den Abstand zum Champion derselben
+Konfiguration (negativ = besser). Entscheidend für die Freigabe bleibt der Vergleich in Kap. 10. Versionen ohne
 `backtest.parquet` erscheinen im Panel ohne Kennzahlen.
 
 Die Prognosefehler **im Betrieb** (Sicht `fcst.prediction_error`, P50 der laufenden Prognosen
@@ -469,6 +484,18 @@ uv run ml-train --config config/ml/de_lu_v2.yaml fit \
 | `train_issue_stride` | `--stride` | 2 | nur jeder n-te Ausgabetag im Training |
 | `issue.hour_utc` | `--issue-hour` | 8 | eine feste Ausgabestunde statt `hours_utc` reihum |
 | `calibration.months` | – | 0 (v2: 12) | Kalibrierung der Quantile je Faltung, kostet je Faltung ein zweites Training |
+
+**Abbruch und Fortsetzen.** Der Backtest legt die Prognosen jeder Faltung und jedes Verfahrens
+sofort unter `<out>/teile/` ab (`backtest.Checkpoint`, eine Parquet-Datei je Faltung und
+Variante bzw. für die Vergleichsverfahren einer Faltung). Bricht ein Lauf ab (Container beendet,
+Speicher voll), setzt derselbe Aufruf mit demselben `--out` dort wieder an: Fertige Teile werden
+übernommen, im Fortschritt erscheinen sie als eigener Schritt ohne Rechenzeit, nur die fehlenden
+werden gerechnet. Ein Teil gilt nur, wenn Snapshot, die gemeinsamen Teile der Konfiguration,
+die Definition seiner Variante und die Grenzen seiner Faltung gleich sind; das steckt im
+Schlüssel im Dateinamen. Wer eine Variante ändert oder einen neuen Snapshot nimmt, rechnet also
+genau die betroffenen Teile neu. Die Merkmale werden bei jedem Start neu gebildet. Nach dem
+Schreiben der Ergebnisse wird `teile/` gelöscht; `lauf.json` vermerkt unter `reused_parts`, wie
+viele Teile übernommen wurden.
 
 **Rechenaufwand.** Je Faltung und Variante wird ein vollständiges `TwoStageModel` trainiert,
 mit Kalibrierung zwei. Bei 6 Faltungen und 15 Varianten sind das 90 bzw. 180 Trainings. Der

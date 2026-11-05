@@ -180,10 +180,21 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
 
     with engine.connect() as c:
         n = c.execute(
-            text("SELECT count(*) FROM meta.model_metric WHERE version = ANY(:v)"),
+            text(
+                "SELECT count(*) FROM meta.model_metric WHERE version = ANY(:v) AND season = 'all'"
+            ),
             {"v": versions},
         ).scalar_one()
         assert n == 2 * 2 * 8  # Versionen x Ziele x (7 Vorlauftage + gesamt)
+        # Backtests liegen in einer Jahreszeit (30 Tage vor jetzt): ebenso viele Zeilen je Saison
+        seasons = c.execute(
+            text(
+                "SELECT count(DISTINCT season) FROM meta.model_metric"
+                " WHERE version = ANY(:v) AND season <> 'all'"
+            ),
+            {"v": versions},
+        ).scalar_one()
+        assert seasons >= 1
         # Backtests decken das Vergleichsfenster nicht ab: vermerkt, ohne Kennzahlen
         scopes = c.execute(
             text("SELECT scope, covered FROM meta.model_metric_scope WHERE version = ANY(:v)"),
@@ -202,7 +213,8 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
         }
 
         panels = {p["id"]: p for f in DASHBOARDS for p in json.loads(f.read_text())["panels"]}
-        rows = {pid: c.execute(text(_sql(panels[pid]))).mappings().all() for pid in range(35, 44)}
+        ids = [*range(35, 44), 67]
+        rows = {pid: c.execute(text(_sql(panels[pid]))).mappings().all() for pid in ids}
         assert rows[35][0]["Champion"].startswith("kalender · ")
         mv = [r for r in rows[38] if r["Version"] in versions]
         assert [r["Rolle"] for r in mv] == ["Champion", "Challenger"]

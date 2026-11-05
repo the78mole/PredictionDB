@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -33,7 +34,13 @@ from typing import Any
 import pandas as pd
 from sqlalchemy import Engine
 
-from ml_train.backtest import BacktestResult, backtest_steps, data_days, run_backtest
+from ml_train.backtest import (
+    BacktestResult,
+    Checkpoint,
+    backtest_steps,
+    data_days,
+    run_backtest,
+)
 from ml_train.config import ModelConfig, load_config
 from ml_train.dataset import FeatureBuilder, issue_days_between
 from ml_train.jobs import JobLog, open_job_log
@@ -47,6 +54,8 @@ log = get_logger(__name__)
 DEFAULT_CONFIG = os.environ.get("PDB_ML_CONFIG", "config/ml/de_lu_v1.yaml")
 DEFAULT_REGISTRY = os.environ.get("PDB_ML_REGISTRY", "s3://ml-artifacts/models")
 DEFAULT_CACHE = os.environ.get("PDB_ML_CACHE", "/tmp/ml-train-cache")
+#: Unterordner des Backtest-Ausgabeordners mit den Zwischenständen je Faltung und Verfahren
+CHECKPOINT_DIR = "teile"
 
 
 def parse_date(s: str) -> date:
@@ -206,6 +215,7 @@ def write_backtest(res: BacktestResult, cfg: ModelConfig, out: Path, extra: dict
     res.metrics_common(methods, ("method", "target", "lead_day")).to_csv(
         out / "metrics_common_lead.csv", index=False
     )
+    res.season_comparison().to_csv(out / "vergleich_jahreszeit.csv", index=False)
     compare: dict[str, Any] | None = None
     if cfg.compare is not None:
         w = cfg.compare
@@ -213,6 +223,7 @@ def write_backtest(res: BacktestResult, cfg: ModelConfig, out: Path, extra: dict
         res.metrics_window(w, ("method", "target", "lead_day")).to_csv(
             out / "metrics_window_lead.csv", index=False
         )
+        res.season_comparison(w).to_csv(out / "vergleich_jahreszeit_fenster.csv", index=False)
         done = res.window_methods(w)
         compare = {
             "name": w.name,
@@ -238,7 +249,7 @@ def write_backtest(res: BacktestResult, cfg: ModelConfig, out: Path, extra: dict
 
 
 def cmd_backtest(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: JobLog) -> int:
-    """@relation(SWR-MLT-040, SWR-MLT-042, scope=function)"""
+    """@relation(SWR-MLT-040, SWR-MLT-042, SWR-MLT-043, SWR-MLT-044, scope=function)"""
     if a.test_from:
         cfg.backtest.test_from = a.test_from
     if a.test_to:
@@ -255,9 +266,13 @@ def cmd_backtest(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: Job
     fb = FeatureBuilder(snap, cfg)
     # Schritte: Snapshot laden, Backtest, Ergebnisse schreiben
     job.total(2 + backtest_steps(fb, cfg, a.variant))
-    res = run_backtest(fb, cfg, a.variant, job)
+    # Zwischenstände je Faltung und Verfahren: ein abgebrochener Lauf setzt hier wieder an
+    ck = Checkpoint(a.out / CHECKPOINT_DIR, snap.snapshot_id, cfg)
+    res = run_backtest(fb, cfg, a.variant, job, ck)
     job.step("Ergebnisse schreiben")
-    write_backtest(res, cfg, a.out, {"snapshot_id": snap.snapshot_id, "config_sha256": cfg_sha})
+    extra = {"snapshot_id": snap.snapshot_id, "config_sha256": cfg_sha, "reused_parts": ck.reused}
+    write_backtest(res, cfg, a.out, extra)
+    shutil.rmtree(ck.root, ignore_errors=True)
     job.result = str(a.out)
     m = res.metrics(("method", "target"))
     print(m.to_string(index=False))
@@ -267,6 +282,13 @@ def cmd_backtest(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: Job
             f"\nVergleichsfenster {cfg.compare.name} ({cfg.compare.start} bis {cfg.compare.end}):"
         )
         print(w.to_string(index=False))
+    sc = res.season_comparison(cfg.compare)
+    if sc.empty and cfg.compare is not None:
+        sc = res.season_comparison()  # kein Verfahren deckt das Fenster ab
+    if not sc.empty:
+        cols = ["target", "season", "rank", "method", "n", "mae", "vs_best"]
+        print("\nVerfahren je Jahreszeit (gemeinsame Zeilen, Rang nach MAE):")
+        print(sc[cols].to_string(index=False))
     return 0
 
 

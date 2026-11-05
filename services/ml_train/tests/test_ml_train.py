@@ -439,6 +439,46 @@ def test_compare_window_metrics(backtest, tmp_path: Path) -> None:  # type: igno
     assert (tmp_path / "metrics_window_lead.csv").exists()
 
 
+def test_season_comparison_ranks_methods(backtest) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-043, scope=function)"""
+    _, _, res, _ = backtest
+    sc = res.season_comparison()
+    assert not sc["method"].str.startswith("bench_").any()
+    assert {"Sommer", "Herbst", "all"} <= set(sc["season"])
+    for _, g in sc.groupby(["target", "season"]):
+        assert g["rank"].min() == 1 and abs(g["vs_best"].min()) < 1e-12
+        # gemeinsame Zeilen: alle Verfahren einer Gruppe haben gleich viele Werte
+        assert g["n"].nunique() == 1
+    best = sc[(sc["target"] == "gen_wind_onshore") & (sc["season"] == "all") & (sc["rank"] == 1)]
+    assert best["method"].tolist() == ["wetter"]
+
+
+def test_backtest_resumes_from_checkpoint(snap, tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-044, scope=function)"""
+    from ml_train.backtest import Checkpoint
+
+    c = make_cfg()
+    c.backtest.test_from = date(2023, 9, 1)
+    fb = FeatureBuilder(snap, c)
+    first = run_backtest(fb, c, ["kalender"], checkpoint=Checkpoint(tmp_path, "s1", c))
+    assert len(list(tmp_path.glob("*.parquet"))) == 2  # Vergleichsverfahren + Variante
+
+    def boom(*_: Any, **__: Any) -> None:
+        raise AssertionError("fertige Faltung neu trainiert")
+
+    monkeypatch.setattr(TwoStageModel, "fit", boom)
+    ck = Checkpoint(tmp_path, "s1", c)
+    again = run_backtest(fb, c, ["kalender"], checkpoint=ck)
+    assert ck.reused == 2
+    cols = ["method", "target", "issue_time", "ts"]
+    a = first.predictions.sort_values(cols).reset_index(drop=True)
+    b = again.predictions.sort_values(cols).reset_index(drop=True)
+    pd.testing.assert_frame_equal(a, b, check_dtype=False)
+    # anderer Snapshot: Teile passen nicht mehr, die Variante wird neu trainiert
+    with pytest.raises(AssertionError, match="neu trainiert"):
+        run_backtest(fb, c, ["kalender"], checkpoint=Checkpoint(tmp_path, "s2", c))
+
+
 def test_compare_window_config_checks() -> None:
     """@relation(SWR-MLT-042, scope=function)"""
     from pydantic import ValidationError
@@ -576,7 +616,9 @@ def test_dbsync_roles_and_metrics() -> None:
         }
     )
     out, checked = metric_rows("v", bt)
-    rows = {r["lead_day"]: r for r in out}
+    rows = {r["lead_day"]: r for r in out if r["season"] == "all"}
+    winter = {r["lead_day"]: r for r in out if r["season"] == "Winter"}
+    assert {r["season"] for r in out} == {"all", "Winter"} and winter[-1]["mae"] == 2.0
     assert set(rows) == {-1, 1, 2} and {r["scope"] for r in out} == {"all"}
     assert rows[1]["mae"] == 1.0 and rows[2]["mae"] == 3.0 and rows[-1]["mae"] == 2.0
     assert rows[-1]["n"] == 48 and rows[1]["coverage80"] == 1.0
@@ -601,7 +643,7 @@ def test_dbsync_window_metrics_once() -> None:
     )
     w = CompareWindow(name="w1", start=date(2024, 1, 6), end=date(2024, 1, 10))
     rows, checked = metric_rows("v", bt, w)
-    win = {r["lead_day"]: r for r in rows if r["scope"] == "w1"}
+    win = {r["lead_day"]: r for r in rows if r["scope"] == "w1" and r["season"] == "all"}
     assert win[1]["n"] == 5 and win[1]["mae"] == 4.0
     assert {(c["scope"], c["covered"]) for c in checked} == {("all", True), ("w1", True)}
     # schon geprüfte Sichten werden nicht neu berechnet

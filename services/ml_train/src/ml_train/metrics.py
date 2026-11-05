@@ -147,3 +147,39 @@ def covers_window(pred: pd.DataFrame, start: date, end: date) -> bool:
         return False
     d = issue_days(pred)
     return bool(d.min() <= start and d.max() >= end)
+
+
+#: Reihenfolge der Jahreszeiten in Tabellen
+SEASON_ORDER = ["Winter", "Frühling", "Sommer", "Herbst"]
+
+
+def season_comparison(pred: pd.DataFrame) -> pd.DataFrame:
+    """Verfahren gegeneinander je Ziel und Jahreszeit (alle Vorlauftage zusammen).
+
+    Gerechnet auf den gemeinsamen Zeilen der Verfahren je Ziel, damit alle dieselben Stunden
+    sehen. Die Prognosen Dritter (``bench_*``) gibt es nur für D+1; sie würden die gemeinsamen
+    Zeilen auf den Folgetag beschränken und bleiben deshalb außen vor. Spalten: ``rank`` nach
+    MAE innerhalb von Ziel und Jahreszeit (1 = bestes Verfahren), ``vs_best`` = MAE relativ zum
+    besten Verfahren (0,05 = 5 % schlechter); dazu eine Zeile ``season = all`` je Verfahren.
+
+    @relation(SWR-MLT-043, scope=function)
+    """
+    methods = sorted(m for m in pred["method"].unique() if not str(m).startswith("bench_"))
+    if not methods:
+        return pd.DataFrame()
+    ctx = add_context(common_rows(pred, methods))
+    m = pd.concat(
+        [
+            score(ctx, ["target", "season", "method"]),
+            score(ctx, ["target", "method"]).assign(season="all"),
+        ],
+        ignore_index=True,
+    )
+    g = m.groupby(["target", "season"])["mae"]
+    m["rank"] = g.rank(method="min").astype(int)
+    m["vs_best"] = m["mae"] / g.transform("min") - 1
+    order = {s: i for i, s in enumerate([*SEASON_ORDER, "all"])}
+    m = m.sort_values(
+        ["target", "season", "rank"], key=lambda c: c.map(order) if c.name == "season" else c
+    )
+    return m.reset_index(drop=True)
