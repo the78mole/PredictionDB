@@ -479,6 +479,74 @@ def test_backtest_resumes_from_checkpoint(snap, tmp_path: Path, monkeypatch) -> 
         run_backtest(fb, c, ["kalender"], checkpoint=Checkpoint(tmp_path, "s2", c))
 
 
+def test_backtest_pauses_before_deadline_and_resumes(snap, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-046, scope=function)"""
+    from datetime import UTC, datetime, timedelta
+
+    from ml_train.backtest import Checkpoint, Paused
+
+    c = make_cfg()  # zwei Faltungen (Juli/August und September 2023)
+    fb = FeatureBuilder(snap, c)
+    full = run_backtest(fb, c, ["kalender"], checkpoint=Checkpoint(tmp_path, "s1", c))
+    late = sorted(tmp_path.glob("fold01_kalender_*.parquet"))
+    assert len(late) == 1
+    late[0].unlink()  # zweite Faltung fehlt, die erste ist fertig
+    t = datetime(2026, 11, 10, 7, 59, tzinfo=UTC)
+    # Frist schon vorbei: hält vor den Merkmalen an
+    with pytest.raises(Paused, match="Merkmalen"):
+        run_backtest(
+            fb,
+            c,
+            ["kalender"],
+            checkpoint=Checkpoint(tmp_path, "s1", c),
+            deadline=t,
+            clock=lambda: t,
+        )
+    # noch eine Mikrosekunde: die erste Faltung kommt aus dem Zwischenspeicher, die zweite
+    # würde (nach der Dauer der ersten) über die Frist laufen
+    ck = Checkpoint(tmp_path, "s1", c)
+    with pytest.raises(Paused, match="Faltung 1 kalender"):
+        run_backtest(
+            fb,
+            c,
+            ["kalender"],
+            checkpoint=ck,
+            deadline=t + timedelta(microseconds=1),
+            clock=lambda: t,
+        )
+    assert ck.reused == 3  # beide Vergleichsteile und die erste Faltung
+    with pytest.raises(ValueError, match="Checkpoint"):
+        run_backtest(fb, c, ["kalender"], deadline=t)
+    # genug Zeit: der Rest läuft durch und ergibt dasselbe wie der Lauf ohne Pause
+    again = run_backtest(
+        fb,
+        c,
+        ["kalender"],
+        checkpoint=Checkpoint(tmp_path, "s1", c),
+        deadline=t + timedelta(days=1),
+        clock=lambda: t,
+    )
+    cols = ["method", "target", "issue_time", "ts"]
+    a = full.predictions.sort_values(cols).reset_index(drop=True)
+    b = again.predictions.sort_values(cols).reset_index(drop=True)
+    pd.testing.assert_frame_equal(a, b, check_dtype=False)
+
+
+def test_parse_deadline_next_local_time() -> None:
+    """@relation(SWR-MLT-046, scope=function)"""
+    from datetime import UTC, datetime
+
+    from ml_train.cli import parse_deadline
+
+    # 02:00 UTC im November = 03:00 Ortszeit: Frist 08:00 Ortszeit am selben Tag
+    at = parse_deadline("08:00", datetime(2026, 11, 10, 2, 0, tzinfo=UTC))
+    assert at.astimezone(UTC) == datetime(2026, 11, 10, 7, 0, tzinfo=UTC)
+    # nach 08:00 gestartet: Frist am nächsten Morgen
+    at = parse_deadline("08:00", datetime(2026, 11, 10, 9, 0, tzinfo=UTC))
+    assert at.astimezone(UTC) == datetime(2026, 11, 11, 7, 0, tzinfo=UTC)
+    assert parse_deadline("2026-11-10T08:00+01:00").hour == 8
+
+
 def test_rolling_window_resolves_to_last_month_or_season() -> None:
     """@relation(SWR-MLT-045, scope=function)"""
     from ml_train.config import RollingWindow

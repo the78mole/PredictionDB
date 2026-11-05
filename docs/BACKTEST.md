@@ -524,6 +524,34 @@ genau die betroffenen Teile neu. Die Merkmale werden bei jedem Start neu gebilde
 Schreiben der Ergebnisse wird `teile/` gelöscht; `lauf.json` vermerkt unter `reused_parts`, wie
 viele Teile übernommen wurden.
 
+**Zeitfenster.** Mit `--stop-at 08:00` (Ortszeit `PDB_LOCAL_TZ`, Vorgabe Europe/Berlin, oder
+eine ISO-Zeit mit Zeitzone) beginnt der Backtest keinen Teil mehr, der nach der längsten
+bisher gemessenen Dauer eines Teils über die Frist liefe. Er hält dann mit Rückgabewert 75 an,
+`meta.ml_job` zeigt den Lauf als `aborted` mit dem Grund. Derselbe Aufruf setzt später an den
+Zwischenständen fort. Die Dauer kennt er erst nach dem ersten fertigen Teil; der erste Teil
+einer Nacht startet deshalb immer, wenn noch keiner gemessen ist. `--active` beschränkt den
+Lauf auf die Varianten der aktiven Registry-Versionen (Champion, Challenger, Baseline, Vorgänger).
+
+**Monatlicher Lauf.** `scripts/backtest-monatlich.sh` rechnet jeden Monat für jede
+Konfiguration (`PDB_BT_CONFIGS`, Vorgabe `de_lu_v1 de_lu_v2`) einen Backtest der aktiven
+Varianten im mitlaufenden Fenster (`--rolling --active`). Ein systemd-Timer startet ihn
+werktags um 03:00, der Lauf hält vor 08:00 an (`PDB_BT_STOP`); am Wochenende ruht er. Je Monat
+und Konfiguration entsteht unter `/data/monatlich/<JJJJMM>/` im Volume `ml-data` einmal ein
+Snapshot `snap-<konfiguration>/` und der Backtest `<konfiguration>/`. Weil Snapshot und Fenster
+im ganzen Monat gleich bleiben, passen die Zwischenstände der Vornacht; ist alles fertig, tut
+das Skript bis zum Monatswechsel nichts mehr. Drei Monate bleiben liegen (`PDB_BT_KEEP`).
+Grob gerechnet braucht eine Variante mit vier Faltungen knapp 4 Stunden und ein Snapshot
+1,5 Stunden; bei fünf Nachtstunden schaffen vier bis fünf aktive Varianten je Konfiguration
+ihren Lauf in der ersten Woche. Alle Varianten (`PDB_BT_VARIANTS=all`, de_lu_v2 hat 17) passen
+nicht in einen Monat.
+
+```sh
+sudo cp deploy/systemd/predictiondb-backtest@.* /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now predictiondb-backtest@<benutzer>.timer
+journalctl -u 'predictiondb-backtest@*'        # Protokoll der Nächte
+```
+
 **Rechenaufwand.** Je Faltung und Variante wird ein vollständiges `TwoStageModel` trainiert,
 mit Kalibrierung zwei. Bei 6 Faltungen und 15 Varianten sind das 90 bzw. 180 Trainings. Der
 Fortschritt erscheint in `meta.ml_job` und im Grafana-Panel „Laufende Trainings und Backtests“,

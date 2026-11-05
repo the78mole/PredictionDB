@@ -13,9 +13,9 @@ from __future__ import annotations
 import hashlib
 import json
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -224,15 +224,59 @@ class Checkpoint:
         tmp.replace(p)
 
 
+class Paused(Exception):
+    """Der Backtest hält vor einem Teil an, der nicht mehr bis zur Frist fertig würde.
+
+    Die fertigen Teile liegen im Zwischenspeicher; der nächste Aufruf mit demselben Ausgabeordner
+    und Snapshot rechnet ab hier weiter.
+    """
+
+
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
+def _estimate(timings: dict[str, float], name: str) -> float | None:
+    """Erwartete Dauer eines Teils: längste bekannte Faltung der Variante, sonst aller Varianten."""
+    own = [s for k, s in timings.items() if k.startswith("fold") and k.endswith(f"_{name}_s")]
+    if own:
+        return max(own)
+    any_ = [s for k, s in timings.items() if k.startswith("fold") and k.endswith("_s")]
+    return max(any_) if any_ else None
+
+
+def _check_deadline(
+    deadline: datetime | None, clock: Callable[[], datetime], need_s: float | None, what: str
+) -> None:
+    if deadline is None:
+        return
+    now = clock()
+    if now >= deadline or (need_s and now + timedelta(seconds=need_s) > deadline):
+        log.info("backtest.paused", before=what, deadline=deadline, expected_s=need_s)
+        raise Paused(f"angehalten vor {what}, Frist {deadline:%Y-%m-%d %H:%M %Z}")
+
+
 def run_backtest(
     fb: FeatureBuilder,
     cfg: ModelConfig,
     variants: Sequence[str] | None = None,
     job: JobLog | None = None,
     checkpoint: Checkpoint | None = None,
+    deadline: datetime | None = None,
+    clock: Callable[[], datetime] = _now,
 ) -> BacktestResult:
-    """@relation(SWR-MLT-040, SWR-MLT-041, SWR-MLT-044, scope=function)"""
+    """Backtest aller oder der genannten Varianten.
+
+    Mit ``deadline`` beginnt der Lauf keinen Teil mehr, dessen erwartete Dauer (längste bekannte
+    Faltung) über die Frist reichen würde, und wirft :class:`Paused`. Das braucht einen
+    ``checkpoint``, sonst ginge die Arbeit verloren.
+
+    @relation(SWR-MLT-040, SWR-MLT-041, SWR-MLT-044, SWR-MLT-046, scope=function)
+    """
+    if deadline is not None and checkpoint is None:
+        raise ValueError("deadline braucht einen Checkpoint")
     job = job or JobLog(None)
+    _check_deadline(deadline, clock, None, "den Merkmalen")
     first, last = data_days(fb, cfg)
     folds = make_folds(cfg, last)
     if not folds:
@@ -269,6 +313,7 @@ def run_backtest(
                     timings[f"fold{fold.no}_{name}_s"] = done[1]
                 log.info("backtest.reused", fold=fold.no, variant=name)
                 continue
+            _check_deadline(deadline, clock, _estimate(timings, name), f"Faltung {fold.no} {name}")
             got, dt = _fit_predict(full, test, cfg, name, fold, first)
             parts += got
             if dt:

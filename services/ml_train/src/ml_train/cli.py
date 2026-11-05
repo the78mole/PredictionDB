@@ -30,6 +30,7 @@ import time
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 from sqlalchemy import Engine
@@ -37,6 +38,7 @@ from sqlalchemy import Engine
 from ml_train.backtest import (
     BacktestResult,
     Checkpoint,
+    Paused,
     backtest_steps,
     data_days,
     run_backtest,
@@ -56,10 +58,29 @@ DEFAULT_REGISTRY = os.environ.get("PDB_ML_REGISTRY", "s3://ml-artifacts/models")
 DEFAULT_CACHE = os.environ.get("PDB_ML_CACHE", "/tmp/ml-train-cache")
 #: Unterordner des Backtest-Ausgabeordners mit den Zwischenständen je Faltung und Verfahren
 CHECKPOINT_DIR = "teile"
+#: Rückgabewert, wenn der Backtest an seiner Frist anhält (EX_TEMPFAIL: später fortsetzen)
+EXIT_PAUSED = 75
+#: Zeitzone für ``--stop-at HH:MM``
+LOCAL_TZ = ZoneInfo(os.environ.get("PDB_LOCAL_TZ", "Europe/Berlin"))
 
 
 def parse_date(s: str) -> date:
     return date.fromisoformat(s)
+
+
+def parse_deadline(s: str, now: datetime | None = None) -> datetime:
+    """Frist als ``HH:MM`` (nächstes Auftreten in ``LOCAL_TZ``) oder ISO-Zeit mit Zeitzone."""
+    if len(s) <= 5 and ":" in s:
+        hh, mm = (int(x) for x in s.split(":"))
+        ref = (now or datetime.now(UTC)).astimezone(LOCAL_TZ)
+        at = ref.replace(hour=hh, minute=mm, second=0, microsecond=0)
+        return at if at > ref else at + timedelta(days=1)
+    at = datetime.fromisoformat(s)
+    if at.tzinfo is None:
+        raise argparse.ArgumentTypeError(
+            "Frist braucht eine Zeitzone, z. B. 2026-11-10T08:00+01:00"
+        )
+    return at
 
 
 def to_dt(d: date) -> datetime:
@@ -95,6 +116,12 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--snapshot", required=True, type=Path)
     b.add_argument("--out", required=True, type=Path)
     b.add_argument("--variant", action="append")
+    b.add_argument(
+        "--active",
+        action="store_true",
+        help="nur die Varianten der aktiven Registry-Versionen (Champion, Challenger, Baseline)",
+    )
+    b.add_argument("--registry", default=DEFAULT_REGISTRY)
     b.add_argument("--test-from", type=parse_date)
     b.add_argument("--test-to", type=parse_date)
     b.add_argument("--fold-months", type=int)
@@ -110,6 +137,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--rolling-until",
         choices=["month", "season"],
         help="Ende: letzter voller Monat oder letzte volle Jahreszeit",
+    )
+    b.add_argument(
+        "--stop-at",
+        type=parse_deadline,
+        help="keinen Teil mehr beginnen, der nicht bis dahin fertig wird (HH:MM oder ISO-Zeit); "
+        f"Rückgabewert {EXIT_PAUSED}, der nächste Aufruf setzt fort",
     )
 
     f = cmd.add_parser("fit", help="Variante mit allen Daten trainieren und registrieren")
@@ -279,7 +312,11 @@ def write_backtest(
 
 
 def cmd_backtest(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: JobLog) -> int:
-    """@relation(SWR-MLT-040, SWR-MLT-042, SWR-MLT-043, SWR-MLT-044, SWR-MLT-045, scope=function)"""
+    """Backtest, wahlweise im mitlaufenden Fenster und mit Frist.
+
+    @relation(SWR-MLT-040, SWR-MLT-042, SWR-MLT-043, SWR-MLT-044, SWR-MLT-045, scope=function)
+    @relation(SWR-MLT-046, scope=function)
+    """
     if a.test_from:
         cfg.backtest.test_from = a.test_from
     if a.test_to:
@@ -311,7 +348,13 @@ def cmd_backtest(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: Job
     job.total(2 + backtest_steps(fb, cfg, a.variant))
     # Zwischenstände je Faltung und Verfahren: ein abgebrochener Lauf setzt hier wieder an
     ck = Checkpoint(a.out / CHECKPOINT_DIR, snap.snapshot_id, cfg)
-    res = run_backtest(fb, cfg, a.variant, job, ck)
+    try:
+        res = run_backtest(fb, cfg, a.variant, job, ck, deadline=a.stop_at)
+    except Paused as e:
+        job.paused = str(e)
+        log.info("backtest.pause", out=str(a.out), parts=len(list(ck.root.glob("*.parquet"))))
+        print(f"Backtest {e}; fortsetzen mit demselben Aufruf")
+        return EXIT_PAUSED
     job.step("Ergebnisse schreiben")
     extra = {"snapshot_id": snap.snapshot_id, "config_sha256": cfg_sha, "reused_parts": ck.reused}
     write_backtest(res, cfg, a.out, extra, today)
@@ -567,6 +610,16 @@ def _terminate(signum: int, _: object) -> None:
     raise SystemExit(128 + signum)
 
 
+def active_variants(cfg: ModelConfig, registry: str) -> list[str]:
+    """Varianten der aktiven Versionen in der Reihenfolge der Konfiguration.
+
+    @relation(SWR-MLT-046, scope=function)
+    """
+    reg = Registry(registry, cfg)
+    used = {reg.manifest(v)["variant"]["name"] for v in reg.active()}
+    return [v.name for v in cfg.variants if v.name in used]
+
+
 def run_job(cfg: ModelConfig, sha: str, a: argparse.Namespace) -> int:
     """Snapshot, Backtest oder Training mit Fortschritt in ``meta.ml_job``.
 
@@ -575,6 +628,11 @@ def run_job(cfg: ModelConfig, sha: str, a: argparse.Namespace) -> int:
     # nur der Eintrag des laufenden Befehls: snapshot hat kein --variant
     variants: list[str] = []
     if a.cmd == "backtest":
+        if a.active:
+            a.variant = [*(a.variant or []), *active_variants(cfg, a.registry)]
+            if not a.variant:
+                raise SystemExit(f"Keine aktive Version in {a.registry} für {cfg.name}")
+            a.variant = list(dict.fromkeys(a.variant))
         variants = a.variant or [v.name for v in cfg.variants]
     elif a.cmd == "fit":
         variants = [a.variant]
@@ -597,7 +655,10 @@ def run_job(cfg: ModelConfig, sha: str, a: argparse.Namespace) -> int:
             msg = f"{type(e).__name__}: {e}".strip().rstrip(":")
         job.finish(error=msg[:1000])
         raise
-    job.finish(error=None if rc == 0 else f"Rückgabewert {rc}")
+    if rc == EXIT_PAUSED and job.paused:
+        job.finish(error=job.paused, status="aborted")
+    else:
+        job.finish(error=None if rc == 0 else f"Rückgabewert {rc}")
     return rc
 
 

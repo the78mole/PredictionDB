@@ -324,6 +324,7 @@ services:
   #   docker compose --profile ml run --rm --entrypoint nice ml-train -n 19 ml-train backtest \
   #     --snapshot /data/snap --out /data/bt --variant kalender
   #   docker compose --profile ml run --rm ml-train registry attach-backtest <version> --backtest /data/bt
+  # Monatlicher Backtest der aktiven Varianten werktags 03–08 Uhr: scripts/backtest-monatlich.sh
   # Feste CPU-Grenze, damit Ingest und Verarbeitung nebenher weiterlaufen.
   ml-train:
     <<: *app
