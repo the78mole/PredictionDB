@@ -65,32 +65,22 @@ Den Ordner nach `predict/models/` kopieren (der Inhalt selbst, also `models/pack
 
 Ein Paket enthält das Modell, seine Konfiguration, das Manifest mit den Backtest-Kennzahlen,
 den Bestand je Technologie aus dem MaStR (letzte 400 Tage, danach gilt der letzte Wert wie im
-Training) und bei Wetter-Varianten die Gitter-Gewichte der Cluster, mit denen trainiert wurde.
+Training), bei Wetter-Varianten die Gitter-Gewichte der Cluster, mit denen trainiert wurde, und
+bei Varianten mit `nachbarwetter` die Gitterzellen der Nachbarzonen.
 Backtest-Prognosen mit Ist-Preisen sind nicht enthalten. Aufbau: `services/ml_train/src/ml_train/bundle.py`.
 
-### Was der schlanke Stack nicht rechnet
+### Welches Wetter der Stack lädt
 
-Der Stack rechnet nur das **DE-Wetter** selbst (GFS 0,25° im Ausschnitt um Deutschland, Cluster
-aus dem MaStR). Varianten mit der Merkmalsgruppe `nachbarwetter` (Wind- und PV-Index der
-Nachbarzonen aus GFS Europa 0,5°, z. B. `wetter_nachbarwetter` in `de_lu_v2`) brauchen das Gold
-von `gfs_0p5` je Zone und lassen sich deshalb nicht paketieren: `ml-train bundle` bricht mit
-„Nachbarwetter kann predict/ noch nicht rechnen" ab.
+| Variante | Abruf je Lauf |
+|---|---|
+| ohne Wetter (`kalender`, `frei`, …) | keiner |
+| mit DE-Wetter (`wetter`, `wetter_frei_gk_skaliert`, …) | GFS 0,25° im Ausschnitt um Deutschland, Cluster aus dem MaStR |
+| mit `nachbarwetter` (`wetter_nachbarwetter`, …) | dazu GFS 0,5° für Europa, Zonen aus `regions_v2` |
 
-| Variante | schlanker Stack | voller Stack (`ml-predict`) |
-|---|---|---|
-| ohne Wetter (`kalender`, `frei`, …) | ja | ja |
-| mit DE-Wetter (`wetter`, `wetter_frei_gk_skaliert`, …) | ja | ja |
-| mit `nachbarwetter` | nein | ja |
-
-So lässt sich die Einschränkung umgehen:
-
-- **Voller Stack:** `ml-predict` rechnet alle Varianten aus der Datenbank, auch solche mit
-  Nachbarwetter (Compose-Profil `ml` im Wurzelordner).
-- **Variante ohne Nachbarwetter paketieren:** Für den schlanken Stack die nächstbeste Variante
-  ohne `nachbarwetter` wählen (z. B. `wetter_frei_gk_skaliert` statt
-  `wetter_frei_gk_skaliert_nachbarwetter`).
-
-Umsetzung im schlanken Stack: [#244](https://github.com/the78mole/PredictionDB/issues/244).
+Die Gruppe `nachbarwetter` enthält den Wind- und PV-Index der Nachbarzonen. Das Modell wurde auf
+0,5° trainiert, deshalb lädt der Stack auch im Betrieb dieses Gitter und rechnet nicht aus 0,25°.
+Der zweite Abruf läuft über das Archiv auf AWS bzw. Google. Fehlt der Lauf dort noch, rechnet der
+Stack ohne diese Merkmale und nennt `nachbarwetter` in `inputs_missing`.
 
 ## Ausgabe
 
@@ -146,6 +136,7 @@ Merkmal leer und `inputs_missing` nennt sie.
 | Monatsmittel Kohle, Gas, LNG, Brent | Weltbank Pink Sheet | CC BY 4.0 |
 | Heizöl, Diesel DE | EU Weekly Oil Bulletin | CC BY 4.0 |
 | Wetter (nur Wetter-Varianten) | NOAA GFS 0,25°, NOMADS-Filter bzw. AWS/Google | gemeinfrei |
+| Wetter der Nachbarzonen (nur `nachbarwetter`) | NOAA GFS 0,5°, AWS/Google | gemeinfrei |
 | Bestand, Cluster | im Paket, aus dem MaStR | Datenlizenz Deutschland – Namensnennung 2.0 |
 
 Die Prognosen stehen wie die Modelle unter **CC BY 4.0**. Namensnennung: „PredictionDB

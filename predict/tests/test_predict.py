@@ -6,6 +6,7 @@ import hashlib
 import json
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import httpx
@@ -15,19 +16,24 @@ import pytest
 import yaml
 
 from energy_ingest.model import HOUR, SeriesData, series
-from ml_train.bundle import export_package
-from ml_train.config import load_config
+from ml_train.bundle import export_package, neighbour_cells, write_package
+from ml_train.config import NeighbourWeather, Variant, load_config
 from ml_train.dataset import FeatureBuilder, issue_days_between
 from ml_train.models import TwoStageModel
 from ml_train.registry import Registry
+from ml_train.snapshot import Snapshot
 from ml_train.testing import synthetic_snapshot
 from pdb_predict.cli import next_slot
 from pdb_predict.energy import EnergyCache, Window
 from pdb_predict.package import OciClient, PackageSource, load_package, parse_ref
 from pdb_predict.server import Api
 from pdb_predict.service import Predictor, write_outputs
-from pdb_predict.weather import technology_features
+from pdb_predict.weather import WeatherCache, neighbour_features, technology_features
+from wx_ingest.config import GfsConfig
 from wx_process.decode import decode_step
+from wx_process.features import FeatureBuilder as GoldBuilder
+from wx_process.features import PvModel, TechnologyFeatures
+from wx_process.regions import RegionSet
 from wx_process.silver import assemble
 from wx_process.testing import grid, make_step
 
@@ -217,6 +223,178 @@ def test_weather_features_per_technology() -> None:
     assert v3["wind_on_t2m"] == pytest.approx((200 * t_c0 + 600 * t_c1) / 800, abs=0.02)
     assert v3["wind_on_wind_power"] == pytest.approx(800 * v3["wind_on_wind_cf"], rel=0.3)
     assert "pv_roof_pv_power" in w.columns
+
+
+#: Nachrichten in ``wx_process.testing`` zu ``pdb_predict.weather.NEIGHBOUR_MESSAGES``
+NEIGHBOUR_NAMES = {"t2m", "u10", "v10", "u100", "v100", "dswrf"}
+NB = NeighbourWeather(zones=["FR", "DK1"])
+REGIONS = ROOT / "config/gefs/regions_v2.json.gz"
+
+
+def eu_steps(names: set[str] | None = None) -> dict[int, bytes]:
+    lat, lon = grid(71.5, 34.5, -10.5, 45, 0.5)
+    return {s: make_step(s, lat, lon, names=names) for s in (0, 3, 6)}
+
+
+def eu_dataset(blobs: dict[int, bytes], run: datetime):  # type: ignore[no-untyped-def]
+    decoded = {s: decode_step(b, s) for s, b in blobs.items()}
+    return assemble("gfs", "0p5", run, decoded).quantized()
+
+
+def test_neighbour_features_like_gold() -> None:
+    """Die Teilmenge der Nachrichten liefert dieselben Werte wie das Gold aus allen Nachrichten.
+
+    @relation(SWR-PRD-025, SWR-MLT-071, scope=function)
+    """
+    run = datetime(2099, 1, 2, 6, tzinfo=UTC)
+    wx = yaml.safe_load((ROOT / "config/process/gfs_0p5.yaml").read_text())
+    regions = RegionSet.load(REGIONS)
+    ids = {c: i for i, c in enumerate(regions.codes)}
+    techs = {k: TechnologyFeatures.model_validate(v) for k, v in wx["technologies"].items()}
+    builder = GoldBuilder(techs, PvModel.model_validate(wx["pv"]))
+    series, _ = builder.build(eu_dataset(eu_steps(), run), regions.clusters(ids))
+    gold = {(s.region_id, s.code): s.values for s in series}
+
+    cells = neighbour_cells(NB, REGIONS)
+    assert set(cells["technology"]) == {"area"}
+    df = neighbour_features(eu_dataset(eu_steps(NEIGHBOUR_NAMES), run), cells, wx, NB.features)
+    assert set(df["feature"]) == {
+        "nb_fr_wind_cf",
+        "nb_fr_pv_cf",
+        "nb_dk1_wind_cf",
+        "nb_dk1_pv_cf",
+    }
+    assert set(df.columns) == {"run_time", "valid_time", "feature", "value"}
+    w = df.pivot(index="valid_time", columns="feature", values="value")
+    for zone in ("FR", "DK1"):
+        rid = ids[f"gefs:{zone}:area"]
+        for code in ("wind_cf", "pv_cf"):
+            got = w[f"nb_{zone.lower()}_{code}"]
+            ref = gold[(rid, code)]
+            np.testing.assert_allclose(got.dropna(), ref[~np.isnan(ref)], rtol=1e-5, atol=1e-6)
+    # Strahlung fehlt im Analyse-Schritt, das Gold hat dort keine Zeile
+    assert (df["feature"] == "nb_fr_pv_cf").sum() == 2
+    assert (df["feature"] == "nb_fr_wind_cf").sum() == 3
+
+
+def test_neighbour_cache_and_failure(monkeypatch, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-PRD-025, scope=function)"""
+    wx = yaml.safe_load((ROOT / "config/process/gfs_0p5.yaml").read_text())
+    cells = neighbour_cells(NB, REGIONS)
+
+    pkg = SimpleNamespace(
+        version="v",
+        neighbour_cells=cells,
+        neighbour_wx={"technologies": wx["technologies"], "pv": wx["pv"]},
+        cfg=SimpleNamespace(neighbour_weather=NB),
+    )
+
+    eu = GfsConfig.from_yaml(ROOT / "config/sources/gfs_0p5.yaml")
+    de = GfsConfig.from_yaml(ROOT / "config/sources/gfs_0p25.yaml")
+    cache = WeatherCache(tmp_path, de, run_hours=[0, 12], max_lead_h=6, neighbour_gfs=eu)
+    run = datetime(2099, 1, 2, 12, tzinfo=UTC)
+    calls: list[tuple[str, list[int]]] = []
+    blobs: dict[int, bytes] | None = eu_steps(NEIGHBOUR_NAMES)
+
+    async def download(gfs, run, steps, messages):  # type: ignore[no-untyped-def]
+        calls.append((gfs.code, steps))
+        return blobs
+
+    monkeypatch.setattr(cache, "_download", download)
+    monkeypatch.setattr(cache, "wanted_runs", lambda now: [run])
+    monkeypatch.setattr(cache, "features_for", lambda run, package: None)
+    df = cache.update(pkg)  # type: ignore[arg-type]
+    assert calls == [("gfs_0p5", [0, 3, 6])]
+    assert df["feature"].str.startswith("nb_").all() and not df.empty
+    cache.update(pkg)  # type: ignore[arg-type]
+    assert len(calls) == 1  # zweiter Aufruf aus dem Cache
+
+    # Lauf der Quelle unvollständig oder Quelle falsch: keine Merkmale, kein Abbruch
+    (tmp_path / "weather/nb/2099010212.parquet").unlink()
+    blobs = None
+    assert cache.update(pkg).empty  # type: ignore[arg-type]
+    cache.neighbour_gfs = de
+    assert cache.update(pkg).empty  # type: ignore[arg-type]
+
+
+def test_neighbour_package_and_predict(tmp_path: Path) -> None:
+    """Paket mit ``nachbarwetter``: Abbruch ohne Zellen, Prognose mit und ohne die Merkmale.
+
+    @relation(SWR-MLT-071, SWR-PRD-025, SWR-PRD-024, scope=function)
+    """
+    snap = synthetic_snapshot("2022-06-01", "2023-10-01", weather_from="2023-01-01")
+    w = snap.weather
+    src = w[w["feature"] == w["feature"].iloc[0]]
+    src = src[(src["valid_time"] - src["run_time"]) / pd.Timedelta(hours=1) % 3 == 0]
+    nb_rows = pd.concat(
+        [
+            src.assign(feature=f"nb_{z}_wind_cf", value=src["value"].astype("float32"))
+            for z in ("fr", "dk1")
+        ]
+    )
+    train = Snapshot(snap.energy, pd.concat([w, nb_rows]), snap.capacity, snap.manifest)
+    cfg_path = tmp_path / "cfg.yaml"
+    cfg, _ = load_config(ROOT / "config/ml/de_lu_v1.yaml")
+    cfg.stage1 = [t for t in cfg.stage1 if t.code != "gen_wind_offshore"]
+    cfg.lgbm.n_estimators = 5
+    cfg.lgbm.n_jobs = 1
+    cfg.neighbour_weather = NB
+    groups = ["calendar", "lags", "capacity", "weather", "nachbarwetter", "stage1"]
+    cfg.variants = [Variant(name="nb", groups=groups, requires_weather=True)]
+    cfg_path.write_text(yaml.safe_dump(cfg.model_dump(mode="json"), allow_unicode=True))
+    cfg, _ = load_config(cfg_path)
+    frame = FeatureBuilder(train, cfg).build(
+        issue_days_between(date(2023, 2, 1), date(2023, 8, 1), 7)
+    )
+    assert "wx_nb_fr_wind_cf" in frame.groups["nachbarwetter"]
+    reg = Registry(str(tmp_path / "registry"), cfg)
+    model = TwoStageModel(cfg, cfg.variant("nb")).fit(frame)
+    version = reg.register(model, {"snapshot_id": "s", "clustering_version": "c"}, None, "champion")
+    reg.load(version, tmp_path / "cache")
+    wx = yaml.safe_load((ROOT / "config/process/gfs_0p5.yaml").read_text())
+    nb_wx = {"technologies": wx["technologies"], "pv": wx["pv"]}
+    common: dict[str, Any] = {
+        "cfg": cfg,
+        "config_yaml": cfg_path.read_bytes(),
+        "model_dir": tmp_path / "cache" / version,
+        "manifest": reg.manifest(version),
+        "capacity": snap.capacity,
+        "clusters": pd.DataFrame({"technology": ["wind_on"], "cluster_no": [0], "lat": [50.0]}),
+        "cluster_capacity": pd.DataFrame(),
+        "wx_process": {"technologies": {}},
+    }
+    with pytest.raises(ValueError, match="Zonen-Gewichte"):
+        write_package(tmp_path / "ohne", **common)
+    cells = neighbour_cells(NB, REGIONS)
+    with pytest.raises(ValueError, match="keine Zellen"):
+        write_package(
+            tmp_path / "halb",
+            **common,
+            neighbour_zone_cells=cells[cells["zone"] == "FR"],
+            neighbour_wx=nb_wx,
+        )
+    out = tmp_path / "paket"
+    info = write_package(out, **common, neighbour_zone_cells=cells, neighbour_wx=nb_wx)
+    assert info["neighbour_weather"]["zones"] == ["FR", "DK1"]
+    assert {"neighbour_cells.parquet", "neighbour_wx.yaml"} <= set(info["files"])
+    pkg = load_package(out)
+    assert pkg.neighbour_cells is not None and set(pkg.neighbour_cells["zone"]) == {"FR", "DK1"}
+
+    class Weather:
+        def __init__(self, rows: pd.DataFrame) -> None:
+            self.rows = rows
+
+        def update(self, package: Any) -> pd.DataFrame:
+            return self.rows
+
+    issue = datetime(2023, 9, 20, 8, tzinfo=UTC)
+    cache = EnergyCache(tmp_path, {"smard": FakeSource("smard", snap.energy)})
+    with_nb = Predictor(lambda: pkg, cache, lambda p: Weather(train.weather)).run(issue)  # type: ignore[arg-type, return-value]
+    assert "nachbarwetter" not in with_nb["inputs_missing"]
+    assert with_nb["targets"]["da_price_de_lu"]
+    without = Predictor(lambda: pkg, cache, lambda p: Weather(w)).run(issue)  # type: ignore[arg-type, return-value]
+    assert "nachbarwetter" in without["inputs_missing"]
+    assert without["targets"]["da_price_de_lu"]
 
 
 def test_oci_pull_and_refresh(package: Path, tmp_path: Path) -> None:

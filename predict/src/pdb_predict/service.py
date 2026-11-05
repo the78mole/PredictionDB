@@ -160,6 +160,10 @@ class Predictor:
         snap = Snapshot(energy, weather, pkg.capacity, {"snapshot_id": "live"})
         frame = FeatureBuilder(snap, pkg.cfg).build_at([pd.Timestamp(issue)])
         df = predict_model(frame, pkg.model, pkg.version, pd.Timestamp(issue))
+        if pkg.neighbour_cells is not None:
+            nb_cols = frame.groups.get("nachbarwetter", [])
+            if not nb_cols or frame.X[nb_cols].isna().all(axis=None):
+                missing["nachbarwetter"] = "kein Lauf von GFS Europa zum gewählten Wetterlauf"
         run = None
         if pkg.requires_weather and "wx_lead_h" in frame.X.columns and not df.empty:
             lead = frame.X["wx_lead_h"].dropna()
