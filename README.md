@@ -5,6 +5,7 @@
 [![Release](https://img.shields.io/github/v/release/the78mole/PredictionDB?filter=v*&sort=semver)](https://github.com/the78mole/PredictionDB/releases)
 [![CodeQL](https://github.com/the78mole/PredictionDB/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/the78mole/PredictionDB/actions/workflows/github-code-scanning/codeql)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/the78mole/PredictionDB/badge)](https://scorecard.dev/viewer/?uri=github.com/the78mole/PredictionDB)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/16346/badge)](https://www.bestpractices.dev/projects/16346)
 [![Security Policy](https://img.shields.io/badge/Security-Policy-brightgreen?logo=github)](SECURITY.md)
 [![Lizenz: AGPL-3.0](https://img.shields.io/badge/Lizenz-AGPL--3.0-blue)](LICENSING.md)
 [![Python 3.14](https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white)](.python-version)
