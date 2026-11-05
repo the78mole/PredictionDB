@@ -166,7 +166,7 @@ def _sql(panel: dict, ref: int = 0) -> str:  # type: ignore[type-arg]
 
 
 def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
-    """@relation(SWR-MLT-053, scope=function)"""
+    """@relation(SWR-MLT-053, SWR-MLT-042, scope=function)"""
     now = pd.Timestamp.now(tz="UTC").floor("h")
     reg, versions = _registry(tmp_path, now)
     with engine.connect() as c:
@@ -184,6 +184,12 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
             {"v": versions},
         ).scalar_one()
         assert n == 2 * 2 * 8  # Versionen x Ziele x (7 Vorlauftage + gesamt)
+        # Backtests decken das Vergleichsfenster nicht ab: vermerkt, ohne Kennzahlen
+        scopes = c.execute(
+            text("SELECT scope, covered FROM meta.model_metric_scope WHERE version = ANY(:v)"),
+            {"v": versions},
+        ).all()
+        assert sorted(scopes) == sorted([("all", True), ("w2024_2025", False)] * 2)
         err = c.execute(
             text(
                 "SELECT DISTINCT model_version, target, err FROM fcst.prediction_error"

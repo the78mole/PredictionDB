@@ -70,6 +70,14 @@ backtest:
   oof_folds: 3
   train_issue_stride: 2
 
+# Festes Vergleichsfenster (Ausgabetage): Jeder Backtest, der es vollständig abdeckt, wird hier
+# zusätzlich bewertet, damit Läufe mit verschiedenen Testzeiträumen vergleichbar sind
+# (docs/BACKTEST.md Kap. 7). Nur bewusst verschieben, dann mit neuem Namen.
+compare:
+  name: w2024_2025
+  start: 2024-01-01
+  end: 2025-12-31
+
 promotion:
   min_gain: 0.0
   max_group_loss: 0.05

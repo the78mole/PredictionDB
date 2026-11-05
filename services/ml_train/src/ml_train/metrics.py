@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import date
 
 import numpy as np
 import pandas as pd
@@ -118,3 +119,31 @@ def common_rows(pred: pd.DataFrame, methods: Sequence[str]) -> pd.DataFrame:
         full = cnt[cnt == n].index
         parts.append(g.set_index(key).loc[lambda d, f=full: d.index.isin(f)].reset_index())
     return pd.concat(parts, ignore_index=True) if parts else p
+
+
+def issue_days(pred: pd.DataFrame) -> pd.Series:
+    """Ausgabetag (UTC-Datum) je Zeile, wie bei den Faltungen des Backtests."""
+    return pd.to_datetime(pred["issue_time"], utc=True).dt.date
+
+
+def in_window(pred: pd.DataFrame, start: date, end: date) -> pd.DataFrame:
+    """Nur Zeilen mit Ausgabetag in ``[start, end]``.
+
+    @relation(SWR-MLT-042, scope=function)
+    """
+    d = issue_days(pred)
+    return pred[((d >= start) & (d <= end)).to_numpy()]
+
+
+def covers_window(pred: pd.DataFrame, start: date, end: date) -> bool:
+    """Reichen die Ausgabetage der Prognosen vom ersten bis zum letzten Tag des Fensters?
+
+    Lücken innerhalb (fehlende Wetterläufe) zählen nicht, nur die Ränder: Ein Lauf, der erst
+    im Fenster beginnt oder vor seinem Ende aufhört, ist nicht vergleichbar.
+
+    @relation(SWR-MLT-042, scope=function)
+    """
+    if pred.empty:
+        return False
+    d = issue_days(pred)
+    return bool(d.min() <= start and d.max() >= end)

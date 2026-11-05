@@ -291,6 +291,28 @@ Champion/Challenger-Vergleich rechnen deshalb nur auf Zeilen (Ziel, `issue_time`
 alle verglichenen Verfahren eine Prognose haben. Für Aussagen der Art „Variante A ist x % besser
 als B“ ist das die richtige Grundlage.
 
+**Festes Vergleichsfenster.** Gemeinsame Zeilen helfen nur innerhalb eines Laufs. Zwischen
+Läufen unterscheiden sich Testzeitraum (`--test-from`, `--test-to`, `--fold-months`) und
+Snapshot; ein Lauf nur über Sommermonate sieht beim Preis besser aus als einer mit Winter. Die
+Konfiguration nennt deshalb ein festes Fenster von Ausgabetagen:
+
+```yaml
+compare:
+  name: w2024_2025      # Kennung in Dateien und meta.model_metric.scope
+  start: 2024-01-01     # erster Ausgabetag (UTC-Datum von issue_time)
+  end: 2025-12-31       # letzter Ausgabetag, einschließlich
+```
+
+Jeder Backtest rechnet die Kennzahlen dann zusätzlich nur auf den Ausgabetagen im Fenster
+(`BacktestResult.metrics_window`) und vermerkt je Verfahren, ob seine Prognosen das Fenster vom
+ersten bis zum letzten Tag abdecken (`window_methods`, Spalte `complete`). Nur Verfahren mit
+`complete = true` sind über Läufe hinweg vergleichbar; ein Kurzlauf mit spätem `--test-from`
+deckt das Fenster nicht ab. Lücken innerhalb (fehlende Wetterläufe) zählen nicht, nur die
+Ränder. Der Snapshot unterscheidet sich zwischen Läufen auch im Fenster leicht (nachträgliche
+Korrekturen, `snapshot_id` in `lauf.json`). Das Fenster wird nur bewusst verschoben, dann mit
+neuem Namen; die Kennzahlen im alten Fenster bleiben in der Datenbank stehen. Die Freigabe
+(Kap. 10) bleibt beim Vergleich auf gemeinsamen Zeilen.
+
 ## 8. Ergebnisdateien
 
 `ml-train backtest --out <ordner>` schreibt:
@@ -303,8 +325,10 @@ als B“ ist das die richtige Grundlage.
 | `metrics_season.csv` | … je Verfahren, Ziel, Vorlauftag und Jahreszeit |
 | `metrics_year.csv` | … je Verfahren, Ziel und Jahr |
 | `metrics_common_lead.csv` | wie `metrics_lead.csv`, aber nur auf gemeinsamen Zeilen aller Verfahren |
+| `metrics_window.csv` | Kennzahlen je Verfahren und Ziel nur im Vergleichsfenster (Kap. 7), mit Spalten `window` und `complete` |
+| `metrics_window_lead.csv` | … je Verfahren, Ziel und Vorlauftag |
 | `rank_corr.csv` | mittlere Rangkorrelation je Liefertag, je Verfahren, Ziel und Vorlauftag |
-| `lauf.json` | Snapshot-ID, Konfig-Hash, Faltungen mit `test_from`, `test_to`, `train_to`, Laufzeiten je Faltung und Variante, Zeilenzahl, Git-Commit, Ende des Laufs |
+| `lauf.json` | Snapshot-ID, Konfig-Hash, Vergleichsfenster (`compare`: Name, Grenzen, Verfahren mit und ohne vollständige Abdeckung), Faltungen mit `test_from`, `test_to`, `train_to`, Laufzeiten je Faltung und Variante, Zeilenzahl, Git-Commit, Ende des Laufs |
 
 Spalten von `predictions.parquet`:
 
@@ -364,11 +388,21 @@ Die Kennzahlen entstehen dabei **einmal je Version** aus `backtest.parquet`
 - je Ziel und Vorlauftag eine Zeile (`lead_day` 0 bis 7),
 - je Ziel eine Zeile über alle Vorläufe mit `lead_day = -1` (0 ist seit `hours_utc` der Rest des
   Ausgabetags),
-- Spalten `n`, `mae`, `rmse`, `bias`, `pinball`, `coverage80`.
+- Spalten `n`, `mae`, `rmse`, `bias`, `pinball`, `coverage80`,
+- Spalte `scope`: `all` über alle Zeilen der Version; deckt ihr Backtest das Vergleichsfenster
+  der Konfiguration ab (Kap. 7), zusätzlich dieselben Zeilen nur im Fenster unter dem Namen des
+  Fensters (z. B. `w2024_2025`).
 
-Diese Kennzahlen laufen über **alle** Zeilen der Version, nicht über die gemeinsamen Zeilen mit
-anderen Versionen. Haben zwei Versionen Backtests über verschiedene Zeiträume, ist ihr Vergleich
-im Dashboard nur ein Anhaltspunkt. Entscheidend ist der Vergleich in Kap. 10. Versionen ohne
+`meta.model_metric_scope` hält je Version und Sicht fest, ob sie geprüft wurde und ob das Fenster
+abgedeckt ist (`covered`). So liest `registry sync` `backtest.parquet` je Version und Sicht nur
+einmal, auch wenn das Fenster nicht abgedeckt ist. Ein neues Fenster (neuer `compare.name`) wird
+beim nächsten Abgleich für alle Versionen nachgerechnet.
+
+Die Kennzahlen mit `scope = 'all'` laufen über **alle** Zeilen der Version, nicht über die
+gemeinsamen Zeilen mit anderen Versionen. Haben zwei Versionen Backtests über verschiedene
+Zeiträume, ist ihr Vergleich nur ein Anhaltspunkt. Vergleichbar sind die Zeilen im Fenster; das
+Panel „Champion und Challenger im Backtest“ zeigt beide Sichten (Spalte „Zeitraum“), die Zeilen
+im Fenster zuerst. Entscheidend für die Freigabe bleibt der Vergleich in Kap. 10. Versionen ohne
 `backtest.parquet` erscheinen im Panel ohne Kennzahlen.
 
 Die Prognosefehler **im Betrieb** (Sicht `fcst.prediction_error`, P50 der laufenden Prognosen

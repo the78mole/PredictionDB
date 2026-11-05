@@ -206,9 +206,25 @@ def write_backtest(res: BacktestResult, cfg: ModelConfig, out: Path, extra: dict
     res.metrics_common(methods, ("method", "target", "lead_day")).to_csv(
         out / "metrics_common_lead.csv", index=False
     )
+    compare: dict[str, Any] | None = None
+    if cfg.compare is not None:
+        w = cfg.compare
+        res.metrics_window(w, ("method", "target")).to_csv(out / "metrics_window.csv", index=False)
+        res.metrics_window(w, ("method", "target", "lead_day")).to_csv(
+            out / "metrics_window_lead.csv", index=False
+        )
+        done = res.window_methods(w)
+        compare = {
+            "name": w.name,
+            "start": w.start,
+            "end": w.end,
+            "complete": sorted(m for m, ok in done.items() if ok),
+            "incomplete": sorted(m for m, ok in done.items() if not ok),
+        }
     run = {
         **extra,
         "config": cfg.name,
+        "compare": compare,
         "folds": [
             {"no": f.no, "test_from": f.test_from, "test_to": f.test_to, "train_to": f.train_to}
             for f in res.folds
@@ -222,7 +238,7 @@ def write_backtest(res: BacktestResult, cfg: ModelConfig, out: Path, extra: dict
 
 
 def cmd_backtest(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: JobLog) -> int:
-    """@relation(SWR-MLT-040, scope=function)"""
+    """@relation(SWR-MLT-040, SWR-MLT-042, scope=function)"""
     if a.test_from:
         cfg.backtest.test_from = a.test_from
     if a.test_to:
@@ -245,6 +261,12 @@ def cmd_backtest(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: Job
     job.result = str(a.out)
     m = res.metrics(("method", "target"))
     print(m.to_string(index=False))
+    if cfg.compare is not None:
+        w = res.metrics_window(cfg.compare, ("method", "target"))
+        print(
+            f"\nVergleichsfenster {cfg.compare.name} ({cfg.compare.start} bis {cfg.compare.end}):"
+        )
+        print(w.to_string(index=False))
     return 0
 
 

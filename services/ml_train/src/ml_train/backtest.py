@@ -18,10 +18,17 @@ from datetime import date, timedelta
 import numpy as np
 import pandas as pd
 
-from ml_train.config import ModelConfig
+from ml_train.config import CompareWindow, ModelConfig
 from ml_train.dataset import FeatureBuilder, FeatureFrame, issue_days_between
 from ml_train.jobs import JobLog
-from ml_train.metrics import add_context, common_rows, daily_rank_corr, score
+from ml_train.metrics import (
+    add_context,
+    common_rows,
+    covers_window,
+    daily_rank_corr,
+    in_window,
+    score,
+)
 from ml_train.models import TwoStageModel, baselines
 from predictiondb_core.log import get_logger
 
@@ -49,6 +56,26 @@ class BacktestResult:
         self, methods: Sequence[str], by: Sequence[str] = ("method", "target", "lead_day")
     ) -> pd.DataFrame:
         return score(add_context(common_rows(self.predictions, methods)), by)
+
+    def window_methods(self, w: CompareWindow) -> dict[str, bool]:
+        """Je Verfahren, ob seine Prognosen das Vergleichsfenster vollständig abdecken.
+
+        @relation(SWR-MLT-042, scope=function)
+        """
+        p = self.predictions
+        return {str(m): covers_window(g, w.start, w.end) for m, g in p.groupby("method", sort=True)}
+
+    def metrics_window(
+        self, w: CompareWindow, by: Sequence[str] = ("method", "target", "lead_day")
+    ) -> pd.DataFrame:
+        """Kennzahlen nur im Vergleichsfenster, mit Spalte ``complete`` je Verfahren.
+
+        @relation(SWR-MLT-042, scope=function)
+        """
+        m = score(add_context(in_window(self.predictions, w.start, w.end)), by)
+        m.insert(0, "window", w.name)
+        m["complete"] = m["method"].map(self.window_methods(w)).fillna(False).astype(bool)
+        return m
 
     def rank_corr(self, by: Sequence[str] = ("method", "target", "lead_day")) -> pd.DataFrame:
         return daily_rank_corr(add_context(self.predictions), by)

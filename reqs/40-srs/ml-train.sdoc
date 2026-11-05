@@ -310,6 +310,29 @@ RELATIONS:
 - TYPE: Parent
   VALUE: SYSR-PR-004
 
+[REQUIREMENT]
+UID: SWR-MLT-042
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Festes Vergleichsfenster
+STATEMENT: >>>
+Ist in der Modellkonfiguration ein Vergleichsfenster (`compare`: Name, erster und letzter
+Ausgabetag) angegeben, muss der Backtest die Kennzahlen zusätzlich nur auf den Ausgabetagen im
+Fenster ausgeben und je Verfahren vermerken, ob seine Prognosen das Fenster vollständig abdecken.
+Der Registry-Spiegel muss diese Kennzahlen je Version getrennt von den Kennzahlen über alle
+Testzeilen ablegen, nur für Versionen, deren Backtest das Fenster abdeckt, und je Version und
+Sicht nur einmal aus `backtest.parquet` berechnen.
+<<<
+RATIONALE: >>>
+Jeder Backtest hat eigene Testzeiträume und Snapshots. Kennzahlen über alle Testzeilen sind
+deshalb zwischen Läufen nicht vergleichbar; im festen Fenster rechnen alle Läufe auf denselben
+Ausgabetagen (docs/MLFLOW.md Kap. 4).
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-004
+
 [[/SECTION]]
 
 [[SECTION]]

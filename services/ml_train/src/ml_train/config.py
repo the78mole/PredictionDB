@@ -207,6 +207,32 @@ class BacktestConfig(BaseModel):
     train_issue_stride: int = Field(default=2, ge=1)
 
 
+class CompareWindow(BaseModel):
+    """Festes Vergleichsfenster: Ausgabetage, auf denen jeder Backtest zusätzlich bewertet wird.
+
+    Backtests haben je Aufruf eigene Testzeiträume (``--test-from``, ``--fold-months``). Die
+    Kennzahlen über alle Testzeilen sind deshalb zwischen Läufen nicht vergleichbar. Im Fenster
+    rechnet jeder Lauf, der es vollständig abdeckt, auf denselben Ausgabetagen; das Fenster wird
+    nur bewusst verschoben (neuer ``name``), siehe docs/BACKTEST.md Kap. 7.
+
+    @relation(SWR-MLT-042, scope=class)
+    """
+
+    #: Kennung in Ausgabedateien und ``meta.model_metric.scope``, z. B. ``w2024_2025``
+    name: str = Field(pattern=r"^[a-z0-9_]+$", max_length=40)
+    #: erster und letzter Ausgabetag (UTC-Datum von ``issue_time``), beide einschließlich
+    start: date
+    end: date
+
+    @model_validator(mode="after")
+    def _order(self) -> CompareWindow:
+        if self.name == "all":
+            raise ValueError("compare.name: 'all' steht für alle Testzeilen")
+        if self.end < self.start:
+            raise ValueError("compare: end liegt vor start")
+        return self
+
+
 class CalibrationConfig(BaseModel):
     """Nachkalibrierung der Quantile je Ziel und Vorlauftag (konformal, Romano et al. 2019).
 
@@ -252,6 +278,8 @@ class ModelConfig(BaseModel):
     backtest: BacktestConfig
     promotion: PromotionRule = Field(default_factory=PromotionRule)
     calibration: CalibrationConfig = Field(default_factory=CalibrationConfig)
+    #: festes Vergleichsfenster für Kennzahlen, die zwischen Läufen vergleichbar sind
+    compare: CompareWindow | None = None
     #: Reihen, die als Lags in die Merkmale gehen (zusätzlich zu den Zielgrößen)
     lag_series: list[str] = Field(default_factory=list)
     #: Reihen, deren Lags ``day`` und ``week`` dieselbe Uhrzeit in Ortszeit nehmen (Verhalten
