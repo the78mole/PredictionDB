@@ -27,6 +27,9 @@ der Backtest in [BACKTEST.md](BACKTEST.md), Registry und Tags in
 - **MLflow passt in den Stack.** Es ist frei (Apache 2.0), läuft als ein Container, speichert
   Läufe und Registry in Postgres (eigene Datenbank `mlflow` im vorhandenen TimescaleDB-Container)
   und Artefakte in Garage. Aktuelle Version 3.18.0 (PyPI, geprüft 2026-11-05).
+- **Ein gemeinsamer Bucket, keine Kopien.** MLflow bekommt `ml-artifacts` als Wurzel, Backtests
+  schreiben direkt nach `ml-artifacts/backtests/`, Modellversionen verweisen auf die vorhandenen
+  Registry-Ordner. Große Parquet-Dateien liegen damit nur einmal vor (Kap. 5).
 - **Tracking ja.** Jeder `ml-train backtest` und jeder `ml-train fit` wird ein MLflow-Lauf mit
   Parametern, Kennzahlen je Ziel und Vorlauftag und kleinen Artefakten. In der Oberfläche lassen
   sich dann Läufe filtern, nebeneinanderstellen und nach Kennzahl sortieren.
@@ -43,7 +46,7 @@ der Backtest in [BACKTEST.md](BACKTEST.md), Registry und Tags in
   wird gewarnt und weitergerechnet, wie beim Registry-Spiegel (`try_sync`).
 - **Ressourcen klein:** ein Container mit grob 0,3 bis 0,6 GB RAM (Schätzung, auf der VM zu
   messen), kaum CPU, wenige Schreibvorgänge je Lauf. Der IO-Engpass der VM wird nicht spürbar
-  belastet, solange `predictions.parquet` nicht nach MLflow kopiert wird.
+  belastet, weil nichts Großes doppelt geschrieben wird.
 - **Aufwand:** etwa drei bis vier Arbeitstage in drei PRs (Kap. 8, Schätzung).
 
 ## 2. Was MLflow ist
@@ -130,8 +133,8 @@ Backtest“ nützlich, das heute denselben Vorbehalt trägt ([BACKTEST.md](BACKT
 | Konfiguration (`de_lu_v1`, `de_lu_v2`) | **Experiment** `de_lu_v2` | eine Linie, wie in der Registry |
 | Aufruf `ml-train backtest` | **Lauf** (Elternlauf), Name z. B. `bt 2026-11-05 frei,frei_gk` | Parameter des Aufrufs, Tags aus Kap. 4, Artefakte `lauf.json`, `metrics*.csv`, `rank_corr.csv`, Konfigurations-YAML |
 | eine Variante im Backtest | **Unterlauf** je Variante und je Vergleichsverfahren (`naive_day`, `bench_load_da_forecast`) | Parameter: Merkmalsgruppen, LightGBM-Parameter, Kalibrierung; Kennzahlen je Ziel und Vorlauftag, einmal gesamt und einmal im Fenster |
-| Aufruf `ml-train fit` | **Lauf** mit Tag `pdb_version=<version>` und `backtest_run_id` | Trainingszeitraum, Zeilen, Laufzeit, Modelldateien als Artefakte |
-| Version der Datei-Registry | **Modellversion** des registrierten Modells `de_lu_v2` | Quelle ist das Artefakt des Fit-Laufs; Tags `pdb_version`, `variant`, `snapshot_id`, `role` |
+| Aufruf `ml-train fit` | **Lauf** mit Tag `pdb_version=<version>` und `backtest_run_id` | Trainingszeitraum, Zeilen, Laufzeit; Modelldateien nur als Verweis auf die Registry |
+| Version der Datei-Registry | **Modellversion** des registrierten Modells `de_lu_v2` | Quelle ist der vorhandene Registry-Ordner in Garage, ohne Kopie (siehe unten); Tags `pdb_version`, `variant`, `snapshot_id`, `role` |
 
 **Kennzahlen** heißen wie die Annotationen in ARCHITEKTUR 7.11.4, damit es eine Schreibweise
 gibt: `<ziel>.d<vorlauf>.<maß>`, z. B. `da_price_de_lu.d1.mae`, `load_actual.d2.pinball`,
@@ -139,10 +142,30 @@ gibt: `<ziel>.d<vorlauf>.<maß>`, z. B. `da_price_de_lu.d1.mae`, `load_actual.d2
 9 Vorlauf-Stufen und 5 Maßen sind das rund 270 Werte je Variante und Sicht, in einem
 `log_metrics`-Aufruf am Ende geschrieben, nicht Schritt für Schritt.
 
-**Nicht nach MLflow** kommen `predictions.parquet` und `backtest.parquet`. Sie sind groß, würden
-Garage und den IO-Engpass der VM unnötig belasten und liegen schon im Backtest-Ordner bzw. in der
-Datei-Registry. Der Lauf trägt stattdessen den Pfad als Tag (`backtest_dir`). Grafiken (z. B.
-MAE je Vorlauftag) kann ein späterer Schritt als kleine PNG anhängen.
+**Ein gemeinsamer Bucket statt Kopien.** `predictions.parquet` und `backtest.parquet` sind groß
+und sollen nicht zweimal geschrieben werden. MLflow wird deshalb so eingerichtet, dass es
+dieselben Dateien in Garage sieht, die `ml-train` ohnehin schreibt:
+
+- **Wurzel der Artefakte ist der Bucket selbst:** `--artifacts-destination s3://ml-artifacts`.
+  MLflow-eigene Artefakte liegen unter `mlflow/`, die Datei-Registry bleibt unter `models/`.
+- **Backtest-Ordner direkt in Garage:** `ml-train backtest --out` schreibt nicht mehr auf das
+  Volume `ml-data`, sondern nach `s3://ml-artifacts/backtests/<konfiguration>/<lauf-id>/`. Der
+  MLflow-Lauf verweist mit dem Tag `backtest_uri` darauf. Die Daten werden damit einmal
+  geschrieben, wie heute, nur an anderer Stelle.
+- **Modellversionen ohne Kopie:** Die Modellversion in der MLflow-Registry bekommt als Quelle den
+  vorhandenen Ordner der Datei-Registry (`mlflow-artifacts:/models/de_lu_v2/<version>`, also
+  `s3://ml-artifacts/models/de_lu_v2/<version>`). Der Fit-Lauf loggt keine Modelldateien
+  zusätzlich.
+- **Klein und doppelt bleibt nur,** was MLflow für die Ansicht braucht: `metrics*.csv`,
+  `lauf.json` und die Konfiguration als Artefakte des Laufs (wenige hundert kB).
+
+Ob die MLflow-Oberfläche Ordner außerhalb ihrer Läufe (`backtests/`, `models/`) tatsächlich
+durchblättern und herunterladen lässt, muss der erste Test zeigen. Falls nicht, bleibt es beim
+Verweis als Tag; die Dateien liegen trotzdem nur einmal vor. Ein Nebeneffekt: Liegen die
+Backtest-Ordner in Garage, können auch Miet-GPU-Jobs und der Laptop sie lesen (über
+`ml-exchange` bzw. einen Schlüssel nur für Lesen), und `fit --backtest` sowie
+`registry attach-backtest` nehmen dann eine `s3://`-Adresse statt eines lokalen Ordners.
+Grafiken (z. B. MAE je Vorlauftag) kann ein späterer Schritt als kleine PNG anhängen.
 
 **Fortschritt** bleibt in `meta.ml_job` und im Grafana-Panel. MLflow zeigt nur „läuft“ oder
 „fertig“; ein Link vom Job zum Lauf (`meta.ml_job.result` bzw. ein Tag `ml_job_id`) reicht.
@@ -203,7 +226,7 @@ Skizze für `compose.yaml` (Profil `mlflow`, nur nach Freigabe aufgesetzt):
     command: >
       mlflow server --host 0.0.0.0 --port 5000
       --backend-store-uri postgresql://mlflow:${MLFLOW_DB_PASSWORD}@postgres:5432/mlflow
-      --artifacts-destination s3://ml-artifacts/mlflow
+      --artifacts-destination s3://ml-artifacts
     environment:
       MLFLOW_S3_ENDPOINT_URL: http://garage:3900
       AWS_ACCESS_KEY_ID: ${MLFLOW_S3_KEY_ID}         # Garage-Schlüssel nur für ml-artifacts
@@ -219,8 +242,9 @@ Skizze für `compose.yaml` (Profil `mlflow`, nur nach Freigabe aufgesetzt):
 - **Datenbank:** eigene Datenbank `mlflow` mit eigenem Benutzer im vorhandenen Postgres, nicht im
   Schema von PredictionDB. MLflow verwaltet sein Schema selbst (Alembic, `mlflow db upgrade` bei
   Versionswechseln). Größenordnung: wenige MB je tausend Läufe.
-- **Artefakte:** Präfix `mlflow/` im vorhandenen Bucket `ml-artifacts`, neben `models/`. Mit dem
-  Verzicht auf Parquet-Dateien einige MB je Fit (Modelldateien) und wenige hundert kB je Backtest.
+- **Artefakte:** ein gemeinsamer Bucket `ml-artifacts` mit den Präfixen `mlflow/` (Ansicht,
+  wenige hundert kB je Lauf), `models/` (Datei-Registry wie heute) und `backtests/` (Backtest-Ordner,
+  bisher auf dem Volume `ml-data`). Große Dateien liegen nur einmal vor.
 - **IO:** je Backtest einige hundert Zeilen in wenigen Transaktionen. Das liegt weit unter dem,
   was Ingest und `ml-predict` stündlich schreiben (der Engpass der VM liegt bei WAL und
   IOPS der Datenplatte, gemessen am 2026-10-30).
@@ -244,7 +268,7 @@ Schätzung, nicht gemessen:
 | Schritt | Inhalt | Aufwand |
 |---|---|---|
 | 1. Dienst | `docker/mlflow/Dockerfile`, Compose-Profil, Datenbank und Garage-Schlüssel anlegen, Doku, Renovate-Regel für das Image | 0,5 Tag |
-| 2. Tracking | `ml_train/tracking.py`, Aufrufe in `cmd_backtest`/`cmd_fit`, `tracking.json` für entfernte Jobs, Tests gegen einen lokalen Dateispeicher (`file:`-URI, ohne Server) | 1 Tag |
+| 2. Tracking | `ml_train/tracking.py`, Aufrufe in `cmd_backtest`/`cmd_fit`, `--out`/`--backtest` auch als `s3://`-Adresse (über die vorhandene Klasse `Storage`), `tracking.json` für entfernte Jobs, Tests gegen einen lokalen Dateispeicher (`file:`-URI, ohne Server) | 1 Tag |
 | 3. Vergleichsfenster | `compare:` in der Konfiguration, zweite Kennzahl-Sicht im Backtest, Spalte in `meta.model_metric` oder eigene Sicht | 0,5–1 Tag |
 | 4. Registry-Spiegel | `mirror_registry` nach `registry sync`, Aliase und Tags | 0,5 Tag |
 | 5. Nachtrag | vorhandene Backtest-Ordner und Registry-Versionen einmalig eintragen | 0,5 Tag |
