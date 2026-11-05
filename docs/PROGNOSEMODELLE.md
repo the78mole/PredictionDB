@@ -703,4 +703,5 @@ Ablation; ihre Ergebnisse stehen noch aus.
 | `lgbm` | `num_leaves`, `learning_rate`, `n_estimators`, `min_child_samples`, `subsample`, `subsample_freq`, `colsample_bytree`, `reg_lambda`, `n_jobs` (0 = alle Kerne) |
 | `calibration` | `months` (Kalibriermenge am Ende des Trainings, 0 = aus), `min_rows` je Vorlauftag |
 | `backtest` | `test_from`, `test_to`, `fold_months`, `gap_days`, `oof_folds`, `train_issue_stride` |
+| `compare` | festes Vergleichsfenster: `name` (Kleinbuchstaben, Ziffern, `_`), `start`, `end` (Ausgabetage, einschließlich); Kennzahlen im Fenster sind zwischen Läufen vergleichbar ([BACKTEST.md](BACKTEST.md) Kap. 7) |
 | `promotion` | `min_gain`, `max_group_loss`, `min_group_n` |

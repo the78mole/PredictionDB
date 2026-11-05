@@ -123,8 +123,11 @@ MLflow zeigt genau die Zahlen, die man hineinschreibt. Ohne Gegenmaßnahme würd
   leicht (nachträgliche Korrekturen); das steht über `snapshot_id` im Lauf und bleibt ein
   bekannter Rest.
 
-Das Fenster wäre auch für `meta.model_metric` und das Grafana-Panel „Champion und Challenger im
-Backtest“ nützlich, das heute denselben Vorbehalt trägt ([BACKTEST.md](BACKTEST.md) Kap. 9).
+**Umgesetzt (2026-11-05)** ohne MLflow: `compare` in `config/ml/de_lu_v1.yaml` und
+`de_lu_v2.yaml` (Fenster `w2024_2025`), Dateien `metrics_window*.csv`, Spalte
+`meta.model_metric.scope` und das Grafana-Panel „Champion und Challenger im Backtest“
+([BACKTEST.md](BACKTEST.md) Kap. 7 und 9). Die Spaltennamen weichen von der Skizze oben ab:
+`start`/`end` statt `window`, `complete` je Verfahren statt eines Tags.
 
 ## 5. Abbildung von Backtest und Fit auf MLflow
 

@@ -407,6 +407,95 @@ def test_backtest_beats_naive_baselines(backtest) -> None:  # type: ignore[no-un
     assert set(bench["lead_day"]) == {1}
 
 
+def test_compare_window_metrics(backtest, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-042, scope=function)"""
+    import json
+
+    from ml_train.cli import write_backtest
+    from ml_train.config import CompareWindow
+
+    _, cfg, res, _ = backtest
+    inside = CompareWindow(name="w2308", start=date(2023, 8, 1), end=date(2023, 8, 31))
+    assert all(res.window_methods(inside).values())
+    early = CompareWindow(name="w2306", start=date(2023, 6, 1), end=date(2023, 8, 31))
+    assert not any(res.window_methods(early).values())
+
+    m = res.metrics_window(inside, ("method", "target")).set_index(["method", "target"])
+    full = res.metrics(("method", "target")).set_index(["method", "target"])
+    key = ("kalender", "load_actual")
+    assert 0 < m.loc[key, "n"] < full.loc[key, "n"]
+    assert m["complete"].all() and set(m["window"]) == {"w2308"}
+    days = res.predictions["issue_time"].dt.date
+    aug = res.predictions[(days >= inside.start) & (days <= inside.end)]
+    assert m.loc[key, "n"] == len(
+        aug[(aug["method"] == "kalender") & (aug["target"] == "load_actual")]
+    )
+
+    c = cfg.model_copy(update={"compare": inside})
+    write_backtest(res, c, tmp_path, {})
+    run = json.loads((tmp_path / "lauf.json").read_text())
+    assert run["compare"]["name"] == "w2308" and "kalender" in run["compare"]["complete"]
+    assert (tmp_path / "metrics_window.csv").exists()
+    assert (tmp_path / "metrics_window_lead.csv").exists()
+
+
+def test_season_comparison_ranks_methods(backtest) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-043, scope=function)"""
+    _, _, res, _ = backtest
+    sc = res.season_comparison()
+    assert not sc["method"].str.startswith("bench_").any()
+    assert {"Sommer", "Herbst", "all"} <= set(sc["season"])
+    for _, g in sc.groupby(["target", "season"]):
+        assert g["rank"].min() == 1 and abs(g["vs_best"].min()) < 1e-12
+        # gemeinsame Zeilen: alle Verfahren einer Gruppe haben gleich viele Werte
+        assert g["n"].nunique() == 1
+    best = sc[(sc["target"] == "gen_wind_onshore") & (sc["season"] == "all") & (sc["rank"] == 1)]
+    assert best["method"].tolist() == ["wetter"]
+
+
+def test_backtest_resumes_from_checkpoint(snap, tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-044, scope=function)"""
+    from ml_train.backtest import Checkpoint
+
+    c = make_cfg()
+    c.backtest.test_from = date(2023, 9, 1)
+    fb = FeatureBuilder(snap, c)
+    first = run_backtest(fb, c, ["kalender"], checkpoint=Checkpoint(tmp_path, "s1", c))
+    assert len(list(tmp_path.glob("*.parquet"))) == 2  # Vergleichsverfahren + Variante
+
+    def boom(*_: Any, **__: Any) -> None:
+        raise AssertionError("fertige Faltung neu trainiert")
+
+    monkeypatch.setattr(TwoStageModel, "fit", boom)
+    ck = Checkpoint(tmp_path, "s1", c)
+    again = run_backtest(fb, c, ["kalender"], checkpoint=ck)
+    assert ck.reused == 2
+    cols = ["method", "target", "issue_time", "ts"]
+    a = first.predictions.sort_values(cols).reset_index(drop=True)
+    b = again.predictions.sort_values(cols).reset_index(drop=True)
+    pd.testing.assert_frame_equal(a, b, check_dtype=False)
+    # anderer Snapshot: Teile passen nicht mehr, die Variante wird neu trainiert
+    with pytest.raises(AssertionError, match="neu trainiert"):
+        run_backtest(fb, c, ["kalender"], checkpoint=Checkpoint(tmp_path, "s2", c))
+
+
+def test_compare_window_config_checks() -> None:
+    """@relation(SWR-MLT-042, scope=function)"""
+    from pydantic import ValidationError
+
+    from ml_train.config import CompareWindow
+
+    for bad in (
+        {"name": "all", "start": "2024-01-01", "end": "2024-12-31"},
+        {"name": "w", "start": "2024-12-31", "end": "2024-01-01"},
+        {"name": "W 24", "start": "2024-01-01", "end": "2024-12-31"},
+    ):
+        with pytest.raises(ValidationError):
+            CompareWindow.model_validate(bad)
+    v2, _ = load_config(ROOT / "config/ml/de_lu_v2.yaml")
+    assert v2.compare is not None and v2.compare.start >= v2.backtest.test_from
+
+
 def test_folds_expand(cfg) -> None:  # type: ignore[no-untyped-def]
     """@relation(SWR-MLT-040, scope=function)"""
     folds = make_folds(cfg, date(2023, 9, 20))
@@ -526,10 +615,45 @@ def test_dbsync_roles_and_metrics() -> None:
             "q90": 12.0,
         }
     )
-    rows = {r["lead_day"]: r for r in metric_rows("v", bt)}
-    assert set(rows) == {-1, 1, 2}
+    out, checked = metric_rows("v", bt)
+    rows = {r["lead_day"]: r for r in out if r["season"] == "all"}
+    winter = {r["lead_day"]: r for r in out if r["season"] == "Winter"}
+    assert {r["season"] for r in out} == {"all", "Winter"} and winter[-1]["mae"] == 2.0
+    assert set(rows) == {-1, 1, 2} and {r["scope"] for r in out} == {"all"}
     assert rows[1]["mae"] == 1.0 and rows[2]["mae"] == 3.0 and rows[-1]["mae"] == 2.0
     assert rows[-1]["n"] == 48 and rows[1]["coverage80"] == 1.0
+    assert checked == [{"version": "v", "scope": "all", "covered": True}]
+
+
+def test_dbsync_window_metrics_once() -> None:
+    """@relation(SWR-MLT-042, SWR-MLT-053, scope=function)"""
+    from ml_train.config import CompareWindow
+    from ml_train.dbsync import metric_rows
+
+    issue = pd.date_range("2024-01-01 08:00", periods=10, freq="D", tz="UTC")
+    bt = pd.DataFrame(
+        {
+            "target": "load_actual",
+            "issue_time": issue,
+            "ts": issue + pd.Timedelta(hours=20),
+            "lead_day": 1,
+            "actual": 10.0,
+            "q50": [11.0] * 5 + [14.0] * 5,  # Fehler 1 in den ersten, 4 in den letzten 5 Tagen
+        }
+    )
+    w = CompareWindow(name="w1", start=date(2024, 1, 6), end=date(2024, 1, 10))
+    rows, checked = metric_rows("v", bt, w)
+    win = {r["lead_day"]: r for r in rows if r["scope"] == "w1" and r["season"] == "all"}
+    assert win[1]["n"] == 5 and win[1]["mae"] == 4.0
+    assert {(c["scope"], c["covered"]) for c in checked} == {("all", True), ("w1", True)}
+    # schon geprüfte Sichten werden nicht neu berechnet
+    assert metric_rows("v", bt, w, {"all", "w1"}) == ([], [])
+    rows, checked = metric_rows("v", bt, w, {"all"})
+    assert {r["scope"] for r in rows} == {"w1"}
+    # Fenster über das Ende des Backtests hinaus: vermerkt, aber ohne Kennzahlen
+    late = CompareWindow(name="w2", start=date(2024, 1, 6), end=date(2024, 1, 20))
+    rows, checked = metric_rows("v", bt, late, {"all"})
+    assert rows == [] and checked == [{"version": "v", "scope": "w2", "covered": False}]
 
 
 def test_due_issues_catches_up_missed_hours() -> None:

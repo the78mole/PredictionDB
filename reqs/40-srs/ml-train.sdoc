@@ -310,6 +310,61 @@ RELATIONS:
 - TYPE: Parent
   VALUE: SYSR-PR-004
 
+[REQUIREMENT]
+UID: SWR-MLT-042
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Festes Vergleichsfenster
+STATEMENT: >>>
+Ist in der Modellkonfiguration ein Vergleichsfenster (`compare`: Name, erster und letzter
+Ausgabetag) angegeben, muss der Backtest die Kennzahlen zusätzlich nur auf den Ausgabetagen im
+Fenster ausgeben und je Verfahren vermerken, ob seine Prognosen das Fenster vollständig abdecken.
+Der Registry-Spiegel muss diese Kennzahlen je Version getrennt von den Kennzahlen über alle
+Testzeilen ablegen, nur für Versionen, deren Backtest das Fenster abdeckt, und je Version und
+Sicht nur einmal aus `backtest.parquet` berechnen.
+<<<
+RATIONALE: >>>
+Jeder Backtest hat eigene Testzeiträume und Snapshots. Kennzahlen über alle Testzeilen sind
+deshalb zwischen Läufen nicht vergleichbar; im festen Fenster rechnen alle Läufe auf denselben
+Ausgabetagen (docs/MLFLOW.md Kap. 4).
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-004
+
+[REQUIREMENT]
+UID: SWR-MLT-043
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Vergleich der Verfahren je Jahreszeit
+STATEMENT: >>>
+Der Backtest muss die Verfahren je Ziel und Jahreszeit auf ihren gemeinsamen Zeilen
+gegeneinander stellen (Rang nach MAE und Abstand zum besten Verfahren), über den ganzen
+Testzeitraum und im Vergleichsfenster. Der Registry-Spiegel muss die Kennzahlen jeder Version
+zusätzlich je Jahreszeit ablegen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-004
+
+[REQUIREMENT]
+UID: SWR-MLT-044
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Backtest fortsetzen
+STATEMENT: >>>
+Der Backtest muss die Prognosen jeder Faltung und jedes Verfahrens sofort nach ihrer Berechnung
+zwischenspeichern. Ein erneuter Aufruf mit demselben Ausgabeordner muss fertige Teile übernehmen,
+sofern Snapshot, Konfiguration der Variante und Faltungsgrenzen gleich sind, und nur die übrigen
+rechnen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-004
+
 [[/SECTION]]
 
 [[SECTION]]

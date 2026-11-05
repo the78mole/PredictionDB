@@ -10,18 +10,29 @@ Langform und Kennzahlen je Verfahren, Ziel und Gruppe.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from ml_train.config import ModelConfig
+from ml_train.config import CompareWindow, ModelConfig
 from ml_train.dataset import FeatureBuilder, FeatureFrame, issue_days_between
 from ml_train.jobs import JobLog
-from ml_train.metrics import add_context, common_rows, daily_rank_corr, score
+from ml_train.metrics import (
+    add_context,
+    common_rows,
+    covers_window,
+    daily_rank_corr,
+    in_window,
+    score,
+    season_comparison,
+)
 from ml_train.models import TwoStageModel, baselines
 from predictiondb_core.log import get_logger
 
@@ -49,6 +60,39 @@ class BacktestResult:
         self, methods: Sequence[str], by: Sequence[str] = ("method", "target", "lead_day")
     ) -> pd.DataFrame:
         return score(add_context(common_rows(self.predictions, methods)), by)
+
+    def window_methods(self, w: CompareWindow) -> dict[str, bool]:
+        """Je Verfahren, ob seine Prognosen das Vergleichsfenster vollständig abdecken.
+
+        @relation(SWR-MLT-042, scope=function)
+        """
+        p = self.predictions
+        return {str(m): covers_window(g, w.start, w.end) for m, g in p.groupby("method", sort=True)}
+
+    def metrics_window(
+        self, w: CompareWindow, by: Sequence[str] = ("method", "target", "lead_day")
+    ) -> pd.DataFrame:
+        """Kennzahlen nur im Vergleichsfenster, mit Spalte ``complete`` je Verfahren.
+
+        @relation(SWR-MLT-042, scope=function)
+        """
+        m = score(add_context(in_window(self.predictions, w.start, w.end)), by)
+        m.insert(0, "window", w.name)
+        m["complete"] = m["method"].map(self.window_methods(w)).fillna(False).astype(bool)
+        return m
+
+    def season_comparison(self, w: CompareWindow | None = None) -> pd.DataFrame:
+        """Verfahren gegeneinander je Ziel und Jahreszeit, auf gemeinsamen Zeilen.
+
+        Mit Fenster nur die Ausgabetage im Fenster und nur Verfahren, die es abdecken.
+
+        @relation(SWR-MLT-043, scope=function)
+        """
+        p = self.predictions
+        if w is not None:
+            ok = [m for m, done in self.window_methods(w).items() if done]
+            p = in_window(p[p["method"].isin(ok)], w.start, w.end)
+        return season_comparison(p)
 
     def rank_corr(self, by: Sequence[str] = ("method", "target", "lead_day")) -> pd.DataFrame:
         return daily_rank_corr(add_context(self.predictions), by)
@@ -123,13 +167,69 @@ def backtest_steps(
     return 1 + len(make_folds(cfg, data_days(fb, cfg)[1])) * len(names)
 
 
+#: Name der Zwischenstände für die Vergleichsverfahren einer Faltung (keine Variante heißt so)
+BASELINES = "_vergleich"
+
+
+class Checkpoint:
+    """Zwischenstände des Backtests: eine Datei je Faltung und Verfahren.
+
+    Bricht ein Lauf ab, übernimmt der nächste Aufruf mit demselben Ausgabeordner alle fertigen
+    Teile und rechnet nur die fehlenden. Jeder Teil trägt einen Schlüssel aus Snapshot, den für
+    ihn maßgeblichen Teilen der Konfiguration und den Grenzen seiner Faltung; ändert sich davon
+    etwas, passt der Schlüssel nicht mehr und der Teil wird neu gerechnet. Nach dem Schreiben der
+    Ergebnisse entfernt ``ml-train backtest`` den Ordner wieder.
+
+    @relation(SWR-MLT-044, scope=class)
+    """
+
+    def __init__(self, root: Path, snapshot_id: str, cfg: ModelConfig) -> None:
+        self.root = root
+        # Was alle Verfahren gemeinsam betrifft; Varianten gehen je Teil einzeln ein
+        common = cfg.model_dump(mode="json", exclude={"variants", "compare", "promotion"})
+        self._base = json.dumps({"snapshot": snapshot_id, "cfg": common}, sort_keys=True)
+        self._variants = {v.name: v.model_dump(mode="json") for v in cfg.variants}
+        self.reused = 0
+
+    def _key(self, fold: Fold, method: str) -> str:
+        spec = self._variants.get(method, BASELINES)
+        raw = json.dumps(
+            [self._base, spec, str(fold.test_from), str(fold.test_to), str(fold.train_to)],
+            sort_keys=True,
+        )
+        return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+    def _path(self, fold: Fold, method: str) -> Path:
+        return self.root / f"fold{fold.no:02d}_{method}_{self._key(fold, method)}.parquet"
+
+    def load(self, fold: Fold, method: str) -> tuple[pd.DataFrame, float] | None:
+        p = self._path(fold, method)
+        if not p.exists():
+            return None
+        side = p.with_suffix(".json")
+        meta = json.loads(side.read_text()) if side.exists() else {}
+        self.reused += 1
+        return pd.read_parquet(p), float(meta.get("seconds", 0.0))
+
+    def save(self, fold: Fold, method: str, parts: list[pd.DataFrame], seconds: float) -> None:
+        self.root.mkdir(parents=True, exist_ok=True)
+        p = self._path(fold, method)
+        df = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
+        # erst Begleitdatei, dann Parquet umbenennen: ein Teil gilt erst mit beiden als fertig
+        p.with_suffix(".json").write_text(json.dumps({"seconds": round(seconds, 3)}))
+        tmp = p.with_suffix(".tmp")
+        df.to_parquet(tmp, index=False)
+        tmp.replace(p)
+
+
 def run_backtest(
     fb: FeatureBuilder,
     cfg: ModelConfig,
     variants: Sequence[str] | None = None,
     job: JobLog | None = None,
+    checkpoint: Checkpoint | None = None,
 ) -> BacktestResult:
-    """@relation(SWR-MLT-040, SWR-MLT-041, scope=function)"""
+    """@relation(SWR-MLT-040, SWR-MLT-041, SWR-MLT-044, scope=function)"""
     job = job or JobLog(None)
     first, last = data_days(fb, cfg)
     folds = make_folds(cfg, last)
@@ -148,32 +248,59 @@ def run_backtest(
         test = full.subset(test_mask)
         if len(test) == 0:
             continue
-        for method, preds in baselines(test, cfg).items():
-            parts += _long(method, dict(preds), test, fold.no)
+        done = checkpoint.load(fold, BASELINES) if checkpoint else None
+        if done is not None:
+            parts.append(done[0])
+        else:
+            base: list[pd.DataFrame] = []
+            for method, preds in baselines(test, cfg).items():
+                base += _long(method, dict(preds), test, fold.no)
+            parts += base
+            if checkpoint:
+                checkpoint.save(fold, BASELINES, base, 0.0)
         for name in names:
             job.step(f"Faltung {fold.no + 1}/{len(folds)} · {name} · {fold.test_from:%m/%Y}")
-            v = cfg.variant(name)
-            tr = train_frame(full, cfg, name, fold.train_to, first)
-            if len(tr) < 1000:
-                log.warning("backtest.skip", fold=fold.no, variant=name, rows=len(tr))
+            done = checkpoint.load(fold, name) if checkpoint else None
+            if done is not None:
+                parts.append(done[0])
+                if done[1]:
+                    timings[f"fold{fold.no}_{name}_s"] = done[1]
+                log.info("backtest.reused", fold=fold.no, variant=name)
                 continue
-            t1 = time.monotonic()
-            model = TwoStageModel(cfg, v).fit(tr)
-            te = test
-            if v.requires_weather and "wx_lead_h" in test.X:
-                te = test.subset(test.X["wx_lead_h"].notna().to_numpy())
-            if len(te) == 0:
-                continue
-            parts += _long(name, dict(model.predict(te)), te, fold.no)
-            dt = time.monotonic() - t1
-            timings[f"fold{fold.no}_{name}_s"] = dt
-            log.info(
-                "backtest.fold",
-                fold=fold.no,
-                variant=name,
-                train_rows=len(tr),
-                test_rows=len(te),
-                seconds=round(dt, 1),
-            )
-    pred = pd.concat(parts, ignore_index=True)
+            got, dt = _fit_predict(full, test, cfg, name, fold, first)
+            parts += got
+            if dt:
+                timings[f"fold{fold.no}_{name}_s"] = dt
+            if checkpoint:
+                checkpoint.save(fold, name, got, dt)
+    pred = pd.concat([p for p in parts if not p.empty], ignore_index=True)
     return BacktestResult(pred, folds, timings)
+
+
+def _fit_predict(
+    full: FeatureFrame, test: FeatureFrame, cfg: ModelConfig, name: str, fold: Fold, first: date
+) -> tuple[list[pd.DataFrame], float]:
+    """Eine Variante in einer Faltung trainieren und auf den Testzeilen prognostizieren."""
+    v = cfg.variant(name)
+    tr = train_frame(full, cfg, name, fold.train_to, first)
+    if len(tr) < 1000:
+        log.warning("backtest.skip", fold=fold.no, variant=name, rows=len(tr))
+        return [], 0.0
+    t1 = time.monotonic()
+    model = TwoStageModel(cfg, v).fit(tr)
+    te = test
+    if v.requires_weather and "wx_lead_h" in test.X:
+        te = test.subset(test.X["wx_lead_h"].notna().to_numpy())
+    if len(te) == 0:
+        return [], 0.0
+    out = _long(name, dict(model.predict(te)), te, fold.no)
+    dt = time.monotonic() - t1
+    log.info(
+        "backtest.fold",
+        fold=fold.no,
+        variant=name,
+        train_rows=len(tr),
+        test_rows=len(te),
+        seconds=round(dt, 1),
+    )
+    return out, dt
