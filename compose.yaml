@@ -509,12 +509,16 @@ services:
       - --host=0.0.0.0
       - --port=5000
       - --workers=2
-      - --backend-store-uri=postgresql://mlflow:${MLFLOW_DB_PASSWORD:-}@postgres:5432/mlflow
       - --artifacts-destination=s3://ml-artifacts/mlflow
       # Host-Header: intern über den Dienstnamen, von außen über den Namen am Proxy
       - --allowed-hosts=mlflow,mlflow:5000,localhost:*,${MLFLOW_HOSTNAME:-localhost}
       - --cors-allowed-origins=https://${MLFLOW_HOSTNAME:-localhost}
     environment:
+      # über die Umgebung statt als Argument, sonst steht das Passwort in der Prozessliste
+      MLFLOW_BACKEND_STORE_URI: postgresql://mlflow:${MLFLOW_DB_PASSWORD:-}@postgres:5432/mlflow
+      # Job-Runner (GenAI-Scorer u. Ä.) startet je Job-Art einen eigenen Prozess mit vollem
+      # MLflow-Import und sprengt damit mem_limit; wir nutzen keine Server-Jobs
+      MLFLOW_SERVER_ENABLE_JOB_EXECUTION: "false"
       MLFLOW_S3_ENDPOINT_URL: http://garage:3900
       AWS_ACCESS_KEY_ID: ${PDB_S3_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${PDB_S3_SECRET_ACCESS_KEY}
