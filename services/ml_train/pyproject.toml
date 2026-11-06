@@ -16,6 +16,7 @@ dependencies = [
     "pydantic>=2.10",
     "pyyaml>=6",
     "sqlalchemy>=2.0",
+    "mlflow-skinny>=3.18,<4",
 ]
 
 [project.optional-dependencies]

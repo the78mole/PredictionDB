@@ -400,6 +400,23 @@ RELATIONS:
 - TYPE: Parent
   VALUE: SYSR-PR-004
 
+[REQUIREMENT]
+UID: SWR-MLT-047
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Läufe und Rollen in MLflow
+STATEMENT: >>>
+Ist `MLFLOW_TRACKING_URI` gesetzt, muss `ml-train` jeden Backtest als Lauf mit einem Unterlauf je
+Verfahren und Kennzahlen je Ziel und Vorlauftag (gesamt, im festen und im mitlaufenden
+Vergleichsfenster) melden, jeden Fit als Lauf, und bei jedem Registry-Abgleich Versionen, Rollen
+und die Aliase `champion`, `baseline` und `previous` spiegeln. Die Datei-Registry bleibt die
+Quelle. Ist MLflow nicht erreichbar, müssen Backtest, Fit und Inferenz ohne Fehler weiterlaufen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-004
+
 [[/SECTION]]
 
 [[SECTION]]

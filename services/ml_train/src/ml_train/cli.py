@@ -35,6 +35,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 from sqlalchemy import Engine
 
+from ml_train import tracking
 from ml_train.backtest import (
     BacktestResult,
     Checkpoint,
@@ -359,6 +360,9 @@ def cmd_backtest(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: Job
     extra = {"snapshot_id": snap.snapshot_id, "config_sha256": cfg_sha, "reused_parts": ck.reused}
     write_backtest(res, cfg, a.out, extra, today)
     shutil.rmtree(ck.root, ignore_errors=True)
+    run_id = tracking.log_backtest(cfg, Path(a.config), a.out, _job_args(a))
+    if run_id:
+        print(f"MLflow-Lauf {run_id}")
     job.result = str(a.out)
     m = res.metrics(("method", "target"))
     print(m.to_string(index=False))
@@ -412,6 +416,7 @@ def cmd_fit(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: JobLog) 
     reg = Registry(a.registry, cfg)
     version = reg.register(model, manifest, bt, a.role)
     job.result = version
+    tracking.log_fit(cfg, version, manifest, a.registry)
     try_sync(reg)
     print(json.dumps({"version": version, "role": a.role, "train_rows": len(frame)}))
     return 0
@@ -443,6 +448,7 @@ def try_sync(reg: Registry, engine: Engine | None = None) -> None:
         sync_registry(engine or create_db_engine(), reg)
     except Exception as e:  # der Spiegel darf Training und Inferenz nie aufhalten
         log.warning("sync.failed", error=str(e))
+    tracking.mirror_registry(reg)  # fängt seine Fehler selbst ab
 
 
 def cmd_registry(cfg: ModelConfig, a: argparse.Namespace) -> int:
@@ -452,7 +458,8 @@ def cmd_registry(cfg: ModelConfig, a: argparse.Namespace) -> int:
         from ml_train.dbsync import sync_registry
         from predictiondb_core.db import create_db_engine
 
-        print(json.dumps({"versions": sync_registry(create_db_engine(), reg)}))
+        n = sync_registry(create_db_engine(), reg)
+        print(json.dumps({"versions": n, "mlflow": tracking.mirror_registry(reg)}))
         return 0
     if a.action == "attach-backtest":
         variant = reg.manifest(a.version)["variant"]["name"]
@@ -610,6 +617,10 @@ def _terminate(signum: int, _: object) -> None:
     raise SystemExit(128 + signum)
 
 
+def _job_args(a: argparse.Namespace) -> dict[str, Any]:
+    return {k: v for k, v in vars(a).items() if k not in ("cmd", "verbose") and v is not None}
+
+
 def active_variants(cfg: ModelConfig, registry: str) -> list[str]:
     """Varianten der aktiven Versionen in der Reihenfolge der Konfiguration.
 
@@ -636,7 +647,7 @@ def run_job(cfg: ModelConfig, sha: str, a: argparse.Namespace) -> int:
         variants = a.variant or [v.name for v in cfg.variants]
     elif a.cmd == "fit":
         variants = [a.variant]
-    args = {k: v for k, v in vars(a).items() if k not in ("cmd", "verbose") and v is not None}
+    args = _job_args(a)
     job = open_job_log()
     job.start(a.cmd, cfg.name, variants, args)
     # docker stop: als Abbruch eintragen statt erst nach der Frist für hängende Jobs
