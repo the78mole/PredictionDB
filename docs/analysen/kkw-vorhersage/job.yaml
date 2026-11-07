@@ -1,0 +1,40 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; ausgeführt von abruf.py und auswertung.py im selben Ordner
+id: kkw-vorhersage
+title: Vorhersagegüte von Flusstemperatur und Abfluss an französischen Kernkraftwerken
+question: >
+  Wie gut lassen sich Wassertemperatur (aus GFS-Größen) und Abfluss (aus den Niederschlägen der
+  Vorwochen und den Abflussdaten) an den französischen Kernkraftwerken mit echten Vorläufen von
+  D+1 bis D+7 vorhersagen, und lohnt sich damit ein Modell für die kühlwasserbedingte Drosselung?
+requested_by: Maulwurf
+kind: backtest
+inputs:
+  period: {from: 2021-03-01, to: 2026-11-01}
+  forecast:
+    source: ghcr.io/the78mole/predictiondb-data/gfs-0p5-silver   # CC BY 4.0, NOAA gemeinfrei
+    runs: [0]
+    lead_days: [0, 1, 2, 3, 4, 5, 6, 7]      # Tag d = Schritte 24 d + 3 bis 24 d + 24 Stunden
+    variables: [t2m, tp, dswrf, soilw_0_10, weasd]
+    points: Gitterpunkt und Einzugsgebiets-Kasten aus ../kkw-kuehlwasser-fr/daten.py
+  hubeau:                      # Licence Ouverte 2.0 (Etalab), API ohne Schlüssel
+    temperature: Stationen und Abruf wie ../kkw-kuehlwasser-fr/abruf.py
+    hydrometrie: QmnJ an den Pegeln wie ../kkw-kuehlwasser-fr/abruf.py
+method:
+  ausgabe: Lauf 00Z des Tages T; letzte Messung von Wassertemperatur und Abfluss ist T-1
+  teilung: je Kalenderjahr des Zieltags prüfen, auf den übrigen Jahren lernen (ein Jahr auslassen), Sommer Mai bis September
+  wassertemperatur:
+    persistenz: letzte Messung T-1
+    luft_vorhersage: Regression auf Luft 3/14/30 Tage, log-Abfluss T-1, Strahlung 7 Tage; Luft und Strahlung bis T+d aus dem Lauf T
+    luft_perfekt: dasselbe mit dem später tatsächlich eingetretenen Wetter (Vorlauf 0), Obergrenze
+    direkt: Regression je Vorlauf zusätzlich auf die letzte Messung
+  abfluss:
+    persistenz: letzter Tagesmittelwert T-1
+    direkt_vorhersage: Regression je Vorlauf auf log-Abfluss T-1 und T-8, Regen 7/30/90 Tage bis T, Boden, Schnee, Jahresgang, Regen T+1 bis T+d aus dem Lauf T
+    direkt_perfekt: dasselbe mit dem später tatsächlich gefallenen Regen, Obergrenze
+  metrics: [mae_k, mae_log_abfluss, trefferquote, fehlalarmquote]
+  schwellen:
+    wasser_c: [24, 26]         # Beginn der Drosselung an Garonne und Rhône, ../kkw-kuehlwasser-fr
+    abfluss_anteil_median: [0.5] # unter 50 % des Medians der Lerntage
+outputs:
+  tables: [wassertemperatur, wasser_schwellen, abfluss, abfluss_schwellen, wetterfehler]
+  figures: [wassertemperatur, abfluss]
+schedule: once

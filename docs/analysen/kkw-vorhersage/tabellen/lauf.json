@@ -1,0 +1,41 @@
+{
+ "job": "kkw-vorhersage",
+ "job_sha256": "54c8059581f71419e9043069e183c50a80bce04a6f047e9c5d38753bded0b693",
+ "git_commit": "577c450d3e30f7107ed6afafd7e1a734670766ab",
+ "gestartet": "2026-11-07T23:59:28+00:00",
+ "beendet": "2026-11-07T23:59:34+00:00",
+ "zeitraum": {
+  "von": "2021-03-23",
+  "bis": "2026-10-31"
+ },
+ "sommer_monate": [
+  5,
+  6,
+  7,
+  8,
+  9
+ ],
+ "umfang": {
+  "gfs_laeufe": 2049,
+  "tage_gesamt": 2049,
+  "stationen_temperatur": [
+   "GOL",
+   "SLB",
+   "TRI"
+  ],
+  "pegel": [
+   "BEL",
+   "BUG",
+   "CAT",
+   "CHI",
+   "CHO",
+   "CIV",
+   "DAM",
+   "GOL",
+   "NOG",
+   "SAL",
+   "SLB",
+   "TRI"
+  ]
+ }
+}
