@@ -304,6 +304,38 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
                 if ref == 1:
                     assert got and {r["metric"] for r in got} == {"P50"}
                     assert len({r["time"] for r in got}) == len(got)
+    # Wochenpanels Last: Wind + PV und Residuallast aus Stufe 1 desselben Laufs (ausgeblendet)
+    s1 = {"gen_wind_onshore": 1000.0, "gen_wind_offshore": 200.0, "gen_solar": 300.0}
+    with engine.begin() as c:
+        for code, val in s1.items():
+            c.execute(
+                text(
+                    "INSERT INTO fcst.prediction SELECT model_version, :c, issue_time, valid_time,"
+                    " quantile, :v FROM fcst.prediction"
+                    " WHERE model_version = ANY(:m) AND target = 'load_actual'"
+                ),
+                {"c": code, "v": val, "m": versions},
+            )
+    with engine.connect() as c:
+        for pid, version in ((67, versions[0]), (69, versions[1])):
+            sql = _sql(panels[pid], 1).replace("${challenger}", version)
+            load = {r["time"]: r["value"] for r in c.execute(text(sql)).mappings()}
+            c.execute(text(_sql(panels[pid], 2))).all()
+            sql = _sql(panels[pid], 3).replace("${challenger}", version)
+            got = c.execute(text(sql)).mappings().all()
+            wind_pv = {r["time"]: r["value"] for r in got if r["metric"] == "prog_wind_pv"}
+            resid = {r["time"]: r["value"] for r in got if r["metric"] == "prog_residual_load"}
+            assert wind_pv and all(v == pytest.approx(1500.0) for v in wind_pv.values())
+            assert resid == {t: pytest.approx(v - 1500.0) for t, v in load.items()}
+        # Serien außer Last, ÜNB-Lastprognose und Band beim Laden ausgeblendet
+        for pid in (67, 69):
+            hide = [
+                o
+                for o in panels[pid]["fieldConfig"]["overrides"]
+                if o.get("__systemRef") == "hideSeriesFrom"
+            ]
+            assert len(hide) == 1 and hide[0]["matcher"]["options"]["mode"] == "exclude"
+    with engine.connect() as c:
         # Tagesmittel H0 (und lastgewichtet): intern eine Zeile je Tag für das ECharts-Panel,
         # in der öffentlichen Vorlage Punkte und Fehlerbalken als Zeitreihen
         public = {p["id"]: p for p in json.loads(PUBLIC.read_text())["panels"]}
