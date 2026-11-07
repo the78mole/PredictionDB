@@ -123,3 +123,56 @@ def test_cross_border(make_http: Callable[..., Http], dataset: str, prefix: str)
     assert [v for _, v in out[prefix + "fr"].points] == pytest.approx([-1078, -752, 500])
     assert [v for _, v in out[prefix + "net"].points] == pytest.approx([-1225, -608, -247, 0])
     assert out[prefix + "net"].resolution == timedelta(minutes=15)
+
+
+def installed(req: httpx.Request) -> httpx.Response:
+    assert req.url.path == "/installed_power"
+    assert req.url.params["time_step"] == "yearly"
+    return httpx.Response(
+        200,
+        json={
+            "time": ["2023", "2024", "2025"],
+            "production_types": [
+                {"name": "Nuclear", "data": [61.4, 63.0, 63.0]},
+                {"name": "Wind onshore", "data": [21.7, 22.91, 23.67]},
+                {"name": "Wind offshore", "data": [None, 1.03, 1.53]},
+                {"name": "Solar AC", "data": [17.79, 22.86, 28.25]},
+                {"name": "Solar DC", "data": [1.0, 1.0, None]},
+            ],
+            "deprecated": False,
+        },
+    )
+
+
+def test_installed_power(make_http: Callable[..., Http]) -> None:
+    """Jahreswerte in MW, Zeitstempel am Jahresbeginn (Ortszeit), PV AC und DC summiert.
+
+    @relation(SWR-ENI-054, scope=function)
+    """
+    ec = EnergyCharts(make_http(installed))
+    assert "installed_fr" in ec.datasets()
+    start = datetime(2023, 1, 1, tzinfo=UTC) - timedelta(hours=1)
+    out = {d.code: d for d in ec.fetch("installed_fr", start, datetime(2026, 1, 1, tzinfo=UTC))}
+    assert set(out) == {"cap_wind_onshore_fr", "cap_wind_offshore_fr", "cap_solar_fr"}
+    solar = out["cap_solar_fr"]
+    assert solar.points[0][0] == datetime(2022, 12, 31, 23, tzinfo=UTC)
+    assert [v for _, v in solar.points] == pytest.approx([18790, 23860, 28250])
+    assert [v for _, v in out["cap_wind_offshore_fr"].points] == pytest.approx([1030, 1530])
+    # nur Jahre im Fenster
+    late = ec.fetch("installed_fr", datetime(2024, 6, 1, tzinfo=UTC), start + timedelta(days=1200))
+    assert all(len(d.points) == 1 for d in late)
+    with pytest.raises(KeyError):
+        ec.fetch("installed_xx", start, start + timedelta(days=1))
+
+
+def test_capacity_published_after_year_end() -> None:
+    """@relation(SWR-ENI-054, scope=function)"""
+    from energy_ingest.model import YEAR, Kind, published_at
+
+    ts = datetime(2024, 12, 31, 23, tzinfo=UTC)
+    fetched = datetime(2027, 1, 1, tzinfo=UTC)
+    pub = published_at(Kind.CAPACITY_YEAR, ts, YEAR, fetched)
+    assert pub == datetime(2025, 12, 31, 23, tzinfo=UTC) + timedelta(days=60)
+    # laufendes Jahr: bekannt ab dem Abruf
+    now = datetime(2025, 11, 7, tzinfo=UTC)
+    assert published_at(Kind.CAPACITY_YEAR, ts, YEAR, now) == now

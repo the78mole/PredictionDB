@@ -86,7 +86,8 @@ def write_package(
     """
     spec = json.loads((model_dir / "model.json").read_text())
     variant = Variant.model_validate(spec["variant"])
-    if "nachbarwetter" in variant.groups:
+    nb_groups = {n for n, g in cfg.series_groups.items() if g.mode == "nachbarindex"}
+    if "nachbarwetter" in variant.groups or nb_groups & set(variant.groups):
         # predict/ rechnet nur das DE-Wetter selbst (pdb_predict.weather); Nachbarzonen fehlen dort
         raise ValueError(f"Variante {variant.name}: Nachbarwetter kann predict/ noch nicht rechnen")
     out.mkdir(parents=True, exist_ok=True)

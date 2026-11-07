@@ -105,11 +105,17 @@ class SeriesGroup(BaseModel):
       Monatsprognose (EIA STEO). ``codes`` sind die Stämme (``steo_brent``), gespeichert je
       Vorlauf k als ``<stamm>_h<kk>``; Merkmal ``ol_<stamm>_h<k>`` = log(Prognose Vorlauf k /
       Prognose laufender Monat) für jedes k in ``horizons``.
+    - ``nachbarindex``: Wind- und PV-Index der Nachbarn als wenige Kennzahlen. ``codes`` sind
+      die installierten Leistungen ``cap_<technik>_<land>`` (Energy-Charts, je Jahr); je Land
+      zählt der zum Ausgabezeitpunkt veröffentlichte Stand mal dem mittleren ``wind_cf`` bzw.
+      ``pv_cf`` seiner Zonen aus ``neighbour_weather`` (gleicher Lauf wie das DE-Wetter).
+      Merkmale ``nbi_wind_mw``, ``nbi_pv_mw`` (Summe der Länder), ``nbi_wind_cf``,
+      ``nbi_pv_cf`` (leistungsgewichtet) und ``nbi_cap_wind_mw``, ``nbi_cap_pv_mw``.
 
-    @relation(SWR-MLT-026, scope=class)
+    @relation(SWR-MLT-026, SWR-MLT-029, scope=class)
     """
 
-    mode: Literal["lags", "forecast", "asof", "outlook", "grenzkosten"]
+    mode: Literal["lags", "forecast", "asof", "outlook", "grenzkosten", "nachbarindex"]
     codes: list[str]
     lags: list[LagKind] = Field(
         default_factory=lambda: list[LagKind](["day", "mean_day", "mean_7d"])
@@ -171,6 +177,11 @@ class NeighbourWeather(BaseModel):
 
 #: Präfix der Nachbarzonen-Features im Snapshot (``weather.parquet``)
 NEIGHBOUR_PREFIX = "nb_"
+
+
+def zone_country(zone: str) -> str:
+    """Land einer Gebotszone: ``DK1`` -> ``dk``, ``NO2`` -> ``no``, ``FR`` -> ``fr``."""
+    return zone.rstrip("0123456789").lower()
 
 
 def neighbour_feature(region_code: str, feature: str) -> str:
@@ -350,6 +361,10 @@ class ModelConfig(BaseModel):
             ]
             if unknown:
                 raise ValueError(f"Variante {v.name!r}: unbekannte Gruppen {unknown}")
+        if self.neighbour_weather is None:
+            idx = [n for n, g in self.series_groups.items() if g.mode == "nachbarindex"]
+            if idx:
+                raise ValueError(f"Gruppen {idx}: nachbarindex braucht neighbour_weather")
         return self
 
     @property

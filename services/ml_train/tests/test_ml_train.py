@@ -347,6 +347,62 @@ def test_neighbour_weather_group_same_run(snap, cfg) -> None:  # type: ignore[no
     np.testing.assert_allclose(frame.X["wx_nb_fr_wind_cf"], frame.X["wx_lead_h"] + 0.5)
 
 
+def test_neighbour_index_capacity_weighted(snap, cfg) -> None:  # type: ignore[no-untyped-def]
+    """Leistung je Land zum Ausgabezeitpunkt mal mittlerem Faktor seiner Zonen, summiert.
+
+    @relation(SWR-MLT-029, scope=function)
+    """
+    from ml_train.config import SeriesGroup, zone_country
+
+    assert [zone_country(z) for z in ("DK1", "NO2", "FR")] == ["dk", "no", "fr"]
+    w = snap.weather
+    src = w[w["feature"] == w["feature"].iloc[0]]
+    parts = [w]
+    for zone, cf in {"dk1": 0.2, "dk2": 0.4, "fr": 0.5}.items():
+        parts.append(src.assign(feature=f"nb_{zone}_wind_cf", value=np.float32(cf)))
+    ts = pd.Timestamp("2021-12-31 23:00", tz="UTC")
+    caps = pd.DataFrame(
+        {
+            "ts": [ts, ts, ts, ts + pd.Timedelta(days=365)],
+            "code": [
+                "cap_wind_onshore_dk",
+                "cap_wind_offshore_dk",
+                "cap_wind_onshore_fr",
+                "cap_wind_onshore_fr",
+            ],
+            "value": [1000.0, 500.0, 1500.0, 2000.0],
+            # der FR-Stand 2023 erscheint erst nach dem Ausgabetag
+            "published": pd.to_datetime(
+                ["2023-03-01", "2023-03-01", "2023-03-01", "2023-06-01"], utc=True
+            ),
+        }
+    )
+    energy = pd.concat([snap.energy, caps.astype(snap.energy.dtypes.to_dict())])
+    s2 = Snapshot(energy, pd.concat(parts), snap.capacity, snap.manifest)
+    cfg.neighbour_weather = NeighbourWeather(zones=["DK1", "DK2", "FR"])
+    cfg.series_groups["nachbarindex"] = SeriesGroup(
+        mode="nachbarindex",
+        codes=["cap_wind_onshore_dk", "cap_wind_offshore_dk", "cap_wind_onshore_fr"],
+    )
+    frame = FeatureBuilder(s2, cfg).build([date(2023, 5, 10)])
+    assert set(frame.groups["nachbarindex"]) == {
+        "nbi_wind_mw",
+        "nbi_wind_cf",
+        "nbi_cap_wind_mw",
+        "nbi_pv_mw",
+        "nbi_pv_cf",
+        "nbi_cap_pv_mw",
+    }
+    x = frame.X[frame.X["wx_lead_h"].notna()]
+    # DK: 1500 MW mal Mittel (0,2; 0,4) = 450, FR: 1500 MW mal 0,5 = 750
+    np.testing.assert_allclose(x["nbi_wind_mw"], 1200.0, rtol=1e-5)
+    np.testing.assert_allclose(x["nbi_wind_cf"], 0.4, rtol=1e-5)
+    np.testing.assert_allclose(x["nbi_cap_wind_mw"], 3000.0)
+    assert x["nbi_pv_mw"].isna().all()  # keine PV-Leistung, kein pv_cf
+    with pytest.raises(ValueError, match="neighbour_weather"):
+        ModelConfig.model_validate({**cfg.model_dump(), "neighbour_weather": None})
+
+
 def test_weather_alignment_interval_and_instant() -> None:
     """@relation(SWR-MLT-023, scope=function)"""
     run = pd.Timestamp("2024-01-01", tz="UTC")

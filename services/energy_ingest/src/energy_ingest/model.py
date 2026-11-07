@@ -44,6 +44,9 @@ OUTLOOK_DELAY = timedelta(days=14)
 # Echtzeitwerte kommen je nach Pegel nach Minuten bis Stunden
 RIVER_DAY_DELAY = timedelta(days=1)
 RIVER_RT_DELAY = timedelta(hours=3)
+# Installierte Leistung je Jahr (Energy-Charts): gilt als Bestand am Jahresende und erst danach
+# als bekannt; der laufende Jahreswert ist nur ab seinem Abruf bekannt
+CAPACITY_YEAR_DELAY = timedelta(days=60)
 
 UNIT_MW = "MW"
 UNIT_EUR_MWH = "EUR/MWh"
@@ -114,6 +117,13 @@ LOAD_FORECAST_ZONES: tuple[str, ...] = (
     "pl",
     "se4",
 )
+
+#: Nachbarländer mit installierter Wind- und PV-Leistung (Energy-Charts ``/installed_power``,
+#: jährlich, CC BY 4.0): Kürzel im Reihen-Code ``cap_<technik>_<kürzel>``. Energy-Charts führt
+#: Länder, nicht Gebotszonen (DK, NO, SE als Ganzes).
+CAPACITY_COUNTRIES: tuple[str, ...] = ("at", "be", "ch", "cz", "dk", "fr", "nl", "no", "pl", "se")
+#: Techniken der Leistungsreihen
+CAPACITY_TECHNOLOGIES: tuple[str, ...] = ("wind_onshore", "wind_offshore", "solar")
 
 #: Gebiete der Gasspeicher-Reihen: Kürzel im Reihen-Code -> AGSI-Parameter bzw. Eurostat-Geo.
 #: Neben DE die Nachbarn mit Speichern, die (auch) am deutschen Markt hängen (Haidach und
@@ -262,6 +272,7 @@ class Kind(StrEnum):
     OUTLOOK_MONTHLY = "outlook_monthly"  # Prognose je Ausgabe, Zeitstempel = Ausgabemonat (STEO)
     RIVER_DAY = "river_day"  # Tagesmittel des Abflusses (Hub'eau, Tag in UTC)
     RIVER_RT = "river_rt"  # Stundenmittel aus den Echtzeitwerten (Hub'eau)
+    CAPACITY_YEAR = "capacity_year"  # installierte Leistung je Jahr (Energy-Charts)
 
 
 @dataclass(frozen=True)
@@ -457,6 +468,12 @@ SERIES: dict[str, SeriesInfo] = {
         # Abfluss an den Pegeln der Kernkraftwerke (Hub'eau): Tagesmittel und Stundenmittel
         *(SeriesInfo(f"river_flow_{g}", Kind.RIVER_DAY, UNIT_M3_S) for g in RIVER_GAUGES),
         *(SeriesInfo(f"river_flow_{g}_h", Kind.RIVER_RT, UNIT_M3_S) for g in RIVER_GAUGES),
+        # Installierte Wind- und PV-Leistung der Nachbarländer je Jahr (Energy-Charts)
+        *(
+            SeriesInfo(f"cap_{t}_{c}", Kind.CAPACITY_YEAR, UNIT_MW)
+            for c in CAPACITY_COUNTRIES
+            for t in CAPACITY_TECHNOLOGIES
+        ),
     ]
 }
 
@@ -496,6 +513,8 @@ def estimate_published(kind: Kind, ts: datetime, resolution: timedelta) -> datet
     - STEO-Prognosen (Zeitstempel am Beginn des Ausgabemonats): 14 Tage danach.
     - Abfluss (Hub'eau): Tagesmittel einen Tag nach Ende des Tages, Stundenmittel drei
       Stunden nach Ende der Stunde.
+    - Installierte Leistung je Jahr (Energy-Charts, Zeitstempel am Jahresbeginn): 60 Tage nach
+      Jahresende.
 
     @relation(SWR-ENI-021, scope=function)
     """
@@ -534,6 +553,8 @@ def estimate_published(kind: Kind, ts: datetime, resolution: timedelta) -> datet
             return ts + resolution + RIVER_DAY_DELAY
         case Kind.RIVER_RT:
             return ts + resolution + RIVER_RT_DELAY
+        case Kind.CAPACITY_YEAR:
+            return next_period(ts, 12) + CAPACITY_YEAR_DELAY
 
 
 def published_at(kind: Kind, ts: datetime, resolution: timedelta, fetched: datetime) -> datetime:

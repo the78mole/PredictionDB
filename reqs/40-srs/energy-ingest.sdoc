@@ -574,5 +574,21 @@ RELATIONS:
 - TYPE: Parent
   VALUE: SYSR-EN-001
 
+[REQUIREMENT]
+UID: SWR-ENI-054
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Installierte Wind- und PV-Leistung der Nachbarländer
+STATEMENT: >>>
+Der Dienst muss die installierte Leistung von Wind an Land, Wind auf See und PV der
+Nachbarländer je Jahr aus ``/installed_power`` von Energy-Charts laden, in MW, und sie erst nach
+Ende des Jahres als bekannt führen.
+<<<
+QUELLE: docs/analysen/austausch-nachbarlaender
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-001
+
 [[/SECTION]]
 

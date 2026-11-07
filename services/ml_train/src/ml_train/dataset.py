@@ -41,7 +41,14 @@ import numpy as np
 import pandas as pd
 
 from ml_train.calendar import BERLIN, CALENDAR_COLUMNS, calendar_features
-from ml_train.config import NEIGHBOUR_PREFIX, FeatureGroup, ModelConfig, SeriesGroup
+from ml_train.config import (
+    NEIGHBOUR_PREFIX,
+    FeatureGroup,
+    ModelConfig,
+    SeriesGroup,
+    neighbour_feature,
+    zone_country,
+)
 from ml_train.snapshot import Snapshot
 
 H = pd.Timedelta(hours=1)
@@ -319,7 +326,10 @@ class FeatureBuilder:
         parts.append(ver)
 
         for name, sg in self.cfg.series_groups.items():
-            extra = self._series_group(sg, meta)
+            if sg.mode == "nachbarindex":
+                extra = self._neighbour_index(sg, meta, nbw)
+            else:
+                extra = self._series_group(sg, meta)
             groups[name] = list(extra.columns)
             parts.append(extra)
 
@@ -668,6 +678,70 @@ class FeatureBuilder:
             )
             out.loc[valid, cols] = self.neighbour.table.reindex(key)[cols].to_numpy()
         return out
+
+    def _capacity_asof(self, code: str, issues: pd.DatetimeIndex) -> np.ndarray:
+        """Zum Ausgabezeitpunkt veröffentlichter Stand einer Jahresreihe (NaN, wenn keiner)."""
+        e = self.energy_long
+        if "published" not in e.columns:
+            raise ValueError(
+                "Snapshot ohne Spalte published: mit aktuellem ml-train neu exportieren"
+            )
+        s = e.loc[(e["code"] == code) & e["published"].notna(), ["published", "value"]]
+        if s.empty:
+            return np.full(len(issues), np.nan)
+        s = s.sort_values("published").astype({"value": np.float64})
+        s["published"] = pd.DatetimeIndex(s["published"]).as_unit("ns")
+        uniq = pd.DataFrame({"issue": issues.unique().sort_values().as_unit("ns")})
+        cur = pd.merge_asof(uniq, s, left_on="issue", right_on="published")["value"]
+        out: np.ndarray = pd.Series(cur.to_numpy(), index=uniq["issue"]).reindex(issues).to_numpy()
+        return out
+
+    def _neighbour_index(
+        self, sg: SeriesGroup, meta: pd.DataFrame, nbw: pd.DataFrame
+    ) -> pd.DataFrame:
+        """Wind- und PV-Leistung der Nachbarn: Stand der Leistung je Land mal mittlerem
+        Kapazitätsfaktor seiner Zonen, summiert.
+
+        @relation(SWR-MLT-029, scope=function)
+        """
+        nb = self.cfg.neighbour_weather
+        assert nb is not None  # vom Konfigurations-Check sichergestellt
+        issues = pd.DatetimeIndex(meta["issue_time"])
+        caps = {c: self._capacity_asof(c, issues) for c in sg.codes}
+        countries = list(dict.fromkeys(zone_country(z) for z in nb.zones))
+        techs = {
+            "wind": ("wind_cf", ("wind_onshore", "wind_offshore")),
+            "pv": ("pv_cf", ("solar",)),
+        }
+        n = len(meta)
+        out: dict[str, np.ndarray] = {}
+        for name, (feature, cap_techs) in techs.items():
+            power = np.zeros(n)
+            cap_sum = np.zeros(n)
+            seen = np.zeros(n, dtype=bool)
+            for country in countries:
+                cols = [
+                    f"wx_{neighbour_feature(f'gefs:{z}:area', feature)}"
+                    for z in nb.zones
+                    if zone_country(z) == country
+                ]
+                cols = [c for c in cols if c in nbw.columns]
+                codes = [f"cap_{t}_{country}" for t in cap_techs if f"cap_{t}_{country}" in caps]
+                if not cols or not codes:
+                    continue
+                with np.errstate(invalid="ignore"):
+                    cf = np.nanmean(nbw[cols].to_numpy(np.float64), axis=1)
+                cap = np.nansum(np.vstack([caps[c] for c in codes]), axis=0)
+                has_cap = ~np.all(np.isnan(np.vstack([caps[c] for c in codes])), axis=0)
+                ok = has_cap & ~np.isnan(cf)
+                power += np.where(ok, cap * np.nan_to_num(cf), 0.0)
+                cap_sum += np.where(ok, cap, 0.0)
+                seen |= ok
+            out[f"nbi_{name}_mw"] = np.where(seen, power, np.nan)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                out[f"nbi_{name}_cf"] = np.where(seen & (cap_sum > 0), power / cap_sum, np.nan)
+            out[f"nbi_cap_{name}_mw"] = np.where(seen, cap_sum, np.nan)
+        return pd.DataFrame(out, index=meta.index).astype(np.float32)
 
 
 def gfs_version(runs: pd.Series) -> np.ndarray:

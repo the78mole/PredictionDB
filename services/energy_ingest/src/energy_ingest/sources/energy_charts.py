@@ -8,6 +8,8 @@ Genutzte Endpunkte::
                                                   -> unix_seconds, forecast_values (MW)
     /cbet?country=de&start=…&end=…                -> unix_seconds, countries[name, data] (GW)
     /cbpf?country=de&start=…&end=…                -> wie /cbet, physikalische Flüsse (GW)
+    /installed_power?country=fr&time_step=yearly&installation_decommission=false
+                                                  -> time (Jahre), production_types (GW)
 
 Zeitstempel bezeichnen den Beginn des Intervalls. Lizenz laut API-Dokumentation (v2.0): CC BY 4.0
 mit Quellenangabe Energy-Charts.info, soweit nicht anders angegeben. Für ``/price`` steht die
@@ -20,6 +22,12 @@ Vermerk oder weicht er ab, schreibt die Quelle keine Preise (``FormatError``).
 den Austausch Deutschlands in GW, positiv als Import; gespeichert wird in MW. Die Antwort hat
 kein ``license_info``, damit gilt laut API-Dokumentation CC BY 4.0.
 
+``/installed_power`` liefert je Land die installierte Leistung am Jahresende (alle Jahre in
+einer Antwort, ebenfalls ohne ``license_info``). Gespeichert werden Wind an Land, Wind auf See
+und PV der Nachbarländer (``CAPACITY_COUNTRIES``, Datensätze ``installed_<land>``) als
+``cap_<technik>_<land>`` in MW, Zeitstempel am Jahresbeginn (Ortszeit). Für den Wind- und
+PV-Index der Nachbarn in ``ml_train`` (Gruppe ``nachbarindex``).
+
 @relation(SWA-ENI-SRC-EC, scope=file)
 """
 
@@ -28,12 +36,21 @@ from __future__ import annotations
 from collections import Counter
 from datetime import UTC, datetime, timedelta
 from itertools import pairwise
-from typing import Any
+from typing import Any, ClassVar
 
 import httpx
 
 from energy_ingest.http import Http
-from energy_ingest.model import NEIGHBOUR_ZONES, QUARTER_HOUR, XB_PARTNERS, SeriesData, series
+from energy_ingest.model import (
+    BERLIN,
+    CAPACITY_COUNTRIES,
+    NEIGHBOUR_ZONES,
+    QUARTER_HOUR,
+    XB_PARTNERS,
+    YEAR,
+    SeriesData,
+    series,
+)
 from energy_ingest.sources import FormatError, SourceError, clip
 from predictiondb_core.log import get_logger
 
@@ -78,6 +95,18 @@ CROSS_BORDER: dict[str, str] = {"cbet": "xb_trade_", "cbpf": "xb_flow_"}
 GW = 1000.0
 
 
+def capacity_technology(name: str) -> str | None:
+    """Technik zu einem Namen aus ``/installed_power`` (``Solar AC``, ``Solar DC`` …)."""
+    n = name.strip().lower()
+    if n == "wind onshore":
+        return "wind_onshore"
+    if n == "wind offshore":
+        return "wind_offshore"
+    if n.startswith("solar"):
+        return "solar"
+    return None
+
+
 def _iso(ts: datetime) -> str:
     return ts.isoformat(timespec="minutes")
 
@@ -106,6 +135,10 @@ class EnergyCharts:
     )
     priority = 30
     free = True
+    #: Jahreswerte: der laufende Abgleich holt immer das Vorjahr mit
+    sync_lookback: ClassVar[dict[str, timedelta]] = {
+        f"installed_{c}": timedelta(days=400) for c in CAPACITY_COUNTRIES
+    }
 
     def __init__(
         self, http: Http, base_url: str = BASE_URL, bzn: str = "DE-LU", country: str = "de"
@@ -122,9 +155,12 @@ class EnergyCharts:
             "public_power",
             *(f"forecast_{t}" for t in FORECASTS),
             *CROSS_BORDER,
+            *(f"installed_{c}" for c in CAPACITY_COUNTRIES),
         ]
 
     def max_chunk(self, dataset: str) -> timedelta:
+        if dataset.startswith("installed_"):
+            return timedelta(days=366 * 20)  # alle Jahre in einer Antwort
         return timedelta(days=31)
 
     def _get(self, endpoint: str, params: dict[str, str]) -> dict[str, Any] | None:
@@ -206,4 +242,42 @@ class EnergyCharts:
                     out.append(SeriesData(series(CROSS_BORDER[dataset] + partner), res, pts))
             return out
 
+        if dataset.startswith("installed_"):
+            return self._installed(dataset.removeprefix("installed_"), start, end)
+
         raise KeyError(dataset)
+
+    def _installed(self, country: str, start: datetime, end: datetime) -> list[SeriesData]:
+        """@relation(SWR-ENI-054, scope=function)"""
+        if country not in CAPACITY_COUNTRIES:
+            raise KeyError(f"installed_{country}")
+        data = self._get(
+            "installed_power",
+            {"country": country, "time_step": "yearly", "installation_decommission": "false"},
+        )
+        if not data or not data.get("time"):
+            return []
+        try:
+            stamps = [
+                datetime(int(str(y)[:4]), 1, 1, tzinfo=BERLIN).astimezone(UTC) for y in data["time"]
+            ]
+        except ValueError as e:
+            raise FormatError(f"Energy-Charts: unerwartete Jahre {data['time'][:3]!r}") from e
+        sums: dict[str, list[float | None]] = {}
+        for pt in data.get("production_types", []):
+            tech = capacity_technology(str(pt.get("name", "")))
+            if tech is None:
+                continue
+            values = pt.get("data") or []
+            if len(values) != len(stamps):
+                raise SourceError(f"Energy-Charts: {len(values)} Werte für {len(stamps)} Jahre")
+            acc = sums.setdefault(tech, [None] * len(stamps))
+            for i, v in enumerate(values):
+                if v is not None:
+                    acc[i] = (acc[i] or 0.0) + float(v) * GW
+        out = []
+        for tech, vals in sums.items():
+            pts = _points(stamps, vals, start, end)
+            if pts:
+                out.append(SeriesData(series(f"cap_{tech}_{country}"), YEAR, pts))
+        return out
