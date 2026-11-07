@@ -5,11 +5,13 @@ Zugangsdaten: ``PDB_ENTSOE_TOKEN``, ``PDB_NETZTRANSPARENZ_CLIENT_ID``,
 die Bulk-Dateien) und ``PDB_GIE_API_KEY`` (Gasspeicher AGSI+ und LNG ALSI, ohne Schlüssel aus).
 
 Quellen, deren Nutzungsbedingungen die Weitergabe einschränken (ENTSO-E, Netztransparenz,
-Thomson-Reuters-Reihen der EIA, THE; ``docs/ARCHITEKTUR.md`` 7.11.1), laufen nur mit
-ausdrücklicher Freigabe ``PDB_ALLOW_ENTSO_E``, ``PDB_ALLOW_NETZTRANSPARENZ``,
-``PDB_ALLOW_EIA_REUTERS`` bzw. ``PDB_ALLOW_THE`` (Vorgabe ``false``). Energy-Charts steht
-laut API-Dokumentation unter CC BY 4.0 und ist frei. Ohne Freigabe liefern freie Quellen alles
-Nötige; die Marktwerte rechnet dann ``pdb_marktwert`` selbst.
+Thomson-Reuters-Reihen der EIA, THE, regelleistung.net; ``docs/ARCHITEKTUR.md`` 7.11.1), laufen
+nur mit ausdrücklicher Freigabe ``PDB_ALLOW_ENTSO_E``, ``PDB_ALLOW_NETZTRANSPARENZ``,
+``PDB_ALLOW_EIA_REUTERS``, ``PDB_ALLOW_THE`` bzw. ``PDB_ALLOW_REGELLEISTUNG`` (Vorgabe ``false``).
+Netztransparenz und regelleistung.net haben die Klasse „nur Training“ (``train``): ein
+veröffentlichtes Modell darf aus ihnen lernen, ihre Reihen werden aber nicht weitergegeben.
+Energy-Charts steht laut API-Dokumentation unter CC BY 4.0 und ist frei. Ohne Freigabe liefern
+freie Quellen alles Nötige; die Marktwerte rechnet dann ``pdb_marktwert`` selbst.
 
 @relation(SWA-ENI-CONFIG, scope=file)
 """
@@ -41,6 +43,8 @@ ALL_SOURCES = [
     "worldbank",
     "oil_bulletin",
     "the",
+    # Regelleistungsauktionen (nur Training)
+    "regelleistung",
     # Gasspeicher, LNG, Gasbilanz
     "gie_agsi",
     "gie_alsi",
@@ -58,6 +62,7 @@ UNFREE_SOURCES = {
     "netztransparenz": "allow_netztransparenz",
     "eia_reuters": "allow_eia_reuters",
     "the": "allow_the",
+    "regelleistung": "allow_regelleistung",
 }
 
 
@@ -93,6 +98,7 @@ class EnergySettings(BaseSettings):
     allow_netztransparenz: bool = _allow("ALLOW_NETZTRANSPARENZ")
     allow_eia_reuters: bool = _allow("ALLOW_EIA_REUTERS")
     allow_the: bool = _allow("ALLOW_THE")
+    allow_regelleistung: bool = _allow("ALLOW_REGELLEISTUNG")
     eia_api_key: SecretStr = Field(
         default=SecretStr(""),
         validation_alias=AliasChoices("PDB_EIA_API_KEY", "PDB_ENERGY_EIA_API_KEY"),

@@ -82,8 +82,9 @@ TITLE: Trainings-Snapshot
 STATEMENT: >>>
 ``snapshot`` muss Energiereihen aus ``energy.value_best``, Wetter-Features aus
 ``feat.nwp_value`` und den Bestand aus ``assets.capacity_daily`` für einen Zeitraum als Parquet
-mit ``manifest.json`` (Inhalt, Hash) exportieren. Backtest und Training dürfen nur den Snapshot
-brauchen; beim Laden muss der Hash geprüft werden.
+mit ``manifest.json`` (Inhalt, Hash, Lizenzklasse je Energiequelle, ``publishable``)
+exportieren. Backtest und Training dürfen nur den Snapshot brauchen; beim Laden muss der Hash
+geprüft werden.
 <<<
 RELATIONS:
 - TYPE: Parent

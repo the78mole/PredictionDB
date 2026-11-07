@@ -149,6 +149,7 @@ class Hubeau:
     license = "Licence Ouverte 2.0 (Etalab), Hub'eau / eaufrance"
     priority = 10
     free = True
+    train = True
 
     def __init__(self, http: Http, now: Callable[[], datetime] | None = None) -> None:
         self.http = http

@@ -241,6 +241,7 @@ class Entsoe:
     license = "ENTSO-E Transparency Platform, Nutzungsbedingungen von ENTSO-E"
     priority = 20
     free = False
+    train = False
 
     def __init__(self, http: Http, token: str, base_url: str = BASE_URL) -> None:
         if not token:
@@ -305,6 +306,7 @@ class EntsoeLast(Entsoe):
     code = "entsoe_last"
     license = "CC BY 4.0, ENTSO-E Transparency Platform (List of Data available for free re-use)"
     free = True
+    train = True
 
     def datasets(self) -> list[str]:
         return list(FREE_DATASETS)
