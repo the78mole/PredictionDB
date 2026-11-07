@@ -49,7 +49,7 @@ flowchart LR
   GFS Europa (`gfs_0p5`, feste Regionen `gefs:<zone>:area`). Der Snapshot führt sie als
   `nb_<zone>_<feature>`, die Merkmale als Gruppe `nachbarwetter` (`wx_nb_…`), immer aus
   demselben Lauf wie das DE-Wetter. Grundlage: `docs/analysen/austausch-nachbarlaender`.
-  `predict/` rechnet diese Gruppe noch nicht; `ml-train bundle` lehnt solche Varianten ab.
+  `ml-train bundle` legt die Zonenzellen ins Paket, `predict/` lädt dafür GFS 0,5° selbst.
 
 ## Aufruf
 

@@ -8,6 +8,11 @@ kommen aus dem Modellpaket, also mit der Clusterung des Trainings. Zusammengefas
 ``ml_train.snapshot.WEATHER_SQL``: ``*_power`` als Summe, alles andere nach Clusterleistung
 gewichtet. Je Lauf bleibt eine kleine Parquet-Datei im Cache (``cache/weather``).
 
+Modelle mit der Gruppe ``nachbarwetter`` brauchen zusätzlich den Wind- und PV-Index der
+Nachbarzonen aus GFS Europa (0,5°), auf dem sie trainiert wurden. Dafür lädt der Dienst denselben
+Lauf ein zweites Mal aus dieser Quelle; die Features gleichen dem Gold von ``gfs_0p5``
+(``cache/weather/nb``).
+
 @relation(SWA-PRD-WEATHER, scope=file)
 """
 
@@ -24,6 +29,7 @@ import numpy as np
 import pandas as pd
 from gribkit import MessageSpec
 
+from ml_train.config import neighbour_feature
 from predictiondb_core.log import get_logger
 from wx_ingest.config import GfsConfig
 from wx_ingest.gfs import Endpoint, FetchError, StepUnavailable
@@ -49,6 +55,15 @@ FEATURE_MESSAGES = [
     MessageSpec("TCDC", "entire atmosphere"),
     MessageSpec("APCP", "surface"),
     MessageSpec("CSNOW", "surface"),
+]
+#: Nachrichten für ``wind_cf`` und ``pv_cf`` der Nachbarzonen
+NEIGHBOUR_MESSAGES = [
+    MessageSpec("TMP", "2 m above ground"),
+    MessageSpec("UGRD", "10 m above ground"),
+    MessageSpec("VGRD", "10 m above ground"),
+    MessageSpec("UGRD", "100 m above ground"),
+    MessageSpec("VGRD", "100 m above ground"),
+    MessageSpec("DSWRF", "surface"),
 ]
 #: GFS-Läufe stehen bei NOMADS etwa 3,5 bis 5 h nach Laufzeit vollständig bereit
 AVAILABLE_AFTER = timedelta(hours=4)
@@ -136,6 +151,50 @@ def technology_features(
     return out
 
 
+def neighbour_features(
+    ds: Dataset,
+    cells: pd.DataFrame,
+    wx: dict[str, Any],
+    features: Sequence[str],
+) -> pd.DataFrame:
+    """Features der Nachbarzonen in Langform wie ``ml_train.snapshot.neighbour_rows``.
+
+    @relation(SWR-PRD-025, scope=function)
+    """
+    techs = {k: TechnologyFeatures.model_validate(v) for k, v in wx["technologies"].items()}
+    builder = FeatureBuilder(techs, PvModel.model_validate(wx.get("pv") or {}))
+    zones = sorted(cells["zone"].unique())
+    weights = [
+        ClusterWeights(
+            str(g["technology"].iloc[0]),
+            i,
+            i,
+            g["lat"].to_numpy(np.float64),
+            g["lon"].to_numpy(np.float64),
+            g["share"].to_numpy(np.float64),
+        )
+        for i, g in enumerate(cells[cells["zone"] == z] for z in zones)
+    ]
+    series, coverage = builder.build(ds, weights)
+    if min(coverage.values(), default=0.0) < 1.0:
+        log.warning("weather.neighbour_coverage", run=f"{ds.run:%Y%m%d%H}", coverage=coverage)
+    valid = pd.to_datetime(pd.DatetimeIndex(ds.valid_times), utc=True)
+    rows = [
+        pd.DataFrame(
+            {
+                "run_time": pd.Timestamp(ds.run),
+                "valid_time": valid,
+                "feature": neighbour_feature(f"gefs:{zones[s.region_id]}:area", s.code),
+                "value": s.values.astype("float32"),
+            }
+        )
+        for s in series
+        if s.code in features
+    ]
+    # Strahlung fehlt im Analyse-Schritt; das Gold hat dafür keine Zeile
+    return pd.concat(rows, ignore_index=True).dropna(subset=["value"])
+
+
 class WeatherCache:
     """@relation(SWR-PRD-023, scope=class)"""
 
@@ -147,10 +206,14 @@ class WeatherCache:
         run_hours: Sequence[int],
         max_lead_h: int,
         timeout_s: float = 60.0,
+        neighbour_gfs: GfsConfig | None = None,
     ) -> None:
         self.root = root / "weather"
-        self.root.mkdir(parents=True, exist_ok=True)
+        self.neighbour_root = self.root / "nb"
+        self.neighbour_root.mkdir(parents=True, exist_ok=True)
         self.gfs = gfs
+        self.neighbour_gfs = neighbour_gfs
+        self.max_lead_h = max_lead_h
         self.run_hours = list(run_hours)
         self.steps = [s for s in gfs.step_list() if s <= max_lead_h]
         self.timeout_s = timeout_s
@@ -165,23 +228,23 @@ class WeatherCache:
         )
         return runs[-2:]
 
-    async def _download(self, run: datetime) -> dict[int, bytes] | None:
+    async def _download(
+        self, gfs: GfsConfig, run: datetime, steps: list[int], messages: list[MessageSpec]
+    ) -> dict[int, bytes] | None:
         timeout = httpx.Timeout(self.timeout_s, connect=15.0)
         headers = {
             "User-Agent": "PredictionDB pdb-predict (+https://github.com/the78mole/PredictionDB)"
         }
-        bbox = self.gfs.bbox.bbox()
+        bbox = gfs.bbox.bbox()
         async with httpx.AsyncClient(timeout=timeout, headers=headers) as client:
-            endpoints = [Endpoint(e, client) for e in self.gfs.endpoints]
-            sem = asyncio.Semaphore(self.gfs.step_concurrency)
+            endpoints = [Endpoint(e, client) for e in gfs.endpoints]
+            sem = asyncio.Semaphore(gfs.step_concurrency)
 
             async def one(step: int) -> bytes | None:
                 async with sem:
                     for ep in endpoints:
                         try:
-                            data = await ep.fetch_step(
-                                self.gfs.product, run, step, FEATURE_MESSAGES, bbox
-                            )
+                            data = await ep.fetch_step(gfs.product, run, step, messages, bbox)
                             return data.grib
                         except StepUnavailable:
                             continue
@@ -192,18 +255,18 @@ class WeatherCache:
                             continue
                 return None
 
-            blobs = await asyncio.gather(*(one(s) for s in self.steps))
+            blobs = await asyncio.gather(*(one(s) for s in steps))
         if any(b is None for b in blobs):
-            missing = [s for s, b in zip(self.steps, blobs, strict=True) if b is None]
+            missing = [s for s, b in zip(steps, blobs, strict=True) if b is None]
             log.warning("weather.run_incomplete", run=f"{run:%Y%m%d%H}", missing=missing[:10])
             return None
-        return {s: b for s, b in zip(self.steps, blobs, strict=True) if b is not None}
+        return {s: b for s, b in zip(steps, blobs, strict=True) if b is not None}
 
     def features_for(self, run: datetime, package: ModelPackage) -> pd.DataFrame | None:
         path = self._path(run)
         if path.exists():
             return pd.read_parquet(path)
-        blobs = asyncio.run(self._download(run))
+        blobs = asyncio.run(self._download(self.gfs, run, self.steps, FEATURE_MESSAGES))
         if blobs is None:
             return None
         decoded = {s: decode_step(b, s) for s, b in blobs.items()}
@@ -214,6 +277,33 @@ class WeatherCache:
         df = technology_features(ds, package.clusters, cc, package.wx_process)
         df.to_parquet(path, index=False)
         log.info("weather.features", run=f"{run:%Y%m%d%H}", rows=len(df))
+        return df
+
+    def neighbour_for(self, run: datetime, package: ModelPackage) -> pd.DataFrame | None:
+        """Nachbarzonen eines Laufs; ``None``, solange der Lauf der Quelle nicht vollständig ist.
+
+        @relation(SWR-PRD-025, scope=function)
+        """
+        path = self.neighbour_root / f"{run:%Y%m%d%H}.parquet"
+        if path.exists():
+            return pd.read_parquet(path)
+        nb = package.cfg.neighbour_weather
+        gfs = self.neighbour_gfs
+        if gfs is None or nb is None or package.neighbour_cells is None:
+            raise ValueError(f"{package.version}: Nachbarwetter ohne Quelle oder Zonen-Gewichte")
+        if gfs.code != nb.source:
+            raise ValueError(f"{package.version}: Nachbarwetter aus {nb.source}, Quelle {gfs.code}")
+        steps = [s for s in gfs.step_list() if s <= self.max_lead_h]
+        blobs = asyncio.run(self._download(gfs, run, steps, NEIGHBOUR_MESSAGES))
+        if blobs is None:
+            return None
+        decoded = {s: decode_step(b, s) for s, b in blobs.items()}
+        ds = assemble(gfs.model, gfs.resolution, run, decoded).quantized()
+        df = neighbour_features(
+            ds, package.neighbour_cells, package.neighbour_wx or {}, nb.features
+        )
+        df.to_parquet(path, index=False)
+        log.info("weather.neighbour_features", run=f"{run:%Y%m%d%H}", rows=len(df))
         return df
 
     def update(self, package: ModelPackage, now: datetime | None = None) -> pd.DataFrame:
@@ -228,8 +318,18 @@ class WeatherCache:
                 df = None
             if df is not None:
                 parts.append(df)
-        for old in sorted(self.root.glob("*.parquet"))[:-KEEP_RUNS]:
-            old.unlink()
+            if package.neighbour_cells is None:
+                continue
+            try:
+                nb = self.neighbour_for(run, package)
+            except Exception:
+                log.exception("weather.neighbour_failed", run=f"{run:%Y%m%d%H}")
+                nb = None
+            if nb is not None:
+                parts.append(nb)
+        for folder in (self.root, self.neighbour_root):
+            for old in sorted(folder.glob("*.parquet"))[:-KEEP_RUNS]:
+                old.unlink()
         if not parts:
             return pd.DataFrame(columns=["run_time", "valid_time", "feature", "value"])
         return pd.concat(parts, ignore_index=True)
