@@ -46,6 +46,7 @@ class Ecb:
     license = "Europäische Zentralbank, Weiterverwendung mit Quellenangabe"
     priority = 10
     free = True
+    train = True
 
     def __init__(self, http: Http, url: str = URL) -> None:
         self.http = http

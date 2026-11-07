@@ -3,7 +3,9 @@
 Zugang: Konto im API-Portal (api-portal.netztransparenz.de), dort einen Client anlegen;
 Client-ID und -Secret in ``PDB_NETZTRANSPARENZ_CLIENT_ID`` und
 ``PDB_NETZTRANSPARENZ_CLIENT_SECRET``. Ohne beide bleibt die Quelle abgeschaltet. Eine Lizenz
-für die Daten ist nicht veröffentlicht; die Quelle läuft deshalb nur mit
+für die Daten ist nicht veröffentlicht; laut Impressum braucht die Vervielfältigung die
+schriftliche Zustimmung der ÜNB, soweit sie nicht ohnehin gesetzlich gestattet ist. Die Quelle
+hat deshalb die Klasse „nur Training“ (docs/ARCHITEKTUR.md 7.11.1) und läuft nur mit
 ``PDB_ALLOW_NETZTRANSPARENZ=true``, sonst rechnet ``pdb_marktwert`` die Marktwerte selbst.
 
 Genutzte Endpunkte (Antwort CSV, Semikolon, Dezimalkomma, Werte in ct/kWh)::
@@ -117,6 +119,8 @@ class Netztransparenz:
     license = "Netztransparenz.de (50Hertz, Amprion, TenneT, TransnetBW), Nutzungsbedingungen"
     priority = 15
     free = False
+    #: Weitergabe nur mit Zustimmung, Training erlaubt (§ 44b UrhG, ARCHITEKTUR.md 7.11.1)
+    train = True
 
     # Werte erscheinen erst nach Periodenende; der laufende Abgleich schaut entsprechend
     # weit zurück, damit nachgereichte Monate und Jahre ankommen

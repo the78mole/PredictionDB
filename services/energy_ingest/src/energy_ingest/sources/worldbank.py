@@ -100,6 +100,7 @@ class WorldBank:
     license = "CC BY 4.0, World Bank Commodity Price Data (The Pink Sheet)"
     priority = 10
     free = True
+    train = True
     # Der Monatswert erscheint Anfang des Folgemonats
     sync_lookback: ClassVar[dict[str, timedelta]] = {"prices": timedelta(days=95)}
 
