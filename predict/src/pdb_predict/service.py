@@ -143,6 +143,7 @@ class Predictor:
         self.energy = energy
         self.weather_factory = weather
         self._weather: WeatherCache | None = None
+        self._weather_for: str | None = None
 
     def run(self, issue: datetime | None = None) -> dict[str, Any]:
         """@relation(SWR-PRD-024, SWR-PRD-020, scope=function)"""
@@ -153,13 +154,19 @@ class Predictor:
         energy = self.energy.snapshot_energy(need)
         weather = pd.DataFrame(columns=["run_time", "valid_time", "feature", "value"])
         if pkg.requires_weather:
-            if self._weather is None and self.weather_factory is not None:
+            # neu aufbauen, wenn ein anderes Paket kommt (Laufzeiten, Horizont)
+            if self.weather_factory is not None and self._weather_for != pkg.version:
                 self._weather = self.weather_factory(pkg)
+                self._weather_for = pkg.version
             if self._weather is not None:
                 weather = self._weather.update(pkg)
         snap = Snapshot(energy, weather, pkg.capacity, {"snapshot_id": "live"})
         frame = FeatureBuilder(snap, pkg.cfg).build_at([pd.Timestamp(issue)])
         df = predict_model(frame, pkg.model, pkg.version, pd.Timestamp(issue))
+        if pkg.neighbour_cells is not None:
+            nb_cols = frame.groups.get("nachbarwetter", [])
+            if not nb_cols or frame.X[nb_cols].isna().all(axis=None):
+                missing["nachbarwetter"] = "kein Lauf von GFS Europa zum gewählten Wetterlauf"
         run = None
         if pkg.requires_weather and "wx_lead_h" in frame.X.columns and not df.empty:
             lead = frame.X["wx_lead_h"].dropna()
@@ -171,6 +178,9 @@ class Predictor:
         sources["mastr"] = "Marktstammdatenregister, Datenlizenz Deutschland - Namensnennung 2.0"
         if pkg.requires_weather:
             sources["noaa_gfs"] = "NOAA GFS, gemeinfrei (Werk der US-Regierung)"
+        if pkg.neighbour_cells is not None:
+            # Zonengrenzen in regions_v2
+            sources["natural_earth"] = "Natural Earth, gemeinfrei"
         doc = to_document(df, pkg, issue, sources, missing, run)
         log.info(
             "predict.done",
