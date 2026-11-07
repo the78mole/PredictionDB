@@ -1,0 +1,48 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; ausgeführt von auswertung.py im selben Ordner
+id: samstagspreis-2026-11-07
+title: Hoher Day-Ahead-Preis am Samstag, 07.11.2026, trotz niedriger Wochenendlast
+question: >
+  Warum ist Strom heute (Samstag, 07.11.2026) so teuer, obwohl die Last samstags
+  eigentlich viel niedriger ist?
+requested_by: Maulwurf
+kind: custom
+inputs:
+  liefertag: 2026-11-07
+  vergleich_von: 2026-10-24        # zwei Wochen davor, inkl. windreichem Wochenende 24./25.10.
+  smard:                           # CC BY 4.0, Bundesnetzagentur | SMARD.de, Stundenwerte
+    zeitraum: {von: 2025-09-01, bis: 2026-11-07}
+    reihen: {preis: 4169/DE-LU, last_prognose: 411/DE, residuallast_prognose: 4362/DE,
+             wind_onshore_prognose: 123/DE, wind_offshore_prognose: 3791/DE,
+             pv_prognose: 125/DE, last: 410/DE, residuallast: 4359/DE}
+  energy_charts:                   # CC BY 4.0, Energy-Charts.info; Preise CC BY 4.0 SMARD
+    preise_nachbarn: [AT, BE, CH, CZ, DK1, DK2, FR, NL, NO2, PL, SE4]
+    preise_zeitraum: {von: 2026-10-24, bis: 2026-11-07}
+    handel_de: cbet                # Saldo DE, + = Import
+    kernkraft_fr: public_power     # country=fr, Nuclear
+    zeitraum_ist: {von: 2026-10-24, bis: 2026-11-06}
+  weltbank_pink_sheet:             # CC BY 4.0, Monatsmittel
+    reihen: ["Natural gas, Europe"]
+    zeitraum: {von: 2024-01, bis: 2026-10}
+  eurostat:                        # CC BY 4.0
+    reihen: [ert_bil_eur_m USD je EUR]
+  vm_export:
+    datei: daten/vm_export.txt     # Ergebnis von abfragen.sql (nur lesend), 07.11.2026 ~01:30 UTC
+    tabellen: [meta.model_version, fcst.prediction, energy.value_best]
+    ausgabe_bis: 2026-11-06T12:00+01:00   # jüngste Prognose vor Gebotsschluss am Vortag
+method:
+  zerlegung: Tagesmittel Samstag gegen Freitag und gegen Mittel Di-Do derselben Woche,
+    Differenz der Residuallastprognose = Δ Last - Δ Wind - Δ PV
+  preis_je_residuallast: Stundenpreis je 5-GW-Klasse der Residuallastprognose,
+    Zeiträume Nov. 2025 (01.11.-30.11.2025) und seit 28.10.2026, getrennt nach Werktag/Wochenende
+  samstage: alle Samstage seit 01.09.2025 mit Tagesmitteln
+  brennstoff: Gaspreis Europa (USD/MMBtu -> EUR/MWh_th mit 1 MMBtu = 0,29307 MWh,
+    Monatskurs Eurostat; fehlt er, der letzte bekannte) gegen Monatsmittel Strompreis;
+    Grenzkosten GuD (eta 0,55) und Gasturbine (eta 0,38) ohne CO2
+  nachbarn: Tagesmittel Day-Ahead-Preis je Nachbarzone, Spreizung zu DE-LU
+  modelle: P50 je aktiver Version (jüngste Ausgabe <= Vortag 12 Uhr) gegen Ist, je Stunde und Tagesmittel
+  metrics: [tagesmittel, mae, bias]
+outputs:
+  tables: [zusammenfassung, tage, zerlegung, samstage, preis_je_residuallast, stunden_07_11,
+           modelle_tagesmittel, nachbarpreise, gas_strom_monat]
+  figures: [tage_residuallast_preis, preis_je_residuallast, stunden_07_11, gas_strom_monat]
+schedule: once
