@@ -82,8 +82,9 @@ TITLE: Trainings-Snapshot
 STATEMENT: >>>
 ``snapshot`` muss Energiereihen aus ``energy.value_best``, Wetter-Features aus
 ``feat.nwp_value`` und den Bestand aus ``assets.capacity_daily`` für einen Zeitraum als Parquet
-mit ``manifest.json`` (Inhalt, Hash) exportieren. Backtest und Training dürfen nur den Snapshot
-brauchen; beim Laden muss der Hash geprüft werden.
+mit ``manifest.json`` (Inhalt, Hash, Lizenzklasse je Energiequelle, ``publishable``)
+exportieren. Backtest und Training dürfen nur den Snapshot brauchen; beim Laden muss der Hash
+geprüft werden.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -310,6 +311,113 @@ RELATIONS:
 - TYPE: Parent
   VALUE: SYSR-PR-004
 
+[REQUIREMENT]
+UID: SWR-MLT-042
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Festes Vergleichsfenster
+STATEMENT: >>>
+Ist in der Modellkonfiguration ein Vergleichsfenster (`compare`: Name, erster und letzter
+Ausgabetag) angegeben, muss der Backtest die Kennzahlen zusätzlich nur auf den Ausgabetagen im
+Fenster ausgeben und je Verfahren vermerken, ob seine Prognosen das Fenster vollständig abdecken.
+Der Registry-Spiegel muss diese Kennzahlen je Version getrennt von den Kennzahlen über alle
+Testzeilen ablegen, nur für Versionen, deren Backtest das Fenster abdeckt, und je Version und
+Sicht nur einmal aus `backtest.parquet` berechnen.
+<<<
+RATIONALE: >>>
+Jeder Backtest hat eigene Testzeiträume und Snapshots. Kennzahlen über alle Testzeilen sind
+deshalb zwischen Läufen nicht vergleichbar; im festen Fenster rechnen alle Läufe auf denselben
+Ausgabetagen (docs/MLFLOW.md Kap. 4).
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-004
+
+[REQUIREMENT]
+UID: SWR-MLT-043
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Vergleich der Verfahren je Jahreszeit
+STATEMENT: >>>
+Der Backtest muss die Verfahren je Ziel und Jahreszeit auf ihren gemeinsamen Zeilen
+gegeneinander stellen (Rang nach MAE und Abstand zum besten Verfahren), über den ganzen
+Testzeitraum und im Vergleichsfenster. Der Registry-Spiegel muss die Kennzahlen jeder Version
+zusätzlich je Jahreszeit ablegen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-004
+
+[REQUIREMENT]
+UID: SWR-MLT-044
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Backtest fortsetzen
+STATEMENT: >>>
+Der Backtest muss die Prognosen jeder Faltung und jedes Verfahrens sofort nach ihrer Berechnung
+zwischenspeichern. Ein erneuter Aufruf mit demselben Ausgabeordner muss fertige Teile übernehmen,
+sofern Snapshot, Konfiguration der Variante und Faltungsgrenzen gleich sind, und nur die übrigen
+rechnen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-004
+
+[REQUIREMENT]
+UID: SWR-MLT-045
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Mitlaufendes Vergleichsfenster
+STATEMENT: >>>
+Die Modellkonfiguration muss ein mitlaufendes Vergleichsfenster erlauben (`compare_rolling`:
+Länge in Monaten, Ende am letzten vollen Monat oder an der letzten vollen Jahreszeit vor dem
+Stichtag). Backtest und Registry-Spiegel müssen es wie das feste Fenster auswerten, unter einem
+Namen, der seine Grenzen enthält. `ml-train backtest --rolling` muss den Testzeitraum auf genau
+dieses Fenster setzen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-004
+
+[REQUIREMENT]
+UID: SWR-MLT-046
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Backtest im Zeitfenster
+STATEMENT: >>>
+`ml-train backtest --stop-at` muss vor jedem Teil (Faltung und Variante) prüfen, ob er nach der
+längsten bekannten Dauer eines Teils noch vor der Frist fertig wird, und sonst mit dem
+Rückgabewert 75 anhalten, ohne die fertigen Teile zu verwerfen. `--active` muss den Backtest auf
+die Varianten der aktiven Registry-Versionen beschränken. Der monatliche Lauf
+(`scripts/backtest-monatlich.sh`) muss Snapshot und Backtest je Konfiguration und Monat einmal
+erstellen und über mehrere Nächte fortsetzen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-004
+
+[REQUIREMENT]
+UID: SWR-MLT-047
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Läufe und Rollen in MLflow
+STATEMENT: >>>
+Ist `MLFLOW_TRACKING_URI` gesetzt, muss `ml-train` jeden Backtest als Lauf mit einem Unterlauf je
+Verfahren und Kennzahlen je Ziel und Vorlauftag (gesamt, im festen und im mitlaufenden
+Vergleichsfenster) melden, jeden Fit als Lauf, und bei jedem Registry-Abgleich Versionen, Rollen
+und die Aliase `champion`, `baseline` und `previous` spiegeln. Die Datei-Registry bleibt die
+Quelle. Ist MLflow nicht erreichbar, müssen Backtest, Fit und Inferenz ohne Fehler weiterlaufen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-004
+
 [[/SECTION]]
 
 [[SECTION]]
@@ -450,6 +558,25 @@ RELATIONS:
 [[/SECTION]]
 
 [[SECTION]]
+TITLE: Auswertung
+
+[REQUIREMENT]
+UID: SWR-MLT-072
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Wichtigkeit der Merkmale
+STATEMENT: >>>
+``importance`` muss für eine Version ohne Datenbank und ohne Backtest den Gain je Ziel als Anteil
+je Merkmal und Merkmalsgruppe ausgeben, gemittelt über die Quantile.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-003
+
+[[/SECTION]]
+
+[[SECTION]]
 TITLE: Veröffentlichung
 
 [REQUIREMENT]
@@ -462,6 +589,20 @@ STATEMENT: >>>
 ``bundle`` muss für eine Version ein Paket mit Modellen, Konfiguration, benötigten
 Energiereihen, Bestand und Gitter-Gewichten der Cluster schreiben, mit dem der Stack
 ``predict/`` ohne Datenbank inferieren kann.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-004
+
+[REQUIREMENT]
+UID: SWR-MLT-071
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Nachbarzonen im Prognosepaket
+STATEMENT: >>>
+Für Varianten mit der Gruppe ``nachbarwetter`` muss ``bundle`` die Gitterzellen der Zonen und die
+Feature-Definitionen der Quelle ins Paket legen und ohne sie abbrechen.
 <<<
 RELATIONS:
 - TYPE: Parent

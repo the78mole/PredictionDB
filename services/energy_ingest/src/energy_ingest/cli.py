@@ -42,6 +42,7 @@ from energy_ingest.sources.hubeau import Hubeau
 from energy_ingest.sources.marktwert import Marktwert
 from energy_ingest.sources.netztransparenz import Netztransparenz
 from energy_ingest.sources.oil_bulletin import OilBulletin
+from energy_ingest.sources.regelleistung import Regelleistung
 from energy_ingest.sources.smard import Smard
 from energy_ingest.sources.steo import EiaSteo
 from energy_ingest.sources.the import The
@@ -172,6 +173,8 @@ def build_sources(
             sources.append(Eurostat(http))
         elif code == "hubeau":
             sources.append(Hubeau(http))
+        elif code == "regelleistung":
+            sources.append(Regelleistung(http))
         else:
             raise ValueError(f"unbekannte Quelle {code!r}")
     # Eigene Marktwerte, solange die amtlichen von Netztransparenz nicht geladen werden
@@ -198,7 +201,7 @@ def run(args: argparse.Namespace, settings: EnergySettings) -> int:
         sources = build_sources(args.source or settings.sources, settings, Http(client), engine)
         if args.cmd == "sources":
             for s in sources:
-                kind = "frei" if s.free else "unfrei, freigegeben"
+                kind = "frei" if s.free else "nur Training" if s.train else "unfrei, freigegeben"
                 print(f"{s.code:14} Rang {s.priority:3}  {kind:20} {', '.join(s.datasets())}")
             return 0
 

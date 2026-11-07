@@ -500,6 +500,11 @@ Eingerichtet wird das erst, wenn mindestens drei Jahre GFS-Trainingsdaten vorlie
   hängt die Prognosen eines Backtests derselben Konfiguration und Variante an eine schon
   registrierte Version; der nächste Abgleich füllt `meta.model_metric`.
 
+- **Wichtigkeit der Merkmale:** `ml-train importance <version>` zeigt den Gain je Ziel und
+  Merkmalsgruppe, `--by feature` je Spalte, ohne Datenbank und ohne Backtest. Das ist ein schneller
+  Hinweis, worauf ein Modell im Training baut, kein Ersatz für den Backtest: Ähnliche Spalten
+  teilen sich den Gain, und Gain im Training ist noch keine bessere Prognose.
+
 - **Prognosepaket für den schlanken Stack:** `ml-train bundle <version> --out <ordner>` legt
   eine Version mit Konfiguration, Bestand aus dem MaStR und bei Wetter-Varianten den
   Gitter-Gewichten der Cluster als Ordner ab (ohne Backtest-Prognosen). Der Stack
@@ -562,7 +567,7 @@ Eingerichtet wird das erst, wenn mindestens drei Jahre GFS-Trainingsdaten vorlie
 | **Neuronales Netz** (TFT, TiDE oder N-HiTS mit bekannten Zukunftskovariaten) | muss den LightGBM-Champion im selben Backtest schlagen |
 | **Streuung der aktiven Versionen** (`fcst.model_spread`) und gewichtetes Ensemble | Unsicherheitssignal und mögliche Kombination der Versionen |
 | **Inferenz bei `NOTIFY features_ready`** statt stündlich, zusätzliche Ausgabe nach dem 06Z-Lauf | frischere Wetterdaten vor Gebotsschluss |
-| **MLflow** statt Datei-Registry | Versionen, Metriken und Artefakte in einer Oberfläche |
+| **MLflow** für Backtests und Fits, Registry als Spiegel ([MLFLOW.md](MLFLOW.md)) | Läufe, Kennzahlen und Versionen in einer Oberfläche vergleichen |
 
 ## 10. Modellkonfigurationen und Varianten
 
@@ -698,4 +703,6 @@ Ablation; ihre Ergebnisse stehen noch aus.
 | `lgbm` | `num_leaves`, `learning_rate`, `n_estimators`, `min_child_samples`, `subsample`, `subsample_freq`, `colsample_bytree`, `reg_lambda`, `n_jobs` (0 = alle Kerne) |
 | `calibration` | `months` (Kalibriermenge am Ende des Trainings, 0 = aus), `min_rows` je Vorlauftag |
 | `backtest` | `test_from`, `test_to`, `fold_months`, `gap_days`, `oof_folds`, `train_issue_stride` |
+| `compare` | festes Vergleichsfenster: `name` (Kleinbuchstaben, Ziffern, `_`), `start`, `end` (Ausgabetage, einschließlich); Kennzahlen im Fenster sind zwischen Läufen vergleichbar ([BACKTEST.md](BACKTEST.md) Kap. 7) |
+| `compare_rolling` | mitlaufendes Vergleichsfenster: `months` (Länge), `until` (`month` = bis Ende Vormonat, `season` = bis Ende der letzten vollen Jahreszeit); `ml-train backtest --rolling` rechnet genau diesen Zeitraum |
 | `promotion` | `min_gain`, `max_group_loss`, `min_group_n` |

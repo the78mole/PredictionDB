@@ -10,7 +10,7 @@ Modellversion ein, damit sich ein Modell genau einer Konfiguration zuordnen läs
 from __future__ import annotations
 
 import hashlib
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Literal
 
@@ -207,6 +207,76 @@ class BacktestConfig(BaseModel):
     train_issue_stride: int = Field(default=2, ge=1)
 
 
+class CompareWindow(BaseModel):
+    """Festes Vergleichsfenster: Ausgabetage, auf denen jeder Backtest zusätzlich bewertet wird.
+
+    Backtests haben je Aufruf eigene Testzeiträume (``--test-from``, ``--fold-months``). Die
+    Kennzahlen über alle Testzeilen sind deshalb zwischen Läufen nicht vergleichbar. Im Fenster
+    rechnet jeder Lauf, der es vollständig abdeckt, auf denselben Ausgabetagen; das Fenster wird
+    nur bewusst verschoben (neuer ``name``), siehe docs/BACKTEST.md Kap. 7.
+
+    @relation(SWR-MLT-042, scope=class)
+    """
+
+    #: Kennung in Ausgabedateien und ``meta.model_metric.scope``, z. B. ``w2024_2025``
+    name: str = Field(pattern=r"^[a-z0-9_]+$", max_length=40)
+    #: erster und letzter Ausgabetag (UTC-Datum von ``issue_time``), beide einschließlich
+    start: date
+    end: date
+
+    @model_validator(mode="after")
+    def _order(self) -> CompareWindow:
+        if self.name == "all":
+            raise ValueError("compare.name: 'all' steht für alle Testzeilen")
+        if self.end < self.start:
+            raise ValueError("compare: end liegt vor start")
+        return self
+
+
+#: Präfix der Namen mitlaufender Fenster in Dateien und ``meta.model_metric.scope``
+ROLLING_PREFIX = "roll_"
+#: Letzter Monat jeder Jahreszeit (meteorologisch: Winter Dez. bis Feb., Frühling März bis Mai …)
+SEASON_END_MONTHS = (2, 5, 8, 11)
+
+
+def _month_end(year: int, month: int) -> date:
+    nxt = date(year + month // 12, month % 12 + 1, 1)
+    return nxt - timedelta(days=1)
+
+
+class RollingWindow(BaseModel):
+    """Mitlaufendes Vergleichsfenster: die letzten ``months`` Monate bis zum Ende des letzten
+    vollständigen Monats (``until: month``) bzw. der letzten vollständigen Jahreszeit
+    (``until: season``) vor dem Stichtag.
+
+    Anders als ``compare`` folgt es der Zeit und ist nicht an Kalenderjahre gebunden. Läufe
+    sind untereinander vergleichbar, solange sie dasselbe aufgelöste Fenster haben (gleicher
+    Name, z. B. ``roll_24m_202411_202610``).
+
+    @relation(SWR-MLT-045, scope=class)
+    """
+
+    months: int = Field(default=24, ge=1, le=120)
+    until: Literal["month", "season"] = "month"
+
+    def resolve(self, today: date) -> CompareWindow:
+        """Konkretes Fenster zum Stichtag ``today`` (der Stichtag selbst gehört nicht dazu).
+
+        @relation(SWR-MLT-045, scope=function)
+        """
+        y, m = today.year, today.month - 1  # Vormonat
+        if m == 0:
+            y, m = y - 1, 12
+        if self.until == "season":
+            while m not in SEASON_END_MONTHS:
+                y, m = (y - 1, 12) if m == 1 else (y, m - 1)
+        end = _month_end(y, m)
+        k = y * 12 + (m - 1) - (self.months - 1)
+        start = date(k // 12, k % 12 + 1, 1)
+        name = f"{ROLLING_PREFIX}{self.months}m_{start:%Y%m}_{end:%Y%m}"
+        return CompareWindow(name=name, start=start, end=end)
+
+
 class CalibrationConfig(BaseModel):
     """Nachkalibrierung der Quantile je Ziel und Vorlauftag (konformal, Romano et al. 2019).
 
@@ -252,6 +322,10 @@ class ModelConfig(BaseModel):
     backtest: BacktestConfig
     promotion: PromotionRule = Field(default_factory=PromotionRule)
     calibration: CalibrationConfig = Field(default_factory=CalibrationConfig)
+    #: festes Vergleichsfenster für Kennzahlen, die zwischen Läufen vergleichbar sind
+    compare: CompareWindow | None = None
+    #: mitlaufendes Vergleichsfenster, z. B. die letzten 24 Monate bis zum Vormonat
+    compare_rolling: RollingWindow | None = None
     #: Reihen, die als Lags in die Merkmale gehen (zusätzlich zu den Zielgrößen)
     lag_series: list[str] = Field(default_factory=list)
     #: Reihen, deren Lags ``day`` und ``week`` dieselbe Uhrzeit in Ortszeit nehmen (Verhalten
@@ -286,6 +360,16 @@ class ModelConfig(BaseModel):
     @property
     def targets(self) -> list[str]:
         return [t.code for t in self.stage1 + self.stage2]
+
+    def compare_windows(self, today: date) -> list[CompareWindow]:
+        """Festes und mitlaufendes Vergleichsfenster, soweit konfiguriert, zum Stichtag.
+
+        @relation(SWR-MLT-045, scope=function)
+        """
+        out = [self.compare] if self.compare else []
+        if self.compare_rolling:
+            out.append(self.compare_rolling.resolve(today))
+        return out
 
     def variant(self, name: str) -> Variant:
         for v in self.variants:

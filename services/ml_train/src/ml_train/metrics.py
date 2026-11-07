@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import date
 
 import numpy as np
 import pandas as pd
@@ -118,3 +119,67 @@ def common_rows(pred: pd.DataFrame, methods: Sequence[str]) -> pd.DataFrame:
         full = cnt[cnt == n].index
         parts.append(g.set_index(key).loc[lambda d, f=full: d.index.isin(f)].reset_index())
     return pd.concat(parts, ignore_index=True) if parts else p
+
+
+def issue_days(pred: pd.DataFrame) -> pd.Series:
+    """Ausgabetag (UTC-Datum) je Zeile, wie bei den Faltungen des Backtests."""
+    return pd.to_datetime(pred["issue_time"], utc=True).dt.date
+
+
+def in_window(pred: pd.DataFrame, start: date, end: date) -> pd.DataFrame:
+    """Nur Zeilen mit Ausgabetag in ``[start, end]``.
+
+    @relation(SWR-MLT-042, scope=function)
+    """
+    d = issue_days(pred)
+    return pred[((d >= start) & (d <= end)).to_numpy()]
+
+
+def covers_window(pred: pd.DataFrame, start: date, end: date) -> bool:
+    """Reichen die Ausgabetage der Prognosen vom ersten bis zum letzten Tag des Fensters?
+
+    Lücken innerhalb (fehlende Wetterläufe) zählen nicht, nur die Ränder: Ein Lauf, der erst
+    im Fenster beginnt oder vor seinem Ende aufhört, ist nicht vergleichbar.
+
+    @relation(SWR-MLT-042, scope=function)
+    """
+    if pred.empty:
+        return False
+    d = issue_days(pred)
+    return bool(d.min() <= start and d.max() >= end)
+
+
+#: Reihenfolge der Jahreszeiten in Tabellen
+SEASON_ORDER = ["Winter", "Frühling", "Sommer", "Herbst"]
+
+
+def season_comparison(pred: pd.DataFrame) -> pd.DataFrame:
+    """Verfahren gegeneinander je Ziel und Jahreszeit (alle Vorlauftage zusammen).
+
+    Gerechnet auf den gemeinsamen Zeilen der Verfahren je Ziel, damit alle dieselben Stunden
+    sehen. Die Prognosen Dritter (``bench_*``) gibt es nur für D+1; sie würden die gemeinsamen
+    Zeilen auf den Folgetag beschränken und bleiben deshalb außen vor. Spalten: ``rank`` nach
+    MAE innerhalb von Ziel und Jahreszeit (1 = bestes Verfahren), ``vs_best`` = MAE relativ zum
+    besten Verfahren (0,05 = 5 % schlechter); dazu eine Zeile ``season = all`` je Verfahren.
+
+    @relation(SWR-MLT-043, scope=function)
+    """
+    methods = sorted(m for m in pred["method"].unique() if not str(m).startswith("bench_"))
+    if not methods:
+        return pd.DataFrame()
+    ctx = add_context(common_rows(pred, methods))
+    m = pd.concat(
+        [
+            score(ctx, ["target", "season", "method"]),
+            score(ctx, ["target", "method"]).assign(season="all"),
+        ],
+        ignore_index=True,
+    )
+    g = m.groupby(["target", "season"])["mae"]
+    m["rank"] = g.rank(method="min").astype(int)
+    m["vs_best"] = m["mae"] / g.transform("min") - 1
+    order = {s: i for i, s in enumerate([*SEASON_ORDER, "all"])}
+    m = m.sort_values(
+        ["target", "season", "rank"], key=lambda c: c.map(order) if c.name == "season" else c
+    )
+    return m.reset_index(drop=True)

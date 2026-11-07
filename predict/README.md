@@ -65,8 +65,22 @@ Den Ordner nach `predict/models/` kopieren (der Inhalt selbst, also `models/pack
 
 Ein Paket enthält das Modell, seine Konfiguration, das Manifest mit den Backtest-Kennzahlen,
 den Bestand je Technologie aus dem MaStR (letzte 400 Tage, danach gilt der letzte Wert wie im
-Training) und bei Wetter-Varianten die Gitter-Gewichte der Cluster, mit denen trainiert wurde.
+Training), bei Wetter-Varianten die Gitter-Gewichte der Cluster, mit denen trainiert wurde, und
+bei Varianten mit `nachbarwetter` die Gitterzellen der Nachbarzonen.
 Backtest-Prognosen mit Ist-Preisen sind nicht enthalten. Aufbau: `services/ml_train/src/ml_train/bundle.py`.
+
+### Welches Wetter der Stack lädt
+
+| Variante | Abruf je Lauf |
+|---|---|
+| ohne Wetter (`kalender`, `frei`, …) | keiner |
+| mit DE-Wetter (`wetter`, `wetter_frei_gk_skaliert`, …) | GFS 0,25° im Ausschnitt um Deutschland, Cluster aus dem MaStR |
+| mit `nachbarwetter` (`wetter_nachbarwetter`, …) | dazu GFS 0,5° für Europa, Zonen aus `regions_v2` |
+
+Die Gruppe `nachbarwetter` enthält den Wind- und PV-Index der Nachbarzonen. Das Modell wurde auf
+0,5° trainiert, deshalb lädt der Stack auch im Betrieb dieses Gitter und rechnet nicht aus 0,25°.
+Der zweite Abruf läuft über das Archiv auf AWS bzw. Google. Fehlt der Lauf dort noch, rechnet der
+Stack ohne diese Merkmale und nennt `nachbarwetter` in `inputs_missing`.
 
 ## Ausgabe
 
@@ -122,6 +136,8 @@ Merkmal leer und `inputs_missing` nennt sie.
 | Monatsmittel Kohle, Gas, LNG, Brent | Weltbank Pink Sheet | CC BY 4.0 |
 | Heizöl, Diesel DE | EU Weekly Oil Bulletin | CC BY 4.0 |
 | Wetter (nur Wetter-Varianten) | NOAA GFS 0,25°, NOMADS-Filter bzw. AWS/Google | gemeinfrei |
+| Wetter der Nachbarzonen (nur `nachbarwetter`) | NOAA GFS 0,5°, AWS/Google | gemeinfrei |
+| Zonengrenzen (nur `nachbarwetter`) | im Paket, aus Natural Earth | gemeinfrei |
 | Bestand, Cluster | im Paket, aus dem MaStR | Datenlizenz Deutschland – Namensnennung 2.0 |
 
 Die Prognosen stehen wie die Modelle unter **CC BY 4.0**. Namensnennung: „PredictionDB

@@ -6,7 +6,9 @@ Bericht ``PricesEnergyImbalance``: je Gastag der gewichtete Durchschnittspreis a
 (Start des Marktgebiets THE). Die API verlangt einen aussagekräftigen User-Agent.
 
 Laut Disclaimer von THE braucht die Vervielfältigung der Daten eine schriftliche Zustimmung.
-Die Quelle läuft deshalb nur mit ``PDB_ALLOW_THE=true``.
+Anders als bei Netztransparenz und regelleistung.net fehlt der Vorbehalt „soweit gesetzlich
+gestattet“, und THE gewährt ausdrücklich keine Lizenzrechte. Die Quelle bleibt deshalb ganz
+unfrei (auch kein Training veröffentlichter Modelle) und läuft nur mit ``PDB_ALLOW_THE=true``.
 
 Ein Gastag beginnt um 06:00 Ortszeit; dort steht der Wert (als UTC). Positiver
 Ausgleichsenergiepreis ist der Preis, den der Bilanzkreis für Unterdeckung zahlt
@@ -71,6 +73,7 @@ class The:
     license = "Trading Hub Europe, Vervielfältigung nur mit schriftlicher Zustimmung"
     priority = 10
     free = False
+    train = False
 
     def __init__(self, http: Http, base_url: str = BASE_URL) -> None:
         self.http = http

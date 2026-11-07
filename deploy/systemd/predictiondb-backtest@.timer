@@ -1,0 +1,10 @@
+[Unit]
+Description=PredictionDB: Backtest werktags von 03:00 bis 08:00 Ortszeit
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 03:00:00 Europe/Berlin
+# verpasste Nächte nicht tagsüber nachholen
+Persistent=false
+
+[Install]
+WantedBy=timers.target
