@@ -47,14 +47,24 @@ jobs:
       # Bericht für die Pages-Seite (Workflow pages.yml holt ihn vom Lauf auf main).
       # -n auto: ein Testprozess je Kern (pytest-xdist); LightGBM läuft in den Tests
       # deshalb mit einem Thread, siehe services/ml_train/tests/test_ml_train.py.
+      # --cov: Testabdeckung (Konfiguration in pyproject.toml), der Job „Testabdeckung“
+      # führt sie mit der der Integrationstests zusammen.
       - run: >-
           uv run pytest -n auto --html=build/tests/unit.html --self-contained-html
-          --junitxml=build/tests/unit.xml
+          --junitxml=build/tests/unit.xml --cov --cov-report=
+        env:
+          COVERAGE_FILE: build/coverage/.coverage.unit
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: testbericht-unit
           path: build/tests
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-unit
+          path: build/coverage
+          include-hidden-files: true
           if-no-files-found: ignore
 
   stack:
@@ -86,17 +96,66 @@ jobs:
         run: |
           uv sync --locked --all-packages
           set -a; . ./.env; set +a
-          PDB_INTEGRATION=1 uv run pytest tests/integration \
+          PDB_INTEGRATION=1 COVERAGE_FILE=build/coverage/.coverage.integration \
+            uv run pytest tests/integration \
             --html=build/tests/integration.html --self-contained-html \
-            --junitxml=build/tests/integration.xml
+            --junitxml=build/tests/integration.xml --cov --cov-report=
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: testbericht-integration
           path: build/tests
           if-no-files-found: ignore
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-integration
+          path: build/coverage
+          include-hidden-files: true
+          if-no-files-found: ignore
       - name: Logs bei Fehler
         if: failure()
         run: docker compose logs
       - if: always()
         run: docker compose down -v
+
+  coverage:
+    name: Testabdeckung
+    needs: [test, stack]
+    if: always()
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          save-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: coverage-*
+          path: build/coverage
+          merge-multiple: true
+      # Unit- und Integrationstests zusammen; Zeilen- und Zweigabdeckung in die Zusammenfassung
+      - name: Zusammenführen und berichten
+        run: |
+          shopt -s nullglob
+          daten=(build/coverage/.coverage.*)
+          if [[ ${#daten[@]} -eq 0 ]]; then
+            echo "Keine Abdeckungsdaten" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          uv run --only-group dev coverage combine --keep "${daten[@]}"
+          uv run --only-group dev coverage xml -o build/coverage/coverage.xml
+          # Gesamtzeile auch im Log, z. B. für den Eintrag bei bestpractices.dev
+          uv run --only-group dev coverage report --skip-covered | tail -n 1
+          uv run --only-group dev coverage json -q -o build/coverage/coverage.json
+          python3 -c "import json; t = json.load(open('build/coverage/coverage.json'))['totals']; print(f\"Anweisungen {t['covered_lines']}/{t['num_statements']} = {100 * t['covered_lines'] / t['num_statements']:.1f} %, Zweige {t['covered_branches']}/{t['num_branches']}\")" | tee -a "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Testabdeckung (Unit + Integration)"
+            echo
+            uv run --only-group dev coverage report --format=markdown
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage
+          path: build/coverage/coverage.xml
+          if-no-files-found: ignore

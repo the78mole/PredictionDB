@@ -97,6 +97,11 @@ uv run pre-commit run --all-files  # dieselben Prüfungen wie die CI
 uv run pytest
 ```
 
+**Neue Funktionen und Fehlerkorrekturen brauchen automatisierte Tests**, die im selben Pull
+Request hinzukommen: eine neue Funktion mit Tests für ihr Verhalten, ein Fix mit einem
+Regressionstest, der ohne den Fix fehlschlägt. Pull Requests ohne passende Tests werden nicht
+gemergt, Ausnahmen (reine Doku, Konfiguration) werden im Pull Request begründet.
+
 Neue oder geänderte Funktionen gehören zu einer Softwareanforderung unter [reqs/](reqs/README.md):
 Code und Tests verweisen im Docstring mit `@relation(SWR-…, scope=function)` darauf. Die Hooks
 `strictdoc` und `reqs-abdeckung` prüfen das.
@@ -127,3 +132,6 @@ material) you agree that
 You keep the copyright in your contribution. Confirm these terms by signing off
 every commit (`git commit -s`) and by ticking the confirmation in the pull
 request description.
+
+New features and bug fixes must come with automated tests in the same pull request (a
+regression test for every fix); pull requests without suitable tests are not merged.
