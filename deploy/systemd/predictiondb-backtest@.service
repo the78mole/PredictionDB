@@ -1,0 +1,15 @@
+# Monatlicher Backtest der aktiven Modelle (docs/BACKTEST.md, Kapitel 11).
+# Instanzname = Benutzer, dem der Checkout gehört und der in der Gruppe docker ist.
+[Unit]
+Description=PredictionDB: monatlicher Backtest im mitlaufenden Fenster (Fortsetzung je Nacht)
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+User=%i
+WorkingDirectory=/opt/predictiondb
+Environment=PDB_BT_STOP=08:00
+ExecStart=/opt/predictiondb/scripts/backtest-monatlich.sh
+# Das Skript hält selbst vor der Frist an; das hier ist nur die Notbremse
+TimeoutStartSec=6h

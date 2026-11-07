@@ -70,6 +70,21 @@ backtest:
   oof_folds: 3
   train_issue_stride: 2
 
+# Festes Vergleichsfenster (Ausgabetage): Jeder Backtest, der es vollständig abdeckt, wird hier
+# zusätzlich bewertet, damit Läufe mit verschiedenen Testzeiträumen vergleichbar sind
+# (docs/BACKTEST.md Kap. 7). Nur bewusst verschieben, dann mit neuem Namen.
+compare:
+  name: w2024_2025
+  start: 2024-01-01
+  end: 2025-12-31
+
+# Mitlaufendes Vergleichsfenster: die letzten 24 Monate bis zum Ende des Vormonats (until: month)
+# bzw. der letzten vollen Jahreszeit (until: season), Name z. B. roll_24m_202411_202610.
+# ml-train backtest --rolling rechnet genau diesen Zeitraum.
+compare_rolling:
+  months: 24
+  until: month
+
 promotion:
   min_gain: 0.0
   max_group_loss: 0.05

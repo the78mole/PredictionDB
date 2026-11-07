@@ -55,6 +55,10 @@ RELATIONS:
   VALUE: SWR-MLT-020
 - TYPE: Parent
   VALUE: SWR-MLT-028
+- TYPE: Parent
+  VALUE: SWR-MLT-042
+- TYPE: Parent
+  VALUE: SWR-MLT-045
 
 [ELEMENT]
 UID: SWA-MLT-SNAPSHOT
@@ -142,6 +146,10 @@ ORT: services/ml_train/src/ml_train/metrics.py
 RELATIONS:
 - TYPE: Parent
   VALUE: SWR-MLT-041
+- TYPE: Parent
+  VALUE: SWR-MLT-042
+- TYPE: Parent
+  VALUE: SWR-MLT-043
 
 [ELEMENT]
 UID: SWA-MLT-BACKTEST
@@ -157,6 +165,14 @@ RELATIONS:
   VALUE: SWR-MLT-040
 - TYPE: Parent
   VALUE: SWR-MLT-041
+- TYPE: Parent
+  VALUE: SWR-MLT-042
+- TYPE: Parent
+  VALUE: SWR-MLT-043
+- TYPE: Parent
+  VALUE: SWR-MLT-044
+- TYPE: Parent
+  VALUE: SWR-MLT-046
 
 [ELEMENT]
 UID: SWA-MLT-REGISTRY
@@ -187,6 +203,12 @@ ORT: services/ml_train/src/ml_train/dbsync.py
 RELATIONS:
 - TYPE: Parent
   VALUE: SWR-MLT-053
+- TYPE: Parent
+  VALUE: SWR-MLT-042
+- TYPE: Parent
+  VALUE: SWR-MLT-043
+- TYPE: Parent
+  VALUE: SWR-MLT-045
 
 [ELEMENT]
 UID: SWA-MLT-JOBS
@@ -200,6 +222,19 @@ ORT: services/ml_train/src/ml_train/jobs.py
 RELATIONS:
 - TYPE: Parent
   VALUE: SWR-MLT-003
+
+[ELEMENT]
+UID: SWA-MLT-TRACKING
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: MLflow-Anbindung
+STATEMENT: >>>
+Backtests, Fits und Registry-Rollen nach MLflow melden, nur mit ``MLFLOW_TRACKING_URI``.
+<<<
+ORT: services/ml_train/src/ml_train/tracking.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MLT-047
 
 [ELEMENT]
 UID: SWA-MLT-PREDICT
@@ -234,6 +269,19 @@ RELATIONS:
   VALUE: SWR-MLT-070
 - TYPE: Parent
   VALUE: SWR-MLT-071
+
+[ELEMENT]
+UID: SWA-MLT-IMPORTANCE
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Wichtigkeit der Merkmale
+STATEMENT: >>>
+Gain je Ziel, Merkmal und Merkmalsgruppe einer Version.
+<<<
+ORT: services/ml_train/src/ml_train/importance.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MLT-072
 
 [ELEMENT]
 UID: SWA-MLT-TESTING

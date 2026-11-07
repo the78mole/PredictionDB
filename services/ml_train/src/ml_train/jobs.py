@@ -49,6 +49,8 @@ class JobLog:
         self.job_id: int | None = None
         #: Ergebnis für die Übersicht (Version, Snapshot-ID, Ausgabeordner), vor ``finish`` setzen
         self.result: str | None = None
+        #: Grund, wenn ein Backtest an seiner Frist angehalten hat (Status ``aborted``)
+        self.paused: str | None = None
         self._steps = 0
         self._stop = threading.Event()
         self._beat: threading.Thread | None = None
@@ -127,7 +129,9 @@ class JobLog:
             {"id": self.job_id, "step": label, "done": done},
         )
 
-    def finish(self, error: str | None = None) -> None:
+    def finish(self, error: str | None = None, status: str | None = None) -> None:
+        """Abschluss: ``done`` ohne, ``failed`` mit Fehler; ``status`` setzt ihn ausdrücklich
+        (``aborted`` für einen geplant angehaltenen Backtest)."""
         self._stop.set()
         if self._beat is not None:
             self._beat.join(timeout=5)
@@ -142,7 +146,7 @@ class JobLog:
                 WHERE job_id = :id""",
             {
                 "id": self.job_id,
-                "status": "failed" if error else "done",
+                "status": status or ("failed" if error else "done"),
                 "result": self.result,
                 "error": error,
                 "steps": self._steps,

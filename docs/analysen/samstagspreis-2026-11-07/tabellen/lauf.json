@@ -1,0 +1,54 @@
+{
+ "job": "samstagspreis-2026-11-07",
+ "job_sha256": "51a3801bb23bf2d004365295631a88402fc4fba13164d53f064c73feb060f290",
+ "git_commit": "b409073dba215259f26f7f2201f9e90e57384915",
+ "gestartet": "2026-11-07T01:39:41+00:00",
+ "beendet": "2026-11-07T01:39:47+00:00",
+ "zeitraum_smard": [
+  "2025-09-01 00:00:00+02:00",
+  "2026-11-07 23:00:00+01:00"
+ ],
+ "stunden_smard": 10393,
+ "fehlende_preisstunden": 0,
+ "zeitraum_nachbarn": [
+  "2026-10-24",
+  "2026-11-07"
+ ],
+ "zonen_nachbarn": [
+  "DE-LU",
+  "AT",
+  "BE",
+  "CH",
+  "CZ",
+  "DK1",
+  "DK2",
+  "FR",
+  "NL",
+  "NO2",
+  "PL",
+  "SE4"
+ ],
+ "zeitraum_handel_kernkraft_fr": [
+  "2026-10-24",
+  "2026-11-06"
+ ],
+ "monate_gas": [
+  "2024-01",
+  "2026-10"
+ ],
+ "monate_ohne_wechselkurs_fortgeschrieben": [],
+ "vm_export_sha256": "5eea4dc79d875cc86dd72d19f44972456e2f4daa77d6144bc51c268828ff006a",
+ "modellversionen": [
+  "de_lu_v1-kalender-202610242054-9a18ba",
+  "de_lu_v1-kalender-202610270115-7e355b",
+  "de_lu_v2-frei-202610251049-7e1594",
+  "de_lu_v2-frei-202610270147-6b979e",
+  "de_lu_v2-wetter_frei-202610271848-df539f",
+  "de_lu_v2-wetter_frei_gk_skaliert-202610282124-fd369f"
+ ],
+ "champion": "de_lu_v1-kalender-202610270115-7e355b",
+ "annahmen": [
+  "Residuallast und Erzeugung als ÜNB-Day-Ahead-Prognose (SMARD), weil der Preis am Vortag auf Basis von Prognosen entsteht und Ist-Werte für den 07.11. noch fehlen",
+  "Grenzkosten nur Brennstoff, ohne CO2 und ohne Fixkosten"
+ ]
+}
