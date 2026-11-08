@@ -48,7 +48,8 @@ def needs(pkg: ModelPackage, issue: datetime) -> dict[str, Window]:
     asof = {
         c
         for name in pkg.model.variant.groups
-        if (g := cfg.series_groups.get(name)) is not None and g.mode in ("asof", "outlook")
+        if (g := cfg.series_groups.get(name)) is not None
+        and g.mode in ("asof", "outlook", "nachbarindex")
         for c in g.stored_codes
     }
     long_start = issue - timedelta(days=int(pkg.info.get("lookback_days", 45)))

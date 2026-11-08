@@ -331,15 +331,20 @@ class Store:
 
     # --- Zustand -----------------------------------------------------------------------------
 
-    def has_features(self, source_id: int, run: datetime) -> bool:
-        """Hatte der Lauf schon einmal Features (gleich welche Clusterung oder Version)?"""
+    def has_features(self, source_id: int, run: datetime, version: str | None = None) -> bool:
+        """Hatte der Lauf schon einmal Features (gleich welche Feature-Version)?
+
+        Ohne ``version`` zählt jede Clusterung, sonst nur diese (feste Standorte schreiben in
+        eigene Regionen, ein Lauf mit Zonen-Gold hat dort noch keine Werte).
+        """
         with self.engine.connect() as c:
             return bool(
                 c.execute(
                     text("""
                     SELECT EXISTS (SELECT 1 FROM meta.nwp_feature_run
-                    WHERE source_id = :s AND run_time = :r)"""),
-                    {"s": source_id, "r": run},
+                    WHERE source_id = :s AND run_time = :r
+                      AND (CAST(:v AS text) IS NULL OR clustering_version = :v))"""),
+                    {"s": source_id, "r": run, "v": version},
                 ).scalar_one()
             )
 

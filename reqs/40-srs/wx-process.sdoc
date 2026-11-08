@@ -396,4 +396,21 @@ RELATIONS:
 - TYPE: Parent
   VALUE: SYSR-QA-001
 
+[REQUIREMENT]
+UID: SWR-WXP-042
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Feste Standorte mit eigener Version
+STATEMENT: >>>
+Mit Standortdateien (``sites``, z. B. Kraftwerksstandorte) muss wx-process im selben Durchgang wie
+die Zonen Gold für diese Standorte unter einer eigenen Version (``sites_<version>``) schreiben,
+ohne das Gold der Zonen zu verändern. Mit ``--clustering sites_<version>`` müssen sich die
+Standorte allein über die Historie nachrechnen lassen.
+<<<
+QUELLE: docs/analysen/kkw-kuehlwasser-fr
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-008
+
 [[/SECTION]]

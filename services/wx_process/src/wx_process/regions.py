@@ -58,7 +58,9 @@ class RegionSet:
                     r.get("hub_height_m"),
                 )
             )
-        return cls(f"regions_{data['version']}", regions)
+        # Standortdateien (``"set": "sites"``) bekommen eine eigene Version, damit ihr Gold
+        # neben dem der Zonen entsteht und getrennt nachgerechnet werden kann
+        return cls(f"{data.get('set', 'regions')}_{data['version']}", regions)
 
     @property
     def codes(self) -> list[str]:

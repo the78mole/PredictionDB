@@ -42,6 +42,7 @@ class FakeStore:
         self.packed: list[Chunk] = []
         self.replaced: list[bool] = []
         self.log: list[tuple[str, str]] = []
+        self.regions: dict[str, int] = {}
 
     def source_id(self, code: str) -> int:
         return 3
@@ -50,7 +51,9 @@ class FakeStore:
         return self.version
 
     def region_ids(self, codes) -> dict[str, int]:  # type: ignore[no-untyped-def]
-        return {c: 100 + i for i, c in enumerate(codes)}
+        for c in codes:
+            self.regions.setdefault(c, 100 + len(self.regions))
+        return {c: self.regions[c] for c in codes}
 
     def cluster_weights(self, version: str, grid: str) -> list[ClusterWeights]:
         a = np.array
@@ -72,7 +75,12 @@ class FakeStore:
 
     def write_values(self, run, valid_until, feature_ids, region_ids, rows, *, replace=True) -> int:  # type: ignore[no-untyped-def]
         self.replaced.append(replace)
-        self.values = {k: v for k, v in self.values.items() if k[0] != run}
+        fids, rids = set(feature_ids), set(region_ids)
+        self.values = {
+            k: v
+            for k, v in self.values.items()
+            if not (k[0] == run and k[1] in fids and k[2] in rids)
+        }
         n = 0
         for fid, rid, t, v in rows:
             assert run <= t <= valid_until and rid in region_ids and fid in feature_ids
@@ -108,8 +116,8 @@ class FakeStore:
             and self.bronze.get(r) != "deleted"
         }
 
-    def has_features(self, source_id: int, run: datetime) -> bool:
-        return any(r == run for r, _ in self.done)
+    def has_features(self, source_id: int, run: datetime, version: str | None = None) -> bool:
+        return any(r == run and version in (None, v) for r, v in self.done)
 
     def decompress_values(self, start: datetime, end: datetime) -> list[Chunk]:
         hit = [c for c in self.packed if c.start <= end and c.end > start]
@@ -224,6 +232,71 @@ def test_fixed_regions_instead_of_clustering(tmp_path: Path) -> None:
     assert {"t2m", "wind_cf", "wind_speed_hub", "ghi", "pv_cf"} <= by_region[101]
     assert not {"wind_power", "pv_power"} & set(store.features)
     assert pipeline.process(RUN).status == "skipped"
+
+
+def test_sites_with_own_version(tmp_path: Path) -> None:
+    """Standorte: eigenes Gold neben den Zonen, getrennt nachrechenbar.
+
+    @relation(SWR-WXP-042, scope=function)
+    """
+    zones = {
+        "version": "vT",
+        "regions": [{"code": "AT:area", "technology": "area", "cells": [[48.0, 11.0, 1.0]]}],
+    }
+    sites = {
+        "set": "sites",
+        "version": "kkw_t",
+        "regions": [
+            {
+                "code": "KKW_BUG:site",
+                "technology": "site",
+                "cells": [[54.0, 9.0, 0.25], [53.0, 8.0, 0.75]],
+            }
+        ],
+    }
+    zpath = tmp_path / "regions.json.gz"
+    zpath.write_bytes(gzip.compress(json.dumps(zones).encode()))
+    spath = tmp_path / "sites.json"
+    spath.write_text(json.dumps(sites))
+    cfg = {
+        **CONFIG,
+        "regions": str(zpath),
+        "sites": [str(spath)],
+        "technologies": {"area": {"kind": "area"}, "site": {"kind": "hydro"}},
+    }
+    bronze = MemoryStore()
+    store = FakeStore(version=None)
+    silver = Silver(MemoryStore())
+
+    def pipeline(cfg: dict[str, Any]) -> WxPipeline:
+        return WxPipeline(
+            ProcessConfig.model_validate(cfg),
+            GfsConfig.model_validate(source_config([(0, 3, 1), (6, 6, 1)])),
+            bronze,
+            silver,
+            store,  # type: ignore[arg-type]
+        )
+
+    fill_bronze(bronze, STEPS)
+    # erst nur die Zonen (Stand vor den Standorten), dann kommen die Standorte dazu
+    only_zones = pipeline({**cfg, "sites": []})
+    assert only_zones.process(RUN).clustering_version == "regions_vT"
+    zone_values = dict(store.values)
+    with_sites = pipeline(cfg)
+    r = with_sites.process(RUN)
+    assert (r.status, r.clustering_version) == ("processed", "sites_kkw_t")
+    # Zonen-Gold bleibt stehen, die Standorte schreiben ohne DELETE
+    assert {k: v for k, v in store.values.items() if k in zone_values} == zone_values
+    assert store.replaced[-1] is False
+    site_id = store.regions["gefs:KKW_BUG:site"]
+    names = {v: k for k, v in store.features.items()}
+    feats = {names[f] for _, f, rid, _ in store.values if rid == site_id}
+    assert {"t2m", "precip"} <= feats and "wind_cf" not in feats
+    assert with_sites.process(RUN).status == "skipped"
+    # mit ausdrücklicher Version nur die Standorte neu, diesmal ersetzend
+    r = with_sites.process(RUN, force=True, clustering="sites_kkw_t")
+    assert r.clustering_version == "sites_kkw_t" and store.replaced[-1] is True
+    assert {k: v for k, v in store.values.items() if k in zone_values} == zone_values
 
 
 def test_force_rebuilds_silver(setup) -> None:  # type: ignore[no-untyped-def]
@@ -343,6 +416,10 @@ def test_repo_config_gfs_0p5_covers_all_region_technologies() -> None:
     regions = RegionSet.load(cfg.regions)
     assert regions.version == "regions_v2"
     assert {r.technology for r in regions.regions} <= set(cfg.technologies)
+    sites = [RegionSet.load(p) for p in cfg.sites]
+    assert [s.version for s in sites] == ["sites_kkw_v1"]
+    assert {r.technology for s in sites for r in s.regions} <= set(cfg.technologies)
+    assert all(abs(r.share.sum() - 1) < 1e-9 for s in sites for r in s.regions)
 
 
 def test_prune_bronze_only_with_silver(setup) -> None:  # type: ignore[no-untyped-def]

@@ -105,11 +105,25 @@ class SeriesGroup(BaseModel):
       Monatsprognose (EIA STEO). ``codes`` sind die Stämme (``steo_brent``), gespeichert je
       Vorlauf k als ``<stamm>_h<kk>``; Merkmal ``ol_<stamm>_h<k>`` = log(Prognose Vorlauf k /
       Prognose laufender Monat) für jedes k in ``horizons``.
+    - ``kuehlwasser``: Kühlwasserlage an Kraftwerksstandorten (``site_weather``). ``codes`` sind
+      die Tagesabflüsse ``river_flow_<pegel>`` (Hub'eau); je Standort Lufttemperatur am
+      Gitterpunkt als Mittel des Zieltags und der 7 und 30 Tage bis dahin (``kw_<s>_t1``,
+      ``_t7``, ``_t30``), der zuletzt veröffentlichte Abfluss relativ zum Median der 365 Tage
+      davor (``kw_<s>_q_rel``) und als Kennzahl die gefährdete Leistung ``kw_risiko_mw``
+      (dazu ``kw_hitze_mw`` und ``kw_niedrigwasser_mw``, docs/analysen/kkw-kuehlwasser-fr).
+    - ``nachbarindex``: Wind- und PV-Index der Nachbarn als wenige Kennzahlen. ``codes`` sind
+      die installierten Leistungen ``cap_<technik>_<land>`` (Energy-Charts, je Jahr); je Land
+      zählt der zum Ausgabezeitpunkt veröffentlichte Stand mal dem mittleren ``wind_cf`` bzw.
+      ``pv_cf`` seiner Zonen aus ``neighbour_weather`` (gleicher Lauf wie das DE-Wetter).
+      Merkmale ``nbi_wind_mw``, ``nbi_pv_mw`` (Summe der Länder), ``nbi_wind_cf``,
+      ``nbi_pv_cf`` (leistungsgewichtet) und ``nbi_cap_wind_mw``, ``nbi_cap_pv_mw``.
 
-    @relation(SWR-MLT-026, scope=class)
+    @relation(SWR-MLT-026, SWR-MLT-029, SWR-MLT-033, scope=class)
     """
 
-    mode: Literal["lags", "forecast", "asof", "outlook", "grenzkosten"]
+    mode: Literal[
+        "lags", "forecast", "asof", "outlook", "grenzkosten", "nachbarindex", "kuehlwasser"
+    ]
     codes: list[str]
     lags: list[LagKind] = Field(
         default_factory=lambda: list[LagKind](["day", "mean_day", "mean_7d"])
@@ -171,6 +185,63 @@ class NeighbourWeather(BaseModel):
 
 #: Präfix der Nachbarzonen-Features im Snapshot (``weather.parquet``)
 NEIGHBOUR_PREFIX = "nb_"
+#: Präfix der Standort-Features im Snapshot
+SITE_PREFIX = "st_"
+
+
+class CoolingSite(BaseModel):
+    """Ein Kraftwerksstandort mit Kühlwasser aus einem Fluss.
+
+    Die Schwellen stammen aus docs/analysen/kkw-kuehlwasser-fr (``tabellen/schwellen.csv``):
+    ab ``t7_from`` °C im 7-Tage-Mittel bzw. unter ``flow_below`` des Median-Abflusses steigt der
+    Anteil der Tage mit Drosselung steil an.
+
+    @relation(SWR-MLT-033, scope=class)
+    """
+
+    #: Kürzel wie in ``config/process/kkw_standorte.json`` (Region ``KKW_<code>:site``)
+    code: str
+    #: Nettoleistung des Standorts in MW
+    mw: float = Field(gt=0)
+    #: Tagesabflüsse in Reihenfolge des Vorrangs (der erste mit Wert zählt)
+    flows: list[str] = Field(default_factory=list)
+    t7_from: float | None = None
+    flow_below: float | None = Field(default=None, gt=0)
+
+
+class SiteWeather(BaseModel):
+    """Wetter an festen Standorten aus dem Gold von GFS Europa (Regionen ``gefs:KKW_<s>:site``),
+    im Snapshot als ``st_<s>_<feature>``, in den Merkmalen über die Gruppe ``kuehlwasser``.
+
+    @relation(SWR-MLT-033, scope=class)
+    """
+
+    source: str = "gfs_0p5"
+    features: list[str] = Field(default_factory=lambda: ["t2m"])
+    sites: list[CoolingSite]
+    #: Breite der Rampe über der Temperaturschwelle (K) und unter der Abflussschwelle
+    ramp_t: float = Field(default=4.0, gt=0)
+    ramp_q: float = Field(default=0.2, gt=0)
+    #: Tage Wetter vor dem ersten Lauf im Snapshot (für das 30-Tage-Mittel)
+    history_days: int = Field(default=31, ge=0)
+
+    def region_codes(self) -> list[str]:
+        return [f"gefs:KKW_{s.code}:site" for s in self.sites]
+
+    @property
+    def flow_codes(self) -> list[str]:
+        return list(dict.fromkeys(c for s in self.sites for c in s.flows))
+
+
+def site_feature(region_code: str, feature: str) -> str:
+    """Name im Snapshot: ``gefs:KKW_BUG:site`` und ``t2m`` -> ``st_bug_t2m``."""
+    site = region_code.split(":")[1].removeprefix("KKW_").lower()
+    return f"{SITE_PREFIX}{site}_{feature}"
+
+
+def zone_country(zone: str) -> str:
+    """Land einer Gebotszone: ``DK1`` -> ``dk``, ``NO2`` -> ``no``, ``FR`` -> ``fr``."""
+    return zone.rstrip("0123456789").lower()
 
 
 def neighbour_feature(region_code: str, feature: str) -> str:
@@ -336,6 +407,8 @@ class ModelConfig(BaseModel):
     weather_features: list[str] = Field(default_factory=list)
     #: Wetter der Nachbarzonen (Gruppe ``nachbarwetter``); ohne Angabe bleibt die Gruppe leer
     neighbour_weather: NeighbourWeather | None = None
+    #: Wetter an Kraftwerksstandorten (Gruppe im Modus ``kuehlwasser``)
+    site_weather: SiteWeather | None = None
     #: weitere Merkmalsgruppen aus Energie- und Preisreihen, Name -> Gruppe
     series_groups: dict[str, SeriesGroup] = Field(default_factory=dict)
 
@@ -350,6 +423,18 @@ class ModelConfig(BaseModel):
             ]
             if unknown:
                 raise ValueError(f"Variante {v.name!r}: unbekannte Gruppen {unknown}")
+        if self.neighbour_weather is None:
+            idx = [n for n, g in self.series_groups.items() if g.mode == "nachbarindex"]
+            if idx:
+                raise ValueError(f"Gruppen {idx}: nachbarindex braucht neighbour_weather")
+        for n, g in self.series_groups.items():
+            if g.mode != "kuehlwasser":
+                continue
+            if self.site_weather is None:
+                raise ValueError(f"Gruppe {n}: kuehlwasser braucht site_weather")
+            lost = set(self.site_weather.flow_codes) - set(g.codes)
+            if lost:
+                raise ValueError(f"Gruppe {n}: Abflüsse {sorted(lost)} fehlen in codes")
         return self
 
     @property

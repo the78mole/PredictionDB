@@ -42,6 +42,9 @@ class ProcessConfig(BaseModel):
     weight_grid: str
     #: feste Regionen statt der Clusterung aus ``assets`` (GFS Europa: Gebotszonen wie GEFS)
     regions: Path | None = None
+    #: weitere feste Regionen mit eigener Version, z. B. Kraftwerksstandorte
+    #: (``config/process/kkw_standorte.json``); ihr Gold entsteht im selben Durchgang
+    sites: list[Path] = Field(default_factory=list)
     #: ``meta.feature.aggregation`` der Cluster-Features
     aggregation: str = "cluster_cap_weighted"
     #: Rückblick im Dienstbetrieb (``latest``)
