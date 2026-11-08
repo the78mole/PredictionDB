@@ -26,7 +26,9 @@ von [kkw-kuehlwasser-fr](../kkw-kuehlwasser-fr/README.md).
   0,06.
 - **Lohnt sich ein Modell?** Ja, als Standortmerkmal „Kühlwasserlage“ für D+1 bis D+3 mit guter
   und bis D+7 mit mäßiger Güte. Wassertemperatur und Abfluss sind beide vorhersagbar, die
-  Abflussmessung von Hub'eau trägt den größten Teil. Die Schwachstelle sind die Standorte ohne
+  Abflussmessung von Hub'eau trägt den größten Teil: Ohne die gemessenen Abflüsse T-1 und T-8
+  liegt der Fehler bei D+3 an allen 12 Pegeln über dem Modell mit Messung und meist sogar über
+  der Persistenz (0,20 bis 0,29 statt 0,08 bis 0,24). Die Schwachstelle sind die Standorte ohne
   Temperaturmessung (Bugey, Saint-Alban, Chooz, Cattenom), dort gilt nur das Luftmodell mit 1 bis
   1,6 K. Ob die Merkmale den Preis DE-LU verbessern, prüft diese Analyse nicht.
 
@@ -93,6 +95,11 @@ MAE im Sommer auf log(Abfluss), 0,2 entspricht rund 20 % Abweichung
 | Saint-Laurent (Loire) | 0,176 | 0,136 | 0,136 | 0,268 | 0,211 | 0,203 |
 | Tricastin (Rhône) | 0,182 | 0,152 | 0,150 | 0,222 | 0,183 | 0,162 |
 
+Ohne die gemessenen Abflüsse (Ablation „ohne Abflussmessung“, sonst gleiche Merkmale) liegt der
+Fehler bei D+3 bei 0,20 bis 0,29 und damit überall über dem Modell mit Messung, an 9 von 12 Pegeln
+auch über der Persistenz. Bei D+7 schlägt die Ablation die Persistenz an 9 Pegeln knapp, an Chinon,
+Nogent und Saint-Laurent nicht.
+
 Das Modell nutzt log-Abfluss T-1 und T-8, Regen der letzten 7, 30 und 90 Tage bis einschließlich T
 (der Tag T selbst aus dem Lauf T mit Vorlauf 0, die Vortage aus den Vortagesläufen), Bodenfeuchte,
 Schnee, den Jahresgang und den Regen der kommenden d Tage, einmal aus dem Lauf T und einmal
@@ -100,11 +107,12 @@ eingetreten. Saint-Alban hat nur 3 Prüfjahre, alle übrigen Pegel 6.
 
 ![Abfluss je Vorlauf](grafiken/abfluss.png)
 
-Die Schwelle „unter 50 % des Medians“ ([tabellen/abfluss_schwellen.csv](tabellen/abfluss_schwellen.csv))
-taugt nur bedingt als Ereignis. An Loire, Maas, Mosel und Vienne liegt im Sommer etwa jeder zweite
-Prüftag darunter, Treffer sind dort leicht. An Saint-Alban (50 Tage) trifft das Modell bei D+3
-86 % gegenüber 48 % der Persistenz, bei 54 % Fehlalarmen. An Bugey sind die 21 Tage vereinzelte
-Werte, die auch die Persistenz nicht trifft; dort ist die Kennzahl nicht aussagekräftig.
+Die Schwelle „unter 50 % des Medians“ ([tabellen/abfluss_schwellen.csv](tabellen/abfluss_schwellen.csv),
+Median je Prüfjahr aus den Lerntagen der übrigen Jahre) taugt nur bedingt als Ereignis. An Loire,
+Maas, Mosel und Vienne liegt im Sommer etwa jeder zweite Prüftag darunter, Treffer sind dort
+leicht. An Saint-Alban (80 Tage) trifft das Modell bei D+3 89 % gegenüber 69 % der Persistenz, bei
+31 % Fehlalarmen. An Bugey sind die 28 Tage vereinzelte Werte, die auch die Persistenz kaum trifft
+(14 %); dort ist die Kennzahl nicht aussagekräftig.
 
 ### Fehler der Wettervorhersage
 
@@ -162,3 +170,8 @@ uv run --no-project --with numpy --with numcodecs python -I \
 uv run --no-project --with pandas --with numpy --with matplotlib --with pyyaml python -I \
   docs/analysen/kkw-vorhersage/auswertung.py --cache /tmp/kkwv
 ```
+
+`abruf.py` legt je Monat die GHCR-Kennung (`<JJJJ-MM>.manifest.json`) neben die Tageswerte;
+`--teil gfs --manifeste` trägt sie für einen älteren Cache nach (Stand des Abrufs, in `lauf.json`
+als `nachgetragen` markiert). `lauf.json` nennt außerdem fehlende Ausgabetage, Lücken der
+Hub'eau-Reihen und die SHA-256 aller Eingabedateien.
