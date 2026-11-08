@@ -16,11 +16,13 @@ import subprocess
 import sys
 import urllib.parse
 import urllib.request
-import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from string import Template
+
+import defusedxml.ElementTree as ET
+from defusedxml import DefusedXmlException
 
 WURZEL = Path(__file__).resolve().parent.parent
 REPO = "https://github.com/the78mole/PredictionDB"
@@ -50,7 +52,9 @@ def junit_lesen(pfad: Path) -> Ergebnis | None:
     """Summen aus einer JUnit-XML von pytest, None wenn sie fehlt oder kaputt ist."""
     try:
         wurzel = ET.parse(pfad).getroot()
-    except (OSError, ET.ParseError):
+    except (OSError, ET.ParseError, DefusedXmlException):
+        return None
+    if wurzel is None:
         return None
     suites = [wurzel] if wurzel.tag == "testsuite" else list(wurzel.iter("testsuite"))
     if not suites:
