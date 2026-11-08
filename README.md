@@ -13,7 +13,7 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](.pre-commit-config.yaml)
 [![Renovate](https://img.shields.io/badge/Renovate-enabled-brightgreen?logo=renovatebot)](renovate.json)
-![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/the78mole/PredictionDB?utm_source=oss&utm_medium=github&utm_campaign=the78mole%2FPredictionDB&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+[![Sourcery](https://img.shields.io/badge/Sourcery-Reviews-FF7A00)](https://sourcery.ai)
 
 Strombedarfs- und Strompreisprognose für Deutschland auf Basis kostenfreier Wettermodelle
 (NOAA GFS u. a.) und Energiedaten. Architektur: [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md), Prognosemodelle:

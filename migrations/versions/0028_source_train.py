@@ -16,6 +16,7 @@ schreibt den Wert beim Start ohnehin neu.
 
 from collections.abc import Sequence
 
+import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0028_source_train"
@@ -28,8 +29,10 @@ NO_TRAIN = ("entsoe", "eia_reuters", "the")
 
 def upgrade() -> None:
     op.execute("ALTER TABLE meta.source ADD COLUMN train boolean NOT NULL DEFAULT true")
-    codes = ", ".join(f"'{c}'" for c in NO_TRAIN)
-    op.execute(f"UPDATE meta.source SET train = false WHERE code IN ({codes})")
+    codes: sa.BindParameter[list[str]] = sa.bindparam("codes", list(NO_TRAIN), expanding=True)
+    op.execute(
+        sa.text("UPDATE meta.source SET train = false WHERE code IN :codes").bindparams(codes)
+    )
 
 
 def downgrade() -> None:

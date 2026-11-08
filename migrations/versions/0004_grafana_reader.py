@@ -11,6 +11,7 @@ dieses Passwort. Ein späterer Passwortwechsel geht per ``ALTER ROLE grafana_rea
 import os
 from collections.abc import Sequence
 
+import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0004_grafana_reader"
@@ -23,6 +24,8 @@ SCHEMAS = ("meta", "energy", "assets", "feat", "fcst")
 
 
 def upgrade() -> None:
+    # Bezeichner/SQL aus Modulkonstanten, keine externe Eingabe; DDL nimmt keine Parameter
+    # nosemgrep
     op.execute(f"""
         DO $$ BEGIN
           IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '{ROLE}') THEN
@@ -30,25 +33,37 @@ def upgrade() -> None:
           END IF;
         END $$""")
     for schema in SCHEMAS:
+        # nosemgrep
         op.execute(f"GRANT USAGE ON SCHEMA {schema} TO {ROLE}")
+        # nosemgrep
         op.execute(f"GRANT SELECT ON ALL TABLES IN SCHEMA {schema} TO {ROLE}")
         # gilt für Tabellen, die der Migrationsbenutzer später anlegt
+        # nosemgrep
         op.execute(f"ALTER DEFAULT PRIVILEGES IN SCHEMA {schema} GRANT SELECT ON TABLES TO {ROLE}")
     # Größen und Kompressionsstand in den Status-Panels
+    # nosemgrep
     op.execute(f"GRANT pg_read_all_stats TO {ROLE}")
 
     password = os.environ.get("PDB_GRAFANA_DB_PASSWORD", "")
     if password:
-        literal = password.replace("'", "''")
-        op.execute(f"ALTER ROLE {ROLE} LOGIN PASSWORD '{literal}'")
+        # ALTER ROLE nimmt keine Serverparameter; literal_execute lässt den Dialekt das Passwort
+        # als Literal maskieren statt es per f-String einzusetzen.
+        pw = sa.bindparam("pw", password, type_=sa.String(), literal_execute=True)
+        # nosemgrep
+        op.execute(sa.text(f"ALTER ROLE {ROLE} LOGIN PASSWORD :pw").bindparams(pw))
 
 
 def downgrade() -> None:
     for schema in SCHEMAS:
+        # nosemgrep
         op.execute(
             f"ALTER DEFAULT PRIVILEGES IN SCHEMA {schema} REVOKE SELECT ON TABLES FROM {ROLE}"
         )
+        # nosemgrep
         op.execute(f"REVOKE ALL ON ALL TABLES IN SCHEMA {schema} FROM {ROLE}")
+        # nosemgrep
         op.execute(f"REVOKE USAGE ON SCHEMA {schema} FROM {ROLE}")
+    # nosemgrep
     op.execute(f"REVOKE pg_read_all_stats FROM {ROLE}")
+    # nosemgrep
     op.execute(f"DROP ROLE IF EXISTS {ROLE}")

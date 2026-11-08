@@ -20,6 +20,8 @@ SCHEMAS = ("meta", "feat", "energy", "fcst")
 def upgrade() -> None:
     op.execute("CREATE EXTENSION IF NOT EXISTS timescaledb")
     for schema in SCHEMAS:
+        # Bezeichner/SQL aus Modulkonstanten, keine externe Eingabe; DDL nimmt keine Parameter
+        # nosemgrep
         op.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
 
     # meta: was wurde wann woher geladen
@@ -130,4 +132,5 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     for schema in reversed(SCHEMAS):
+        # nosemgrep
         op.execute(f"DROP SCHEMA IF EXISTS {schema} CASCADE")
