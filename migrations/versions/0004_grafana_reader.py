@@ -49,7 +49,8 @@ def upgrade() -> None:
         # ALTER ROLE nimmt keine Serverparameter; literal_execute lässt den Dialekt das Passwort
         # als Literal maskieren statt es per f-String einzusetzen.
         pw = sa.bindparam("pw", password, type_=sa.String(), literal_execute=True)
-        op.execute(sa.text("ALTER ROLE grafana_reader LOGIN PASSWORD :pw").bindparams(pw))
+        # nosemgrep
+        op.execute(sa.text(f"ALTER ROLE {ROLE} LOGIN PASSWORD :pw").bindparams(pw))
 
 
 def downgrade() -> None:
