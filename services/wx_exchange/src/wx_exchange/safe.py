@@ -46,6 +46,11 @@ def safe_name(name: str) -> str:
         or any(ord(c) < 0x20 or ord(c) == 0x7F for c in name)
     ):
         raise ArtifactError(f"unzulässiger Pfad im Tar: {name!r}")
+    try:
+        # Tar-Namen mit Surrogaten (ungültiges UTF-8) ließen sich später nicht hashen
+        name.encode("utf-8")
+    except UnicodeEncodeError as e:
+        raise ArtifactError(f"unzulässiger Pfad im Tar: {name!r}") from e
     return name
 
 
