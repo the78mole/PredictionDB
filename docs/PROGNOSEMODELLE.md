@@ -381,11 +381,18 @@ verglichenen Verfahren eine Prognose haben.
 
 Jede neue Version kommt als **Challenger** in die Registry (oder als `champion` bzw. `baseline`,
 wenn ausdrücklich gewünscht). `registry promote` macht einen Challenger nur dann zum Champion,
-wenn auf den gemeinsamen Backtest-Zeilen beider Versionen gilt:
+wenn in jeder Horizontklasse („kurz“ D+0 bis D+7, „lang“ ab D+8) auf den gemeinsamen
+Backtest-Zeilen gilt:
 
 1. Je Zielgröße ist der mittlere Pinball-Verlust mindestens um `min_gain` (Vorgabe 0) besser.
 2. In keiner Gruppe aus Zielgröße, Vorlauftag und Jahreszeit mit mindestens `min_group_n`
    (200) Werten ist der Challenger mehr als `max_group_loss` (5 %) schlechter.
+
+Deckt der Champion eine Klasse nicht ab (etwa ein Modell bis D+7 gegen einen Challenger bis
+D+15), muss der Challenger dort die Vorwochenprognose schlagen: den Ist-Wert vor so vielen
+Wochen, wie zur Ausgabe schon bekannt war (verglichen über den Median, `pinball50`). Deckt der
+Challenger eine Klasse des Champions nicht ab, wird er nicht Champion, sonst fielen Vorlauftage
+aus dem Betrieb weg. Es bleibt bei einem Champion je Registry-Linie.
 
 So kann eine Version, die im Mittel gewinnt, aber etwa im Winter für D+1 deutlich verliert,
 nicht unbemerkt Champion werden. `registry evaluate` zeigt die Gründe vorab, `--force`

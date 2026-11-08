@@ -224,6 +224,7 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
         assert [r["Rolle"] for r in mv] == ["Champion", "Challenger"]
         assert mv[0]["MAE Last D+1"] == pytest.approx(500.0)
         assert any(r["Ziel"] == "Preis €/MWh" and r["Gesamt"] for r in rows[41])
+        assert all(r["Tiefe"].startswith("bis D+") for r in rows[41])
         live = [r for r in rows[42] if "Champion" in r["Version"] and r["Ziel"] == "Last MW"]
         assert live and live[0]["Bias"] == pytest.approx(1.0)
         assert any(r["Aktion"] == "Champion" for r in rows[43])

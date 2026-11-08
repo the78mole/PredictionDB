@@ -484,10 +484,12 @@ STATUS: Umgesetzt
 NACHWEIS: Test
 TITLE: Champion/Challenger
 STATEMENT: >>>
-``promote`` darf einen Challenger nur zum Champion machen, wenn er auf den gemeinsamen
-Backtest-Zeilen je Ziel im Mittel (Pinball über P10/P50/P90) besser ist und in keiner Gruppe aus
-Ziel, Vorlauftag und Jahreszeit mit mindestens 200 Werten mehr als 5 % schlechter; ``--force``
-übergeht die Prüfung.
+``promote`` darf einen Challenger nur zum Champion machen, wenn er je Horizontklasse (D+0–7,
+ab D+8) auf den gemeinsamen Backtest-Zeilen je Ziel im Mittel (Pinball über P10/P50/P90) besser
+ist und in keiner Gruppe aus Ziel, Vorlauftag und Jahreszeit mit mindestens 200 Werten mehr als
+5 % schlechter. In einer Klasse ohne Werte des Champions ist die Vorwochenprognose (bekannter
+Ist-Wert vor k Wochen, Median) der Gegner; fehlt dem Challenger eine Klasse des Champions, wird
+er nicht Champion. ``--force`` übergeht die Prüfung.
 <<<
 QUELLE: ARCHITEKTUR.md 7.7
 RELATIONS:

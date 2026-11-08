@@ -446,7 +446,9 @@ Die Kennzahlen mit `scope = 'all'` laufen über **alle** Zeilen der Version, nic
 gemeinsamen Zeilen mit anderen Versionen. Haben zwei Versionen Backtests über verschiedene
 Zeiträume, ist ihr Vergleich nur ein Anhaltspunkt. Vergleichbar sind die Zeilen im Fenster; das
 Panel „Champion und Challenger im Backtest“ zeigt beide Sichten (Spalte „Zeitraum“), die Zeilen
-im Fenster zuerst. Das Panel „Backtest je Jahreszeit im Vergleichsfenster“ zeigt je aktiver
+im Fenster zuerst. Es gruppiert die Versionen nach Prognosetiefe (Spalte „Tiefe“, längste zuerst)
+und zeigt „Ø D+1–7“ und „Ø D+8–15“ getrennt, passend zu den Horizontklassen der Freigabe
+(Kap. 10). Das Panel „Backtest je Jahreszeit im Vergleichsfenster“ zeigt je aktiver
 Version den MAE je Jahreszeit im Fenster und daneben den Abstand zum Champion derselben
 Konfiguration (negativ = besser). Entscheidend für die Freigabe bleibt der Vergleich in Kap. 10. Versionen ohne
 `backtest.parquet` erscheinen im Panel ohne Kennzahlen.
@@ -458,11 +460,23 @@ echten Läufen von `ml-predict`.
 ## 10. Champion/Challenger auf Basis des Backtests
 
 Ob ein Challenger Champion wird, entscheidet `registry evaluate` bzw. `registry promote` allein
-aus den `backtest.parquet` beider Versionen (`registry.compare`):
+aus den `backtest.parquet` beider Versionen (`registry.compare`). Geprüft wird je
+**Horizontklasse** getrennt: „kurz“ (D+0 bis D+7) und „lang“ (ab D+8). Ein Challenger muss in
+jeder Klasse bestehen, die er abdeckt:
+
+- Hat der Champion Zeilen in der Klasse, ist er der Gegner (Ablauf unten).
+- Hat er keine (Champion bis D+7, Challenger bis D+15), ist der Gegner die **Vorwochenprognose**
+  aus den Ist-Werten des Challenger-Backtests: Wert vor k Wochen mit dem kleinsten k, der zur
+  Ausgabezeit schon bekannt war (für D+8 bis D+13 also meist zwei Wochen). Sie hat keine
+  Quantile, verglichen wird deshalb über `pinball50`.
+- Deckt der Challenger eine Klasse des Champions nicht ab, wird er nicht Champion.
+
+`registry evaluate` gibt die Tabelle je Klasse mit Spalte `reference` (`champion` oder
+`vorwoche`) aus. Ablauf je Klasse:
 
 ```mermaid
 flowchart TD
-    A["backtest.parquet Champion<br/>backtest.parquet Challenger"] --> B["common_rows:<br/>nur Zeilen, die beide haben"]
+    A["backtest.parquet Champion<br/>(oder Vorwoche)<br/>backtest.parquet Challenger<br/>je Horizontklasse"] --> B["common_rows:<br/>nur Zeilen, die beide haben"]
     B -->|keine| X1["nein: keine gemeinsamen Backtest-Zeilen"]
     B --> C{"q10 überall vorhanden?"}
     C -->|ja| M1["Maß: pinball"]

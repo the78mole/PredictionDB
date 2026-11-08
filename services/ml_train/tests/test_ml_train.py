@@ -848,6 +848,65 @@ def test_compare_blocks_group_regression() -> None:
     assert any("Winter" in r for r in d.reasons)
 
 
+def _horizon_rows(leads: list[int], rng: np.random.Generator) -> pd.DataFrame:
+    ts = pd.date_range("2024-01-01", periods=24 * 120, freq="h", tz="UTC")
+    hour = np.arange(len(ts))
+    actual = np.sin(2 * np.pi * hour / 168) + rng.normal(0, 0.3, len(ts))
+    parts = [
+        pd.DataFrame(
+            {
+                "target": "x",
+                "issue_time": ts.floor("D") - pd.Timedelta(days=lead),
+                "ts": ts,
+                "lead_day": lead,
+                "actual": actual,
+            }
+        )
+        for lead in leads
+    ]
+    return pd.concat(parts, ignore_index=True)
+
+
+def _quantiles(df: pd.DataFrame, q50: np.ndarray) -> pd.DataFrame:
+    return df.assign(q50=q50, q10=q50 - 0.5, q90=q50 + 0.5)
+
+
+def test_compare_by_horizon_class() -> None:
+    """@relation(SWR-MLT-051, scope=function)"""
+    from ml_train.config import PromotionRule
+    from ml_train.registry import week_reference
+
+    rng = np.random.default_rng(2)
+    rule = PromotionRule(min_group_n=50)
+    short = _horizon_rows([1], rng)
+    champ = _quantiles(short, short["actual"].to_numpy() + 0.4)
+    full = _horizon_rows([1, 10], rng)
+    good = full["actual"].to_numpy() + rng.normal(0, 0.1, len(full))
+    # Vorwoche nur aus Werten vor der Ausgabe: für D+10 der Wert von vor zwei Wochen
+    ref = week_reference(full)
+    row = full.index[(full["lead_day"] == 10)][400]
+    want = full.loc[(full["ts"] == full.loc[row, "ts"] - pd.Timedelta(days=14)), "actual"]
+    assert ref.loc[row, "q50"] == pytest.approx(want.iloc[0])
+
+    # D+15-Challenger gegen D+7-Champion: kurz gegen Champion, lang gegen Vorwoche
+    d = compare(champ, _quantiles(full, good), rule)
+    assert d.promote, d.reasons
+    assert set(zip(d.overall["class"], d.overall["reference"], strict=True)) == {
+        ("kurz", "champion"),
+        ("lang", "vorwoche"),
+    }
+    # Gut bis D+7, aber ab D+8 schlechter als die Vorwoche: keine Freigabe
+    bad = np.where(full["lead_day"] == 10, full["actual"] + 3.0, good)
+    d = compare(champ, _quantiles(full, bad), rule)
+    assert not d.promote
+    assert any("lang gegen vorwoche" in r for r in d.reasons)
+    assert not any("kurz" in r for r in d.reasons)
+    # Kurzer Challenger gegen langen Champion: Vorlauftage gingen verloren
+    d = compare(_quantiles(full, good), champ, rule)
+    assert not d.promote
+    assert any(r.startswith("lang: Challenger deckt") for r in d.reasons)
+
+
 def test_dbsync_roles_and_metrics() -> None:
     """@relation(SWR-MLT-053, scope=function)"""
     from ml_train.dbsync import metric_rows, roles
