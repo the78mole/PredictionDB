@@ -56,6 +56,13 @@ flowchart LR
   `nbi_wind_mw`, `nbi_pv_mw`, leistungsgewichtete `nbi_*_cf` und `nbi_cap_*_mw`. Variante
   `wetter_frei_gk_skaliert_nachbarindex`. `ml-train bundle` legt dafür wie bei
   `nachbarwetter` die Zonenzellen ins Paket.
+- **GEFS-Ensemble (`ensemble_weather`):** Mittel, Streuung und P10/P90 über die 31 Mitglieder
+  aus dem Gold von GEFS (`gefs_0p5`, Regionen `gefs:<region>` wie `DE:wind_on`, je Region eigene
+  Kennzahlen). Der Snapshot führt sie als `en_<region>_<feature>`, die Merkmale als Gruppe `gefs`
+  (`wx_en_…`, dazu `wx_en_lead_h`). Eigener Lauf (nur 00Z): der jüngste mit
+  `run_time + delay_h` vor dem Ausgabezeitpunkt, unabhängig vom GFS-Lauf. Varianten
+  `wetter_gefs`, `wetter_frei_gefs`; noch nicht im schlanken Stack (`ml-train bundle` lehnt sie
+  ab).
 - **Kühlwasser (`mode: kuehlwasser`, `site_weather`):** Kühlwasserlage der französischen
   Kernkraftwerke mit umweltbedingter Drosselung (docs/analysen/kkw-kuehlwasser-fr). Je Standort
   die Lufttemperatur am Gitterpunkt (Gold von GFS Europa, Regionen `gefs:KKW_<s>:site` aus

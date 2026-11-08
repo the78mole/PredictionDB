@@ -125,6 +125,21 @@ neighbour_weather:
   zones: [AT, BE, CH, CZ, DK1, DK2, FR, NL, NO2, PL, SE4]
   features: [wind_cf, pv_cf]
 
+# GEFS-Ensemble (31 Mitglieder, 0,5°, nur 00Z, 6-stündlich bis 384 h) aus dem Gold von
+# wx-exchange: Mittel, Streuung und P10/P90 über die Mitglieder in den DE-Regionen nach
+# Anlagenbestand (regions_v2), Gruppe gefs. Eigener Lauf: der jüngste 00Z-Lauf, der zum
+# Ausgabezeitpunkt verarbeitet vorlag (Gold ca. 7 h nach Laufzeit). Ziel: Niveau und
+# Unsicherheit ab D+5, wo ein einzelner GFS-Lauf kaum noch trägt.
+ensemble_weather:
+  source: gefs_0p5
+  run_hours: [0]
+  delay_h: 8
+  regions:
+    DE:wind_on: [wind_cf_mean, wind_cf_std, wind_cf_p10, wind_cf_p90]
+    DE:wind_off: [wind_cf_mean, wind_cf_std]
+    DE:pv: [pv_cf_mean, pv_cf_std, pv_cf_p10, pv_cf_p90]
+    DE:area: [t2m_mean, t2m_std]
+
 # Französische Kernkraftwerke mit umweltbedingter Drosselung 2021 bis 2026
 # (docs/analysen/kkw-kuehlwasser-fr): Lufttemperatur am Gitterpunkt aus dem Gold von GFS Europa
 # (Regionen config/process/kkw_standorte.json, Version sites_kkw_v1), Abfluss am Pegel davor.
@@ -211,6 +226,16 @@ variants:
     groups: [calendar, lags, capacity, weather, nachbarn, lastprognose, brennstoffe, marktwerte,
              grenzkosten, stage1]
     scale: {da_price_de_lu: gk_niveau}
+    requires_weather: true
+    train_from: 2021-03-23
+  # dazu das GEFS-Ensemble (Ablation gegen wetter bzw. wetter_frei)
+  - name: wetter_gefs
+    groups: [calendar, lags, capacity, weather, gefs, stage1]
+    requires_weather: true
+    train_from: 2021-03-23
+  - name: wetter_frei_gefs
+    groups: [calendar, lags, capacity, weather, gefs, nachbarn, lastprognose, brennstoffe,
+             marktwerte, stage1]
     requires_weather: true
     train_from: 2021-03-23
   # dazu Wind und PV der Nachbarzonen (Ablation gegen wetter bzw. wetter_frei_gk_skaliert)

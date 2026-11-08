@@ -12,7 +12,15 @@ import pytest
 
 from ml_train.backtest import backtest_steps, make_folds, run_backtest
 from ml_train.calendar import calendar_features
-from ml_train.config import ModelConfig, NeighbourWeather, Variant, load_config, neighbour_feature
+from ml_train.config import (
+    EnsembleWeather,
+    ModelConfig,
+    NeighbourWeather,
+    Variant,
+    ensemble_feature,
+    load_config,
+    neighbour_feature,
+)
 from ml_train.dataset import (
     FeatureBuilder,
     WeatherTable,
@@ -345,6 +353,66 @@ def test_neighbour_weather_group_same_run(snap, cfg) -> None:  # type: ignore[no
     # DE-Wetter unverändert, Nachbarzone aus demselben Lauf (Momentanwert: Stundenmitte)
     pd.testing.assert_frame_equal(frame.X[base.groups["weather"]], base.X[base.groups["weather"]])
     np.testing.assert_allclose(frame.X["wx_nb_fr_wind_cf"], frame.X["wx_lead_h"] + 0.5)
+
+
+def test_gefs_group_own_run(snap, cfg) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-034, scope=function)"""
+    assert ensemble_feature("gefs:DE:wind_on", "wind_cf_mean") == "en_de_wind_on_wind_cf_mean"
+    assert ensemble_feature("gefs:IT-Nord:area", "t2m_std") == "en_it_nord_area_t2m_std"
+    w = snap.weather
+    runs = w["run_time"].drop_duplicates()
+    # GEFS: nur 00Z-Läufe, 6-stündlich bis 384 h; Wert = Stunden seit Lauf
+    parts = []
+    for run in runs[runs.dt.hour == 0]:
+        steps = np.arange(0, 385, 6)
+        vt = run + pd.to_timedelta(steps, unit="h")
+        for feat, off in (("en_de_wind_on_wind_cf_mean", 0.0), ("en_de_pv_pv_cf_mean", 0.0)):
+            parts.append(
+                pd.DataFrame(
+                    {
+                        "run_time": run,
+                        "valid_time": vt,
+                        "feature": feat,
+                        "value": (steps + off).astype("float32"),
+                    }
+                )
+            )
+    with_en = Snapshot(snap.energy, pd.concat([w, *parts]), snap.capacity, snap.manifest)
+    cfg.ensemble_weather = EnsembleWeather(
+        regions={"DE:wind_on": ["wind_cf_mean"], "DE:pv": ["pv_cf_mean"]}, delay_h=8
+    )
+    assert cfg.ensemble_weather.region_codes() == ["gefs:DE:wind_on", "gefs:DE:pv"]
+    assert cfg.ensemble_weather.wanted() == {"en_de_wind_on_wind_cf_mean", "en_de_pv_pv_cf_mean"}
+    base = FeatureBuilder(snap, cfg).build([date(2023, 5, 10)])
+    frame = FeatureBuilder(with_en, cfg).build([date(2023, 5, 10)])
+    assert base.groups["gefs"] == []
+    assert frame.groups["gefs"] == [
+        "wx_en_de_pv_pv_cf_mean",
+        "wx_en_de_wind_on_wind_cf_mean",
+        "wx_en_lead_h",
+    ]
+    assert not set(frame.groups["gefs"]) & set(frame.groups["weather"])
+    pd.testing.assert_frame_equal(frame.X[base.groups["weather"]], base.X[base.groups["weather"]])
+    # Ausgabe 08 UTC: 00Z-Lauf desselben Tags mit 8 h Verzug gerade verwendbar
+    lead = frame.meta["lead_h"].to_numpy() + 8
+    np.testing.assert_allclose(frame.X["wx_en_lead_h"], lead)
+    # Momentanwert: Mittel aus ts und ts+1h (Stundenmitte), linear zwischen 6-h-Schritten
+    np.testing.assert_allclose(frame.X["wx_en_de_wind_on_wind_cf_mean"], lead + 0.5)
+    # 6-h-Mittel (PV): gilt für die 6 h bis zum Schritt, also nächster Schritt ab ts+1h
+    np.testing.assert_allclose(frame.X["wx_en_de_pv_pv_cf_mean"], np.ceil((lead + 1) / 6) * 6)
+    # mit 9 h Verzug ist es der Lauf vom Vortag
+    cfg.ensemble_weather.delay_h = 9
+    late = FeatureBuilder(with_en, cfg).build([date(2023, 5, 10)])
+    np.testing.assert_allclose(late.X["wx_en_lead_h"], lead + 24)
+    # ohne ensemble_weather keine Variante mit gefs
+    with pytest.raises(ValueError, match="ensemble_weather"):
+        ModelConfig.model_validate(
+            {
+                **cfg.model_dump(),
+                "ensemble_weather": None,
+                "variants": [{"name": "g", "groups": ["calendar", "gefs"]}],
+            }
+        )
 
 
 def test_neighbour_index_capacity_weighted(snap, cfg) -> None:  # type: ignore[no-untyped-def]
@@ -1200,6 +1268,7 @@ def test_feature_group_from_name(cfg) -> None:  # type: ignore[no-untyped-def]
         "cap_pv": "capacity",
         "wx_gfs_v": "nwp_version",
         "wx_nb_fr_wind_cf": "nachbarwetter",
+        "wx_en_de_wind_on_wind_cf_mean": "gefs",
         "wx_pv_roof_ghi": "weather",
         "gk_niveau": "grenzkosten",
         "lag_da_price_fr_mean_7d": "nachbarn",

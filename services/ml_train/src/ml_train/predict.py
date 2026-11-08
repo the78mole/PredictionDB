@@ -176,6 +176,7 @@ def live_snapshot(
         max_lead_h=24 * (max(cfg.issue.lead_days) + 2),
         neighbour=cfg.neighbour_weather,
         sites=cfg.site_weather,
+        ensemble=cfg.ensemble_weather,
     )
 
 

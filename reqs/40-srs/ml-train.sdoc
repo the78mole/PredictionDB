@@ -270,6 +270,24 @@ RELATIONS:
 TITLE: Modell
 
 [REQUIREMENT]
+UID: SWR-MLT-034
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: GEFS-Ensemble als Merkmalsgruppe
+STATEMENT: >>>
+Kennzahlen über die Mitglieder des GEFS-Ensembles (Mittel, Streuung, Quantile) für feste Regionen
+aus dem Gold von GEFS müssen als eigene Merkmalsgruppe ``gefs`` konfigurierbar sein. Je
+Ausgabezeitpunkt muss der jüngste GEFS-Lauf gelten, der mit seinem eigenen Verzug zum
+Ausgabezeitpunkt verarbeitet vorlag, unabhängig vom Lauf des DE-Wetters. Die Schritte müssen wie
+beim DE-Wetter auf Stunden ausgerichtet werden, Mittel über Intervalle für das Intervall bis zum
+Schritt.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-001
+
+[REQUIREMENT]
 UID: SWR-MLT-030
 ART: Funktional
 STATUS: Umgesetzt

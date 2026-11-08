@@ -140,6 +140,9 @@ def write_package(
             f"Variante {variant.name}: Gruppe {cooling[0]} (kuehlwasser) im Paket noch nicht "
             "unterstützt"
         )
+    if "gefs" in variant.groups:
+        # Der schlanke Stack lädt kein GEFS; ohne Ensemble blieben die Merkmale leer
+        raise ValueError(f"Variante {variant.name}: Gruppe gefs im Paket noch nicht unterstützt")
     needs_nb = uses_neighbour(cfg, variant)
     nb = cfg.neighbour_weather if needs_nb else None
     if needs_nb:

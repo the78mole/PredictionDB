@@ -13,7 +13,9 @@ Leakage-Schutz (ARCHITEKTUR.md 7.4):
 
 - Ist-Werte gelten ab Intervallende plus ``actual_delay_h`` als bekannt.
 - Day-Ahead-Preise eines Liefertags gelten am Vortag ab ``price_known_local_hour`` als bekannt.
-- Wetter kommt aus dem jüngsten Lauf mit ``run_time + nwp_delay_h <= issue_time``.
+- Wetter kommt aus dem jüngsten Lauf mit ``run_time + nwp_delay_h <= issue_time``, das
+  GEFS-Ensemble (Gruppe ``gefs``) aus dem jüngsten GEFS-Lauf mit
+  ``run_time + ensemble_weather.delay_h <= issue_time``.
 - Prognosen Dritter (Lastprognose der ÜNB) sind nur als eigene Reihengruppe (``forecast``)
   Merkmal, und nur für Liefertage, deren Prognose zum Ausgabezeitpunkt veröffentlicht war.
 - Tages-, Wochen- und Monatswerte (Brennstoffpreise, Marktwerte) gelten ab ihrer Spalte
@@ -25,7 +27,8 @@ Wetter liegt im Snapshot in nativen Schritten (GFS v16 stündlich bis 120 h, dan
 dreistündlich). Erst hier wird auf Stunden interpoliert (Vorgabe: Interpolation beim Lesen):
 Momentanwerte linear, Intervallgrößen (Strahlung, PV, Niederschlag, Schneeanteil) gelten für
 das ganze Intervall bis zum Schritt. Auf die Energiestunde ``[ts, ts+1h)`` passen Intervallwerte
-mit Gültigkeit ``ts+1h`` und das Mittel der Momentanwerte bei ``ts`` und ``ts+1h``.
+mit Gültigkeit ``ts+1h`` und das Mittel der Momentanwerte bei ``ts`` und ``ts+1h``. GEFS liegt
+6-stündlich vor; Mittel und Summen beziehen sich dort auf die 6 h vor dem Schritt.
 ``wx_interp`` markiert interpolierte Stunden.
 
 @relation(SWA-MLT-DATASET, scope=file)
@@ -42,6 +45,7 @@ import pandas as pd
 
 from ml_train.calendar import BERLIN, CALENDAR_COLUMNS, calendar_features
 from ml_train.config import (
+    ENSEMBLE_PREFIX,
     NEIGHBOUR_PREFIX,
     SITE_PREFIX,
     FeatureGroup,
@@ -57,6 +61,8 @@ DAY = pd.Timedelta(days=1)
 
 #: Intervallgrößen (Wert gilt für das Intervall bis zur Gültigkeitszeit)
 INTERVAL_SUFFIXES = ("_ghi", "_pv_cf", "_pv_power", "_precip", "_snow_fraction")
+#: Kennzahlen über die Ensemble-Mitglieder (GEFS-Gold), angehängt an den Namen der Größe
+ENSEMBLE_STATS = ("_mean", "_std", "_p10", "_p90")
 #: Day-Ahead-Preise (DE-LU und Nachbarzonen): bekannt ab dem Auktionsergebnis am Vortag
 PRICE_PREFIX = "da_price_"
 LAG_KINDS = ("day", "week", "mean_day", "mean_7d", "last")
@@ -81,7 +87,12 @@ META_COLUMNS = ["issue_time", "ts", "lead_day", "lead_h"]
 
 
 def is_interval_feature(name: str) -> bool:
-    """@relation(SWR-MLT-023, scope=function)"""
+    """@relation(SWR-MLT-023, SWR-MLT-034, scope=function)"""
+    if name.startswith((ENSEMBLE_PREFIX, f"wx_{ENSEMBLE_PREFIX}")):
+        for stat in ENSEMBLE_STATS:
+            if name.endswith(stat):
+                name = name.removesuffix(stat)
+                break
     return name.endswith(INTERVAL_SUFFIXES)
 
 
@@ -216,12 +227,15 @@ class FeatureBuilder:
         feat = wx["feature"].astype(str)
         nb = feat.str.startswith(NEIGHBOUR_PREFIX)
         st = feat.str.startswith(SITE_PREFIX)
-        self.weather = WeatherTable(wx[~nb & ~st], cfg.weather_features)
+        en = feat.str.startswith(ENSEMBLE_PREFIX)
+        self.weather = WeatherTable(wx[~nb & ~st & ~en], cfg.weather_features)
         # Nachbarzonen: eigene Tabelle, damit wx_interp und die Stunden des DE-Wetters gleich
         # bleiben; gewählt wird derselbe Lauf wie fürs DE-Wetter
         self.neighbour = WeatherTable(wx[nb])
         # Kraftwerksstandorte: Tagesmittel je Lauf (gleitende Mittel über Vortage)
         self.sites = WeatherTable(wx[st])
+        # GEFS: eigene Läufe (nur 00Z, 6-stündlich), eigener Verzug
+        self.ensemble = WeatherTable(wx[en])
         self._site_days: tuple[dict[pd.Timestamp, pd.DataFrame], pd.DataFrame] | None = None
         local = self.energy.index.tz_convert(BERLIN)
         self.local_day = pd.DatetimeIndex(local.normalize().tz_localize(None))
@@ -327,6 +341,9 @@ class FeatureBuilder:
         nbw = self._neighbour_weather(meta, runs)
         groups["nachbarwetter"] = list(nbw.columns)
         parts.append(nbw)
+        ens = self._ensemble(meta)
+        groups["gefs"] = list(ens.columns)
+        parts.append(ens)
         ver = pd.DataFrame({"wx_gfs_v": gfs_version(runs)}, index=meta.index)
         groups["nwp_version"] = list(ver.columns)
         parts.append(ver)
@@ -685,6 +702,32 @@ class FeatureBuilder:
                 names=["run_time", "ts"],
             )
             out.loc[valid, cols] = self.neighbour.table.reindex(key)[cols].to_numpy()
+        return out
+
+    def _ensemble(self, meta: pd.DataFrame) -> pd.DataFrame:
+        """GEFS-Kennzahlen aus dem jüngsten GEFS-Lauf, der zum Ausgabezeitpunkt verarbeitet
+        vorlag, dazu ``wx_en_lead_h`` (Stunden seit diesem Lauf). Ohne Lauf: leer (NaN).
+
+        @relation(SWR-MLT-034, scope=function)
+        """
+        en = self.cfg.ensemble_weather
+        cols = self.ensemble.columns
+        if en is None or not cols:
+            return pd.DataFrame(index=meta.index)
+        issues = meta["issue_time"]
+        run_of = {i: self.ensemble.run_for(pd.Timestamp(i), en.delay_h) for i in issues.unique()}
+        runs = issues.map(run_of)
+        names = [*cols, f"wx_{ENSEMBLE_PREFIX}lead_h"]
+        out = pd.DataFrame(np.nan, index=meta.index, columns=names, dtype=np.float32)
+        valid = runs.notna().to_numpy()
+        if valid.any():
+            key = pd.MultiIndex.from_arrays(
+                [pd.DatetimeIndex(runs[valid]), pd.DatetimeIndex(meta["ts"][valid])],
+                names=["run_time", "ts"],
+            )
+            out.loc[valid, names] = self.ensemble.table.reindex(key)[
+                [*cols, "wx_lead_h"]
+            ].to_numpy()
         return out
 
     def _newest_published(self, code: str, issues: pd.DatetimeIndex) -> pd.DataFrame:

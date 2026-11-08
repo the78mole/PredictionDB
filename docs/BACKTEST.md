@@ -195,6 +195,9 @@ Das Training einer Faltung ist dasselbe `TwoStageModel.fit` wie beim endgültige
 Varianten mit Wetter (`requires_weather`) trainieren und testen nur auf Ausgabezeitpunkten, zu
 denen ein verarbeiteter GFS-Lauf vorlag. Ihre Kennzahlen beruhen deshalb auf weniger Zeilen als
 die der übrigen Varianten. Vergleiche müssen auf gemeinsamen Zeilen laufen (Kap. 7).
+Die Gruppe `gefs` verlangt dagegen keinen GEFS-Lauf: Fehlt er (oder reicht er nicht bis zur
+Zielstunde), bleiben ihre Spalten leer, und LightGBM behandelt sie als fehlend. Der GEFS-Lauf
+wird je Ausgabezeitpunkt eigens gewählt (00Z, `run_time` + `ensemble_weather.delay_h`).
 
 ## 5. Varianten und Vergleichsverfahren
 
