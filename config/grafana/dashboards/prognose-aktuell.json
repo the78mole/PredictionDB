@@ -281,6 +281,28 @@
           "editorMode": "code",
           "format": "time_series",
           "rawSql": "-- Je Stunde der jüngste Lauf, der sie abdeckt (heute vergangene Stunden also aus\n-- früheren Läufen), mit P10, P50 und P90 desselben Laufs. Läufe reichen höchstens\n-- 9 Tage voraus, daher die Untergrenze für issue_time (Index statt Vollscan).\nWITH lauf AS (\n  SELECT DISTINCT ON (p.valid_time) p.valid_time, p.issue_time\n    FROM fcst.prediction p\n   WHERE p.target = 'load_actual' AND p.quantile = 0.5\n     AND p.value <> 'NaN'\n     AND p.model_version = (SELECT version FROM meta.model_version WHERE role = 'champion'\n                  ORDER BY created DESC LIMIT 1)\n     AND p.issue_time >= $__timeFrom()::timestamptz - interval '9 days'\n     AND $__timeFilter(p.valid_time)\n   ORDER BY p.valid_time, p.issue_time DESC)\nSELECT p.valid_time AS time,\n       CASE round(p.quantile::numeric, 2) WHEN 0.10 THEN 'P10' WHEN 0.50 THEN 'P50'\n                                          ELSE 'P90' END AS metric, p.value\n  FROM lauf l JOIN fcst.prediction p\n    ON p.valid_time = l.valid_time AND p.issue_time = l.issue_time\n WHERE p.target = 'load_actual' AND p.model_version = (SELECT version FROM meta.model_version WHERE role = 'champion'\n                  ORDER BY created DESC LIMIT 1)\n   AND round(p.quantile::numeric, 2) IN (0.10, 0.50, 0.90)\n ORDER BY 1, 2"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "-- Wind + PV, alle EE und Residuallast (SMARD: Last − Wind − PV), je Stunde gemittelt, weil\n-- Quellen in Viertelstunden oder Stunden liefern. EE gesamt nur, wenn Wind und PV vollständig\n-- sind (Biomasse, Wasser und sonstige EE kommen hinzu, soweit vorhanden).\nWITH h AS (\n  SELECT date_trunc('hour', ts) AS t, code, avg(value) AS v\n    FROM energy.value_best\n   WHERE code IN ('gen_wind_onshore', 'gen_wind_offshore', 'gen_solar', 'gen_biomass',\n                  'gen_hydro', 'gen_other_renewable', 'residual_load',\n                  'residual_load_da_forecast')\n     AND $__timeFilter(ts)\n   GROUP BY 1, 2)\nSELECT t AS time, 'ist_wind_pv' AS metric, sum(v) AS value\n  FROM h WHERE code IN ('gen_wind_onshore', 'gen_wind_offshore', 'gen_solar')\n GROUP BY t HAVING count(*) = 3\nUNION ALL\nSELECT t, 'ist_ee', sum(v)\n  FROM h WHERE code NOT LIKE 'residual%'\n GROUP BY t\nHAVING count(*) FILTER (WHERE code IN ('gen_wind_onshore', 'gen_wind_offshore', 'gen_solar')) = 3\nUNION ALL\nSELECT t, code, v FROM h WHERE code LIKE 'residual%'\n ORDER BY 1, 2"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "-- Stufe 1 des Modells: Wind + PV und Residuallast (Last − Wind − PV) aus den P50 desselben\n-- Laufs, je Stunde der jüngste Lauf wie bei der Lastprognose. Stufe 2 (Preis) rechnet mit\n-- genau dieser Residuallast.\nWITH lauf AS (\n  SELECT DISTINCT ON (p.valid_time) p.valid_time, p.issue_time\n    FROM fcst.prediction p\n   WHERE p.target = 'load_actual' AND p.quantile = 0.5\n     AND p.value <> 'NaN'\n     AND p.model_version = (SELECT version FROM meta.model_version WHERE role = 'champion'\n                            ORDER BY created DESC LIMIT 1)\n     AND p.issue_time >= $__timeFrom()::timestamptz - interval '9 days'\n     AND $__timeFilter(p.valid_time)\n   ORDER BY p.valid_time, p.issue_time DESC),\ns1 AS (\n  SELECT p.valid_time, p.target, p.value\n    FROM lauf l JOIN fcst.prediction p\n      ON p.valid_time = l.valid_time AND p.issue_time = l.issue_time\n   WHERE p.model_version = (SELECT version FROM meta.model_version WHERE role = 'champion'\n                            ORDER BY created DESC LIMIT 1)\n     AND p.quantile = 0.5 AND p.value <> 'NaN'\n     AND p.target IN ('load_actual', 'gen_wind_onshore', 'gen_wind_offshore', 'gen_solar'))\nSELECT valid_time AS time, 'prog_wind_pv' AS metric,\n       sum(value) FILTER (WHERE target <> 'load_actual') AS value\n  FROM s1 GROUP BY 1 HAVING count(*) FILTER (WHERE target <> 'load_actual') = 3\nUNION ALL\nSELECT valid_time, 'prog_residual_load',\n       sum(CASE WHEN target = 'load_actual' THEN value ELSE -value END)\n  FROM s1 GROUP BY 1 HAVING count(*) = 4\n ORDER BY 1, 2"
         }
       ],
       "fieldConfig": {
@@ -424,10 +446,186 @@
                 }
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ist_ee"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "EE gesamt"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "dark-green"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ist_wind_pv"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Wind + PV"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "prog_wind_pv"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Wind + PV Prognose P50"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "light-green"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "residual_load"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Residuallast"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "prog_residual_load"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Residuallast Prognose P50"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "light-orange"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "residual_load_da_forecast"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Residuallast-Prognose (ÜNB)"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    6,
+                    4
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "__systemRef": "hideSeriesFrom",
+            "matcher": {
+              "id": "byNames",
+              "options": {
+                "mode": "exclude",
+                "names": [
+                  "Last",
+                  "Lastprognose (ÜNB)",
+                  "Prognose P50",
+                  "Band P10–P90",
+                  "P10"
+                ],
+                "prefix": "All except:",
+                "readOnly": true
+              }
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": false,
+                  "tooltip": true,
+                  "viz": true
+                }
+              }
+            ]
           }
         ]
       },
-      "description": "Zeitraum des Dashboards (Standard heute 00:00 bis Ende D+7, Ortszeit) mit der Prognose des aktuellen Champions: Median P50 als Linie, das Band P10–P90 (nominell 80 %) als grauer Schlauch. Je Stunde gilt der jüngste Lauf, der sie abdeckt; vergangene Stunden von heute stammen daher aus früheren Läufen. Zum Vergleich die Last (gelb) und die Day-Ahead-Lastprognose der ÜNB (gelb gestrichelt), soweit vorhanden.",
+      "description": "Zeitraum des Dashboards (Standard heute 00:00 bis Ende D+7, Ortszeit) mit der Prognose des aktuellen Champions: Median P50 als Linie, das Band P10–P90 (nominell 80 %) als grauer Schlauch. Je Stunde gilt der jüngste Lauf, der sie abdeckt; vergangene Stunden von heute stammen daher aus früheren Läufen. Zum Vergleich die Last (gelb) und die Day-Ahead-Lastprognose der ÜNB (gelb gestrichelt), soweit vorhanden. Ausgeblendet und über die Legende zuschaltbar (Klick zeigt nur diese Serie, Strg-Klick schaltet sie dazu): Wind + PV (grün), EE gesamt mit Biomasse, Wasser und sonstigen EE (dunkelgrün) und Residuallast = Last − Wind − PV (orange, SMARD), jeweils als Ist, dazu die Modellprognose aus Stufe 1 (hell, P50 desselben Laufs, mit der auch der Preis rechnet) und die Residuallast-Prognose der ÜNB (orange gestrichelt).",
       "options": {
         "tooltip": {
           "mode": "multi",
@@ -549,6 +747,28 @@
           "editorMode": "code",
           "format": "time_series",
           "rawSql": "-- Je Stunde der jüngste Lauf, der sie abdeckt (heute vergangene Stunden also aus\n-- früheren Läufen), mit P10, P50 und P90 desselben Laufs. Läufe reichen höchstens\n-- 9 Tage voraus, daher die Untergrenze für issue_time (Index statt Vollscan).\nWITH lauf AS (\n  SELECT DISTINCT ON (p.valid_time) p.valid_time, p.issue_time\n    FROM fcst.prediction p\n   WHERE p.target = 'load_actual' AND p.quantile = 0.5\n     AND p.value <> 'NaN'\n     AND p.model_version = '${challenger}'\n     AND p.issue_time >= $__timeFrom()::timestamptz - interval '9 days'\n     AND $__timeFilter(p.valid_time)\n   ORDER BY p.valid_time, p.issue_time DESC)\nSELECT p.valid_time AS time,\n       CASE round(p.quantile::numeric, 2) WHEN 0.10 THEN 'P10' WHEN 0.50 THEN 'P50'\n                                          ELSE 'P90' END AS metric, p.value\n  FROM lauf l JOIN fcst.prediction p\n    ON p.valid_time = l.valid_time AND p.issue_time = l.issue_time\n WHERE p.target = 'load_actual' AND p.model_version = '${challenger}'\n   AND round(p.quantile::numeric, 2) IN (0.10, 0.50, 0.90)\n ORDER BY 1, 2"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "-- Wind + PV, alle EE und Residuallast (SMARD: Last − Wind − PV), je Stunde gemittelt, weil\n-- Quellen in Viertelstunden oder Stunden liefern. EE gesamt nur, wenn Wind und PV vollständig\n-- sind (Biomasse, Wasser und sonstige EE kommen hinzu, soweit vorhanden).\nWITH h AS (\n  SELECT date_trunc('hour', ts) AS t, code, avg(value) AS v\n    FROM energy.value_best\n   WHERE code IN ('gen_wind_onshore', 'gen_wind_offshore', 'gen_solar', 'gen_biomass',\n                  'gen_hydro', 'gen_other_renewable', 'residual_load',\n                  'residual_load_da_forecast')\n     AND $__timeFilter(ts)\n   GROUP BY 1, 2)\nSELECT t AS time, 'ist_wind_pv' AS metric, sum(v) AS value\n  FROM h WHERE code IN ('gen_wind_onshore', 'gen_wind_offshore', 'gen_solar')\n GROUP BY t HAVING count(*) = 3\nUNION ALL\nSELECT t, 'ist_ee', sum(v)\n  FROM h WHERE code NOT LIKE 'residual%'\n GROUP BY t\nHAVING count(*) FILTER (WHERE code IN ('gen_wind_onshore', 'gen_wind_offshore', 'gen_solar')) = 3\nUNION ALL\nSELECT t, code, v FROM h WHERE code LIKE 'residual%'\n ORDER BY 1, 2"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "pdb-postgres"
+          },
+          "rawQuery": true,
+          "editorMode": "code",
+          "format": "time_series",
+          "rawSql": "-- Stufe 1 des Modells: Wind + PV und Residuallast (Last − Wind − PV) aus den P50 desselben\n-- Laufs, je Stunde der jüngste Lauf wie bei der Lastprognose. Stufe 2 (Preis) rechnet mit\n-- genau dieser Residuallast.\nWITH lauf AS (\n  SELECT DISTINCT ON (p.valid_time) p.valid_time, p.issue_time\n    FROM fcst.prediction p\n   WHERE p.target = 'load_actual' AND p.quantile = 0.5\n     AND p.value <> 'NaN'\n     AND p.model_version = '${challenger}'\n     AND p.issue_time >= $__timeFrom()::timestamptz - interval '9 days'\n     AND $__timeFilter(p.valid_time)\n   ORDER BY p.valid_time, p.issue_time DESC),\ns1 AS (\n  SELECT p.valid_time, p.target, p.value\n    FROM lauf l JOIN fcst.prediction p\n      ON p.valid_time = l.valid_time AND p.issue_time = l.issue_time\n   WHERE p.model_version = '${challenger}'\n     AND p.quantile = 0.5 AND p.value <> 'NaN'\n     AND p.target IN ('load_actual', 'gen_wind_onshore', 'gen_wind_offshore', 'gen_solar'))\nSELECT valid_time AS time, 'prog_wind_pv' AS metric,\n       sum(value) FILTER (WHERE target <> 'load_actual') AS value\n  FROM s1 GROUP BY 1 HAVING count(*) FILTER (WHERE target <> 'load_actual') = 3\nUNION ALL\nSELECT valid_time, 'prog_residual_load',\n       sum(CASE WHEN target = 'load_actual' THEN value ELSE -value END)\n  FROM s1 GROUP BY 1 HAVING count(*) = 4\n ORDER BY 1, 2"
         }
       ],
       "fieldConfig": {
@@ -692,10 +912,186 @@
                 }
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ist_ee"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "EE gesamt"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "dark-green"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ist_wind_pv"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Wind + PV"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "prog_wind_pv"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Wind + PV Prognose P50"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "light-green"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "residual_load"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Residuallast"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "prog_residual_load"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Residuallast Prognose P50"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "light-orange"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "residual_load_da_forecast"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Residuallast-Prognose (ÜNB)"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    6,
+                    4
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "__systemRef": "hideSeriesFrom",
+            "matcher": {
+              "id": "byNames",
+              "options": {
+                "mode": "exclude",
+                "names": [
+                  "Last",
+                  "Lastprognose (ÜNB)",
+                  "Prognose P50",
+                  "Band P10–P90",
+                  "P10"
+                ],
+                "prefix": "All except:",
+                "readOnly": true
+              }
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": false,
+                  "tooltip": true,
+                  "viz": true
+                }
+              }
+            ]
           }
         ]
       },
-      "description": "Zeitraum des Dashboards (Standard heute 00:00 bis Ende D+7, Ortszeit) mit der Prognose des oben gewählten Challengers (Variable Challenger): Median P50 als Linie, das Band P10–P90 (nominell 80 %) als grauer Schlauch. Je Stunde gilt der jüngste Lauf, der sie abdeckt; vergangene Stunden von heute stammen daher aus früheren Läufen. Zum Vergleich die Last (gelb) und die Day-Ahead-Lastprognose der ÜNB (gelb gestrichelt), soweit vorhanden.",
+      "description": "Zeitraum des Dashboards (Standard heute 00:00 bis Ende D+7, Ortszeit) mit der Prognose des oben gewählten Challengers (Variable Challenger): Median P50 als Linie, das Band P10–P90 (nominell 80 %) als grauer Schlauch. Je Stunde gilt der jüngste Lauf, der sie abdeckt; vergangene Stunden von heute stammen daher aus früheren Läufen. Zum Vergleich die Last (gelb) und die Day-Ahead-Lastprognose der ÜNB (gelb gestrichelt), soweit vorhanden. Ausgeblendet und über die Legende zuschaltbar (Klick zeigt nur diese Serie, Strg-Klick schaltet sie dazu): Wind + PV (grün), EE gesamt mit Biomasse, Wasser und sonstigen EE (dunkelgrün) und Residuallast = Last − Wind − PV (orange, SMARD), jeweils als Ist, dazu die Modellprognose aus Stufe 1 (hell, P50 desselben Laufs, mit der auch der Preis rechnet) und die Residuallast-Prognose der ÜNB (orange gestrichelt).",
       "options": {
         "tooltip": {
           "mode": "multi",
