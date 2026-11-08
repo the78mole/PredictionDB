@@ -99,6 +99,17 @@ Chunks von `feat.nwp_value`, solange Läufe hineinschreiben, und packt sie danac
 höchstens 5 s gewartet; ein gesperrter Chunk bleibt, wie er ist, und wird nach 10 min erneut
 versucht. Nach einem Abbruch packt die Kompressions-Policy die Chunks später.
 
+**Feste Standorte (`sites`):** Neben den Zonen aus `regions` kann die Konfiguration
+Standortdateien nennen (GFS Europa: `config/process/kkw_standorte.json`, die 14
+Binnenkraftwerke Frankreichs, bilinear auf vier Gitterpunkte, Technik `site` = `hydro`). Ihr Gold
+entsteht im selben Durchgang unter eigener Version (`sites_kkw_v1`, Regionen
+`gefs:KKW_<s>:site`) und lässt das Zonen-Gold unberührt. Die Historie der Standorte allein:
+
+```bash
+uv run wx-process --config config/process/gfs_0p5.yaml gfs backfill 2021-03-22T00 \
+    --runs 0,12 --clustering sites_kkw_v1
+```
+
 | Variable | Standard |
 |---|---|
 | `PDB_DATABASE_URL`, `PDB_S3_*` | siehe `.env.example` |

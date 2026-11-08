@@ -416,6 +416,83 @@ def test_neighbour_index_capacity_weighted(snap, cfg) -> None:  # type: ignore[n
         ModelConfig.model_validate({**cfg.model_dump(), "neighbour_weather": None})
 
 
+def test_cooling_sites_rolling_and_flow(snap, cfg) -> None:  # type: ignore[no-untyped-def]
+    """Kühlwasser: Temperaturmittel über Vortage aus früheren Läufen, Abfluss relativ zum
+    Median, gefährdete Leistung.
+
+    @relation(SWR-MLT-033, scope=function)
+    """
+    from ml_train.config import CoolingSite, SeriesGroup, SiteWeather, site_feature
+
+    assert site_feature("gefs:KKW_BUG:site", "t2m") == "st_bug_t2m"
+    w = snap.weather
+    src = w[w["feature"] == w["feature"].iloc[0]]
+    # BUG: Temperatur = Tag seit 1.1.2023 (Ortstag), SAL: fest 25 °C
+    day = pd.DatetimeIndex(src["valid_time"]).tz_convert("Europe/Berlin").normalize()
+    k = ((day.tz_localize(None) - pd.Timestamp("2023-01-01")) / pd.Timedelta(days=1)).to_numpy()
+    parts = [
+        w,
+        src.assign(feature="st_bug_t2m", value=k.astype(np.float32)),
+        src.assign(feature="st_sal_t2m", value=np.float32(25.0)),
+    ]
+    flow_days = pd.date_range("2022-06-01", "2023-05-12", freq="D", tz="UTC")
+    flow = np.where(flow_days < pd.Timestamp("2023-04-30", tz="UTC"), 100.0, 30.0)
+    flows = pd.DataFrame(
+        {
+            "ts": flow_days,
+            "code": "river_flow_rhone_st_rambert",
+            "value": flow,
+            "published": flow_days + pd.Timedelta(days=1, hours=6),
+        }
+    )
+    energy = pd.concat([snap.energy, flows.astype(snap.energy.dtypes.to_dict())])
+    s2 = Snapshot(energy, pd.concat(parts), snap.capacity, snap.manifest)
+    cfg.site_weather = SiteWeather(
+        sites=[
+            # Schwelle mitten in den Werten, damit die Rampe greift
+            CoolingSite(code="BUG", mw=3600, t7_from=130),
+            CoolingSite(
+                code="SAL",
+                mw=2600,
+                flows=["river_flow_rhone_ternay", "river_flow_rhone_st_rambert"],
+                t7_from=24,
+                flow_below=0.5,
+            ),
+        ]
+    )
+    cfg.series_groups["kuehlwasser"] = SeriesGroup(
+        mode="kuehlwasser", codes=["river_flow_rhone_ternay", "river_flow_rhone_st_rambert"]
+    )
+    cfg.variants[-1].groups.append("kuehlwasser")
+    issue = date(2023, 5, 10)
+    frame = FeatureBuilder(s2, cfg).build([issue])
+    assert {"kw_bug_t7", "kw_sal_q_rel", "kw_risiko_mw"} <= set(frame.groups["kuehlwasser"])
+    assert "kw_bug_q_rel" not in frame.X.columns
+    x = frame.X[frame.X["wx_lead_h"].notna()]
+    target = pd.DatetimeIndex(frame.meta.loc[x.index, "ts"]).tz_convert("Europe/Berlin")
+    kt = (target.normalize().tz_localize(None) - pd.Timestamp("2023-01-01")).days.to_numpy()
+    # Stundenwerte sind Mittel über die Stunde: die letzte Stunde des Tages reicht in den
+    # nächsten hinein (+0,5/24)
+    np.testing.assert_allclose(x["kw_bug_t1"], kt, atol=0.03)
+    np.testing.assert_allclose(x["kw_bug_t7"], kt - 3, atol=0.03)
+    np.testing.assert_allclose(x["kw_bug_t30"], kt - 14.5, atol=0.03)
+    np.testing.assert_allclose(x["kw_sal_t7"], 25.0)
+    # zuletzt veröffentlicht ist der 8.5. (30 m³/s), Median der 365 Tage davor 100 m³/s
+    np.testing.assert_allclose(x["kw_sal_q_rel"], 0.3, rtol=1e-6)
+    # BUG: (t7 - 130) / 4 begrenzt auf 0..1; SAL: Abfluss voll (0,5 - 0,3) / 0,2 = 1
+    heat_bug = np.clip((x["kw_bug_t7"].to_numpy() - 130) / 4, 0, 1) * 3600
+    assert heat_bug.min() == 0 and 0 < heat_bug.max() < 3600
+    np.testing.assert_allclose(x["kw_hitze_mw"], heat_bug + 0.25 * 2600, rtol=1e-5)
+    np.testing.assert_allclose(x["kw_niedrigwasser_mw"], 2600.0)
+    np.testing.assert_allclose(x["kw_risiko_mw"], heat_bug + 2600, rtol=1e-5)
+    with pytest.raises(ValueError, match="site_weather"):
+        ModelConfig.model_validate({**cfg.model_dump(), "site_weather": None})
+    bad = cfg.model_dump()
+    bad["series_groups"]["kuehlwasser"]["codes"] = ["river_flow_rhone_ternay"]
+    with pytest.raises(ValueError, match="fehlen in codes"):
+        ModelConfig.model_validate(bad)
+
+
 def test_weather_alignment_interval_and_instant() -> None:
     """@relation(SWR-MLT-023, scope=function)"""
     run = pd.Timestamp("2024-01-01", tz="UTC")

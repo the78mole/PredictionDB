@@ -128,6 +128,18 @@ def write_package(
     """
     spec = json.loads((model_dir / "model.json").read_text())
     variant = Variant.model_validate(spec["variant"])
+    cooling = [
+        g
+        for g in variant.groups
+        if g in cfg.series_groups and cfg.series_groups[g].mode == "kuehlwasser"
+    ]
+    if cooling:
+        # Der schlanke Stack rechnet das Standort-Wetter noch nicht; ohne es blieben die
+        # Merkmale im Betrieb leer
+        raise ValueError(
+            f"Variante {variant.name}: Gruppe {cooling[0]} (kuehlwasser) im Paket noch nicht "
+            "unterstützt"
+        )
     needs_nb = uses_neighbour(cfg, variant)
     nb = cfg.neighbour_weather if needs_nb else None
     if needs_nb:

@@ -54,6 +54,9 @@ def lookback_days(cfg: ModelConfig, variant: Variant) -> int:
         if g is not None and g.mode == "nachbarindex":
             # Jahreswerte: der Stand des Vorjahres erscheint erst gut zwei Monate nach Jahresende
             back = max(back, 800)
+        if g is not None and g.mode == "kuehlwasser":
+            # Abfluss relativ zum Median der 365 Tage vor dem letzten bekannten Tag
+            back = max(back, 365 + 35)
         if g is not None and g.mode == "grenzkosten":
             back = max(back, max(g.windows) + UTIL_DAYS + 3)
     return back
@@ -172,6 +175,7 @@ def live_snapshot(
         weather_to=(issue + timedelta(hours=1)).to_pydatetime() if weather else wx_from,
         max_lead_h=24 * (max(cfg.issue.lead_days) + 2),
         neighbour=cfg.neighbour_weather,
+        sites=cfg.site_weather,
     )
 
 

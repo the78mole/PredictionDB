@@ -43,6 +43,7 @@ import pandas as pd
 from ml_train.calendar import BERLIN, CALENDAR_COLUMNS, calendar_features
 from ml_train.config import (
     NEIGHBOUR_PREFIX,
+    SITE_PREFIX,
     FeatureGroup,
     ModelConfig,
     SeriesGroup,
@@ -212,11 +213,16 @@ class FeatureBuilder:
         self.energy_long = snapshot.energy
         self.capacity = snapshot.capacity_wide()
         wx = snapshot.weather
-        nb = wx["feature"].astype(str).str.startswith(NEIGHBOUR_PREFIX)
-        self.weather = WeatherTable(wx[~nb], cfg.weather_features)
+        feat = wx["feature"].astype(str)
+        nb = feat.str.startswith(NEIGHBOUR_PREFIX)
+        st = feat.str.startswith(SITE_PREFIX)
+        self.weather = WeatherTable(wx[~nb & ~st], cfg.weather_features)
         # Nachbarzonen: eigene Tabelle, damit wx_interp und die Stunden des DE-Wetters gleich
         # bleiben; gewählt wird derselbe Lauf wie fürs DE-Wetter
         self.neighbour = WeatherTable(wx[nb])
+        # Kraftwerksstandorte: Tagesmittel je Lauf (gleitende Mittel über Vortage)
+        self.sites = WeatherTable(wx[st])
+        self._site_days: tuple[dict[pd.Timestamp, pd.DataFrame], pd.DataFrame] | None = None
         local = self.energy.index.tz_convert(BERLIN)
         self.local_day = pd.DatetimeIndex(local.normalize().tz_localize(None))
         self.daily_mean = self.energy.groupby(self.local_day).mean()
@@ -328,6 +334,8 @@ class FeatureBuilder:
         for name, sg in self.cfg.series_groups.items():
             if sg.mode == "nachbarindex":
                 extra = self._neighbour_index(sg, meta, nbw)
+            elif sg.mode == "kuehlwasser":
+                extra = self._cooling(meta)
             else:
                 extra = self._series_group(sg, meta)
             groups[name] = list(extra.columns)
@@ -679,10 +687,14 @@ class FeatureBuilder:
             out.loc[valid, cols] = self.neighbour.table.reindex(key)[cols].to_numpy()
         return out
 
-    def _capacity_asof(self, code: str, issues: pd.DatetimeIndex) -> np.ndarray:
-        """Zum Ausgabezeitpunkt veröffentlichter Stand einer Jahresreihe (NaN, wenn keiner).
+    def _newest_published(self, code: str, issues: pd.DatetimeIndex) -> pd.DataFrame:
+        """Jüngster zum Ausgabezeitpunkt veröffentlichter Stand einer Reihe (``ts``, ``value``).
 
-        @relation(SWR-MLT-029, scope=function)
+        Unter den schon veröffentlichten Werten gilt der mit dem jüngsten ``ts``, nicht der
+        zuletzt veröffentlichte: ein Vorjahreswert erscheint regulär erst nach dem laufenden
+        Jahr, ein nachgereichter Tageswert nach dem folgenden Tag.
+
+        @relation(SWR-MLT-029, SWR-MLT-033, scope=function)
         """
         e = self.energy_long
         if "published" not in e.columns:
@@ -691,17 +703,167 @@ class FeatureBuilder:
             )
         s = e.loc[(e["code"] == code) & e["published"].notna(), ["ts", "published", "value"]]
         if s.empty:
-            return np.full(len(issues), np.nan)
+            ts = pd.DatetimeIndex([pd.NaT] * len(issues), tz="UTC")
+            return pd.DataFrame({"ts": ts, "value": np.nan}, index=issues)
         s = s.sort_values("published").astype({"value": np.float64}).reset_index(drop=True)
         s["published"] = pd.DatetimeIndex(s["published"]).as_unit("ns")
-        # Unter den schon veröffentlichten Werten gilt das jüngste Jahr, nicht der zuletzt
-        # veröffentlichte Wert: der Vorjahreswert erscheint regulär erst nach dem laufenden Jahr
         newest = s["ts"].cummax()
         s["value"] = s["value"].where(s["ts"] == newest).ffill()
+        s["ts"] = newest
         uniq = pd.DataFrame({"issue": issues.unique().sort_values().as_unit("ns")})
-        cur = pd.merge_asof(uniq, s, left_on="issue", right_on="published")["value"]
-        out: np.ndarray = pd.Series(cur.to_numpy(), index=uniq["issue"]).reindex(issues).to_numpy()
+        cur = pd.merge_asof(uniq, s, left_on="issue", right_on="published")
+        cur.index = pd.DatetimeIndex(uniq["issue"])
+        return cur[["ts", "value"]].reindex(issues)
+
+    def _capacity_asof(self, code: str, issues: pd.DatetimeIndex) -> np.ndarray:
+        """Zum Ausgabezeitpunkt veröffentlichter Stand einer Jahresreihe (NaN, wenn keiner).
+
+        @relation(SWR-MLT-029, scope=function)
+        """
+        out: np.ndarray = self._newest_published(code, issues)["value"].to_numpy(np.float64)
         return out
+
+    # --- Kühlwasser an Kraftwerksstandorten --------------------------------------------------
+
+    def _site_tables(self) -> tuple[dict[pd.Timestamp, pd.DataFrame], pd.DataFrame]:
+        """Tagesmittel (Ortstag) je Lauf und die Näherung für vergangene Tage.
+
+        Für einen vergangenen Tag gilt das Tagesmittel aus dem jüngsten Lauf, der vor
+        Tagesbeginn lag (Vorlauf bis gut einen Tag, also fast eine Analyse).
+
+        @relation(SWR-MLT-033, scope=function)
+        """
+        if self._site_days is not None:
+            return self._site_days
+        cols = [c for c in self.sites.columns if c not in ("wx_interp", "wx_lead_h")]
+        per_run: dict[pd.Timestamp, pd.DataFrame] = {}
+        past = pd.DataFrame(columns=cols, dtype=np.float64)
+        if cols and not self.sites.table.empty:
+            t = self.sites.table[cols].astype(np.float64)
+            run = t.index.get_level_values("run_time")
+            ts = pd.DatetimeIndex(t.index.get_level_values("ts"))
+            day = pd.DatetimeIndex(ts.tz_convert(BERLIN).normalize().tz_localize(None))
+            g = t.groupby([run, day])
+            mean, n = g.mean(), g.count()
+            # Teiltage am Laufbeginn zählen ab 6 Stunden, sonst bleibt der Tag leer
+            daily = mean.where(n >= 6)
+            daily.index.names = ["run_time", "day"]
+            for r, d in daily.groupby(level="run_time"):
+                per_run[pd.Timestamp(r)] = d.droplevel("run_time")
+            # vergangene Tage: Lauf vor Tagesbeginn, voller Tag
+            full = mean.where(n >= 20)
+            full.index.names = ["run_time", "day"]
+            runs = pd.DatetimeIndex(sorted(per_run))
+            days = pd.DatetimeIndex(sorted(set(full.index.get_level_values("day"))))
+            start = days.tz_localize(BERLIN, ambiguous=True, nonexistent="shift_forward")
+            pos = runs.searchsorted(start.tz_convert("UTC"), side="right") - 1
+            key = [(runs[p], d) for p, d in zip(pos, days, strict=True) if p >= 0]
+            if key:
+                idx = pd.MultiIndex.from_tuples(key, names=["run_time", "day"])
+                past = full.reindex(idx).droplevel("run_time")
+        self._site_days = (per_run, past)
+        return self._site_days
+
+    def _site_temperatures(self, meta: pd.DataFrame) -> pd.DataFrame:
+        """Mittel des Zieltags und gleitende 7- und 30-Tage-Mittel je Standort.
+
+        Je Zeile der jüngste Standort-Lauf zum Ausgabezeitpunkt: ab seinem Tag dessen Prognose,
+        davor die Näherung für vergangene Tage.
+
+        @relation(SWR-MLT-033, scope=function)
+        """
+        sw = self.cfg.site_weather
+        assert sw is not None
+        per_run, past = self._site_tables()
+        names = [s.code.lower() for s in sw.sites]
+        out_cols = [f"kw_{n}_{k}" for n in names for k in ("t1", "t7", "t30")]
+        out = pd.DataFrame(np.nan, index=meta.index, columns=out_cols, dtype=np.float64)
+        if not per_run:
+            return out
+        issues = pd.DatetimeIndex(meta["issue_time"])
+        target = pd.DatetimeIndex(
+            pd.DatetimeIndex(meta["ts"]).tz_convert(BERLIN).normalize().tz_localize(None)
+        )
+        run_of = {i: self.sites.run_for(i, self.cfg.issue.nwp_delay_h) for i in issues.unique()}
+        runs = pd.Series([run_of[i] for i in issues], index=meta.index)
+        for r, rows in runs.groupby(runs, sort=False):
+            fc = per_run.get(pd.Timestamp(r))
+            if fc is None:
+                continue
+            d0 = pd.Timestamp(pd.Timestamp(r).tz_convert(BERLIN).date())
+            days = target[runs.index.get_indexer(rows.index)]
+            hist = past[past.index < d0].iloc[-30:]
+            comb = pd.concat([hist, fc[fc.index >= d0]])
+            comb = comb.reindex(pd.date_range(min(comb.index.min(), d0), days.max(), freq="D"))
+            r7 = comb.rolling(7, min_periods=5).mean()
+            r30 = comb.rolling(30, min_periods=20).mean()
+            for n in names:
+                col = f"wx_{SITE_PREFIX}{n}_t2m"
+                if col not in comb.columns:
+                    continue
+                out.loc[rows.index, f"kw_{n}_t1"] = comb[col].reindex(days).to_numpy()
+                out.loc[rows.index, f"kw_{n}_t7"] = r7[col].reindex(days).to_numpy()
+                out.loc[rows.index, f"kw_{n}_t30"] = r30[col].reindex(days).to_numpy()
+        return out
+
+    def _flow_rel(self, code: str, issues: pd.DatetimeIndex) -> np.ndarray:
+        """Zuletzt veröffentlichter Tagesabfluss relativ zum Median der 365 Tage bis dahin.
+
+        @relation(SWR-MLT-033, scope=function)
+        """
+        cur = self._newest_published(code, issues)
+        e = self.energy_long
+        f = e.loc[e["code"] == code, ["ts", "value"]].dropna()
+        if f.empty or cur["value"].isna().all():
+            return np.full(len(issues), np.nan)
+        f = f.groupby("ts")["value"].mean().sort_index().astype(np.float64)
+        med = f.rolling("365D", min_periods=180).median()
+        ref = med.reindex(pd.DatetimeIndex(cur["ts"])).to_numpy()
+        with np.errstate(divide="ignore", invalid="ignore"):
+            out: np.ndarray = np.where(ref > 0, cur["value"].to_numpy(np.float64) / ref, np.nan)
+        return out
+
+    def _cooling(self, meta: pd.DataFrame) -> pd.DataFrame:
+        """Kühlwasserlage je Standort und die gefährdete Leistung als Kennzahl.
+
+        Je Standort gilt der Anteil ``clip((t7 - t7_from) / ramp_t, 0, 1)`` bzw.
+        ``clip((flow_below - q_rel) / ramp_q, 0, 1)`` seiner Leistung als gefährdet, der größere
+        von beiden zählt für ``kw_risiko_mw``.
+
+        @relation(SWR-MLT-033, scope=function)
+        """
+        sw = self.cfg.site_weather
+        assert sw is not None  # vom Konfigurations-Check sichergestellt
+        out = self._site_temperatures(meta)
+        issues = pd.DatetimeIndex(meta["issue_time"])
+        n = len(meta)
+        heat, low, risk = np.zeros(n), np.zeros(n), np.zeros(n)
+        seen = np.zeros(n, dtype=bool)
+        for site in sw.sites:
+            name = site.code.lower()
+            q = np.full(n, np.nan)
+            for code in site.flows:
+                q = np.where(np.isnan(q), self._flow_rel(code, issues), q)
+            if site.flows:
+                out[f"kw_{name}_q_rel"] = q
+            t7 = out[f"kw_{name}_t7"].to_numpy(np.float64)
+            h = np.zeros(n)
+            lo = np.zeros(n)
+            if site.t7_from is not None:
+                h = np.clip((t7 - site.t7_from) / sw.ramp_t, 0, 1)
+                seen |= ~np.isnan(h)
+                h = np.nan_to_num(h)
+            if site.flow_below is not None and site.flows:
+                lo = np.clip((site.flow_below - q) / sw.ramp_q, 0, 1)
+                seen |= ~np.isnan(lo)
+                lo = np.nan_to_num(lo)
+            heat += site.mw * h
+            low += site.mw * lo
+            risk += site.mw * np.maximum(h, lo)
+        out["kw_hitze_mw"] = np.where(seen, heat, np.nan)
+        out["kw_niedrigwasser_mw"] = np.where(seen, low, np.nan)
+        out["kw_risiko_mw"] = np.where(seen, risk, np.nan)
+        return out.astype(np.float32)
 
     def _neighbour_index(
         self, sg: SeriesGroup, meta: pd.DataFrame, nbw: pd.DataFrame

@@ -56,6 +56,18 @@ flowchart LR
   `nbi_wind_mw`, `nbi_pv_mw`, leistungsgewichtete `nbi_*_cf` und `nbi_cap_*_mw`. Variante
   `wetter_frei_gk_skaliert_nachbarindex`. `ml-train bundle` legt dafür wie bei
   `nachbarwetter` die Zonenzellen ins Paket.
+- **Kühlwasser (`mode: kuehlwasser`, `site_weather`):** Kühlwasserlage der französischen
+  Kernkraftwerke mit umweltbedingter Drosselung (docs/analysen/kkw-kuehlwasser-fr). Je Standort
+  die Lufttemperatur am Gitterpunkt (Gold von GFS Europa, Regionen `gefs:KKW_<s>:site` aus
+  `config/process/kkw_standorte.json`) als Mittel des Zieltags und der 7 und 30 Tage bis dahin
+  (`kw_<s>_t1`, `_t7`, `_t30`; vergangene Tage aus dem jüngsten Lauf vor Tagesbeginn), der
+  zuletzt veröffentlichte Hub'eau-Tagesabfluss relativ zum Median der 365 Tage davor
+  (`kw_<s>_q_rel`) und die gefährdete Leistung `kw_risiko_mw` (`kw_hitze_mw`,
+  `kw_niedrigwasser_mw`): je Standort der Anteil `clip((t7 - t7_from) / 4 K)` bzw.
+  `clip((flow_below - q_rel) / 0,2)` seiner Leistung, der größere zählt. Schwellen und Leistung
+  in `config/ml/de_lu_v2.yaml`, Variante `wetter_frei_gk_skaliert_kuehlwasser`. Der Snapshot holt
+  das Standort-Wetter 31 Tage vor dem ersten Lauf dazu. Noch nicht im schlanken Stack
+  (`ml-train bundle` lehnt die Variante ab).
 
 ## Aufruf
 
