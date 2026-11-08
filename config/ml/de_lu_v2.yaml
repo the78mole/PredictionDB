@@ -107,7 +107,7 @@ series_groups:
 # Wind- und PV-Index der Nachbarzonen aus dem Gold von GFS Europa (gfs_0p5, Flächenmittel je
 # Zone aus regions_v2), Gruppe nachbarwetter. Im Analyse-Backtest erklärte das Netto-Import und
 # Grenzflüsse deutlich besser, den Preis etwas (docs/analysen/austausch-nachbarlaender).
-# Zonen mit Grenze bzw. Kabel zu DE-LU; predict/ kann die Gruppe noch nicht rechnen.
+# Zonen mit Grenze bzw. Kabel zu DE-LU.
 # Verdichtet: installierte Wind- und PV-Leistung je Nachbarland (Energy-Charts, je Jahr) mal
 # mittlerem Kapazitätsfaktor seiner Zonen, als Summe in MW und leistungsgewichteter Faktor
 # (Gruppe nachbarindex, 6 Merkmale statt 22 in nachbarwetter).

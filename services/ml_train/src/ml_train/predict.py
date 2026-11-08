@@ -51,6 +51,9 @@ def lookback_days(cfg: ModelConfig, variant: Variant) -> int:
             back = max(back, ASOF_BACK_DAYS + g.change_days)
         if g is not None and g.mode == "outlook":
             back = max(back, OUTLOOK_BACK_DAYS)
+        if g is not None and g.mode == "nachbarindex":
+            # Jahreswerte: der Stand des Vorjahres erscheint erst gut zwei Monate nach Jahresende
+            back = max(back, 800)
         if g is not None and g.mode == "grenzkosten":
             back = max(back, max(g.windows) + UTIL_DAYS + 3)
     return back

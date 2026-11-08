@@ -20,11 +20,20 @@ Ein Stack in Standardeinstellung nutzt also nur freie Reihen. Seine Daten und Mo
 Betreiber unter Nennung der Quellen frei veröffentlichen.
 
 > **Wer einen Schalter `PDB_ALLOW_*` auf `true` setzt, darf seine Ergebnisse nicht mehr frei
-> veröffentlichen.** Daten unfreier Quellen fließen dann in `energy.value_best`, also in
+> veröffentlichen** (Ausnahme: Quellen der Klasse „nur Training“, siehe unten). Daten unfreier Quellen fließen dann in `energy.value_best`, also in
 > Training, Dashboards und Exporte. Modelle und Datenexporte aus einer solchen Instanz sind nur
 > für den eigenen, internen Gebrauch bestimmt. Setzt man den Schalter zurück auf `false`, fallen
 > die unfreien Werte wieder aus `energy.value_best` heraus (sie bleiben in `energy.value`
 > gespeichert). Erst ein danach neu trainiertes Modell ist wieder veröffentlichbar.
+
+**Klasse „nur Training“.** Netztransparenz und regelleistung.net machen in ihrem Impressum nur
+die Vervielfältigung von einer Zustimmung der ÜNB abhängig, „soweit die Vervielfältigung nicht
+ohnehin gesetzlich gestattet ist“. Das Training eines Modells ist Text- und Data-Mining und nach
+§ 44b bzw. § 87c UrhG gestattet. Ein Modell, das auch aus diesen Quellen gelernt hat, darf deshalb
+veröffentlicht werden. Ihre Reihen selbst dürfen aber nicht weitergegeben werden: kein Export,
+kein Datenartefakt, kein öffentliches Dashboard oder öffentlicher Snapshot mit diesen Reihen.
+Intern in Grafana angezeigt werden dürfen sie. `meta.source.train` und das Snapshot-Manifest
+(`sources`, `publishable`) halten die Klasse fest.
 
 ## Freie Quellen (Standard, ohne Schalter)
 
@@ -33,7 +42,7 @@ Betreiber unter Nennung der Quellen frei veröffentlichen.
 | NOAA GFS/GEFS | Wetterprognosen | nein | gemeinfrei |
 | NCAR GDEX d084001 | GFS-Historie vor v16 (bis 2021-03-22 06Z, nur `gfs-history.yml` mit `source: gdex`) | nein | CC BY 4.0, „NCEP GFS 0.25 Degree Global Forecast Grids Historical Archive, Research Data Archive at NCAR, doi:10.5065/D65D8PWK“ |
 | Marktstammdatenregister (MaStR) | installierte Leistung PV/Wind | nein | Datenlizenz Deutschland – Namensnennung 2.0 |
-| SMARD (Bundesnetzagentur) | Day-Ahead-Preis, Last, Erzeugung, Prognosen | nein | CC BY 4.0, „Bundesnetzagentur \| SMARD.de“ |
+| SMARD (Bundesnetzagentur) | Day-Ahead-Preis, Last, Erzeugung, Prognosen, Ausgleichsenergie (reBAP, Volumen) | nein | CC BY 4.0, „Bundesnetzagentur \| SMARD.de“ |
 | Energy-Charts (Fraunhofer ISE) | Day-Ahead-Preis DE-LU und 14 Nachbarzonen, Erzeugung, Last, PV/Wind-Prognose, Handel und physikalische Flüsse je Grenze | nein | CC BY 4.0, „Energy-Charts.info“; Preise DE-LU und Nachbarzonen: CC BY 4.0, „Bundesnetzagentur \| SMARD.de“ |
 | ENTSO-E, freier Teil (`entsoe_last`) | Day-Ahead-Lastprognose (6.1.b) für DE und 11 Nachbarzonen | Token (siehe unten) | CC BY 4.0, „ENTSO-E Transparency Platform“ |
 | `pdb_marktwert` | Monats- und Jahresmarktwerte | – | eigene Berechnung aus SMARD |
@@ -86,7 +95,8 @@ backfill 2011-01-01 2015-01-01`.
 | Quelle | Wofür | Schlüssel | Schalter | Warum unfrei |
 |---|---|---|---|---|
 | ENTSO-E Transparency Platform (`entsoe`) | Preis, Ist-Last, Erzeugung, Wind/PV-Prognose (Abgleich zu SMARD) | Token | `PDB_ALLOW_ENTSO_E` | Preis, Ist-Last, Erzeugung, Wind/PV-Prognose nicht auf der Free-Re-use-Liste |
-| Netztransparenz.de (`netztransparenz`) | amtliche Monats- und Jahresmarktwerte | OAuth2-Client | `PDB_ALLOW_NETZTRANSPARENZ` | keine Lizenz veröffentlicht |
+| Netztransparenz.de (`netztransparenz`) | amtliche Monats- und Jahresmarktwerte | OAuth2-Client | `PDB_ALLOW_NETZTRANSPARENZ` | keine Lizenz, Vervielfältigung nur mit Zustimmung; **nur Training** |
+| regelleistung.net (`regelleistung`) | Leistungspreise und Mengen der FCR-, aFRR- und mFRR-Auktionen | nein | `PDB_ALLOW_REGELLEISTUNG` | keine Lizenz, Vervielfältigung nur mit Zustimmung; **nur Training** |
 | EIA, Reihen von Thomson Reuters (`eia_reuters`) | Brent, WTI, Benzin, Heizöl, Kerosin, Propan, Henry Hub | wie EIA | `PDB_ALLOW_EIA_REUTERS` | urheberrechtlich geschützt |
 | Trading Hub Europe (`the`) | Tagespreis Gas am VTP, Ausgleichsenergiepreise | nein | `PDB_ALLOW_THE` | Vervielfältigung nur mit schriftlicher Zustimmung |
 
@@ -133,8 +143,21 @@ Day-Ahead-Lastprognose (6.1.b) darauf; sie läuft deshalb als eigene freie Quell
 
 4. Historie nachladen: `energy-ingest --source netztransparenz backfill 2011-12-01 <Folgemonat>`.
 
-Lizenz: Weder auf der Website noch in der WebAPI-Doku (v1.14) ist eine Lizenz zu finden. Die
-Bedingungen müsste der Betreiber bei den ÜNB (50Hertz, Amprion, TenneT, TransnetBW) erfragen.
+Lizenz: Weder auf der Website noch in der WebAPI-Doku (v1.14) ist eine Lizenz zu finden. Laut
+Impressum braucht die Vervielfältigung die schriftliche Zustimmung der ÜNB, soweit sie nicht
+ohnehin gesetzlich gestattet ist. Klasse „nur Training“ (siehe oben). Eine Freigabe zur
+Weitergabe müsste der Betreiber bei den ÜNB (50Hertz, Amprion, TenneT, TransnetBW) erfragen.
+
+### regelleistung.net
+
+Kein Schlüssel. Schalter `PDB_ALLOW_REGELLEISTUNG=true`. Geladen werden je Liefertag die
+Ergebnisse des Leistungsmarkts (FCR ab 07/2019, aFRR und mFRR ab 07/2018), je Stunde der
+Zeitscheibe: `rl_fcr_price`, `rl_fcr_demand`, `rl_afrr_{pos,neg}_{price_avg,price_marginal,
+volume,offered}`, `rl_mfrr_{pos,neg}_{price_avg,price_marginal,offered}`. Leistungspreise in
+EUR je MW und Stunde. Die Auktionen schließen vor der Day-Ahead-Auktion; die Werte gelten ab
+12:00 am Vortag als bekannt. Historie: `energy-ingest --source regelleistung backfill
+2018-07-12 <heute>` (eine Datei je Tag und Produkt). Lizenz wie Netztransparenz, Klasse „nur
+Training“.
 
 ### EIA, Reihen von Thomson Reuters
 
@@ -145,7 +168,8 @@ Reuters; sie sind urheberrechtlich geschützt.
 
 Kein Schlüssel; die API verlangt einen aussagekräftigen User-Agent, den der Stack mitschickt.
 Schalter `PDB_ALLOW_THE=true`. Laut Disclaimer braucht jede Vervielfältigung die schriftliche
-Zustimmung von THE.
+Zustimmung von THE; anders als bei den ÜNB ohne Vorbehalt für gesetzlich erlaubte Nutzung. THE
+bleibt deshalb ganz unfrei (auch kein Training veröffentlichter Modelle).
 
 ## Freie Reihen, die noch fehlen
 

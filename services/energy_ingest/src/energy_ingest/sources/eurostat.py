@@ -226,6 +226,7 @@ class Eurostat:
     license = "CC BY 4.0, Eurostat"
     priority = 10
     free = True
+    train = True
     # Eurostat überarbeitet zurückliegende Monate
     sync_lookback: ClassVar[dict[str, timedelta]] = {d: timedelta(days=400) for d in TABLES}
 

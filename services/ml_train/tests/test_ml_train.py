@@ -1061,3 +1061,16 @@ def test_feature_group_from_name(cfg) -> None:  # type: ignore[no-untyped-def]
         "unbekannt": "sonstige",
     }
     assert {k: feature_group(k, v2, variant) for k in expected} == expected
+
+
+def test_snapshot_source_classes() -> None:
+    """Lizenzklasse je Energiequelle im Snapshot-Manifest.
+
+    @relation(SWR-MLT-010, scope=function)
+    """
+    from ml_train.snapshot import source_classes
+
+    classes = source_classes(
+        [("smard", True, True), ("regelleistung", False, True), ("entsoe", False, False)]
+    )
+    assert classes == {"smard": "frei", "regelleistung": "nur Training", "entsoe": "unfrei"}

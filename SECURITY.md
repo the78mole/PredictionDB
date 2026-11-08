@@ -36,6 +36,9 @@ Melde sie vertraulich über
 
 Es gibt kein Bug-Bounty-Programm.
 
+Was Du an Sicherheit erwarten kannst und wie sich Images und Release-Anhänge prüfen lassen,
+steht in [docs/SICHERHEIT.md](docs/SICHERHEIT.md).
+
 ## Geltungsbereich
 
 Gemeint ist der Code in diesem Repository: die Python-Pakete und Dienste, die Container-Images
@@ -63,3 +66,5 @@ This is a one-person project: expect an acknowledgement within 7 days and a firs
 assessment within 14 days. There is no bug bounty. Already public advisories for dependencies may be
 filed as a normal issue without project-specific exploit details; anything new or specific
 to PredictionDB must be reported privately. Third-party deployments are out of scope.
+Security expectations, the assurance case and how to verify signatures:
+[docs/SICHERHEIT.md](docs/SICHERHEIT.md).

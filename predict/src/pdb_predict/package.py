@@ -53,6 +53,8 @@ class ModelPackage:
     wx_process: dict[str, Any] | None = None
     source: str = ""
     digest: str | None = None
+    neighbour_cells: pd.DataFrame | None = None
+    neighbour_wx: dict[str, Any] | None = None
 
     @property
     def version(self) -> str:
@@ -79,6 +81,7 @@ class ModelPackage:
             "train_issue_days": self.manifest.get("train_issue_days"),
             "capacity_until": self.info.get("capacity_until"),
             "requires_weather": self.requires_weather,
+            "neighbour_weather": self.info.get("neighbour_weather"),
             "backtest_metrics": self.manifest.get("backtest_metrics", []),
         }
 
@@ -100,6 +103,12 @@ def load_package(path: Path, source: str = "", digest: str | None = None) -> Mod
         clusters = pd.read_parquet(path / "clusters.parquet")
         cluster_capacity = pd.read_parquet(path / "cluster_capacity.parquet")
         wx = yaml.safe_load((path / "wx_process.yaml").read_text())
+    nb_cells = nb_wx = None
+    if info.get("neighbour_weather"):
+        import yaml
+
+        nb_cells = pd.read_parquet(path / "neighbour_cells.parquet")
+        nb_wx = yaml.safe_load((path / "neighbour_wx.yaml").read_text())
     return ModelPackage(
         path,
         info,
@@ -112,6 +121,8 @@ def load_package(path: Path, source: str = "", digest: str | None = None) -> Mod
         wx,
         source or str(path),
         digest,
+        nb_cells,
+        nb_wx,
     )
 
 

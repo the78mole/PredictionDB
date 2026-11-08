@@ -135,6 +135,7 @@ class EnergyCharts:
     )
     priority = 30
     free = True
+    train = True
     #: Jahreswerte: der laufende Abgleich holt immer das Vorjahr mit
     sync_lookback: ClassVar[dict[str, timedelta]] = {
         f"installed_{c}": timedelta(days=400) for c in CAPACITY_COUNTRIES
@@ -248,7 +249,7 @@ class EnergyCharts:
         raise KeyError(dataset)
 
     def _installed(self, country: str, start: datetime, end: datetime) -> list[SeriesData]:
-        """@relation(SWR-ENI-054, scope=function)"""
+        """@relation(SWR-ENI-055, scope=function)"""
         if country not in CAPACITY_COUNTRIES:
             raise KeyError(f"installed_{country}")
         data = self._get(

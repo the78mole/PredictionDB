@@ -49,13 +49,13 @@ flowchart LR
   GFS Europa (`gfs_0p5`, feste Regionen `gefs:<zone>:area`). Der Snapshot führt sie als
   `nb_<zone>_<feature>`, die Merkmale als Gruppe `nachbarwetter` (`wx_nb_…`), immer aus
   demselben Lauf wie das DE-Wetter. Grundlage: `docs/analysen/austausch-nachbarlaender`.
+  `ml-train bundle` legt die Zonenzellen ins Paket, `predict/` lädt dafür GFS 0,5° selbst.
 - **Nachbar-Index (`mode: nachbarindex`):** dieselben Zonen verdichtet zu 6 Kennzahlen: je Land
   installierte Wind- bzw. PV-Leistung (Energy-Charts `/installed_power`, `cap_<technik>_<land>`,
   bekannt ab 60 Tagen nach Jahresende) mal mittlerem Kapazitätsfaktor seiner Zonen, als
   `nbi_wind_mw`, `nbi_pv_mw`, leistungsgewichtete `nbi_*_cf` und `nbi_cap_*_mw`. Variante
-  `wetter_frei_gk_skaliert_nachbarindex`. `ml-train bundle` lehnt sie wie `nachbarwetter` ab,
-  solange `predict/` die Nachbarzonen nicht rechnet (#244).
-  `predict/` rechnet diese Gruppe noch nicht; `ml-train bundle` lehnt solche Varianten ab.
+  `wetter_frei_gk_skaliert_nachbarindex`. `ml-train bundle` legt dafür wie bei
+  `nachbarwetter` die Zonenzellen ins Paket.
 
 ## Aufruf
 

@@ -93,6 +93,7 @@ class OilBulletin:
     license = "CC BY 4.0, Europäische Kommission, Weekly Oil Bulletin"
     priority = 10
     free = True
+    train = True
     sync_lookback: ClassVar[dict[str, timedelta]] = {"retail_de": timedelta(days=21)}
 
     def __init__(self, http: Http, url: str = URL) -> None:

@@ -82,8 +82,9 @@ TITLE: Trainings-Snapshot
 STATEMENT: >>>
 ``snapshot`` muss Energiereihen aus ``energy.value_best``, Wetter-Features aus
 ``feat.nwp_value`` und den Bestand aus ``assets.capacity_daily`` für einen Zeitraum als Parquet
-mit ``manifest.json`` (Inhalt, Hash) exportieren. Backtest und Training dürfen nur den Snapshot
-brauchen; beim Laden muss der Hash geprüft werden.
+mit ``manifest.json`` (Inhalt, Hash, Lizenzklasse je Energiequelle, ``publishable``)
+exportieren. Backtest und Training dürfen nur den Snapshot brauchen; beim Laden muss der Hash
+geprüft werden.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -605,6 +606,20 @@ STATEMENT: >>>
 ``bundle`` muss für eine Version ein Paket mit Modellen, Konfiguration, benötigten
 Energiereihen, Bestand und Gitter-Gewichten der Cluster schreiben, mit dem der Stack
 ``predict/`` ohne Datenbank inferieren kann.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-004
+
+[REQUIREMENT]
+UID: SWR-MLT-071
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Nachbarzonen im Prognosepaket
+STATEMENT: >>>
+Für Varianten mit der Gruppe ``nachbarwetter`` muss ``bundle`` die Gitterzellen der Zonen und die
+Feature-Definitionen der Quelle ins Paket legen und ohne sie abbrechen.
 <<<
 RELATIONS:
 - TYPE: Parent

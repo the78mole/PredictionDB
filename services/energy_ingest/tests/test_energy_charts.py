@@ -147,7 +147,7 @@ def installed(req: httpx.Request) -> httpx.Response:
 def test_installed_power(make_http: Callable[..., Http]) -> None:
     """Jahreswerte in MW, Zeitstempel am Jahresbeginn (Ortszeit), PV AC und DC summiert.
 
-    @relation(SWR-ENI-054, scope=function)
+    @relation(SWR-ENI-055, scope=function)
     """
     ec = EnergyCharts(make_http(installed))
     assert "installed_fr" in ec.datasets()
@@ -166,7 +166,7 @@ def test_installed_power(make_http: Callable[..., Http]) -> None:
 
 
 def test_capacity_published_after_year_end() -> None:
-    """@relation(SWR-ENI-054, scope=function)"""
+    """@relation(SWR-ENI-055, scope=function)"""
     from energy_ingest.model import YEAR, Kind, published_at
 
     ts = datetime(2024, 12, 31, 23, tzinfo=UTC)

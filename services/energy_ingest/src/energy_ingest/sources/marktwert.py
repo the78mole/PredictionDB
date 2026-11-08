@@ -107,6 +107,7 @@ class Marktwert:
     # Hinter netztransparenz (15): sind beide vorhanden, gelten die amtlichen Werte
     priority = 40
     free = True
+    train = True
 
     # Laufender Abgleich rechnet den Vormonat bzw. das Vorjahr nach, bis alle Stunden da sind.
     # Eine Periode zählt nur, wenn sie im Fenster beginnt: Der Vormonat begann bis zu 62 Tage

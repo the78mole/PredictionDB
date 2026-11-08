@@ -85,12 +85,14 @@ ART: Komponente
 STATUS: Umgesetzt
 TITLE: Wetter-Cache
 STATEMENT: >>>
-GFS-Läufe laden, Features je Technologie und Cluster.
+GFS-Läufe laden, Features je Technologie und Cluster sowie je Nachbarzone.
 <<<
 ORT: predict/src/pdb_predict/weather.py
 RELATIONS:
 - TYPE: Parent
   VALUE: SWR-PRD-023
+- TYPE: Parent
+  VALUE: SWR-PRD-025
 
 [ELEMENT]
 UID: SWA-PRD-SERVICE

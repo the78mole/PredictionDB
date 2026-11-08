@@ -10,8 +10,8 @@ Gasbilanz“).
 
 | Quelle | Zugang | Datensätze | Rang | frei |
 |---|---|---|---|---|
-| SMARD, Bundesnetzagentur (`smard`) | offen | je Reihe ein Datensatz (`da_price_de_lu`, `load_actual`, …) | 10 | ja, CC BY 4.0 |
-| Netztransparenz.de, ÜNB (`netztransparenz`) | kostenloser OAuth-Client, `PDB_NETZTRANSPARENZ_CLIENT_ID` und `_CLIENT_SECRET` | `market_value_month`, `market_value_year` | 15 | nein, keine Lizenz veröffentlicht |
+| SMARD, Bundesnetzagentur (`smard`) | offen | je Reihe ein Datensatz (`da_price_de_lu`, `load_actual`, …, Ausgleichsenergie `imbalance_price` = reBAP, `imbalance_volume_pos`/`_neg`, ab 07/2022 Summe der vier Regelzonen) | 10 | ja, CC BY 4.0 |
+| Netztransparenz.de, ÜNB (`netztransparenz`) | kostenloser OAuth-Client, `PDB_NETZTRANSPARENZ_CLIENT_ID` und `_CLIENT_SECRET` | `market_value_month`, `market_value_year` | 15 | nein, **nur Training** (Vervielfältigung nur mit Zustimmung, soweit nicht gesetzlich gestattet) |
 | ENTSO-E Transparency (`entsoe`) | kostenloser Token, `PDB_ENTSOE_TOKEN` | `price`, `load`, `generation`, `wind_solar_forecast` | 20 | nein, Preis, Last, Erzeugung nicht auf der Freigabeliste |
 | ENTSO-E, freier Teil (`entsoe_last`) | wie `entsoe`, ohne Schalter | `load_forecast` (Day-Ahead-Lastprognose 6.1.b), `load_forecast_<zone>` (dieselbe für AT, BE, CH, CZ, DK1, DK2, FR, NL, NO2, PL, SE4 als `load_da_forecast_<zone>`) | 20 | ja, CC BY 4.0 (Freigabeliste) |
 | Energy-Charts, Fraunhofer ISE (`energy_charts`) | offen | `price`, `price_<zone>` (Nachbarzonen AT, BE, CH, CZ, DK1, DK2, FR, HU, IT-North, NL, NO2, PL, SE4, SI als `da_price_<zone>`), `public_power`, `forecast_solar`, `forecast_wind_onshore`, `forecast_wind_offshore`, `forecast_load`, `cbet` und `cbpf` (Handel bzw. physikalischer Fluss je Grenze als `xb_trade_<land>`/`xb_flow_<land>`, Summe `_net`, MW, + = Import) | 30 | ja, CC BY 4.0 laut API-Dokumentation; Preise DE-LU und Nachbarzonen CC BY 4.0 (SMARD), Vermerk wird geprüft |
@@ -22,6 +22,7 @@ Gasbilanz“).
 | Weltbank, Pink Sheet (`worldbank`) | offen, xlsx | `prices` (Monatsmittel Brent, WTI, Dubai, Kohle AU/ZA, Erdgas US/Europa, LNG Japan) | 10 | ja, CC BY 4.0 |
 | EU Weekly Oil Bulletin (`oil_bulletin`) | offen, xlsx | `retail_de` (Super E5, Diesel, Heizöl, LPG mit und ohne Steuern) | 10 | ja, CC BY 4.0 |
 | Trading Hub Europe (`the`) | offen | `gas_prices` (VTP-Tagesmittel, Ausgleichsenergiepreise ab 10/2021) | 10 | nein, Vervielfältigung nur mit Zustimmung |
+| regelleistung.net, ÜNB (`regelleistung`) | offen, xlsx je Liefertag | `fcr_capacity`, `afrr_capacity`, `mfrr_capacity` (Leistungspreise in EUR/MW/h, Bedarf, angebotene und zugeschlagene Leistung; Reihen `rl_*`) | 10 | nein, **nur Training** (Vervielfältigung nur mit Zustimmung, soweit nicht gesetzlich gestattet) |
 | GIE AGSI+ (`gie_agsi`) | kostenloser Schlüssel, `PDB_GIE_API_KEY` | `storage_de`, `storage_at`, `storage_nl`, `storage_cz`, `storage_eu` (Gasspeicher je Gastag) | 10 | ja, Weiterverwendung frei mit Quellenangabe „GIE AGSI+“ |
 | GIE ALSI (`gie_alsi`) | wie `gie_agsi` | `lng_de`, `lng_nl`, `lng_be`, `lng_fr`, `lng_eu` (LNG-Terminals je Gastag) | 10 | ja, wie AGSI+ |
 | Eurostat (`eurostat`) | offen | `gas_stock` (Bestand am Monatsende), `gas_balance` (Monatsbilanz), `gas_import_origin` (Importe nach Herkunft), `oil_crude_import` (Rohöl-Einfuhrpreis DE), `oil_crude_balance`, `oil_stock`, `oil_import_origin`, `coal_balance`, `coal_stock` | 10 | ja, CC BY 4.0 |
@@ -30,8 +31,10 @@ Gasbilanz“).
 
 **Nur freie Quellen als Standard.** Unfreie Quellen laufen nur mit ausdrücklicher Freigabe:
 `PDB_ALLOW_ENTSO_E`, `PDB_ALLOW_NETZTRANSPARENZ`,
-`PDB_ALLOW_EIA_REUTERS`, `PDB_ALLOW_THE` (`true|false`,
-Vorgabe `false`; ohne Präfix `PDB_` ebenfalls gelesen). Beim Start schreibt der Dienst die
+`PDB_ALLOW_EIA_REUTERS`, `PDB_ALLOW_THE`, `PDB_ALLOW_REGELLEISTUNG` (`true|false`,
+Vorgabe `false`; ohne Präfix `PDB_` ebenfalls gelesen). Netztransparenz und regelleistung.net
+haben die Klasse „nur Training“ (`meta.source.train`): ein veröffentlichtes Modell darf aus
+ihnen lernen, ihre Reihen werden aber nicht exportiert oder öffentlich gezeigt. Beim Start schreibt der Dienst die
 Freigaben nach `meta.source.enabled`, und `energy.value_best` liest nur freigegebene Quellen.
 Bereits geladene Werte einer gesperrten Quelle bleiben in `energy.value`, fließen aber nicht
 mehr in Training, Dashboards und Veröffentlichungen ein. Hintergrund: `docs/ARCHITEKTUR.md`
@@ -223,7 +226,7 @@ damit zwischen dem Abgleichfenster und den fertigen Blöcken keine Lücke bleibt
 wird nicht erneut abgerufen (`--force` erzwingt es).
 
 Einstellungen (Umgebung bzw. `.env`): `PDB_ALLOW_ENTSO_E`, `PDB_ALLOW_NETZTRANSPARENZ`,
-`PDB_ALLOW_EIA_REUTERS`, `PDB_ALLOW_THE`, `PDB_EIA_API_KEY`, `PDB_GIE_API_KEY`, `PDB_ENTSOE_TOKEN`, `PDB_NETZTRANSPARENZ_CLIENT_ID`,
+`PDB_ALLOW_EIA_REUTERS`, `PDB_ALLOW_THE`, `PDB_ALLOW_REGELLEISTUNG`, `PDB_EIA_API_KEY`, `PDB_GIE_API_KEY`, `PDB_ENTSOE_TOKEN`, `PDB_NETZTRANSPARENZ_CLIENT_ID`,
 `PDB_NETZTRANSPARENZ_CLIENT_SECRET`, `PDB_ENERGY_SOURCES`
 (JSON-Liste), `PDB_ENERGY_LOOKBACK_DAYS`, `PDB_ENERGY_HORIZON_DAYS`,
 `PDB_ENERGY_BACKFILL_FROM`, `PDB_ENERGY_BACKFILL_CHUNKS_PER_CYCLE`,
@@ -236,8 +239,10 @@ Energy-Charts.info, soweit nicht anders angegeben (API-Dokumentation v2.0); die 
 stammen von SMARD und stehen laut `license_info` unter CC BY 4.0, andere Gebotszonen nicht.
 ENTSO-E:
 Nutzungsbedingungen der Transparency Platform, frei (CC BY 4.0) nur die „List of Data available
-for free re-use“. Netztransparenz: keine Lizenz veröffentlicht. Die Vermerke stehen in
-`meta.source.license`, die Einordnung in `meta.source.free`. GIE AGSI+ und ALSI: keine formale
+for free re-use“. Netztransparenz und regelleistung.net: keine Lizenz veröffentlicht,
+Vervielfältigung nur mit Zustimmung der ÜNB, soweit nicht gesetzlich gestattet (Klasse „nur
+Training“). Die Vermerke stehen in `meta.source.license`, die Einordnung in `meta.source.free`
+und `meta.source.train`. GIE AGSI+ und ALSI: keine formale
 Lizenz, laut Nutzungsregel der API beliebig weiterverwendbar mit Quellenangabe „GIE AGSI+“ bzw.
 „GIE ALSI“. EIA Short-Term Energy Outlook: Prognosen gemeinfrei. Eurostat:
 CC BY 4.0.

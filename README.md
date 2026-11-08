@@ -114,7 +114,14 @@ von ihm genutzten Pakete ändern, und berührt die Tags `vX.Y.Z` nicht (`naechst
 ## Beiträge
 
 Beiträge setzen die Annahme der [Beitragsbedingungen](CONTRIBUTING.md) voraus,
-insbesondere die Einräumung von Nutzungsrechten an den Projektinhaber.
+insbesondere die Einräumung von Nutzungsrechten an den Projektinhaber. Wer was entscheidet, steht
+in [GOVERNANCE.md](GOVERNANCE.md), die Ziele in [ROADMAP.md](ROADMAP.md).
+
+## Sicherheit
+
+Lücken bitte vertraulich melden, siehe [SECURITY.md](SECURITY.md). Was Du an Sicherheit erwarten
+kannst, das Sicherheitskonzept und wie sich Images und Release-Anhänge prüfen lassen, steht in
+[docs/SICHERHEIT.md](docs/SICHERHEIT.md).
 
 ## Lizenz
 

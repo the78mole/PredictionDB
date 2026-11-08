@@ -193,7 +193,7 @@ RELATIONS:
 - TYPE: Parent
   VALUE: SWR-ENI-003
 - TYPE: Parent
-  VALUE: SWR-ENI-054
+  VALUE: SWR-ENI-055
 
 [ELEMENT]
 UID: SWA-ENI-SRC-ENTSOE
@@ -352,6 +352,21 @@ ORT: services/energy_ingest/src/energy_ingest/sources/hubeau.py
 RELATIONS:
 - TYPE: Parent
   VALUE: SWR-ENI-053
+
+[ELEMENT]
+UID: SWA-ENI-SRC-RL
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Quelle regelleistung.net
+STATEMENT: >>>
+Abruf, Formatprüfung und Umrechnung der Ergebnisse der Regelleistungsauktionen.
+<<<
+ORT: services/energy_ingest/src/energy_ingest/sources/regelleistung.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-ENI-054
+- TYPE: Parent
+  VALUE: SWR-ENI-030
 
 [[/SECTION]]
 

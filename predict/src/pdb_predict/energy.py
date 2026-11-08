@@ -29,6 +29,8 @@ from energy_ingest.config import EnergySettings
 from energy_ingest.http import Http
 from energy_ingest.model import (
     BERLIN,
+    CAPACITY_COUNTRIES,
+    CAPACITY_TECHNOLOGIES,
     NEIGHBOUR_ZONES,
     OUTLOOK_HORIZONS,
     OUTLOOK_SERIES,
@@ -69,6 +71,7 @@ REFRESH: dict[Kind, timedelta] = {
     Kind.PRICE_WEEKLY: timedelta(days=28),
     Kind.PRICE_MONTHLY: timedelta(days=70),
     Kind.OUTLOOK_MONTHLY: timedelta(days=62),
+    Kind.CAPACITY_YEAR: timedelta(days=400),
 }
 
 
@@ -102,6 +105,9 @@ def routes() -> dict[str, list[tuple[str, str]]]:
         add(code, "energy_charts", "public_power")
     for ptype, code in FORECASTS.items():
         add(code, "energy_charts", f"forecast_{ptype}")
+    for country in CAPACITY_COUNTRIES:
+        for tech in CAPACITY_TECHNOLOGIES:
+            add(f"cap_{tech}_{country}", "energy_charts", f"installed_{country}")
     return out
 
 

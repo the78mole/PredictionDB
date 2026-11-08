@@ -58,9 +58,12 @@ NACHWEIS: Test
 TITLE: Unfreie Quellen nur mit Freigabe
 STATEMENT: >>>
 Quellen, deren Nutzungsbedingungen die Weitergabe einschränken (ENTSO-E, Netztransparenz,
-Thomson-Reuters-Reihen der EIA, THE), dürfen nur laufen, wenn ``PDB_ALLOW_ENTSO_E``,
-``PDB_ALLOW_NETZTRANSPARENZ``, ``PDB_ALLOW_EIA_REUTERS`` bzw. ``PDB_ALLOW_THE`` gesetzt ist
-(Vorgabe ``false``). Der Freigabestand muss nach ``meta.source.enabled`` geschrieben werden.
+Thomson-Reuters-Reihen der EIA, THE, regelleistung.net), dürfen nur laufen, wenn
+``PDB_ALLOW_ENTSO_E``, ``PDB_ALLOW_NETZTRANSPARENZ``, ``PDB_ALLOW_EIA_REUTERS``,
+``PDB_ALLOW_THE`` bzw. ``PDB_ALLOW_REGELLEISTUNG`` gesetzt ist (Vorgabe ``false``). Der
+Freigabestand muss nach ``meta.source.enabled`` geschrieben werden, die Lizenzklasse nach
+``meta.source.free`` (freie Weitergabe) und ``meta.source.train`` (ein veröffentlichtes Modell
+darf daraus lernen; Klasse „nur Training“ bei Netztransparenz und regelleistung.net).
 Von Energy-Charts dürfen nur Reihen unter freier Lizenz geladen werden. Freie Quellen laufen
 ohne Schalter.
 <<<
@@ -372,8 +375,10 @@ STATUS: Umgesetzt
 NACHWEIS: Test
 TITLE: SMARD
 STATEMENT: >>>
-Der Dienst muss Preise, Last, Erzeugung und Prognosen aus der Chart-API von SMARD laden,
-Viertelstunde mit Rückfall auf Stundenwerte.
+Der Dienst muss Preise, Last, Erzeugung, Prognosen und Ausgleichsenergie (Preis und Volumen)
+aus der Chart-API von SMARD laden, Viertelstunde mit Rückfall auf Stundenwerte. Das
+Ausgleichsvolumen für DE muss dort, wo SMARD es nicht mehr für DE liefert, als Summe der vier
+Regelzonen gebildet werden.
 <<<
 RELATIONS:
 - TYPE: Parent
@@ -576,6 +581,21 @@ RELATIONS:
 
 [REQUIREMENT]
 UID: SWR-ENI-054
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Regelleistungsauktionen (regelleistung.net)
+STATEMENT: >>>
+Der Dienst muss die Ergebnisse des Leistungsmarkts für FCR, aFRR und mFRR in Deutschland je
+Liefertag von regelleistung.net laden (Leistungspreise in EUR je MW und Stunde, Bedarf bzw.
+angebotene und zugeschlagene Leistung), je Stunde der Zeitscheibe (Quelle „nur Training“).
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-001
+
+[REQUIREMENT]
+UID: SWR-ENI-055
 ART: Schnittstelle
 STATUS: Umgesetzt
 NACHWEIS: Test

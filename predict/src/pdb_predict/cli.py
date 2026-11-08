@@ -72,6 +72,7 @@ def make_predictor(s: PredictSettings, client: httpx.Client) -> tuple[Predictor,
             run_hours=w.get("run_hours", [0, 12]),
             max_lead_h=int(w.get("max_lead_h", 216)),
             timeout_s=s.http_timeout_s,
+            neighbour_gfs=GfsConfig.from_yaml(s.gfs_neighbour_config),
         )
 
     return Predictor(source.get, energy, weather), source

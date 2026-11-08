@@ -106,17 +106,18 @@ class EnergyStore:
             with self.engine.begin() as conn:
                 sid = conn.execute(
                     text("""
-                        INSERT INTO meta.source (code, kind, license, priority, free)
-                        VALUES (:code, 'energy', :license, :priority, :free)
+                        INSERT INTO meta.source (code, kind, license, priority, free, train)
+                        VALUES (:code, 'energy', :license, :priority, :free, :train)
                         ON CONFLICT (code) DO UPDATE
                            SET license = EXCLUDED.license, priority = EXCLUDED.priority,
-                               free = EXCLUDED.free
+                               free = EXCLUDED.free, train = EXCLUDED.train
                         RETURNING source_id"""),
                     {
                         "code": source.code,
                         "license": source.license,
                         "priority": source.priority,
                         "free": source.free,
+                        "train": source.train,
                     },
                 ).scalar_one()
             self._sources[source.code] = int(sid)

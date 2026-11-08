@@ -166,6 +166,22 @@ RELATIONS:
   VALUE: SYSR-PUB-004
 
 [REQUIREMENT]
+UID: SWR-PRD-025
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Wetter der Nachbarzonen
+STATEMENT: >>>
+Für Modelle mit der Gruppe ``nachbarwetter`` muss der Dienst denselben Lauf zusätzlich aus GFS
+Europa (0,5°) laden und daraus mit den Zellen und Definitionen aus dem Paket dieselben Werte
+``nb_<zone>_<feature>`` bilden wie das Gold von ``gfs_0p5``. Fehlt der Lauf, muss die Prognose
+ohne diese Merkmale entstehen und ``nachbarwetter`` in den fehlenden Eingängen stehen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-004
+
+[REQUIREMENT]
 UID: SWR-PRD-024
 ART: Funktional
 STATUS: Umgesetzt
