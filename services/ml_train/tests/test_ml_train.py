@@ -1281,6 +1281,29 @@ def test_feature_group_from_name(cfg) -> None:  # type: ignore[no-untyped-def]
     assert {k: feature_group(k, v2, variant) for k in expected} == expected
 
 
+def test_compact_weather_parts() -> None:
+    """@relation(SWR-MLT-010, scope=function)"""
+    from ml_train.snapshot import compact_weather
+
+    def part(features: list[str]) -> pd.DataFrame:
+        return pd.DataFrame(
+            {
+                "run_time": pd.Timestamp("2026-01-01", tz="UTC"),
+                "valid_time": pd.date_range("2026-01-01", periods=len(features), tz="UTC"),
+                "feature": features,
+                "value": np.arange(len(features), dtype="float64"),
+                "region": "gefs:DE:area",
+            }
+        )
+
+    a, b = compact_weather(part(["x", "y"])), compact_weather(part(["z", "x"]))
+    assert list(a.columns) == ["run_time", "valid_time", "feature", "value"]
+    assert a["feature"].dtype == "category" and a["value"].dtype == np.float32
+    both = pd.concat([a, b], ignore_index=True)
+    assert list(both["feature"].astype(object)) == ["x", "y", "z", "x"]
+    assert both["valid_time"].dt.tz is not None
+
+
 def test_snapshot_source_classes() -> None:
     """Lizenzklasse je Energiequelle im Snapshot-Manifest.
 
