@@ -24,6 +24,7 @@ BUILTIN_GROUPS = (
     "capacity",
     "weather",
     "nachbarwetter",
+    "gefs",
     "nwp_version",
     "stage1",
 )
@@ -183,8 +184,43 @@ class NeighbourWeather(BaseModel):
         return [f"gefs:{z}:area" for z in self.zones]
 
 
+class EnsembleWeather(BaseModel):
+    """Ensemble-Kennzahlen (Mittel, Streuung, Quantile über die Mitglieder) aus dem Gold von
+    GEFS für feste Regionen (``gefs:<region>`` in ``meta.region``, z. B. ``DE:wind_on`` nach
+    Anlagenbestand). Im Snapshot stehen sie als ``en_<region>_<feature>``, in den Merkmalen als
+    Gruppe ``gefs``.
+
+    GEFS hat einen eigenen Lauf (nur 00Z, 6-stündlich bis 384 h): Gewählt wird je
+    Ausgabezeitpunkt der jüngste GEFS-Lauf mit ``run_time + delay_h <= issue_time``, unabhängig
+    vom GFS-Lauf des DE-Wetters.
+
+    @relation(SWR-MLT-034, scope=class)
+    """
+
+    source: str = "gefs_0p5"
+    #: Laufstunden (UTC), die die Quelle liefert
+    run_hours: list[int] = Field(default_factory=lambda: [0])
+    #: Lauf gilt ab ``run_time`` plus diesem Verzug als verarbeitet (Gold ca. 7 h nach Laufzeit)
+    delay_h: float = Field(default=8.0, ge=0)
+    #: Region ohne Präfix -> Kennzahlen, z. B. ``DE:wind_on: [wind_cf_mean, wind_cf_std]``
+    regions: dict[str, list[str]]
+
+    def region_codes(self) -> list[str]:
+        return [f"gefs:{r}" for r in self.regions]
+
+    @property
+    def features(self) -> list[str]:
+        return list(dict.fromkeys(f for fs in self.regions.values() for f in fs))
+
+    def wanted(self) -> set[str]:
+        """Namen im Snapshot, die die Konfiguration anfordert."""
+        return {ensemble_feature(f"gefs:{r}", f) for r, fs in self.regions.items() for f in fs}
+
+
 #: Präfix der Nachbarzonen-Features im Snapshot (``weather.parquet``)
 NEIGHBOUR_PREFIX = "nb_"
+#: Präfix der GEFS-Ensemble-Features im Snapshot
+ENSEMBLE_PREFIX = "en_"
 #: Präfix der Standort-Features im Snapshot
 SITE_PREFIX = "st_"
 
@@ -237,6 +273,12 @@ def site_feature(region_code: str, feature: str) -> str:
     """Name im Snapshot: ``gefs:KKW_BUG:site`` und ``t2m`` -> ``st_bug_t2m``."""
     site = region_code.split(":")[1].removeprefix("KKW_").lower()
     return f"{SITE_PREFIX}{site}_{feature}"
+
+
+def ensemble_feature(region_code: str, feature: str) -> str:
+    """Name im Snapshot: ``gefs:DE:wind_on``, ``wind_cf_mean`` -> ``en_de_wind_on_wind_cf_mean``."""
+    region = region_code.removeprefix("gefs:").lower().replace(":", "_").replace("-", "_")
+    return f"{ENSEMBLE_PREFIX}{region}_{feature}"
 
 
 def zone_country(zone: str) -> str:
@@ -409,6 +451,8 @@ class ModelConfig(BaseModel):
     neighbour_weather: NeighbourWeather | None = None
     #: Wetter an Kraftwerksstandorten (Gruppe im Modus ``kuehlwasser``)
     site_weather: SiteWeather | None = None
+    #: GEFS-Ensemble-Kennzahlen (Gruppe ``gefs``); ohne Angabe bleibt die Gruppe leer
+    ensemble_weather: EnsembleWeather | None = None
     #: weitere Merkmalsgruppen aus Energie- und Preisreihen, Name -> Gruppe
     series_groups: dict[str, SeriesGroup] = Field(default_factory=dict)
 
@@ -423,6 +467,9 @@ class ModelConfig(BaseModel):
             ]
             if unknown:
                 raise ValueError(f"Variante {v.name!r}: unbekannte Gruppen {unknown}")
+        gefs = [v.name for v in self.variants if "gefs" in v.groups]
+        if gefs and self.ensemble_weather is None:
+            raise ValueError(f"Varianten {gefs}: Gruppe gefs braucht ensemble_weather")
         if self.neighbour_weather is None:
             idx = [n for n, g in self.series_groups.items() if g.mode == "nachbarindex"]
             if idx:

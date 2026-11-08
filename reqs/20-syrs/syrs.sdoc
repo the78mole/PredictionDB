@@ -516,7 +516,7 @@ STATUS: Umgesetzt
 NACHWEIS: Test, Demonstration
 TITLE: Öffentliche Prognose
 STATEMENT: >>>
-Das System muss die aktuelle Wochenprognose (Preis und Last, D+0 bis D+7) mindestens täglich
+Das System muss die aktuelle Prognose (Preis und Last, D+0 bis D+15) mindestens täglich
 ohne Anmeldung öffentlich zugänglich machen, unter einer gleichbleibenden Adresse und mit den
 Quellenvermerken. Ältere Stände sollen eine Zeit lang zum Vergleich erreichbar bleiben. Wie und
 wo veröffentlicht wird, ist austauschbar und nicht Teil dieser Anforderung.

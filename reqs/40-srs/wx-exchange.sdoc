@@ -386,7 +386,7 @@ NACHWEIS: Test
 TITLE: Wochenprognose als Snapshot
 STATEMENT: >>>
 ``snapshot`` muss täglich zur eingestellten Uhrzeit das Dashboard „Prognose öffentlich“ holen, die
-Abfragen der Wochenpanels für heute 00:00 bis Ende D+7 (auch über die Zeitumstellung) ausführen,
+Abfragen der Prognosepanels für heute 00:00 bis Ende D+15 (auch über die Zeitumstellung) ausführen,
 die Ergebnisse einbetten, den Snapshot extern mit Ablaufzeit hochladen und die früheren, noch
 gültigen Stände verlinken.
 <<<
@@ -416,7 +416,7 @@ STATUS: Umgesetzt
 NACHWEIS: Test
 TITLE: Vorlauf-Panels für morgen im Snapshot
 STATEMENT: >>>
-Der Snapshot muss die Panels „Morgen“ (Preis und Last mit D+1 bis D+7, je Champion und
+Der Snapshot muss die Panels „Morgen“ (Preis und Last mit D+1 bis D+15, je Champion und
 Challenger, mit Day-Ahead-Preis bzw. ÜNB-Lastprognose) für den Liefertag nach dem Stand von 0 bis
 24 Uhr Ortszeit enthalten, mit der Uhrzeit als x-Achse, auch an Tagen der Zeitumstellung.
 <<<

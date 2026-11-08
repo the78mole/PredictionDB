@@ -238,6 +238,7 @@ def cmd_snapshot(cfg: ModelConfig, a: argparse.Namespace, job: JobLog) -> int:
         max_lead_h=24 * (max(cfg.issue.lead_days) + 2),
         neighbour=cfg.neighbour_weather,
         sites=cfg.site_weather,
+        ensemble=cfg.ensemble_weather,
         progress=job.step,
     )
     job.step("Speichern")

@@ -9,13 +9,13 @@ from wx_exchange import snapshot
 
 
 def test_week_range_spans_dst_change() -> None:
-    # 25.10.2026: Ende der Sommerzeit, der Bereich hat dann 8 Tage + 1 Stunde
+    # 25.10.2026: Ende der Sommerzeit, der Bereich hat dann 16 Tage + 1 Stunde
     """@relation(SWR-WXX-050, scope=function)"""
     start, end = snapshot.week_range(datetime(2026, 10, 24, 22, 30, tzinfo=UTC))
     assert start.isoformat() == "2026-10-25T00:00:00+02:00"
-    assert end.isoformat() == "2026-11-02T00:00:00+01:00"
+    assert end.isoformat() == "2026-11-10T00:00:00+01:00"
     # gleiche tzinfo: Python zieht Wanduhren ab, daher über UTC
-    assert (end.astimezone(UTC) - start.astimezone(UTC)).total_seconds() == 8 * 86400 + 3600
+    assert (end.astimezone(UTC) - start.astimezone(UTC)).total_seconds() == 16 * 86400 + 3600
 
 
 def test_next_run_today_or_tomorrow() -> None:
@@ -190,7 +190,7 @@ def test_build_snapshot_embeds_frames_in_v2() -> None:
     assert [f["name"] for f in frames[0]["schema"]["fields"]] == ["Uhrzeit"]
     assert spec["variables"] == [] and spec["links"] == []
     assert spec["timeSettings"]["from"] == "2026-10-29T23:00:00.000Z"
-    assert spec["timeSettings"]["to"] == "2026-11-06T22:59:59.999Z"
+    assert spec["timeSettings"]["to"] == "2026-11-14T22:59:59.999Z"
     assert spec["timeSettings"]["hideTimepicker"] is True
     assert spec["title"].endswith("Stand 30.10.2026 14:30")
 

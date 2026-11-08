@@ -30,7 +30,7 @@ Güte verbessert wird. Die Grundsatzentscheidungen stehen in
 | Zielgrößen | Netzlast DE (`load_actual`) und Day-Ahead-Preis DE-LU (`da_price_de_lu`) |
 | Hilfsziele | Einspeisung Wind an Land, Wind auf See, PV (`gen_wind_onshore`, `gen_wind_offshore`, `gen_solar`) |
 | Ausgabe | Quantile P10, P50, P90 je Stunde |
-| Horizont | ganze Liefertage D+1 bis D+7 in Ortszeit (je 23, 24 oder 25 Stunden) |
+| Horizont | ganze Liefertage D+1 bis D+7 in Ortszeit (je 23, 24 oder 25 Stunden); `de_lu_v2` ab 11/2026 D+0 bis D+15, also 16 Tage (Stunden hinter dem Ende des GFS-Laufs, 384 h nach Laufzeit, fallen weg) |
 | Ausgabezeitpunkt | täglich 08 UTC, also vor dem Gebotsschluss der Day-Ahead-Auktion (12 Uhr Ortszeit) |
 | Modelltyp | Gradient Boosting (LightGBM) mit Quantil-Verlust, zweistufig |
 | Varianten | `de_lu_v1`: `kalender` (ohne Wetter, Maßstab) und `wetter` (mit GFS-Features je Technologie); `de_lu_v2`: zusätzlich freie Reihen als Merkmalsgruppen ([10.2](#102-de_lu_v2)) |
@@ -132,6 +132,7 @@ bei langem Vorlauf noch geben kann.
 | `capacity` | `cap_<technologie>`, `cap_pv` | installierte Leistung je Technologie in DE aus dem MaStR (Clusterversion des Snapshots), am Liefertag |
 | `lags` | `lag_<reihe>_day`, `_week`, `_mean_day`, `_mean_7d`, `_last` | für alle Zielgrößen und die Residuallast: gleiche Stunde am letzten vollständig bekannten Tag, gleiche Stunde in der jüngsten bekannten Vorwoche, Tagesmittel des letzten vollständigen Tags, 7-Tage-Mittel, letzter bekannter Stundenwert |
 | `weather` | `wx_<technologie>_<feature>`, `wx_interp`, `wx_lead_h` | GFS-Features je Technologie, über die MaStR-Cluster zusammengefasst (siehe unten), Kennzeichen für interpolierte Stunden, Vorlauf des Wetterlaufs |
+| `gefs` | `wx_en_<region>_<kennzahl>`, `wx_en_lead_h` | nur `de_lu_v2`: GEFS-Ensemble (31 Mitglieder) in den DE-Regionen nach Anlagenbestand, je Größe Mittel, Streuung und P10/P90 über die Mitglieder (siehe unten), Vorlauf des GEFS-Laufs |
 | `nwp_version` | `wx_gfs_v` | GFS-Hauptversion des genutzten Wetterlaufs (13 bis 16). Läufe vor dem 22.03.2021 12Z stammen aus NCAR GDEX; der 10-m-Wind hat beim Wechsel auf v16 einen Bias-Sprung ([analysen/gfs-v15-v16](analysen/gfs-v15-v16/README.md)). Nur nötig, wenn das Training Läufe mehrerer Versionen enthält; derzeit in keiner Variante |
 | `stage1` | `s1_load_actual`, `s1_gen_*`, `s1_residual_load` | nur Stufe 2: P50 der Stufe 1 und daraus Residuallast = Last − Wind an Land − Wind auf See − PV |
 
@@ -161,6 +162,23 @@ füllt auf Stunden auf (Interpolation beim Lesen): Momentanwerte linear, Interva
 Strahlung oder Niederschlag gelten für das ganze Intervall bis zum Schritt. Auf die
 Energiestunde `[ts, ts+1h)` passen der Intervallwert mit Gültigkeit `ts+1h` und das Mittel der
 Momentanwerte bei `ts` und `ts+1h`.
+
+**GEFS-Ensemble (Gruppe `gefs`).** `wx-exchange` verdichtet jeden GEFS-Lauf (nur 00Z,
+6-stündlich bis 384 h) je Region zu Mittel, Streuung und P10/P90 über die 31 Mitglieder
+([WETTERDATEN.md](WETTERDATEN.md) Kap. 3). `de_lu_v2` nutzt die vier DE-Regionen aus
+`regions_v2` (`ensemble_weather` in der Konfiguration):
+
+| Region | Kennzahlen |
+|---|---|
+| `DE:wind_on` (Wind an Land nach Bestand, Nabenhöhe 120 m) | `wind_cf_mean`, `wind_cf_std`, `wind_cf_p10`, `wind_cf_p90` |
+| `DE:wind_off` (Wind auf See) | `wind_cf_mean`, `wind_cf_std` |
+| `DE:pv` (PV nach Bestand) | `pv_cf_mean`, `pv_cf_std`, `pv_cf_p10`, `pv_cf_p90` |
+| `DE:area` (Fläche DE) | `t2m_mean`, `t2m_std` |
+
+Der GEFS-Lauf wird unabhängig vom GFS-Lauf gewählt: der jüngste 00Z-Lauf mit
+`run_time + ensemble_weather.delay_h` (8 h) vor dem Ausgabezeitpunkt. Bei Ausgabe 08 UTC ist das
+der Lauf desselben Tags, bei 02 UTC der vom Vortag. Die 6-h-Schritte werden wie GFS auf Stunden
+aufgefüllt; `pv_cf` ist ein Mittel über die 6 h vor dem Schritt und gilt für dieses Intervall.
 
 ### 4.3 Stufe 1: Last, Wind und PV
 
@@ -254,6 +272,7 @@ mit dem Wissensstand von `issue_time` gebildet:
 | Ist-Werte (Last, Erzeugung, Residuallast) | Intervallende + 2 h | `issue.actual_delay_h` |
 | Day-Ahead-Preis eines Liefertags | 13 Uhr Ortszeit am Vortag | `issue.price_known_local_hour` |
 | GFS-Lauf | `run_time` + 6 h (vollständig verarbeitet) | `issue.nwp_delay_h` |
+| GEFS-Lauf (nur 00Z) | `run_time` + 8 h (Gold verarbeitet, im Betrieb ca. 7 h) | `ensemble_weather.delay_h` |
 | installierte Leistung | Stand des MaStR-Snapshots, auf Tage zurückgerechnet | – |
 | Prognosen Dritter | v1 nur Vergleich; v2 Lastprognose der ÜNB ab 10 Uhr am Vortag | `series_groups.*.known_local_hour` |
 | Monats- und Wochenwerte (Brennstoffe, Marktwerte, STEO) | Zeitpunkt `published` der Reihe | Modi `asof`, `outlook` |
@@ -381,11 +400,18 @@ verglichenen Verfahren eine Prognose haben.
 
 Jede neue Version kommt als **Challenger** in die Registry (oder als `champion` bzw. `baseline`,
 wenn ausdrücklich gewünscht). `registry promote` macht einen Challenger nur dann zum Champion,
-wenn auf den gemeinsamen Backtest-Zeilen beider Versionen gilt:
+wenn in jeder Horizontklasse („kurz“ D+0 bis D+7, „lang“ ab D+8) auf den gemeinsamen
+Backtest-Zeilen gilt:
 
 1. Je Zielgröße ist der mittlere Pinball-Verlust mindestens um `min_gain` (Vorgabe 0) besser.
 2. In keiner Gruppe aus Zielgröße, Vorlauftag und Jahreszeit mit mindestens `min_group_n`
    (200) Werten ist der Challenger mehr als `max_group_loss` (5 %) schlechter.
+
+Deckt der Champion eine Klasse nicht ab (etwa ein Modell bis D+7 gegen einen Challenger bis
+D+15), muss der Challenger dort die Vorwochenprognose schlagen: den Ist-Wert vor so vielen
+Wochen, wie zur Ausgabe schon bekannt war (verglichen über den Median, `pinball50`). Deckt der
+Challenger eine Klasse des Champions nicht ab, wird er nicht Champion, sonst fielen Vorlauftage
+aus dem Betrieb weg. Es bleibt bei einem Champion je Registry-Linie.
 
 So kann eine Version, die im Mittel gewinnt, aber etwa im Winter für D+1 deutlich verliert,
 nicht unbemerkt Champion werden. `registry evaluate` zeigt die Gründe vorab, `--force`
@@ -434,11 +460,11 @@ Eingerichtet wird das erst, wenn mindestens drei Jahre GFS-Trainingsdaten vorlie
   jeder Ausgabezeitpunkt vorliegt. Nachholen ist leakage-sicher, weil die Merkmale nur Werte
   nutzen, die zum Ausgabezeitpunkt veröffentlicht waren.
 - **Neue Versionen sofort im Vergleich:** Kommt eine aktive Version hinzu (neu registrierter
-  Challenger, neue Linie), rechnet sie rückwirkend die Ausgabezeitpunkte der letzten 216 h nach,
-  die ihr fehlen (`--fill-new 216`), und zwar nur die, die die Vergleichsgrafiken zeigen: 08 UTC
+  Challenger, neue Linie), rechnet sie rückwirkend die Ausgabezeitpunkte der letzten 408 h nach,
+  die ihr fehlen (`--fill-new 408`), und zwar nur die, die die Vergleichsgrafiken zeigen: 08 UTC
   (Prognosefehler D+1, Tabelle) und 10 Uhr Ortszeit (eigene Modelle gegen ÜNB und
-  Day-Ahead-Preis, gestriger Tag mit D+1 bis D+7), also etwa 18 je Version. Neun Tage reichen,
-  damit für gestern auch D+7 vorliegt (Lauf acht Tage vorher um 10 Uhr). Sie erscheint damit
+  Day-Ahead-Preis, gestriger Tag mit D+1 bis D+15), also etwa 34 je Version. Siebzehn Tage reichen,
+  damit für gestern auch D+15 vorliegt (Lauf sechzehn Tage vorher um 10 Uhr). Sie erscheint damit
   sofort in den Panels unter „Prognosemodelle“ und „Modellversionen“ neben Champion und
   Challengern, statt erst ab dem nächsten Liefertag. Die Eingänge sind dieselben wie
   bei den übrigen Versionen: dieselbe Merkmalsbildung zum Ausgabezeitpunkt, nur mit Werten, die
@@ -455,9 +481,9 @@ Eingerichtet wird das erst, wenn mindestens drei Jahre GFS-Trainingsdaten vorlie
   Day-Ahead-Preis“ im Dashboard „Prognose und Energiedaten“ zeigen deshalb je Liefertag die P50-Prognose des Laufs
   vom Vortag 10:00 Ortszeit. Hinweis: `de_lu_v2` nutzt die ÜNB-Prognose selbst als Merkmal,
   sofern sie zum Ausgabezeitpunkt schon veröffentlicht war.
-- **Gestriger Tag mit allen Vorlauftagen:** Die Panels „Gestern: Last mit D+1 bis D+7 …“ und „Gestern: Preis mit D+1 bis D+7 …“
+- **Gestriger Tag mit allen Vorlauftagen:** Die Panels „Gestern: Last mit D+1 bis D+15 …“ und „Gestern: Preis mit D+1 bis D+15 …“
   zeigen den gestrigen Liefertag mit Ist, ÜNB-Prognose (nur Last) und den P50-Prognosen D+1 bis
-  D+7, je vom Lauf um 10:00 Ortszeit n Tage vor dem Liefertag. Eine Zeile für den aktuellen
+  D+15 (ab D+8 in Grautönen), je vom Lauf um 10:00 Ortszeit n Tage vor dem Liefertag. Eine Zeile für den aktuellen
   Champion, eine für den Challenger, den die Variable „Challenger“ oben im Dashboard auswählt
   (Vorgabe: jüngster). So sieht man, wie sich die Vorhersage mit kürzer werdendem Vorlauf dem
   Ist annähert.
@@ -556,7 +582,7 @@ Eingerichtet wird das erst, wenn mindestens drei Jahre GFS-Trainingsdaten vorlie
 
 | Vorhaben | Ziel |
 |---|---|
-| **Über D+7 hinaus mit GEFS-Ensemble** (Mittel und Streuung, Nachbarzonen grob je Gebotszone) | D+8 bis D+14/16, dort eher Tagesmittel als Stundenwerte; Vorschlag in Arbeit |
+| **GEFS-Ensemble weiter ausbauen** (Gruppe `gefs` steht, Varianten `wetter_gefs`, `wetter_frei_gefs`; offen: Nachbarzonen je Gebotszone, Streuung für die Bänder, schlanker Stack) | `de_lu_v2` reicht seit 11/2026 bis D+15; das Ensemble soll dort Niveau und Unsicherheit verbessern |
 | **Wetter-Variante bewerten**, sobald die GFS-Historie als Gold-Features in `feat.nwp_value` liegt (Silber ab 2021 aus dem AWS-Archiv, davor aus NCAR GDEX, beides als Import aus GHCR, ARCHITEKTUR.md 5.5) | Wind und PV sind ohne Wetter nur Klimatologie (Wind an Land MAE 7,4 GW gegen 1,2 GW bei den ÜNB) |
 | **Grenzkostenindex und STEO im Backtest bewerten** (Varianten `frei_gk`, `frei_gk_skaliert`, `steo`, `frei_steo`; `wetter_frei_gk_skaliert` läuft bereits als Challenger) | Preisniveau bei Brennstoff- und CO₂-Sprüngen, die die Lags erst Tage später zeigen |
 | **Lastniveau über Wochen** (28-Tage-Mittel von Last und Residuallast) | In v2 verbessern Preisniveau und Brennstoffe die Last 2026 um bis zu 10 %, ein Hinweis auf ein fehlendes Lastniveau |
@@ -637,6 +663,7 @@ zum Ausgabezeitpunkt veröffentlicht war. Als Gegenprobe gibt es die Gruppe `pre
 | `wetter` | `weather` (ab 23.03.2021, nur mit Wetterlauf) |
 | `wetter_frei` | `weather` und die Gruppen von `frei` |
 | `wetter_frei_gk_skaliert` | `weather` und die Gruppen von `frei_gk`, skaliert wie `frei_gk_skaliert` |
+| `wetter_gefs`, `wetter_frei_gefs` | wie `wetter` bzw. `wetter_frei`, dazu `gefs` (GEFS-Ensemble, [4.2](#42-merkmalsgruppen)); noch nicht im schlanken Stack (`ml-train bundle` lehnt sie ab) |
 
 Ergebnisse der Ablation (Backtest 01/2025 bis 10/2026, alle Varianten auf denselben Stunden,
 Analyse in [`docs/analysen/prognose-de-lu-v2/`](analysen/prognose-de-lu-v2/README.md)):
@@ -699,6 +726,7 @@ Ablation; ihre Ergebnisse stehen noch aus.
 | `lag_local_time` | Reihen, deren Lags `_day`/`_week` dieselbe Ortsuhrzeit statt k·24 h nehmen (z. B. `load_actual`) |
 | `weather_features` | Auswahl der Wetter-Features, leer = alle |
 | `series_groups` | ab `de_lu_v2`: Reihengruppen mit `mode` (`lags`, `forecast`, `asof`, `outlook`, `grenzkosten`), `codes`, `lags` (`day`, `week`, `mean_day`, `mean_7d`, `mean_28d`, `last`), `known_local_hour`, `change_days`, `horizons` (`outlook`), `windows`, `floor`, `residual`, `lignite`, `hard_coal`, `gas` (`grenzkosten`) |
+| `ensemble_weather` | ab `de_lu_v2`: GEFS-Ensemble für die Gruppe `gefs`: `source` (`gefs_0p5`), `run_hours` (`[0]`), `delay_h` (Verzug bis zur Verarbeitung, Vorgabe 8), `regions` (Region ohne Präfix → Kennzahlen, z. B. `DE:wind_on: [wind_cf_mean, wind_cf_std]`) |
 | `variants[]` | `name`, `groups`, `requires_weather`, `train_from`, `scale` (Ziel-Code → Niveauspalte, durch die die Abweichung geteilt wird) |
 | `lgbm` | `num_leaves`, `learning_rate`, `n_estimators`, `min_child_samples`, `subsample`, `subsample_freq`, `colsample_bytree`, `reg_lambda`, `n_jobs` (0 = alle Kerne) |
 | `calibration` | `months` (Kalibriermenge am Ende des Trainings, 0 = aus), `min_rows` je Vorlauftag |

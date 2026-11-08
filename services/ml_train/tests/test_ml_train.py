@@ -12,7 +12,15 @@ import pytest
 
 from ml_train.backtest import backtest_steps, make_folds, run_backtest
 from ml_train.calendar import calendar_features
-from ml_train.config import ModelConfig, NeighbourWeather, Variant, load_config, neighbour_feature
+from ml_train.config import (
+    EnsembleWeather,
+    ModelConfig,
+    NeighbourWeather,
+    Variant,
+    ensemble_feature,
+    load_config,
+    neighbour_feature,
+)
 from ml_train.dataset import (
     FeatureBuilder,
     WeatherTable,
@@ -345,6 +353,66 @@ def test_neighbour_weather_group_same_run(snap, cfg) -> None:  # type: ignore[no
     # DE-Wetter unverändert, Nachbarzone aus demselben Lauf (Momentanwert: Stundenmitte)
     pd.testing.assert_frame_equal(frame.X[base.groups["weather"]], base.X[base.groups["weather"]])
     np.testing.assert_allclose(frame.X["wx_nb_fr_wind_cf"], frame.X["wx_lead_h"] + 0.5)
+
+
+def test_gefs_group_own_run(snap, cfg) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-034, scope=function)"""
+    assert ensemble_feature("gefs:DE:wind_on", "wind_cf_mean") == "en_de_wind_on_wind_cf_mean"
+    assert ensemble_feature("gefs:IT-Nord:area", "t2m_std") == "en_it_nord_area_t2m_std"
+    w = snap.weather
+    runs = w["run_time"].drop_duplicates()
+    # GEFS: nur 00Z-Läufe, 6-stündlich bis 384 h; Wert = Stunden seit Lauf
+    parts = []
+    for run in runs[runs.dt.hour == 0]:
+        steps = np.arange(0, 385, 6)
+        vt = run + pd.to_timedelta(steps, unit="h")
+        for feat, off in (("en_de_wind_on_wind_cf_mean", 0.0), ("en_de_pv_pv_cf_mean", 0.0)):
+            parts.append(
+                pd.DataFrame(
+                    {
+                        "run_time": run,
+                        "valid_time": vt,
+                        "feature": feat,
+                        "value": (steps + off).astype("float32"),
+                    }
+                )
+            )
+    with_en = Snapshot(snap.energy, pd.concat([w, *parts]), snap.capacity, snap.manifest)
+    cfg.ensemble_weather = EnsembleWeather(
+        regions={"DE:wind_on": ["wind_cf_mean"], "DE:pv": ["pv_cf_mean"]}, delay_h=8
+    )
+    assert cfg.ensemble_weather.region_codes() == ["gefs:DE:wind_on", "gefs:DE:pv"]
+    assert cfg.ensemble_weather.wanted() == {"en_de_wind_on_wind_cf_mean", "en_de_pv_pv_cf_mean"}
+    base = FeatureBuilder(snap, cfg).build([date(2023, 5, 10)])
+    frame = FeatureBuilder(with_en, cfg).build([date(2023, 5, 10)])
+    assert base.groups["gefs"] == []
+    assert frame.groups["gefs"] == [
+        "wx_en_de_pv_pv_cf_mean",
+        "wx_en_de_wind_on_wind_cf_mean",
+        "wx_en_lead_h",
+    ]
+    assert not set(frame.groups["gefs"]) & set(frame.groups["weather"])
+    pd.testing.assert_frame_equal(frame.X[base.groups["weather"]], base.X[base.groups["weather"]])
+    # Ausgabe 08 UTC: 00Z-Lauf desselben Tags mit 8 h Verzug gerade verwendbar
+    lead = frame.meta["lead_h"].to_numpy() + 8
+    np.testing.assert_allclose(frame.X["wx_en_lead_h"], lead)
+    # Momentanwert: Mittel aus ts und ts+1h (Stundenmitte), linear zwischen 6-h-Schritten
+    np.testing.assert_allclose(frame.X["wx_en_de_wind_on_wind_cf_mean"], lead + 0.5)
+    # 6-h-Mittel (PV): gilt für die 6 h bis zum Schritt, also nächster Schritt ab ts+1h
+    np.testing.assert_allclose(frame.X["wx_en_de_pv_pv_cf_mean"], np.ceil((lead + 1) / 6) * 6)
+    # mit 9 h Verzug ist es der Lauf vom Vortag
+    cfg.ensemble_weather.delay_h = 9
+    late = FeatureBuilder(with_en, cfg).build([date(2023, 5, 10)])
+    np.testing.assert_allclose(late.X["wx_en_lead_h"], lead + 24)
+    # ohne ensemble_weather keine Variante mit gefs
+    with pytest.raises(ValueError, match="ensemble_weather"):
+        ModelConfig.model_validate(
+            {
+                **cfg.model_dump(),
+                "ensemble_weather": None,
+                "variants": [{"name": "g", "groups": ["calendar", "gefs"]}],
+            }
+        )
 
 
 def test_neighbour_index_capacity_weighted(snap, cfg) -> None:  # type: ignore[no-untyped-def]
@@ -848,6 +916,65 @@ def test_compare_blocks_group_regression() -> None:
     assert any("Winter" in r for r in d.reasons)
 
 
+def _horizon_rows(leads: list[int], rng: np.random.Generator) -> pd.DataFrame:
+    ts = pd.date_range("2024-01-01", periods=24 * 120, freq="h", tz="UTC")
+    hour = np.arange(len(ts))
+    actual = np.sin(2 * np.pi * hour / 168) + rng.normal(0, 0.3, len(ts))
+    parts = [
+        pd.DataFrame(
+            {
+                "target": "x",
+                "issue_time": ts.floor("D") - pd.Timedelta(days=lead),
+                "ts": ts,
+                "lead_day": lead,
+                "actual": actual,
+            }
+        )
+        for lead in leads
+    ]
+    return pd.concat(parts, ignore_index=True)
+
+
+def _quantiles(df: pd.DataFrame, q50: np.ndarray) -> pd.DataFrame:
+    return df.assign(q50=q50, q10=q50 - 0.5, q90=q50 + 0.5)
+
+
+def test_compare_by_horizon_class() -> None:
+    """@relation(SWR-MLT-051, scope=function)"""
+    from ml_train.config import PromotionRule
+    from ml_train.registry import week_reference
+
+    rng = np.random.default_rng(2)
+    rule = PromotionRule(min_group_n=50)
+    short = _horizon_rows([1], rng)
+    champ = _quantiles(short, short["actual"].to_numpy() + 0.4)
+    full = _horizon_rows([1, 10], rng)
+    good = full["actual"].to_numpy() + rng.normal(0, 0.1, len(full))
+    # Vorwoche nur aus Werten vor der Ausgabe: für D+10 der Wert von vor zwei Wochen
+    ref = week_reference(full)
+    row = full.index[(full["lead_day"] == 10)][400]
+    want = full.loc[(full["ts"] == full.loc[row, "ts"] - pd.Timedelta(days=14)), "actual"]
+    assert ref.loc[row, "q50"] == pytest.approx(want.iloc[0])
+
+    # D+15-Challenger gegen D+7-Champion: kurz gegen Champion, lang gegen Vorwoche
+    d = compare(champ, _quantiles(full, good), rule)
+    assert d.promote, d.reasons
+    assert set(zip(d.overall["class"], d.overall["reference"], strict=True)) == {
+        ("kurz", "champion"),
+        ("lang", "vorwoche"),
+    }
+    # Gut bis D+7, aber ab D+8 schlechter als die Vorwoche: keine Freigabe
+    bad = np.where(full["lead_day"] == 10, full["actual"] + 3.0, good)
+    d = compare(champ, _quantiles(full, bad), rule)
+    assert not d.promote
+    assert any("lang gegen vorwoche" in r for r in d.reasons)
+    assert not any("kurz" in r for r in d.reasons)
+    # Kurzer Challenger gegen langen Champion: Vorlauftage gingen verloren
+    d = compare(_quantiles(full, good), champ, rule)
+    assert not d.promote
+    assert any(r.startswith("lang: Challenger deckt") for r in d.reasons)
+
+
 def test_dbsync_roles_and_metrics() -> None:
     """@relation(SWR-MLT-053, scope=function)"""
     from ml_train.dbsync import metric_rows, roles
@@ -1141,6 +1268,7 @@ def test_feature_group_from_name(cfg) -> None:  # type: ignore[no-untyped-def]
         "cap_pv": "capacity",
         "wx_gfs_v": "nwp_version",
         "wx_nb_fr_wind_cf": "nachbarwetter",
+        "wx_en_de_wind_on_wind_cf_mean": "gefs",
         "wx_pv_roof_ghi": "weather",
         "gk_niveau": "grenzkosten",
         "lag_da_price_fr_mean_7d": "nachbarn",

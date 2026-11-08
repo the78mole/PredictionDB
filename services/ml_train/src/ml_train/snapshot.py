@@ -14,7 +14,9 @@ werden (lokal, im LAN oder auf einer Miet-GPU).
                           mit ``neighbour_weather`` zusätzlich ``nb_<zone>_<feature>`` je
                           Nachbarzone aus dem Gold der zweiten Quelle (GFS Europa), mit
                           ``site_weather`` ``st_<standort>_<feature>`` je Kraftwerksstandort
-                          (Läufe ab ``history_days`` Tage vor dem ersten Wetterlauf)
+                          (Läufe ab ``history_days`` Tage vor dem ersten Wetterlauf), mit
+                          ``ensemble_weather`` ``en_<region>_<feature>`` aus dem Gold von
+                          GEFS (eigene Läufe, nur 00Z)
 ``capacity.parquet``      ``day``, ``technology``, ``capacity_mw``: installierte Leistung DE
 ``manifest.json``         Zeiträume, Clusterung, Zeilenzahlen, SHA-256 je Datei, ``snapshot_id``,
                           Lizenzklasse je Energiequelle (``sources``) und ``publishable``
@@ -36,7 +38,14 @@ from typing import Any
 import pandas as pd
 from sqlalchemy import Engine, text
 
-from ml_train.config import NeighbourWeather, SiteWeather, neighbour_feature, site_feature
+from ml_train.config import (
+    EnsembleWeather,
+    NeighbourWeather,
+    SiteWeather,
+    ensemble_feature,
+    neighbour_feature,
+    site_feature,
+)
 from ml_train.jobs import Progress, no_progress
 from predictiondb_core.log import get_logger
 
@@ -265,6 +274,32 @@ def site_rows(
     )
 
 
+def ensemble_rows(
+    c: Any,
+    en: EnsembleWeather,
+    a: datetime,
+    b: datetime,
+    max_lead_h: int,
+) -> pd.DataFrame:
+    """GEFS-Kennzahlen eines Zeitraums in der Form von ``weather.parquet`` (Läufe der Quelle).
+
+    @relation(SWR-MLT-034, scope=function)
+    """
+    df = _fixed_rows(
+        c,
+        en.source,
+        en.region_codes(),
+        en.features,
+        ensemble_feature,
+        a,
+        b,
+        en.run_hours,
+        max_lead_h,
+    )
+    # nur die je Region angeforderten Kennzahlen (die Abfrage holt alle Paare Region x Feature)
+    return df[df["feature"].isin(en.wanted())]
+
+
 def latest_clustering(engine: Engine) -> str | None:
     with engine.connect() as c:
         v = c.execute(
@@ -297,6 +332,7 @@ def export_snapshot(
     grid: str = "gfs_0p25",
     neighbour: NeighbourWeather | None = None,
     sites: SiteWeather | None = None,
+    ensemble: EnsembleWeather | None = None,
     progress: Progress = no_progress,
 ) -> Snapshot:
     """Liest Energie, Wetter-Features und Bestand für ``[start, end)`` aus der Datenbank.
@@ -304,9 +340,10 @@ def export_snapshot(
     Wetterläufe nur mit ``run_time`` in ``[weather_from, weather_to)`` (Vorgabe: ``start``,
     ``end``); ``weather_to <= weather_from`` lässt das Wetter ganz weg. ``neighbour`` holt für
     dieselben Läufe die Features der Nachbarzonen dazu, ``sites`` die der Kraftwerksstandorte
-    (ab ``sites.history_days`` vor dem ersten Wetterlauf, für gleitende Mittel).
+    (ab ``sites.history_days`` vor dem ersten Wetterlauf, für gleitende Mittel), ``ensemble``
+    die GEFS-Kennzahlen aus den Läufen derselben Monate.
 
-    @relation(SWR-MLT-010, SWR-MLT-028, SWR-MLT-033, scope=function)
+    @relation(SWR-MLT-010, SWR-MLT-028, SWR-MLT-033, SWR-MLT-034, scope=function)
     """
     cv = clustering_version or latest_clustering(engine)
     hours = run_hours or [0, 12]
@@ -346,6 +383,10 @@ def export_snapshot(
                     nb = neighbour_rows(c, neighbour, a, b, hours, max_lead_h)
                     weather_parts.append(nb)
                     log.info("snapshot.neighbour", month=a.strftime("%Y-%m"), rows=len(nb))
+                if ensemble is not None:
+                    en = ensemble_rows(c, ensemble, a, b, max_lead_h)
+                    weather_parts.append(en)
+                    log.info("snapshot.ensemble", month=a.strftime("%Y-%m"), rows=len(en))
             if sites is not None and wx_start < wx_end:
                 site_start = wx_start - timedelta(days=sites.history_days)
                 for a, b in _months(site_start, wx_end):
@@ -382,6 +423,8 @@ def export_snapshot(
         manifest["neighbour_weather"] = neighbour.model_dump()
     if sites is not None:
         manifest["site_weather"] = sites.model_dump()
+    if ensemble is not None:
+        manifest["ensemble_weather"] = ensemble.model_dump()
     return Snapshot(energy, weather, capacity, manifest)
 
 

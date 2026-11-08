@@ -12,8 +12,10 @@ Rollen: ``champion`` (Produktion), ``challengers`` (laufen im Schatten mit), ``b
 (LightGBM ohne Wetter als Maßstab), ``previous`` (frühere Champions als Rückfall). Aktiv
 inferiert werden Champion, Challenger, Baseline und der letzte Vorgänger.
 
-Ein Challenger wird nur Champion, wenn er auf denselben Backtest-Zeilen im Mittel besser ist
-und in keiner Gruppe (Ziel, Vorlauftag und Jahreszeit) mit genug Werten deutlich schlechter.
+Ein Challenger wird nur Champion, wenn er je Horizontklasse (bis D+7, ab D+8) auf denselben
+Backtest-Zeilen im Mittel besser ist und in keiner Gruppe (Ziel, Vorlauftag und Jahreszeit) mit
+genug Werten deutlich schlechter. Wo der Champion keine Werte hat, gilt die Vorwochenprognose
+als Maßstab.
 
 @relation(SWA-MLT-REGISTRY, scope=file)
 """
@@ -90,6 +92,12 @@ class Storage:
             (local / n).write_bytes(data)
 
 
+#: Horizontklassen für die Freigabe: Name, erster und letzter Vorlauftag (ARCHITEKTUR.md 7.7)
+HORIZON_CLASSES: tuple[tuple[str, int, int], ...] = (("kurz", 0, 7), ("lang", 8, 99))
+#: Name des Maßstabs in Klassen, die der Champion nicht abdeckt
+WEEK_REFERENCE = "vorwoche"
+
+
 @dataclass
 class Decision:
     promote: bool
@@ -98,16 +106,53 @@ class Decision:
     groups: pd.DataFrame = field(default_factory=pd.DataFrame)
 
 
-def compare(champion: pd.DataFrame, challenger: pd.DataFrame, rule: PromotionRule) -> Decision:
-    """Vergleicht zwei Backtest-Prognosesätze (Langform) auf ihren gemeinsamen Zeilen.
+def horizon_class(lead_day: pd.Series) -> pd.Series:
+    """Horizontklasse je Zeile (``kurz`` bis D+7, ``lang`` ab D+8)."""
+    out = pd.Series(pd.NA, index=lead_day.index, dtype="object")
+    for name, lo, hi in HORIZON_CLASSES:
+        out[(lead_day >= lo) & (lead_day <= hi)] = name
+    return out
 
-    @relation(SWR-MLT-051, scope=function)
+
+def week_reference(pred: pd.DataFrame, max_weeks: int = 4) -> pd.DataFrame:
+    """Vorwochenprognose für dieselben Zeilen: Ist-Wert vor k Wochen, k so klein wie möglich.
+
+    Verwendet wird nur ein Wert, der zur Ausgabezeit schon bekannt war (``ts - k·7 Tage`` vor
+    ``issue_time``), wie bei ``lag_*_week``. Die Ist-Werte stammen aus den Zeilen von ``pred``;
+    Zeilen ohne passenden Wert bleiben leer und fallen im Vergleich heraus. Punktprognose ohne
+    Quantile, verglichen wird deshalb über ``pinball50``.
     """
+    ref = pred[["target", "issue_time", "ts", "lead_day", "actual"]].copy()
+    ref["q50"] = float("nan")
+    ts = pd.to_datetime(ref["ts"], utc=True)
+    issue = pd.to_datetime(ref["issue_time"], utc=True)
+    known = (
+        pd.DataFrame({"target": pred["target"], "ts": pd.to_datetime(pred["ts"], utc=True)})
+        .assign(actual=pred["actual"].to_numpy())
+        .dropna(subset=["actual"])
+        .drop_duplicates(["target", "ts"])
+        .set_index(["target", "ts"])["actual"]
+    )
+    for k in range(1, max_weeks + 1):
+        cand = ts - pd.Timedelta(days=7 * k)
+        todo = ref["q50"].isna() & (cand < issue)
+        if not todo.any():
+            continue
+        idx = pd.MultiIndex.from_arrays([ref.loc[todo, "target"], cand[todo]])
+        ref.loc[todo, "q50"] = known.reindex(idx).to_numpy()
+    ref["q10"] = float("nan")
+    ref["q90"] = float("nan")
+    return ref
+
+
+def _compare_rows(
+    champion: pd.DataFrame, challenger: pd.DataFrame, rule: PromotionRule, cls: str, ref: str
+) -> tuple[list[str], pd.DataFrame, pd.DataFrame] | None:
     a = champion.assign(method="champion")
     b = challenger.assign(method="challenger")
     both = common_rows(pd.concat([a, b], ignore_index=True), ["champion", "challenger"])
-    if both.empty:
-        return Decision(False, ["keine gemeinsamen Backtest-Zeilen"], pd.DataFrame())
+    if both.empty or both["method"].nunique() < 2:
+        return None
     ctx = add_context(both)
     metric = "pinball" if ctx["q10"].notna().all() else "pinball50"
     overall = score(ctx, ["method", "target"]).pivot(
@@ -126,14 +171,54 @@ def compare(champion: pd.DataFrame, challenger: pd.DataFrame, rule: PromotionRul
         }
     )
     g["loss"] = g["challenger"] / g["champion"] - 1
+    label = f"{cls}" if ref == "champion" else f"{cls} gegen {ref}"
     reasons = []
     for target, row in overall.iterrows():
         if row["gain"] < rule.min_gain:
-            reasons.append(f"{target}: im Mittel nicht besser ({row['gain']:+.1%})")
+            reasons.append(f"{target} {label}: im Mittel nicht besser ({row['gain']:+.1%})")
     bad = g[(g["n"] >= rule.min_group_n) & (g["loss"] > rule.max_group_loss)]
     for (target, lead, season), row in bad.iterrows():
-        reasons.append(f"{target} Tag {lead} {season}: {row['loss']:+.1%} schlechter")
-    return Decision(not reasons, reasons, overall.reset_index(), g.reset_index())
+        reasons.append(f"{target} Tag {lead} {season}: {row['loss']:+.1%} schlechter ({label})")
+    info = {"class": cls, "reference": ref, "metric": metric}
+    return reasons, overall.reset_index().assign(**info), g.reset_index().assign(**info)
+
+
+def compare(champion: pd.DataFrame, challenger: pd.DataFrame, rule: PromotionRule) -> Decision:
+    """Vergleicht zwei Backtest-Prognosesätze (Langform) je Horizontklasse.
+
+    Je Klasse (``kurz`` bis D+7, ``lang`` ab D+8) zählen die gemeinsamen Zeilen beider Versionen.
+    Deckt der Champion eine Klasse nicht ab, muss der Challenger dort die Vorwochenprognose
+    (:func:`week_reference`) schlagen. Deckt der Challenger eine Klasse des Champions nicht ab,
+    wird er nicht Champion, weil sonst Vorlauftage aus dem Betrieb verschwänden.
+
+    @relation(SWR-MLT-051, scope=function)
+    """
+    reasons: list[str] = []
+    overall, groups = [], []
+    ca, cb = horizon_class(champion["lead_day"]), horizon_class(challenger["lead_day"])
+    for cls, _, _ in HORIZON_CLASSES:
+        a, b = champion[(ca == cls).to_numpy()], challenger[(cb == cls).to_numpy()]
+        if b.empty:
+            if not a.empty:
+                reasons.append(
+                    f"{cls}: Challenger deckt diese Vorlauftage nicht ab, der Champion schon"
+                )
+            continue
+        ref = "champion"
+        if a.empty:
+            a, ref = week_reference(b), WEEK_REFERENCE
+        res = _compare_rows(a, b, rule, cls, ref)
+        if res is None:
+            reasons.append(f"{cls}: keine gemeinsamen Backtest-Zeilen")
+            continue
+        reasons += res[0]
+        overall.append(res[1])
+        groups.append(res[2])
+    if not overall:
+        return Decision(False, reasons or ["keine gemeinsamen Backtest-Zeilen"], pd.DataFrame())
+    out = pd.concat(overall, ignore_index=True)
+    cols = ["class", "reference", "target", "champion", "challenger", "gain", "metric"]
+    return Decision(not reasons, reasons, out[cols], pd.concat(groups, ignore_index=True))
 
 
 class Registry:
