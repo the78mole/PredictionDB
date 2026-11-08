@@ -6,10 +6,10 @@ name: GEFS-Ensemble
 # das Silber: ghcr.io/the78mole/predictiondb-data/gefs-0p5-silver (Tag JJJJ-MM-00z). Die VM holt
 # es später per Import.
 #
-# Nur abgeschlossene Monate: Den aktuellen Monat baut die VM selbst (mit Bronze, ARCHITEKTUR.md
-# 5.6). Ohne Eingabe endet der Plan deshalb am letzten Lauf des Vormonats. Er liest den Stand aus
+# Nur abgeschlossene Monate: Den aktuellen Monat baut täglich gefs-live.yml (ARCHITEKTUR.md 5.6).
+# Ohne Eingabe endet der Plan deshalb am letzten Lauf des Vormonats. Er liest den Stand aus
 # den Manifesten und nimmt nur Monate mit Lücken, jüngste zuerst; ein erneuter Start setzt also
-# fort. Der wöchentliche Zeitplan füllt Lücken, z. B. wenn die VM am Monatsende ausgefallen war.
+# fort. Der wöchentliche Zeitplan füllt Lücken, z. B. wenn der Live-Lauf am Monatsende ausfiel.
 on:
   schedule:
     - cron: "40 7 * * 1"

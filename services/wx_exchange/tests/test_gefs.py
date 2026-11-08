@@ -698,6 +698,36 @@ async def test_vm_cycle_gold_while_live_runs(tmp_path: Path) -> None:
     assert imports == 1 and result.gold["written"] == len(gold)
 
 
+async def test_vm_without_live_imports_current_month_from_ghcr(tmp_path: Path) -> None:
+    """Live in Actions: Die VM lädt kein Bronze und holt auch den laufenden Monat aus GHCR.
+
+    @relation(SWR-WXX-049, scope=function)
+    """
+    cfg = make_config(tmp_path)
+    jan = [datetime(2099, 1, d, tzinfo=UTC) for d in (30, 31)]
+    feb = [datetime(2099, 2, d, tzinfo=UTC) for d in (1, 2)]
+    archive = FakeArchive(cfg, jan + feb)
+    fake = FakeRegistry()
+    now = datetime(2099, 2, 2, 12, tzinfo=UTC)
+    async with client(archive) as c:
+        # wie gefs-history.yml und gefs-live.yml: beide Monate nur nach GHCR
+        pub = GefsPublisher(
+            registry(fake), cfg, Regions.load(cfg.regions), c, source_url="x", now=now
+        )
+        await pub.publish_month("2099-01", 0, jan[0], jan[-1])
+        await pub.publish_month("2099-02", 0, feb[0], feb[-1])
+        n = len(archive.requests)
+        vm = vm_for(tmp_path, archive, fake, c, now)
+        vm.live_enabled = False
+        result = await vm.cycle()
+    assert len(archive.requests) == n  # kein Zugriff aufs Archiv
+    assert vm.bronze.runs() == [] and result.live == []
+    local = vm.local.runs()
+    assert set(local) == set(jan + feb)
+    assert {i.origin for i in local.values()} == {"ghcr"}
+    assert result.imported["imported"] == 4
+
+
 async def test_vm_import_history_in_portions(tmp_path: Path) -> None:
     """Import in Portionen: ``more`` meldet, dass GHCR noch Läufe bereithält.
 

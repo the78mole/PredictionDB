@@ -307,6 +307,8 @@ services:
       # Gold in kleinen Runden (≈ 75 s und 96 000 Werte je Lauf), jüngste Läufe zuerst; jede Runde
       # sieht frisch importierte Monate, und das GFS-Gold wartet nicht lange
       - --gold-limit=${GEFS_GOLD_LIMIT:-12}
+      # Silber auch des aktuellen Monats kommt aus Actions (gefs-live.yml), kein Bronze-Download
+      - --no-live
       - --watch=1800
     environment:
       <<: *bulk-env

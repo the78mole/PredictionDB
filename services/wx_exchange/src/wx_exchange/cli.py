@@ -33,7 +33,7 @@ Beispiele::
     wx-exchange gefs publish 2026-10 0
 
     # VM: aktueller Monat live (Bronze 6 Monate, Silber nach GHCR), Historie importieren, Gold
-    wx-exchange gefs vm --history-start 2021-03-22T12 --watch 1800
+    wx-exchange gefs vm --history-start 2021-03-22T12 --watch 1800 --no-live
 
     # VM: täglich um 14:30 öffentlichen Grafana-Snapshot der Wochenprognose, Kurzlink umbiegen
     wx-exchange snapshot --at 14:30
@@ -548,9 +548,7 @@ def _gefs_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> No
         "--concurrency", type=int, help="Anfragen ans Archiv (Standard: Konfiguration)"
     )
 
-    vm = cmd.add_parser(
-        "vm", help="VM: aktueller Monat live mit Bronze, Historie aus GHCR, Gold, Aufräumen"
-    )
+    vm = cmd.add_parser("vm", help="VM: Silber aus GHCR, Gold, Aufräumen; optional live")
     vm.add_argument("--history-start", type=parse_run, help="Standard: first_run der Konfiguration")
     vm.add_argument("--watch", type=int, default=0, metavar="SEK", help="wiederholen (0 = einmal)")
     vm.add_argument("--bronze-days", type=int, default=183, help="Bronze so lange behalten")
@@ -558,6 +556,12 @@ def _gefs_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> No
     vm.add_argument("--parallel-runs", type=int, default=1, metavar="N")
     vm.add_argument("--concurrency", type=int, help="Anfragen ans Archiv (Standard: Konfiguration)")
     vm.add_argument("--gold-limit", type=int, help="höchstens so viele Gold-Läufe je Durchgang")
+    vm.add_argument(
+        "--live",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="aktuellen Monat selbst bauen (--no-live: auch ihn aus GHCR, gefs-live.yml)",
+    )
 
     rg = cmd.add_parser("regions", help="Regionen und Gitter-Gewichte bauen")
     rg.add_argument("--mastr", type=Path, required=True, help="CSV der MaStR-Abfrage")
@@ -663,6 +667,7 @@ async def _gefs_vm(
             bronze_days=args.bronze_days,
             catch_up_days=args.catch_up_days,
             parallel_runs=args.parallel_runs,
+            live=args.live,
         )
         while True:
             try:

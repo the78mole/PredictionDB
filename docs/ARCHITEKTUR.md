@@ -673,10 +673,12 @@ flowchart LR
 
 Für mehrtägige Prognosen (bis D+16) und deren Unsicherheit kommt das NOAA-Ensemble GEFS v12
 (0,5°, Kontrolle `gec00` plus `gep01` bis `gep30`) dazu. Die **Historie** (abgeschlossene Monate
-ab 2021-03) entsteht nur in GitHub Actions (`gefs-history.yml`) und liegt in GHCR; die VM
-importiert sie. Den **aktuellen Monat** baut immer die VM selbst: Sie lädt jeden neuen 00Z-Lauf,
-hält dessen Bronze (auf den Ausschnitt zugeschnitten) etwa 6 Monate und löscht sie erst, wenn
-das Silber des Laufs in GHCR und lokal vorliegt (Stufe 2). Ablauf je Lauf (nur 00Z,
+ab 2021-03) entsteht in GitHub Actions (`gefs-history.yml`) und liegt in GHCR; die VM
+importiert sie. Den **aktuellen Monat** baut seit 2026-11 ebenfalls Actions, täglich nach dem
+00Z-Lauf (`gefs-live.yml`, die letzten 3 Tage, Starts 06:15 und 08:15 UTC). Die VM lädt damit
+kein GEFS-Bronze mehr und holt nur Silber; das gilt genauso für den schlanken Prognose-Stack.
+Fällt GitHub aus, fehlt der neue Lauf, und die Modelle nutzen den letzten mit längerem Vorlauf;
+der nächste Start holt ihn nach. Ablauf je Lauf (nur 00Z,
 6-stündlich bis 384 h, 31 × 65 Mitglied-Schritte), in Actions wie auf der VM derselbe Code:
 
 1. Aus der `.idx` der Dateien `pgrb2a`/`pgrb2b` nur die Felder aus
@@ -711,13 +713,14 @@ Manifest). Fehlende Felder bleiben NaN, ebenso Mittel und Summen in f000.
 dauert damit ≈ 50 min, die Historie mit acht Jobs parallel ≈ 7 h. Der Zeitplan in Actions füllt
 wöchentlich nur Lücken in abgeschlossenen Monaten.
 
-**VM (Dienst `wx-gefs`, `wx-exchange gefs vm`, alle 30 min):** Läufe des aktuellen Monats (und
-der letzten 3 Tage des Vormonats) baut sie selbst, sobald der letzte Schritt des letzten
-Mitglieds auf AWS liegt (≈ 3,7 GB Download, gemessen ≈ 21 min je Lauf), und schiebt das
-Silber nach GHCR. Die Bronze liegt auf den Ausschnitt zugeschnitten und verlustfrei nach CCSDS
+**VM (Dienst `wx-gefs`, `wx-exchange gefs vm --no-live`, alle 30 min):** Sie importiert das
+Silber aller Monate aus GHCR, auch des laufenden. Mit `--live` (bis 2026-11 der Betrieb) baut
+sie den aktuellen Monat und die letzten 3 Tage des Vormonats selbst, sobald der letzte Schritt
+des letzten Mitglieds auf AWS liegt (≈ 3,7 GB Download, gemessen ≈ 21 min je Lauf), und
+schiebt das Silber nach GHCR. Die Bronze aus diesem Betrieb liegt auf den Ausschnitt zugeschnitten und verlustfrei nach CCSDS
 umgepackt in `wx-bronze` (≈ 140 MB je Lauf, 6 Monate ≈ 25 GB) und wird nach 183 Tagen nur
-gelöscht, wenn das Silber lokal und in GHCR denselben Inhalts-Hash hat. Abgeschlossene Monate
-importiert sie aus GHCR, als eigene Aufgabe neben Gold: in Portionen von 64 Läufen ohne Pause,
+gelöscht, wenn das Silber lokal und in GHCR denselben Inhalts-Hash hat; das Aufräumen läuft
+auch mit `--no-live` weiter. Das Silber aus GHCR importiert sie als eigene Aufgabe neben Gold: in Portionen von 64 Läufen ohne Pause,
 solange dort mehr bereitliegt, sonst alle 30 min. Gold rechnet sie alle 5 min für Läufe mit
 fertigem Silber, jüngste zuerst, also auch während der Live-Aufbau noch läuft: je Lauf, Region, Größe und Schritt Mittel, Streuung, P10 und P90
 über die Mitglieder in `feat.nwp_value` (Merkmal `<größe>_<kennzahl>`, Aggregation `ensemble`,
