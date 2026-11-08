@@ -422,6 +422,12 @@ def main() -> None:
     gfs = lade_gfs(a.cache)
     deckung = abdeckung(gfs, a.cache)
     mess = lade_hubeau(a.cache)
+    # Lücken der Messreihen im Zeitraum (Tage ohne Wert zwischen erstem und letztem Messtag)
+    luecken = {
+        c: int(mess[c].loc[mess[c].first_valid_index() : mess[c].last_valid_index()].isna().sum())
+        for c in mess
+        if mess[c].notna().any()
+    }
     tab, gra = HIER / "tabellen", HIER / "grafiken"
     tab.mkdir(exist_ok=True)
     gra.mkdir(exist_ok=True)
@@ -432,6 +438,18 @@ def main() -> None:
     q.to_csv(tab / "abfluss.csv", index=False)
     qs.to_csv(tab / "abfluss_schwellen.csv", index=False)
     pd.concat([wf, qf]).to_csv(tab / "wetterfehler.csv", index=False)
+    pd.DataFrame(
+        [
+            {
+                "zeitraum_von": str(gfs["tag"].min().date()),
+                "zeitraum_bis": str(gfs["tag"].max().date()),
+                "gfs_laeufe": int(gfs["tag"].nunique()),
+                "fehlende_ausgabetage": len(deckung["fehlende_ausgabetage"]),  # type: ignore[arg-type]
+                "temperaturstationen": int(w["standort"].nunique()) if not w.empty else 0,
+                "pegel": int(q["standort"].nunique()) if not q.empty else 0,
+            }
+        ]
+    ).to_csv(tab / "umfang.csv", index=False)
     grafik(
         w,
         "mae_k",
@@ -463,6 +481,7 @@ def main() -> None:
             "pegel": sorted(q["standort"].unique().tolist()) if not q.empty else [],
         },
         **deckung,
+        "hubeau_luecken_tage": luecken,
         "eingaben_sha256": {
             f.relative_to(a.cache).as_posix(): hashlib.sha256(f.read_bytes()).hexdigest()
             for f in sorted(a.cache.glob("*/*.csv"))

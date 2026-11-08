@@ -37,6 +37,6 @@ method:
     wasser_c: [24, 26]         # Beginn der Drosselung an Garonne und Rhône, ../kkw-kuehlwasser-fr
     abfluss_anteil_median: [0.5] # unter 50 % des Medians der Lerntage
 outputs:
-  tables: [wassertemperatur, wasser_schwellen, abfluss, abfluss_schwellen, wetterfehler]
+  tables: [wassertemperatur, wasser_schwellen, abfluss, abfluss_schwellen, wetterfehler, umfang]
   figures: [wassertemperatur, abfluss]
 schedule: once
