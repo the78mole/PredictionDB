@@ -11,7 +11,9 @@ issue:
   # Training reihum zu vier Tageszeiten: ml-predict rechnet stündlich, gelernt war bisher nur
   # 08 UTC (nach 13 Uhr ist der Preis des Folgetags bekannt und wird übernommen, nicht gelernt)
   hours_utc: [2, 8, 14, 20]
-  lead_days: [0, 1, 2, 3, 4, 5, 6, 7]   # 0 = Rest des Ausgabetags
+  # 0 = Rest des Ausgabetags. Bis D+15 = 16 Tage: Weiter reicht kein GFS-Lauf (384 h), Stunden
+  # hinter dem Ende des genutzten Laufs fallen aus Training und Prognose heraus.
+  lead_days: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
   actual_delay_h: 2            # Ist-Werte ab Intervallende + 2 h bekannt
   price_known_local_hour: 13   # Auktionsergebnis D+1 ab 13 Uhr am Vortag
   nwp_delay_h: 6               # GFS-Lauf vollständig verarbeitet ca. 5,5 h nach Laufzeit

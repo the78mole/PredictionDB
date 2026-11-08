@@ -66,7 +66,7 @@ bestimmten Zeitpunkt**. Eine Zeile ist das Paar (`issue_time`, `ts`):
 - `ts`: die Zielstunde (UTC, Intervallbeginn), für alle Stunden der Liefertage
   `issue.lead_days` in Ortszeit. Vorlauftag 1 ist der Folgetag, 0 der Rest des Ausgabetags.
 - `lead_day`: der Vorlauftag. Ein Ausgabetag mit D+1 bis D+7 ergibt also etwa 7 × 24 Zeilen je
-  Zielgröße.
+  Zielgröße, mit D+0 bis D+15 (`de_lu_v2`) etwa 16 × 24.
 
 Alle Merkmale einer Zeile sind mit dem Wissensstand von `issue_time` gebildet (Ist-Werte erst
 2 h nach Intervallende, Preise des Folgetags ab 13 Uhr, GFS-Lauf erst 6 h nach Laufzeit, siehe
@@ -141,6 +141,10 @@ Trainingsausgabe vor dem ersten Testtag liegt und Training und Test sich in kein
 berühren. Der Preis dafür: Das Modell einer Faltung kennt die letzte Woche vor dem Test nicht.
 Im Betrieb ist das ähnlich, denn auch dort trainiert `ml-train fit` nur bis `gap_days` vor dem
 letzten Datentag.
+
+Bei längeren Horizonten (`de_lu_v2` bis D+15) bleibt `gap_days` bei 8: Regel 3 schneidet die
+Zielstunden ohnehin am Tag `train_to` ab, Training und Test berühren sich also auch mit D+15 in
+keiner Zielstunde. Eine größere Lücke würde dem Modell nur weitere Tage vor dem Test nehmen.
 
 Der Beginn des Trainings ist je Variante `train_from` (für die meisten Varianten der Start der
 Gebotszone DE-LU am 08.10.2018, für Wettervarianten der Beginn der GFS-Historie am 23.03.2021),

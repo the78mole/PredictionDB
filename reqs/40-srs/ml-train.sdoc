@@ -277,7 +277,8 @@ NACHWEIS: Test
 TITLE: Zweistufiges Quantilmodell
 STATEMENT: >>>
 Eine Variante muss in Stufe 1 Last, Wind an Land, Wind auf See und PV und in Stufe 2 den Preis
-als Quantile P10, P50 und P90 je Stunde für D+1 bis D+7 lernen. Stufe 2 erhält P50 und
+als Quantile P10, P50 und P90 je Stunde für die Liefertage aus ``issue.lead_days`` lernen
+(``de_lu_v1`` D+1 bis D+7, ``de_lu_v2`` D+0 bis D+15). Stufe 2 erhält P50 und
 Residuallast aus Stufe 1, im Training out-of-fold aus zeitlich zusammenhängenden Blöcken.
 <<<
 RELATIONS:

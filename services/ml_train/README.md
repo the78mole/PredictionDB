@@ -1,7 +1,7 @@
 # ml-train
 
 Erstes Prognosemodell für die **Netzlast DE** und den **Day-Ahead-Preis DE-LU**: Quantile
-P10/P50/P90 je Stunde für die Liefertage D+1 bis D+7, zweistufig mit LightGBM
+P10/P50/P90 je Stunde für die Liefertage D+1 bis D+7 (`de_lu_v2`: D+0 bis D+15), zweistufig mit LightGBM
 (Kap. 7.3, 7.4 und 7.7 in `docs/ARCHITEKTUR.md`). Ausführliche Beschreibung für Anwender:
 [`docs/PROGNOSEMODELLE.md`](../../docs/PROGNOSEMODELLE.md). Konfiguration in
 `config/ml/de_lu_v1.yaml` und `config/ml/de_lu_v2.yaml`, Backtest-Ergebnisse in

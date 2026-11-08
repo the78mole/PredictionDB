@@ -12,7 +12,7 @@ ist leakage-sicher: Merkmale nutzen nur Werte, die zum Ausgabezeitpunkt veröffe
 Kommt eine Version neu hinzu (``--fill-new``), rechnet sie rückwirkend die Ausgabezeitpunkte
 der Vergleichsgrafiken (08 UTC, 10 Uhr Ortszeit) im Fenster nach. Sie erscheint so sofort neben
 Champion und Challengern, mit demselben Veröffentlichungsstand der Eingänge wie diese, und mit
-einem Fenster von acht Tagen zeigt sie für gestern alle Vorlauftage D+1 bis D+7.
+einem Fenster von 17 Tagen (408 h) zeigt sie für gestern alle Vorlauftage bis D+15.
 
 @relation(SWA-MLT-PREDICT, scope=file)
 """

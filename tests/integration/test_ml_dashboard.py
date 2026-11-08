@@ -285,6 +285,9 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
             sql = _sql(panels[pid]).replace("${challenger}", versions[1])
             got = c.execute(text(sql)).mappings().all()
             assert all({"Vorlauf", "Verfahren", "MAE"} <= set(r) for r in got)
+            # nach Vorlauftag als Zahl sortiert (bis D+15: als Text käme D+10 vor D+2)
+            leads = [int(r["Vorlauf"].removeprefix("D+")) for r in got]
+            assert leads == sorted(leads)
             if pid == 64:
                 d3 = {r["Verfahren"].split()[0] for r in got if r["Vorlauf"] == "D+3"}
                 assert {"Champion", "Challenger"} <= d3

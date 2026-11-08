@@ -2,7 +2,7 @@
 
 Ein Container, der nur Prognosen rechnet: Er lädt ein fertig trainiertes Modellpaket, holt die
 für eine Prognose nötigen Eingänge selbst bei freien Quellen und gibt Last DE und
-Day-Ahead-Preis DE-LU (P10/P50/P90 je Stunde, Liefertage D+1 bis D+7) als Dateien und über eine
+Day-Ahead-Preis DE-LU (P10/P50/P90 je Stunde, Liefertage wie im Modellpaket, bei `de_lu_v2` D+0 bis D+15) als Dateien und über eine
 kleine HTTP-Schnittstelle aus. Kein Training, kein Backfill, keine Datenbank, kein S3.
 
 Für wen: Nutzer der Prognosen, etwa für Home Assistant, evcc, Node-RED oder eigene Skripte zur

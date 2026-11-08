@@ -30,7 +30,7 @@ Güte verbessert wird. Die Grundsatzentscheidungen stehen in
 | Zielgrößen | Netzlast DE (`load_actual`) und Day-Ahead-Preis DE-LU (`da_price_de_lu`) |
 | Hilfsziele | Einspeisung Wind an Land, Wind auf See, PV (`gen_wind_onshore`, `gen_wind_offshore`, `gen_solar`) |
 | Ausgabe | Quantile P10, P50, P90 je Stunde |
-| Horizont | ganze Liefertage D+1 bis D+7 in Ortszeit (je 23, 24 oder 25 Stunden) |
+| Horizont | ganze Liefertage D+1 bis D+7 in Ortszeit (je 23, 24 oder 25 Stunden); `de_lu_v2` ab 11/2026 D+0 bis D+15, also 16 Tage (Stunden hinter dem Ende des GFS-Laufs, 384 h nach Laufzeit, fallen weg) |
 | Ausgabezeitpunkt | täglich 08 UTC, also vor dem Gebotsschluss der Day-Ahead-Auktion (12 Uhr Ortszeit) |
 | Modelltyp | Gradient Boosting (LightGBM) mit Quantil-Verlust, zweistufig |
 | Varianten | `de_lu_v1`: `kalender` (ohne Wetter, Maßstab) und `wetter` (mit GFS-Features je Technologie); `de_lu_v2`: zusätzlich freie Reihen als Merkmalsgruppen ([10.2](#102-de_lu_v2)) |
@@ -434,11 +434,11 @@ Eingerichtet wird das erst, wenn mindestens drei Jahre GFS-Trainingsdaten vorlie
   jeder Ausgabezeitpunkt vorliegt. Nachholen ist leakage-sicher, weil die Merkmale nur Werte
   nutzen, die zum Ausgabezeitpunkt veröffentlicht waren.
 - **Neue Versionen sofort im Vergleich:** Kommt eine aktive Version hinzu (neu registrierter
-  Challenger, neue Linie), rechnet sie rückwirkend die Ausgabezeitpunkte der letzten 216 h nach,
-  die ihr fehlen (`--fill-new 216`), und zwar nur die, die die Vergleichsgrafiken zeigen: 08 UTC
+  Challenger, neue Linie), rechnet sie rückwirkend die Ausgabezeitpunkte der letzten 408 h nach,
+  die ihr fehlen (`--fill-new 408`), und zwar nur die, die die Vergleichsgrafiken zeigen: 08 UTC
   (Prognosefehler D+1, Tabelle) und 10 Uhr Ortszeit (eigene Modelle gegen ÜNB und
-  Day-Ahead-Preis, gestriger Tag mit D+1 bis D+7), also etwa 18 je Version. Neun Tage reichen,
-  damit für gestern auch D+7 vorliegt (Lauf acht Tage vorher um 10 Uhr). Sie erscheint damit
+  Day-Ahead-Preis, gestriger Tag mit D+1 bis D+15), also etwa 34 je Version. Siebzehn Tage reichen,
+  damit für gestern auch D+15 vorliegt (Lauf sechzehn Tage vorher um 10 Uhr). Sie erscheint damit
   sofort in den Panels unter „Prognosemodelle“ und „Modellversionen“ neben Champion und
   Challengern, statt erst ab dem nächsten Liefertag. Die Eingänge sind dieselben wie
   bei den übrigen Versionen: dieselbe Merkmalsbildung zum Ausgabezeitpunkt, nur mit Werten, die
@@ -455,9 +455,9 @@ Eingerichtet wird das erst, wenn mindestens drei Jahre GFS-Trainingsdaten vorlie
   Day-Ahead-Preis“ im Dashboard „Prognose und Energiedaten“ zeigen deshalb je Liefertag die P50-Prognose des Laufs
   vom Vortag 10:00 Ortszeit. Hinweis: `de_lu_v2` nutzt die ÜNB-Prognose selbst als Merkmal,
   sofern sie zum Ausgabezeitpunkt schon veröffentlicht war.
-- **Gestriger Tag mit allen Vorlauftagen:** Die Panels „Gestern: Last mit D+1 bis D+7 …“ und „Gestern: Preis mit D+1 bis D+7 …“
+- **Gestriger Tag mit allen Vorlauftagen:** Die Panels „Gestern: Last mit D+1 bis D+15 …“ und „Gestern: Preis mit D+1 bis D+15 …“
   zeigen den gestrigen Liefertag mit Ist, ÜNB-Prognose (nur Last) und den P50-Prognosen D+1 bis
-  D+7, je vom Lauf um 10:00 Ortszeit n Tage vor dem Liefertag. Eine Zeile für den aktuellen
+  D+15 (ab D+8 in Grautönen), je vom Lauf um 10:00 Ortszeit n Tage vor dem Liefertag. Eine Zeile für den aktuellen
   Champion, eine für den Challenger, den die Variable „Challenger“ oben im Dashboard auswählt
   (Vorgabe: jüngster). So sieht man, wie sich die Vorhersage mit kürzer werdendem Vorlauf dem
   Ist annähert.
@@ -556,7 +556,7 @@ Eingerichtet wird das erst, wenn mindestens drei Jahre GFS-Trainingsdaten vorlie
 
 | Vorhaben | Ziel |
 |---|---|
-| **Über D+7 hinaus mit GEFS-Ensemble** (Mittel und Streuung, Nachbarzonen grob je Gebotszone) | D+8 bis D+14/16, dort eher Tagesmittel als Stundenwerte; Vorschlag in Arbeit |
+| **GEFS-Ensemble als Merkmalsgruppe** (Mittel und Streuung, Nachbarzonen grob je Gebotszone) | `de_lu_v2` reicht seit 11/2026 mit GFS allein bis D+15; das Ensemble soll dort Niveau und Unsicherheit verbessern |
 | **Wetter-Variante bewerten**, sobald die GFS-Historie als Gold-Features in `feat.nwp_value` liegt (Silber ab 2021 aus dem AWS-Archiv, davor aus NCAR GDEX, beides als Import aus GHCR, ARCHITEKTUR.md 5.5) | Wind und PV sind ohne Wetter nur Klimatologie (Wind an Land MAE 7,4 GW gegen 1,2 GW bei den ÜNB) |
 | **Grenzkostenindex und STEO im Backtest bewerten** (Varianten `frei_gk`, `frei_gk_skaliert`, `steo`, `frei_steo`; `wetter_frei_gk_skaliert` läuft bereits als Challenger) | Preisniveau bei Brennstoff- und CO₂-Sprüngen, die die Lags erst Tage später zeigen |
 | **Lastniveau über Wochen** (28-Tage-Mittel von Last und Residuallast) | In v2 verbessern Preisniveau und Brennstoffe die Last 2026 um bis zu 10 %, ein Hinweis auf ein fehlendes Lastniveau |
