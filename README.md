@@ -21,7 +21,7 @@ Strombedarfs- und Strompreisprognose für Deutschland auf Basis kostenfreier Wet
 **Projektseite:** [the78mole.github.io/PredictionDB](https://the78mole.github.io/PredictionDB/)
 mit Anforderungen (Traceability, Projektstatistik) und aktuellen Testberichten.
 
-### Dokumentation
+## Dokumentation
 
 | Dokument | Inhalt |
 |---|---|
