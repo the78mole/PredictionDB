@@ -145,15 +145,18 @@ aus dem AWS-Archiv, ohne Bronze: je Mitglied-Schritt nur die Felder aus
 `config/gefs/regions_v2.json.gz`. Nach GHCR geht je Monat ein Manifest mit einem Layer je Lauf
 (`ghcr.io/the78mole/predictiondb-data/gefs-0p5-silver:JJJJ-MM-00z`, Inhalt siehe
 `docs/ARCHITEKTUR.md` 5.6). Der Workflow `gefs-history.yml` füllt die Historie ab 2021-03-22
-mit abgeschlossenen Monaten; den aktuellen Monat baut die VM selbst.
+mit abgeschlossenen Monaten, den aktuellen Monat baut täglich `gefs-live.yml` (06:15 und
+08:15 UTC, die letzten 3 Tage).
 
-Auf der VM läuft `wx-exchange gefs vm` als Dienst `wx-gefs` (alle 30 min):
+Auf der VM läuft `wx-exchange gefs vm --no-live` als Dienst `wx-gefs` (alle 30 min):
 
-1. **Live:** Läufe des aktuellen Monats (und der letzten 3 Tage des Vormonats), sobald der
-   letzte Schritt des letzten Mitglieds auf AWS liegt. Dabei landen die Nachrichten auf den
-   Ausschnitt zugeschnitten in `wx-bronze` (`gefs/0p5/JJJJ/MM/TT/HH/<mitglied>.fSSS.grib2`), das
-   Silber in `wx-silver` (`gefs/0p5/JJJJ/MM/TT/HH.tar.gz`, byte-gleich mit dem Layer) und in GHCR.
-2. **Import:** abgeschlossene Monate aus GHCR, nur Layer mit aktuellem Fingerabdruck.
+1. **Live (nur mit `--live`, bis 2026-11 der Betrieb):** Läufe des aktuellen Monats (und der
+   letzten 3 Tage des Vormonats) selbst bauen, sobald der letzte Schritt des letzten Mitglieds
+   auf AWS liegt. Dabei landen die Nachrichten auf den Ausschnitt zugeschnitten in `wx-bronze`
+   (`gefs/0p5/JJJJ/MM/TT/HH/<mitglied>.fSSS.grib2`), das Silber in `wx-silver`
+   (`gefs/0p5/JJJJ/MM/TT/HH.tar.gz`, byte-gleich mit dem Layer) und in GHCR.
+2. **Import:** Silber aus GHCR, nur Layer mit aktuellem Fingerabdruck; mit `--no-live` auch der
+   laufende Monat, sonst nur abgeschlossene Monate.
 3. **Gold:** je Lauf Mittel, Streuung, P10 und P90 über die Mitglieder je Region, Größe und
    Schritt nach `feat.nwp_value` (Merkmal `<größe>_<kennzahl>`, Aggregation `ensemble`, Region
    `gefs:<code>`), jüngste Läufe zuerst.

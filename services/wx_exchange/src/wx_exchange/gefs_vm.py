@@ -1,10 +1,13 @@
-"""GEFS auf der VM: aktueller Monat live mit Bronze, Historie aus GHCR, Gold, Aufräumen.
+"""GEFS auf der VM: Silber aus GHCR, Gold, Aufräumen; auf Wunsch der aktuelle Monat live.
 
-Aufteilung (ARCHITEKTUR.md 5.6): Abgeschlossene Monate baut GitHub Actions, die VM importiert
-sie aus GHCR. Den aktuellen Monat baut die VM selbst mit demselben Code (``GefsPublisher``) und
-schiebt das Silber nach GHCR. Dabei hält sie die geladenen Nachrichten als Bronze, auf den
-Ausschnitt zugeschnitten, und löscht sie erst nach ``bronze_days``, wenn das Silber des Laufs
-lokal und in GHCR mit gleichem Inhalt liegt.
+Aufteilung (ARCHITEKTUR.md 5.6): Silber baut GitHub Actions, abgeschlossene Monate in
+``gefs-history.yml``, den aktuellen Monat täglich in ``gefs-live.yml``. Die VM importiert es aus
+GHCR (``live=False``, Vorgabe im Compose-Stack) und rechnet daraus Gold. Mit ``live=True`` baut
+sie den aktuellen Monat wie früher selbst mit demselben Code (``GefsPublisher``) und schiebt das
+Silber nach GHCR. Dabei hält sie die geladenen Nachrichten als Bronze, auf den Ausschnitt
+zugeschnitten, und löscht sie erst nach ``bronze_days``, wenn das Silber des Laufs lokal und in
+GHCR mit gleichem Inhalt liegt. Bronze aus früherem Live-Betrieb räumt sie auch ohne ``live``
+nach dieser Regel ab.
 
 Ablage:
 
@@ -382,6 +385,7 @@ class GefsVm:
         bronze_days: int = 183,
         catch_up_days: int = 3,
         parallel_runs: int = 1,
+        live: bool = True,
         now: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         self.registry = registry
@@ -396,6 +400,8 @@ class GefsVm:
         self.bronze_days = bronze_days
         self.catch_up_days = catch_up_days
         self.parallel_runs = parallel_runs
+        #: aktuellen Monat selbst bauen; sonst kommt auch er aus GHCR (gefs-live.yml)
+        self.live_enabled = live
         self.now = now
         self.fp = fingerprint(config, regions)
         self.gold = GefsGold(ledger, local) if ledger is not None else None
@@ -436,6 +442,8 @@ class GefsVm:
 
     async def live(self) -> list[dict[str, Any]]:
         """@relation(SWR-WXX-045, scope=function)"""
+        if not self.live_enabled:
+            return []
         now = self.now()
         start = max(self.config.first_run, month_start(now) - timedelta(days=self.catch_up_days))
         publisher = GefsPublisher(
@@ -464,12 +472,16 @@ class GefsVm:
 
     # abgeschlossene Monate: aus GHCR holen
     def import_history(self, limit: int | None = None) -> Counter[str]:
-        """Abgeschlossene Monate aus GHCR holen, höchstens ``limit`` Läufe (danach ``more``).
+        """Silber aus GHCR holen, höchstens ``limit`` Läufe (danach ``more``).
 
-        @relation(SWR-WXX-046, scope=function)
+        Ohne Live-Aufbau auch den aktuellen Monat (Actions baut ihn täglich), sonst nur
+        abgeschlossene Monate.
+
+        @relation(SWR-WXX-046, SWR-WXX-049, scope=function)
         """
         counts: Counter[str] = Counter()
-        end = month_start(self.now()) - timedelta(hours=1)
+        now = self.now()
+        end = now if not self.live_enabled else month_start(now) - timedelta(hours=1)
         local = self.local.runs()
         existing = set(self.registry.tags())
         # schon lokal, aber nicht im Bestand (Neustart zwischen Speichern und Melden): nachmelden

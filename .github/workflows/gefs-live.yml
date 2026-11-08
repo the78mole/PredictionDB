@@ -1,0 +1,71 @@
+name: GEFS live
+
+# Baut täglich den neuen 00Z-Lauf des GEFS-Ensembles als Silber im Runner und legt ihn in den
+# Monats-Tag auf GHCR (ghcr.io/the78mole/predictiondb-data/gefs-0p5-silver, JJJJ-MM-00z), mit
+# demselben Code wie gefs-history.yml. Die VM lädt kein GEFS-Bronze mehr, sondern holt auch den
+# aktuellen Monat als Silber (wx-gefs mit --no-live, ARCHITEKTUR.md 5.6). Das hält auch den
+# schlanken Prognose-Stack (predict/) ohne Bronze lauffähig.
+#
+# Mitgenommen werden die letzten 3 Tage, damit ein ausgefallener Tag oder der Monatswechsel
+# nachgeholt wird. Fertige Läufe überspringt der Publisher, ein Lauf, den NOAA noch nicht ganz
+# veröffentlicht hat, bleibt „ausstehend“ und kommt beim nächsten Start dran. Zwei Starts am
+# Tag: GEFS 00Z liegt auf AWS meist gegen 06 UTC vollständig vor.
+on:
+  schedule:
+    - cron: "15 6 * * *"
+    - cron: "15 8 * * *"
+  workflow_dispatch:
+    inputs:
+      days:
+        description: So viele Tage zurück mitnehmen
+        default: "3"
+
+# dieselbe Gruppe wie die Historie: beide schreiben dieselben Monats-Manifeste
+concurrency:
+  group: gefs-history
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  WX_EXCHANGE_GEFS_REPOSITORY: the78mole/predictiondb-data/gefs-0p5-silver
+  PDB_LOG_JSON: "false"
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  live:
+    name: Neue Läufe nach GHCR
+    runs-on: ubuntu-26.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+    env:
+      WX_EXCHANGE_USERNAME: ${{ github.actor }}
+      WX_EXCHANGE_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          save-cache: false
+      - run: uv sync --locked --no-dev --package wx-exchange
+      - name: Letzte Tage laden, verdichten und nach GHCR
+        env:
+          DAYS: ${{ inputs.days || '3' }}
+        run: |
+          case "$DAYS" in ''|*[!0-9]*) echo "days muss eine Zahl sein" >&2; exit 2 ;; esac
+          START=$(date -u -d "$DAYS days ago" +%Y-%m-%dT00)
+          END=$(date -u +%Y-%m-%dT%H)
+          rc=0
+          # jeder Kalendermonat von START bis heute (auch dazwischen bei großem DAYS)
+          MONTH=$(date -u -d "$DAYS days ago" +%Y-%m)
+          LAST=$(date -u +%Y-%m)
+          while :; do
+            uv run --no-sync wx-exchange gefs publish "$MONTH" 0 \
+              --start "$START" --end "$END" --parallel-runs 2 || rc=1
+            [ "$MONTH" = "$LAST" ] && break
+            MONTH=$(date -u -d "$MONTH-01 +1 month" +%Y-%m)
+          done
+          exit $rc

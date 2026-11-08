@@ -318,7 +318,7 @@ STATUS: Umgesetzt
 NACHWEIS: Test
 TITLE: GEFS live auf der VM
 STATEMENT: >>>
-``gefs vm`` muss die Läufe des aktuellen Monats und der letzten Tage des Vormonats bauen, sobald
+``gefs vm --live`` muss die Läufe des aktuellen Monats und der letzten Tage des Vormonats bauen, sobald
 der letzte Schritt des letzten Mitglieds im Archiv liegt, die zugeschnittenen Nachrichten in
 ``wx-bronze`` und das Silber in ``wx-silver`` und GHCR ablegen.
 <<<
@@ -372,6 +372,21 @@ Silber lokal und in GHCR denselben Inhalts-Hash hat.
 RELATIONS:
 - TYPE: Parent
   VALUE: SYSR-QA-001
+
+[REQUIREMENT]
+UID: SWR-WXX-049
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: GEFS live in GitHub Actions
+STATEMENT: >>>
+Den aktuellen Monat muss täglich der Workflow ``gefs-live.yml`` nach dem 00Z-Lauf als Silber nach
+GHCR bauen (mit den letzten Tagen des Vormonats). ``gefs vm --no-live`` lädt dann kein Bronze
+mehr, sondern importiert auch den aktuellen Monat aus GHCR und rechnet daraus Gold.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-WX-007
 
 [[/SECTION]]
 
