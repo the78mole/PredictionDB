@@ -16,12 +16,20 @@
 [![Sourcery](https://img.shields.io/badge/Sourcery-Reviews-FF7A00)](https://sourcery.ai)
 
 Strombedarfs- und Strompreisprognose für Deutschland auf Basis kostenfreier Wettermodelle
-(NOAA GFS u. a.) und Energiedaten. Architektur: [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md), Prognosemodelle:
-[docs/PROGNOSEMODELLE.md](docs/PROGNOSEMODELLE.md), Backtest:
-[docs/BACKTEST.md](docs/BACKTEST.md). Gespeicherte Wetterdaten: [docs/WETTERDATEN.md](docs/WETTERDATEN.md). Quellen mit
-Schlüssel- oder Lizenzbedarf: [docs/DATENQUELLEN-ZUGANG.md](docs/DATENQUELLEN-ZUGANG.md).
-Projektseite mit Anforderungen (Traceability, Projektstatistik) und aktuellen Testberichten:
-[the78mole.github.io/PredictionDB](https://the78mole.github.io/PredictionDB/).
+(NOAA GFS u. a.) und Energiedaten.
+
+**Projektseite:** [the78mole.github.io/PredictionDB](https://the78mole.github.io/PredictionDB/)
+mit Anforderungen (Traceability, Projektstatistik) und aktuellen Testberichten.
+
+### Dokumentation
+
+| Dokument | Inhalt |
+|---|---|
+| [ARCHITEKTUR.md](docs/ARCHITEKTUR.md) | Gesamtarchitektur: Dienste, Datenhaltung, Betrieb |
+| [PROGNOSEMODELLE.md](docs/PROGNOSEMODELLE.md) | Prognosemodelle für Last DE und Day-Ahead-Preis DE-LU: Aufbau, Training, Freigabe |
+| [BACKTEST.md](docs/BACKTEST.md) | Backtest: wie gut eine Modellvariante im Betrieb gewesen wäre, und wie man ihn liest |
+| [WETTERDATEN.md](docs/WETTERDATEN.md) | Gespeicherte Wetterdaten je Modell und Stufe (Bronze, Silber, Gold) |
+| [DATENQUELLEN-ZUGANG.md](docs/DATENQUELLEN-ZUGANG.md) | Quellen mit Schlüssel- oder Lizenzbedarf |
 
 ## Aufbau
 
