@@ -93,7 +93,8 @@ MAE im Sommer auf log(Abfluss), 0,2 entspricht rund 20 % Abweichung
 | Saint-Laurent (Loire) | 0,176 | 0,136 | 0,136 | 0,268 | 0,211 | 0,203 |
 | Tricastin (Rhône) | 0,182 | 0,152 | 0,150 | 0,222 | 0,183 | 0,162 |
 
-Das Modell nutzt log-Abfluss T-1 und T-8, Regen der letzten 7, 30 und 90 Tage, Bodenfeuchte,
+Das Modell nutzt log-Abfluss T-1 und T-8, Regen der letzten 7, 30 und 90 Tage bis einschließlich T
+(der Tag T selbst aus dem Lauf T mit Vorlauf 0, die Vortage aus den Vortagesläufen), Bodenfeuchte,
 Schnee, den Jahresgang und den Regen der kommenden d Tage, einmal aus dem Lauf T und einmal
 eingetreten. Saint-Alban hat nur 3 Prüfjahre, alle übrigen Pegel 6.
 

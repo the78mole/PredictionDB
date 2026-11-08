@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import importlib.util
 import io
 import json
@@ -52,17 +53,20 @@ KOPF = "tag,vorlauf,standort,ort,t_mittel,niederschlag_mm,dswrf,soilw,weasd"
 def _feld(tar: tarfile.TarFile, g: str) -> np.ndarray:
     meta = tar.extractfile(f"{g}/zarr.json")
     assert meta is not None
-    attr = json.loads(meta.read())["attributes"]
+    kopf = json.loads(meta.read())
+    attr = kopf["attributes"]
+    # Datentyp und Füllwert wie im Array angegeben (Silber bisher int16 mit -32768)
+    typ = np.dtype(kopf.get("data_type", "int16")).newbyteorder("<")
+    fuell = kopf.get("fill_value", -32768)
     blosc = numcodecs.Blosc()
     teile = []
     for c in (0, 1):
         f = tar.extractfile(f"{g}/c/{c}/0/0")
         assert f is not None
-        teile.append(np.frombuffer(blosc.decode(f.read()), "<i2").reshape(CHUNK, 75, 112))
-    roh = np.concatenate(teile)[SCHRITTE]
-    return np.where(
-        roh == -32768, np.nan, roh * attr.get("scale_factor", 1.0) + attr.get("add_offset", 0.0)
-    )
+        teile.append(np.frombuffer(blosc.decode(f.read()), typ).reshape(CHUNK, 75, 112))
+    roh = np.concatenate(teile)[SCHRITTE].astype(np.float64)
+    leer = np.isnan(roh) if fuell is None or fuell == "NaN" else roh == float(fuell)
+    return np.where(leer, np.nan, roh * attr.get("scale_factor", 1.0) + attr.get("add_offset", 0.0))
 
 
 def lauf(blob: bytes, tag: dt.date, punkte: dict, kaesten: dict) -> list[str]:  # type: ignore[type-arg]
@@ -89,7 +93,24 @@ def lauf(blob: bytes, tag: dt.date, punkte: dict, kaesten: dict) -> list[str]:  
     return zeilen
 
 
-def gfs(ziel: Path, nur: str | None = None) -> None:
+def _manifest(token: str, monat: dt.date) -> tuple[dict, dict]:  # type: ignore[type-arg]
+    """Manifest des Monats und seine Kennung (SHA-256, Layer-Digests) für ``lauf.json``."""
+    roh = hole(f"https://ghcr.io/v2/{REPO}/manifests/{monat:%Y-%m}-00z", token, MANIFEST)
+    man = json.loads(roh)
+    kennung = {
+        "tag": f"{monat:%Y-%m}-00z",
+        "manifest_sha256": hashlib.sha256(roh).hexdigest(),
+        "layers": sorted(e["digest"] for e in man["layers"]),
+        "abgerufen": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
+    }
+    return man, kennung
+
+
+def gfs(ziel: Path, nur: str | None = None, nur_manifeste: bool = False) -> None:
+    """Monats-CSV je Monat; daneben ``<JJJJ-MM>.manifest.json`` mit den verwendeten Digests.
+
+    ``nur_manifeste`` trägt für schon geladene Monate nur die Kennung nach (Stand des Abrufs).
+    """
     ziel.mkdir(parents=True, exist_ok=True)
     token = json.loads(hole(f"https://ghcr.io/token?scope=repository:{REPO}:pull"))["token"]
     punkte = {s.code: (round((71.5 - s.lat) / 0.5), round((s.lon + 10.5) / 0.5)) for s in STANDORTE}
@@ -104,13 +125,22 @@ def gfs(ziel: Path, nur: str | None = None) -> None:
     monat = dt.date(START.year, START.month, 1)
     while monat < ENDE:
         datei = ziel / f"{monat:%Y-%m}.csv"
+        kenn = ziel / f"{monat:%Y-%m}.manifest.json"
         naechster = (monat + dt.timedelta(32)).replace(day=1)
-        if datei.exists() or (nur and f"{monat:%Y-%m}" != nur):
+        if nur and f"{monat:%Y-%m}" != nur:
             monat = naechster
             continue
-        man = json.loads(
-            hole(f"https://ghcr.io/v2/{REPO}/manifests/{monat:%Y-%m}-00z", token, MANIFEST)
-        )
+        if datei.exists():
+            if nur_manifeste and not kenn.exists():
+                _, kennung = _manifest(token, monat)
+                kennung["nachgetragen"] = True
+                kenn.write_text(json.dumps(kennung, indent=1) + "\n")
+            monat = naechster
+            continue
+        if nur_manifeste:
+            monat = naechster
+            continue
+        man, kennung = _manifest(token, monat)
         layer = []
         for e in man["layers"]:
             tag = dt.date.fromisoformat(e["annotations"]["org.predictiondb.run"][:10])
@@ -127,6 +157,7 @@ def gfs(ziel: Path, nur: str | None = None) -> None:
         tmp = datei.with_suffix(".tmp")
         tmp.write_text(KOPF + "\n" + "\n".join(z for e in ergebnis for z in e) + "\n")
         tmp.rename(datei)
+        kenn.write_text(json.dumps(kennung, indent=1) + "\n")
         print(f"GFS {monat:%Y-%m}: {len(layer)} Läufe", flush=True)
         monat = naechster
 
@@ -136,11 +167,16 @@ def main() -> None:
     p.add_argument("--cache", type=Path, required=True)
     p.add_argument("--teil", choices=["hubeau", "gfs", "alle"], default="alle")
     p.add_argument("--monat", help="nur diesen Monat laden, JJJJ-MM (Probe)")
+    p.add_argument(
+        "--manifeste",
+        action="store_true",
+        help="für schon geladene Monate nur die GHCR-Kennung nachtragen",
+    )
     a = p.parse_args()
     if a.teil in ("hubeau", "alle"):
         vorgaenger.hubeau(a.cache / "hubeau")
     if a.teil in ("gfs", "alle"):
-        gfs(a.cache / "gfs", a.monat)
+        gfs(a.cache / "gfs", a.monat, a.manifeste)
 
 
 if __name__ == "__main__":

@@ -53,10 +53,50 @@ TEMP_ZIELE = ["TRI", "GOL", "SLB"]
 ABFLUSS_ZIELE = ["BUG", "SAL", "TRI", "GOL", "BEL", "DAM", "SLB", "CHI", "CIV", "CAT", "CHO", "NOG"]
 
 
+#: Zeitraum laut job.yaml (inputs.period), Ende ausschließlich
+START, ENDE = pd.Timestamp("2021-03-01"), pd.Timestamp("2026-11-01")
+SPALTEN_GFS = {"tag", "vorlauf", "standort", "ort", "t_mittel", "niederschlag_mm", "dswrf"}
+
+
 def lade_gfs(cache: Path) -> pd.DataFrame:
-    df = pd.concat(pd.read_csv(f) for f in sorted((cache / "gfs").glob("*.csv")))
+    dateien = sorted((cache / "gfs").glob("*.csv"))
+    if not dateien:
+        raise SystemExit(f"{cache / 'gfs'}: keine Monatsdateien, erst abruf.py laufen lassen")
+    teile = []
+    for f in dateien:
+        t = pd.read_csv(f)
+        fehlt = SPALTEN_GFS - set(t.columns)
+        if fehlt:
+            # z. B. Monatsdateien der Vorgängeranalyse ohne Vorlauf im selben Cache
+            raise SystemExit(f"{f}: Spalten {sorted(fehlt)} fehlen, Datei neu laden")
+        teile.append(t)
+    df = pd.concat(teile)
     df["tag"] = pd.to_datetime(df["tag"])
     return df
+
+
+def abdeckung(gfs: pd.DataFrame, cache: Path) -> dict[str, object]:
+    """Fehlende Ausgabetage und GHCR-Kennung je Monat; bricht ab, wenn ein Monat ganz fehlt."""
+    soll = pd.date_range(START, ENDE - pd.Timedelta(days=1), freq="D")
+    da = pd.DatetimeIndex(gfs.loc[gfs["vorlauf"] == 0, "tag"].unique())
+    fehlt = soll.difference(da)
+    je_monat = pd.Series(1, index=fehlt).groupby(fehlt.to_period("M")).sum()
+    leer = [str(m) for m, n in je_monat.items() if n >= m.days_in_month]
+    if leer:
+        raise SystemExit(f"GFS: Monate ohne Läufe {leer}, abruf.py erneut laufen lassen")
+    kennung = {}
+    for f in sorted((cache / "gfs").glob("*.manifest.json")):
+        k = json.loads(f.read_text())
+        kennung[f.name.split(".")[0]] = {
+            "manifest_sha256": k["manifest_sha256"],
+            "layers": len(k["layers"]),
+            "nachgetragen": bool(k.get("nachgetragen")),
+        }
+    return {
+        "fehlende_ausgabetage": [str(t.date()) for t in fehlt],
+        "fehlende_je_monat": {str(m): int(n) for m, n in je_monat.items()},
+        "ghcr_manifeste": kennung or "nicht erfasst",
+    }
 
 
 def lade_hubeau(cache: Path) -> pd.DataFrame:
@@ -122,9 +162,13 @@ def je_jahr(
     return pd.concat(teile) if teile else pd.Series(dtype=float)
 
 
-def schwellen_guete(ist: pd.Series, vor: pd.Series, s: float, unter: bool) -> dict[str, float]:
-    a = ist < s if unter else ist >= s
-    b = vor < s if unter else vor >= s
+def schwellen_guete(
+    ist: pd.Series, vor: pd.Series, s: float | pd.Series, unter: bool
+) -> dict[str, float]:
+    sa = s.reindex(ist.index) if isinstance(s, pd.Series) else s
+    sb = s.reindex(vor.index) if isinstance(s, pd.Series) else s
+    a = ist < sa if unter else ist >= sa
+    b = vor < sb if unter else vor >= sb
     treffer = int((a & b).sum())
     verpasst = int((a & ~b).sum())
     falsch = int((~a & b).sum())
@@ -282,11 +326,19 @@ def abfluss(
                 continue
             test_s = pd.Series(y.index.isin(vor_v.index), index=y.index)
             ist = y[test_s]
-            # Median über alle Tage: Bezug der Schwelle, nicht Teil des Modells
-            median = float(np.exp(lq.median()))
+            jahr = ziel_tag.dt.year
+            # Bezug der Schwelle je Prüfjahr: Median der Lerntage (alle übrigen Jahre)
+            lern_median = {
+                j: float(np.exp(y[gut & (jahr != j)].median())) for j in jahr[test_s].unique()
+            }
+            schwelle = np.log(0.5 * jahr[test_s].map(lern_median).astype(float))
+            median = float(np.exp(y[gut].median()))
+            # Ablation: dasselbe ohne die gemessenen Abflüsse T-1 und T-8
+            x_o = x_v.drop(columns=[c for c in ("lq1", "lq8") if c in x_v])
             modelle = {
                 "persistenz": lq.shift(1)[test_s],
                 "direkt_vorhersage": vor_v,
+                "ohne_abflussmessung": je_jahr(x_o, y, gut, ziel_tag, test_s),
                 "direkt_perfekt": je_jahr(x_p, y, gut, ziel_tag, test_s),
             }
             for name, vor in modelle.items():
@@ -298,7 +350,7 @@ def abfluss(
                         "modell": name,
                         "n_test": len(ist),
                         "jahre": int(ziel_tag[test_s].dt.year.nunique()),
-                        "mae_log": round(float((ist - vor).abs().mean()), 4),
+                        "mae_log_abfluss": round(float((ist - vor).abs().mean()), 4),
                         "bias_log": round(float((vor - ist).mean()), 4),
                         "median_m3s": round(median, 1),
                     }
@@ -310,7 +362,7 @@ def abfluss(
                         "vorlauf": d,
                         "modell": name,
                         "schwelle_anteil_median": 0.5,
-                        **schwellen_guete(ist, vor, float(np.log(0.5 * median)), unter=True),
+                        **schwellen_guete(ist, vor, schwelle, unter=True),
                     }
                 )
             f = (kommend_v - kommend_p).dropna()
@@ -335,6 +387,7 @@ FARBE = {
     "direkt": "#1b9e77",
     "direkt_vorhersage": "#1b9e77",
     "direkt_perfekt": "#a1d99b",
+    "ohne_abflussmessung": "#7570b3",
 }
 
 
@@ -367,6 +420,7 @@ def main() -> None:
     a = p.parse_args()
     start = dt.datetime.now(dt.UTC)
     gfs = lade_gfs(a.cache)
+    deckung = abdeckung(gfs, a.cache)
     mess = lade_hubeau(a.cache)
     tab, gra = HIER / "tabellen", HIER / "grafiken"
     tab.mkdir(exist_ok=True)
@@ -385,7 +439,13 @@ def main() -> None:
         "Flusstemperatur, Sommer im Prüfzeitraum",
         gra / "wassertemperatur.png",
     )
-    grafik(q, "mae_log", "MAE log(Abfluss)", "Abfluss, Sommer im Prüfzeitraum", gra / "abfluss.png")
+    grafik(
+        q,
+        "mae_log_abfluss",
+        "MAE log(Abfluss)",
+        "Abfluss, Sommer im Prüfzeitraum",
+        gra / "abfluss.png",
+    )
     lauf = {
         "job": "kkw-vorhersage",
         "job_sha256": hashlib.sha256((HIER / "job.yaml").read_bytes()).hexdigest(),
@@ -402,6 +462,11 @@ def main() -> None:
             "stationen_temperatur": sorted(w["standort"].unique().tolist()) if not w.empty else [],
             "pegel": sorted(q["standort"].unique().tolist()) if not q.empty else [],
         },
+        **deckung,
+        "eingaben_sha256": {
+            f.relative_to(a.cache).as_posix(): hashlib.sha256(f.read_bytes()).hexdigest()
+            for f in sorted(a.cache.glob("*/*.csv"))
+        },
     }
     (tab / "lauf.json").write_text(json.dumps(lauf, indent=1, ensure_ascii=False) + "\n")
     if not w.empty:
@@ -413,7 +478,7 @@ def main() -> None:
     if not q.empty:
         print(
             q[q["vorlauf"].isin([1, 3, 7])]
-            .pivot_table(index=["name", "vorlauf"], columns="modell", values="mae_log")
+            .pivot_table(index=["name", "vorlauf"], columns="modell", values="mae_log_abfluss")
             .round(3)
         )
 

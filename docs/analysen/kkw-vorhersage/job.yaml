@@ -1,4 +1,4 @@
-# Auftrag nach docs/ARCHITEKTUR.md 7.9; ausgeführt von abruf.py und auswertung.py im selben Ordner
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; ausgeführt von auswertung.py im selben Ordner
 id: kkw-vorhersage
 title: Vorhersagegüte von Flusstemperatur und Abfluss an französischen Kernkraftwerken
 question: >
@@ -30,6 +30,8 @@ method:
     persistenz: letzter Tagesmittelwert T-1
     direkt_vorhersage: Regression je Vorlauf auf log-Abfluss T-1 und T-8, Regen 7/30/90 Tage bis T, Boden, Schnee, Jahresgang, Regen T+1 bis T+d aus dem Lauf T
     direkt_perfekt: dasselbe mit dem später tatsächlich gefallenen Regen, Obergrenze
+    ohne_abflussmessung: wie direkt_vorhersage ohne log-Abfluss T-1 und T-8 (Ablation)
+    regenfenster: 7/30/90 Tage bis einschließlich T, Tag T aus dem Lauf T (Vorlauf 0), davor Vorlauf 0 der Vortagesläufe
   metrics: [mae_k, mae_log_abfluss, trefferquote, fehlalarmquote]
   schwellen:
     wasser_c: [24, 26]         # Beginn der Drosselung an Garonne und Rhône, ../kkw-kuehlwasser-fr
