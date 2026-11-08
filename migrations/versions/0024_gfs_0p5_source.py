@@ -37,6 +37,8 @@ def downgrade() -> None:
         "meta.bronze_run",
         "meta.nwp_run",
     ):
+        # Bezeichner/SQL aus Modulkonstanten, keine externe Eingabe; DDL nimmt keine Parameter
+        # nosemgrep
         op.execute(f"""
             DELETE FROM {table}
             WHERE source_id = (SELECT source_id FROM meta.source WHERE code = 'gfs_0p5')""")

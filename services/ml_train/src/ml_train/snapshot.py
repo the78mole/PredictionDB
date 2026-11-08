@@ -12,7 +12,9 @@ werden (lokal, im LAN oder auf einer Miet-GPU).
                           je Technologie, über die Cluster zusammengefasst (``*_power`` als
                           Summe, alles andere leistungsgewichtet gemittelt), Schritte nativ;
                           mit ``neighbour_weather`` zusätzlich ``nb_<zone>_<feature>`` je
-                          Nachbarzone aus dem Gold der zweiten Quelle (GFS Europa)
+                          Nachbarzone aus dem Gold der zweiten Quelle (GFS Europa), mit
+                          ``site_weather`` ``st_<standort>_<feature>`` je Kraftwerksstandort
+                          (Läufe ab ``history_days`` Tage vor dem ersten Wetterlauf)
 ``capacity.parquet``      ``day``, ``technology``, ``capacity_mw``: installierte Leistung DE
 ``manifest.json``         Zeiträume, Clusterung, Zeilenzahlen, SHA-256 je Datei, ``snapshot_id``,
                           Lizenzklasse je Energiequelle (``sources``) und ``publishable``
@@ -25,7 +27,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -34,7 +36,7 @@ from typing import Any
 import pandas as pd
 from sqlalchemy import Engine, text
 
-from ml_train.config import NeighbourWeather, neighbour_feature
+from ml_train.config import NeighbourWeather, SiteWeather, neighbour_feature, site_feature
 from ml_train.jobs import Progress, no_progress
 from predictiondb_core.log import get_logger
 
@@ -200,6 +202,35 @@ CAPACITY_SQL = text("""
     GROUP BY 1, 2 ORDER BY 1, 2""")
 
 
+def _fixed_rows(
+    c: Any,
+    source: str,
+    regions: list[str],
+    features: list[str],
+    name: Callable[[str, str], str],
+    a: datetime,
+    b: datetime,
+    hours: list[int],
+    max_lead_h: int,
+) -> pd.DataFrame:
+    df = pd.read_sql(
+        NEIGHBOUR_SQL,
+        c,
+        params={
+            "source": source,
+            "a": a,
+            "b": b,
+            "valid_to": b + timedelta(hours=max_lead_h),
+            "hours": hours,
+            "max_lead": max_lead_h,
+            "regions": regions,
+            "features": features,
+        },
+    )
+    df["feature"] = [name(r, f) for r, f in zip(df["region"], df["feature"], strict=True)]
+    return df[["run_time", "valid_time", "feature", "value"]]
+
+
 def neighbour_rows(
     c: Any,
     nb: NeighbourWeather,
@@ -212,24 +243,26 @@ def neighbour_rows(
 
     @relation(SWR-MLT-028, scope=function)
     """
-    df = pd.read_sql(
-        NEIGHBOUR_SQL,
-        c,
-        params={
-            "source": nb.source,
-            "a": a,
-            "b": b,
-            "valid_to": b + timedelta(hours=max_lead_h),
-            "hours": hours,
-            "max_lead": max_lead_h,
-            "regions": nb.region_codes(),
-            "features": nb.features,
-        },
+    return _fixed_rows(
+        c, nb.source, nb.region_codes(), nb.features, neighbour_feature, a, b, hours, max_lead_h
     )
-    df["feature"] = [
-        neighbour_feature(r, f) for r, f in zip(df["region"], df["feature"], strict=True)
-    ]
-    return df[["run_time", "valid_time", "feature", "value"]]
+
+
+def site_rows(
+    c: Any,
+    sw: SiteWeather,
+    a: datetime,
+    b: datetime,
+    hours: list[int],
+    max_lead_h: int,
+) -> pd.DataFrame:
+    """Features der Kraftwerksstandorte eines Zeitraums in der Form von ``weather.parquet``.
+
+    @relation(SWR-MLT-033, scope=function)
+    """
+    return _fixed_rows(
+        c, sw.source, sw.region_codes(), sw.features, site_feature, a, b, hours, max_lead_h
+    )
 
 
 def latest_clustering(engine: Engine) -> str | None:
@@ -263,15 +296,17 @@ def export_snapshot(
     source: str = "gfs_0p25",
     grid: str = "gfs_0p25",
     neighbour: NeighbourWeather | None = None,
+    sites: SiteWeather | None = None,
     progress: Progress = no_progress,
 ) -> Snapshot:
     """Liest Energie, Wetter-Features und Bestand für ``[start, end)`` aus der Datenbank.
 
     Wetterläufe nur mit ``run_time`` in ``[weather_from, weather_to)`` (Vorgabe: ``start``,
     ``end``); ``weather_to <= weather_from`` lässt das Wetter ganz weg. ``neighbour`` holt für
-    dieselben Läufe die Features der Nachbarzonen dazu.
+    dieselben Läufe die Features der Nachbarzonen dazu, ``sites`` die der Kraftwerksstandorte
+    (ab ``sites.history_days`` vor dem ersten Wetterlauf, für gleitende Mittel).
 
-    @relation(SWR-MLT-010, SWR-MLT-028, scope=function)
+    @relation(SWR-MLT-010, SWR-MLT-028, SWR-MLT-033, scope=function)
     """
     cv = clustering_version or latest_clustering(engine)
     hours = run_hours or [0, 12]
@@ -311,6 +346,12 @@ def export_snapshot(
                     nb = neighbour_rows(c, neighbour, a, b, hours, max_lead_h)
                     weather_parts.append(nb)
                     log.info("snapshot.neighbour", month=a.strftime("%Y-%m"), rows=len(nb))
+            if sites is not None and wx_start < wx_end:
+                site_start = wx_start - timedelta(days=sites.history_days)
+                for a, b in _months(site_start, wx_end):
+                    st = site_rows(c, sites, a, b, hours, max_lead_h)
+                    weather_parts.append(st)
+                    log.info("snapshot.sites", month=a.strftime("%Y-%m"), rows=len(st))
             progress("Bestand")
             capacity = pd.read_sql(CAPACITY_SQL, c, params={"cv": cv})
         else:
@@ -339,6 +380,8 @@ def export_snapshot(
     }
     if neighbour is not None:
         manifest["neighbour_weather"] = neighbour.model_dump()
+    if sites is not None:
+        manifest["site_weather"] = sites.model_dump()
     return Snapshot(energy, weather, capacity, manifest)
 
 

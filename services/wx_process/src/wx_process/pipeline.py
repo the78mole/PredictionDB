@@ -76,8 +76,10 @@ class WxPipeline:
         self.store = store
         self.builder = FeatureBuilder(config.technologies, config.pv)
         self.regions = RegionSet.load(config.regions) if config.regions is not None else None
+        #: feste Standorte mit eigener Version (``config.sites``)
+        self.sites = [RegionSet.load(p) for p in config.sites]
         self._source_id: int | None = None
-        self._region_ids: dict[str, int] | None = None
+        self._region_ids: dict[str, dict[str, int]] = {}
 
     @property
     def source_id(self) -> int:
@@ -271,11 +273,13 @@ class WxPipeline:
         assert self.store is not None
         valid = ds.valid_times
         capacity: Callable[[str, int], np.ndarray | None] | None = None
-        if self.regions is not None and version == self.regions.version:
+        fixed = self._fixed(version)
+        if fixed is not None:
             # feste Regionen: ohne Bestand, also ohne wind_power/pv_power
-            if self._region_ids is None:
-                self._region_ids = self.store.region_ids(self.regions.codes)
-            clusters = self.regions.clusters(self._region_ids)
+            ids = self._region_ids.get(version)
+            if ids is None:
+                ids = self._region_ids[version] = self.store.region_ids(fixed.codes)
+            clusters = fixed.clusters(ids)
         else:
             clusters = self.store.cluster_weights(version, self.config.weight_grid)
             days = [v.date() for v in valid]
@@ -310,6 +314,13 @@ class WxPipeline:
             log.warning("features.coverage", run=f"{ds.run:%Y%m%d%H}", clusters=low)
         return n, stats
 
+    def _fixed(self, version: str) -> RegionSet | None:
+        """Feste Regionen (Zonen oder Standorte) dieser Version, sonst ``None`` (Clusterung)."""
+        for rs in [self.regions, *self.sites]:
+            if rs is not None and rs.version == version:
+                return rs
+        return None
+
     # --- Ablauf ------------------------------------------------------------------------------
 
     def process(
@@ -322,7 +333,7 @@ class WxPipeline:
     ) -> RunOutcome:
         """Rechnet einen Lauf; ``prepare(run, valid_until)`` läuft direkt vor dem Schreiben.
 
-        @relation(SWR-WXP-003, SWR-WXP-022, scope=function)
+        @relation(SWR-WXP-003, SWR-WXP-022, SWR-WXP-042, scope=function)
         """
         run = run.astimezone(UTC)
         manifest = self.run_manifest(run)
@@ -335,40 +346,54 @@ class WxPipeline:
             version = self.regions.version
         if self.store is not None and version is None:
             version = self.store.latest_clustering(self.config.weight_grid)
-        if (
-            not force
-            and self.store is not None
-            and version is not None
-            and self.store.processed(self.source_id, run, version, FEATURES_VERSION)
-        ):
-            return RunOutcome(run, "skipped", clustering_version=version)
+        # Ohne ausdrückliche Clusterung entstehen auch die Standorte; mit ``clustering`` nur diese
+        # Version (z. B. Standorte allein über die Historie nachrechnen)
+        versions = [version] if version is not None else []
+        if clustering is None:
+            versions += [s.version for s in self.sites]
+        if self.store is not None:
+            todo = [
+                v
+                for v in versions
+                if force or not self.store.processed(self.source_id, run, v, FEATURES_VERSION)
+            ]
+            if versions and not todo:
+                return RunOutcome(run, "skipped", clustering_version=version)
+        else:
+            todo = versions
 
         ds, built = self.load_silver(run, manifest, force=force)
         silver: Literal["built", "reused"] = "built" if built else "reused"
         if self.store is not None:
             origin: Literal["bronze", "ghcr"] = "ghcr" if manifest.get("imported") else "bronze"
             self.store.mark_silver(self.source_id, [run], "present", origin)
-        if self.store is None or version is None:
+        if self.store is None or not todo:
             if self.store is not None:
                 log.warning("features.no_clustering", grid=self.config.weight_grid)
             return RunOutcome(run, "silver_only", silver)
 
         if prepare is not None:
             prepare(run, ds.valid_times[-1])
-        replace = self.store.has_features(self.source_id, run)
-        n, stats = self.write_features(ds, version, replace=replace)
         key = self.silver.key(ds.model, ds.resolution, ds.run)
-        self.store.mark_processed(
-            self.source_id, run, version, FEATURES_VERSION, key, n, stats, manifest
+        total, coverage = 0, []
+        for v in todo:
+            # Zonen-Gold: ersetzen, sobald der Lauf je Features hatte; Standorte nur, wenn diese
+            # Version schon einmal geschrieben wurde (sonst unnötiges DELETE in alten Chunks)
+            own = self._fixed(v) in self.sites
+            replace = self.store.has_features(self.source_id, run, v if own else None)
+            n, stats = self.write_features(ds, v, replace=replace)
+            self.store.mark_processed(
+                self.source_id, run, v, FEATURES_VERSION, key, n, stats, manifest
+            )
+            log.info(
+                "features.written", run=f"{run:%Y%m%d%H}", clustering=v, values=n, silver=silver
+            )
+            total += n
+            if stats["coverage_min"] is not None:
+                coverage.append(stats["coverage_min"])
+        return RunOutcome(
+            run, "processed", silver, todo[0], total, min(coverage) if coverage else None
         )
-        log.info(
-            "features.written",
-            run=f"{run:%Y%m%d%H}",
-            clustering=version,
-            values=n,
-            silver=silver,
-        )
-        return RunOutcome(run, "processed", silver, version, n, stats["coverage_min"])
 
     def _safe(self, run: datetime, **kwargs: Any) -> RunOutcome:
         """@relation(SWR-WXP-004, scope=function)"""

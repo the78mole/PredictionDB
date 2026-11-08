@@ -229,6 +229,41 @@ RELATIONS:
 - TYPE: Parent
   VALUE: SYSR-PR-001
 
+[REQUIREMENT]
+UID: SWR-MLT-029
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Verdichteter Index der Nachbarn
+STATEMENT: >>>
+Eine Reihengruppe ``nachbarindex`` muss Wind und PV der Nachbarn zu wenigen Kennzahlen
+verdichten: je Land der zum Ausgabezeitpunkt veröffentlichte Stand der installierten Leistung mal
+dem mittleren Kapazitätsfaktor seiner Zonen aus dem Lauf des DE-Wetters, als Summe in MW,
+leistungsgewichteter Faktor und Summe der Leistung.
+<<<
+QUELLE: docs/analysen/austausch-nachbarlaender
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-001
+
+[REQUIREMENT]
+UID: SWR-MLT-033
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Kühlwasserlage an Kraftwerksstandorten
+STATEMENT: >>>
+Eine Reihengruppe ``kuehlwasser`` muss je konfiguriertem Kraftwerksstandort die Lufttemperatur am
+Standort als Mittel des Zieltags und der 7 und 30 Tage bis dahin liefern (vergangene Tage aus dem
+jüngsten Lauf vor Tagesbeginn, ab dem Tag des Laufs dessen Prognose), dazu den zum
+Ausgabezeitpunkt zuletzt veröffentlichten Tagesabfluss relativ zum Median der 365 Tage davor und
+als Kennzahl die nach Temperatur- und Abflussschwelle gefährdete Leistung in MW.
+<<<
+QUELLE: docs/analysen/kkw-kuehlwasser-fr
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-001
+
 [[/SECTION]]
 
 [[SECTION]]

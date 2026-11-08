@@ -32,6 +32,8 @@ def downgrade() -> None:
           SELECT feature_id FROM meta.feature f JOIN meta.source s USING (source_id)
           WHERE s.code = 'gefs_0p5')""")
     for table in ("meta.feature", "meta.nwp_feature_run", "meta.silver_run", "meta.nwp_run"):
+        # Bezeichner/SQL aus Modulkonstanten, keine externe Eingabe; DDL nimmt keine Parameter
+        # nosemgrep
         op.execute(f"""
             DELETE FROM {table}
             WHERE source_id = (SELECT source_id FROM meta.source WHERE code = 'gefs_0p5')""")

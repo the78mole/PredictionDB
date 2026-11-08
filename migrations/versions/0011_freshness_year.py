@@ -34,8 +34,11 @@ _VIEW = """
 
 
 def upgrade() -> None:
+    # Bezeichner/SQL aus Modulkonstanten, keine externe Eingabe; DDL nimmt keine Parameter
+    # nosemgrep
     op.execute(_VIEW.format(year="800 days"))
 
 
 def downgrade() -> None:
+    # nosemgrep
     op.execute(_VIEW.format(year="500 days"))

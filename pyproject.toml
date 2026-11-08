@@ -6,7 +6,10 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = "AGPL-3.0-only"
 license-files = ["LICENSE"]
-dependencies = ["predictiondb-core"]
+dependencies = [
+    "defusedxml>=0.7.1",
+    "predictiondb-core",
+]
 
 [dependency-groups]
 dev = [
@@ -15,10 +18,12 @@ dev = [
     "pre-commit>=4.7.0",
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
+    "pytest-cov>=6",
     "pytest-html>=4.1",
     "pytest-xdist>=3.6",
     "ruff>=0.8",
     "strictdoc>=0.30.4",
+    "types-defusedxml>=0.7.0.20260504",
     "types-PyYAML",
 ]
 fuzz = [
@@ -70,6 +75,15 @@ module = [
     "pandas.*", "pyarrow.*", "scipy.*", "openpyxl.*", "strictdoc.*", "atheris",
 ]
 ignore_missing_imports = true
+
+[tool.coverage.run]
+# Testabdeckung der Unit-Tests (CI-Job „Unit-Tests“, OpenSSF Best Practices Silver)
+source = ["packages", "services", "predict"]
+branch = true
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+skip_empty = true
 
 [tool.pytest.ini_options]
 testpaths = ["packages", "services", "predict", "tests"]

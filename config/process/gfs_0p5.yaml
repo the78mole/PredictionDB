@@ -7,6 +7,10 @@ source: gfs_0p5
 source_config: config/sources/gfs_0p5.yaml
 weight_grid: gfs_0p5
 regions: config/gefs/regions_v2.json.gz
+# Kraftwerksstandorte (Kühlwasser, docs/analysen/kkw-kuehlwasser-fr), eigene Version sites_kkw_v1;
+# nur Temperatur, Niederschlag und Schnee am Gitterpunkt
+sites:
+  - config/process/kkw_standorte.json
 aggregation: cluster_cap_weighted
 lookback_hours: 48
 read_concurrency: 8
@@ -28,6 +32,7 @@ technologies:
     hub_height_m: 105
     power_curve: {cut_in: 3.5, rated: 13.0, cut_out: 25.0}
   pv: {kind: pv}
+  site: {kind: hydro}
   area:
     kind: area
     hub_height_m: 100

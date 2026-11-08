@@ -347,6 +347,152 @@ def test_neighbour_weather_group_same_run(snap, cfg) -> None:  # type: ignore[no
     np.testing.assert_allclose(frame.X["wx_nb_fr_wind_cf"], frame.X["wx_lead_h"] + 0.5)
 
 
+def test_neighbour_index_capacity_weighted(snap, cfg) -> None:  # type: ignore[no-untyped-def]
+    """Leistung je Land zum Ausgabezeitpunkt mal mittlerem Faktor seiner Zonen, summiert.
+
+    @relation(SWR-MLT-029, scope=function)
+    """
+    from ml_train.config import SeriesGroup, zone_country
+
+    assert [zone_country(z) for z in ("DK1", "NO2", "FR")] == ["dk", "no", "fr"]
+    w = snap.weather
+    src = w[w["feature"] == w["feature"].iloc[0]]
+    parts = [w]
+    for zone, cf in {"dk1": 0.2, "dk2": 0.4, "fr": 0.5}.items():
+        parts.append(src.assign(feature=f"nb_{zone}_wind_cf", value=np.float32(cf)))
+    ts = pd.Timestamp("2021-12-31 23:00", tz="UTC")
+    caps = pd.DataFrame(
+        {
+            "ts": [ts, ts, ts, ts + pd.Timedelta(days=365)],
+            "code": [
+                "cap_wind_onshore_dk",
+                "cap_wind_offshore_dk",
+                "cap_wind_onshore_fr",
+                "cap_wind_onshore_fr",
+            ],
+            "value": [1000.0, 500.0, 1500.0, 2000.0],
+            # der FR-Stand 2023 erscheint erst nach dem Ausgabetag
+            "published": pd.to_datetime(
+                ["2023-03-01", "2023-03-01", "2023-03-01", "2023-06-01"], utc=True
+            ),
+        }
+    )
+    energy = pd.concat([snap.energy, caps.astype(snap.energy.dtypes.to_dict())])
+    s2 = Snapshot(energy, pd.concat(parts), snap.capacity, snap.manifest)
+    cfg.neighbour_weather = NeighbourWeather(zones=["DK1", "DK2", "FR"])
+    cfg.series_groups["nachbarindex"] = SeriesGroup(
+        mode="nachbarindex",
+        codes=["cap_wind_onshore_dk", "cap_wind_offshore_dk", "cap_wind_onshore_fr"],
+    )
+    frame = FeatureBuilder(s2, cfg).build([date(2023, 5, 10)])
+    assert set(frame.groups["nachbarindex"]) == {
+        "nbi_wind_mw",
+        "nbi_wind_cf",
+        "nbi_cap_wind_mw",
+        "nbi_pv_mw",
+        "nbi_pv_cf",
+        "nbi_cap_pv_mw",
+    }
+    x = frame.X[frame.X["wx_lead_h"].notna()]
+    # DK: 1500 MW mal Mittel (0,2; 0,4) = 450, FR: 1500 MW mal 0,5 = 750
+    np.testing.assert_allclose(x["nbi_wind_mw"], 1200.0, rtol=1e-5)
+    np.testing.assert_allclose(x["nbi_wind_cf"], 0.4, rtol=1e-5)
+    np.testing.assert_allclose(x["nbi_cap_wind_mw"], 3000.0)
+    assert x["nbi_pv_mw"].isna().all()  # keine PV-Leistung, kein pv_cf
+    # laufendes Jahr früh abgerufen: der später veröffentlichte Vorjahreswert verdrängt es nicht
+    fb = FeatureBuilder(s2, cfg)
+    early = pd.DataFrame(
+        {
+            "ts": [ts + pd.Timedelta(days=365), ts],
+            "code": "cap_solar_fr",
+            "value": [3000.0, 2000.0],
+            "published": pd.to_datetime(["2023-01-05", "2023-03-01"], utc=True),
+        }
+    )
+    fb.energy_long = pd.concat([snap.energy, early.astype(snap.energy.dtypes.to_dict())])
+    when = pd.DatetimeIndex(pd.to_datetime(["2023-02-01", "2023-05-01"], utc=True))
+    np.testing.assert_allclose(fb._capacity_asof("cap_solar_fr", when), [3000.0, 3000.0])
+    with pytest.raises(ValueError, match="neighbour_weather"):
+        ModelConfig.model_validate({**cfg.model_dump(), "neighbour_weather": None})
+
+
+def test_cooling_sites_rolling_and_flow(snap, cfg) -> None:  # type: ignore[no-untyped-def]
+    """Kühlwasser: Temperaturmittel über Vortage aus früheren Läufen, Abfluss relativ zum
+    Median, gefährdete Leistung.
+
+    @relation(SWR-MLT-033, scope=function)
+    """
+    from ml_train.config import CoolingSite, SeriesGroup, SiteWeather, site_feature
+
+    assert site_feature("gefs:KKW_BUG:site", "t2m") == "st_bug_t2m"
+    w = snap.weather
+    src = w[w["feature"] == w["feature"].iloc[0]]
+    # BUG: Temperatur = Tag seit 1.1.2023 (Ortstag), SAL: fest 25 °C
+    day = pd.DatetimeIndex(src["valid_time"]).tz_convert("Europe/Berlin").normalize()
+    k = ((day.tz_localize(None) - pd.Timestamp("2023-01-01")) / pd.Timedelta(days=1)).to_numpy()
+    parts = [
+        w,
+        src.assign(feature="st_bug_t2m", value=k.astype(np.float32)),
+        src.assign(feature="st_sal_t2m", value=np.float32(25.0)),
+    ]
+    flow_days = pd.date_range("2022-06-01", "2023-05-12", freq="D", tz="UTC")
+    flow = np.where(flow_days < pd.Timestamp("2023-04-30", tz="UTC"), 100.0, 30.0)
+    flows = pd.DataFrame(
+        {
+            "ts": flow_days,
+            "code": "river_flow_rhone_st_rambert",
+            "value": flow,
+            "published": flow_days + pd.Timedelta(days=1, hours=6),
+        }
+    )
+    energy = pd.concat([snap.energy, flows.astype(snap.energy.dtypes.to_dict())])
+    s2 = Snapshot(energy, pd.concat(parts), snap.capacity, snap.manifest)
+    cfg.site_weather = SiteWeather(
+        sites=[
+            # Schwelle mitten in den Werten, damit die Rampe greift
+            CoolingSite(code="BUG", mw=3600, t7_from=130),
+            CoolingSite(
+                code="SAL",
+                mw=2600,
+                flows=["river_flow_rhone_ternay", "river_flow_rhone_st_rambert"],
+                t7_from=24,
+                flow_below=0.5,
+            ),
+        ]
+    )
+    cfg.series_groups["kuehlwasser"] = SeriesGroup(
+        mode="kuehlwasser", codes=["river_flow_rhone_ternay", "river_flow_rhone_st_rambert"]
+    )
+    cfg.variants[-1].groups.append("kuehlwasser")
+    issue = date(2023, 5, 10)
+    frame = FeatureBuilder(s2, cfg).build([issue])
+    assert {"kw_bug_t7", "kw_sal_q_rel", "kw_risiko_mw"} <= set(frame.groups["kuehlwasser"])
+    assert "kw_bug_q_rel" not in frame.X.columns
+    x = frame.X[frame.X["wx_lead_h"].notna()]
+    target = pd.DatetimeIndex(frame.meta.loc[x.index, "ts"]).tz_convert("Europe/Berlin")
+    kt = (target.normalize().tz_localize(None) - pd.Timestamp("2023-01-01")).days.to_numpy()
+    # Stundenwerte sind Mittel über die Stunde: die letzte Stunde des Tages reicht in den
+    # nächsten hinein (+0,5/24)
+    np.testing.assert_allclose(x["kw_bug_t1"], kt, atol=0.03)
+    np.testing.assert_allclose(x["kw_bug_t7"], kt - 3, atol=0.03)
+    np.testing.assert_allclose(x["kw_bug_t30"], kt - 14.5, atol=0.03)
+    np.testing.assert_allclose(x["kw_sal_t7"], 25.0)
+    # zuletzt veröffentlicht ist der 8.5. (30 m³/s), Median der 365 Tage davor 100 m³/s
+    np.testing.assert_allclose(x["kw_sal_q_rel"], 0.3, rtol=1e-6)
+    # BUG: (t7 - 130) / 4 begrenzt auf 0..1; SAL: Abfluss voll (0,5 - 0,3) / 0,2 = 1
+    heat_bug = np.clip((x["kw_bug_t7"].to_numpy() - 130) / 4, 0, 1) * 3600
+    assert heat_bug.min() == 0 and 0 < heat_bug.max() < 3600
+    np.testing.assert_allclose(x["kw_hitze_mw"], heat_bug + 0.25 * 2600, rtol=1e-5)
+    np.testing.assert_allclose(x["kw_niedrigwasser_mw"], 2600.0)
+    np.testing.assert_allclose(x["kw_risiko_mw"], heat_bug + 2600, rtol=1e-5)
+    with pytest.raises(ValueError, match="site_weather"):
+        ModelConfig.model_validate({**cfg.model_dump(), "site_weather": None})
+    bad = cfg.model_dump()
+    bad["series_groups"]["kuehlwasser"]["codes"] = ["river_flow_rhone_ternay"]
+    with pytest.raises(ValueError, match="fehlen in codes"):
+        ModelConfig.model_validate(bad)
+
+
 def test_weather_alignment_interval_and_instant() -> None:
     """@relation(SWR-MLT-023, scope=function)"""
     run = pd.Timestamp("2024-01-01", tz="UTC")

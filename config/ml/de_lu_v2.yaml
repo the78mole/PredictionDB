@@ -48,6 +48,15 @@ lag_series: [residual_load]
 lag_local_time: [load_actual]
 
 series_groups:
+  # Wind- und PV-Index der Nachbarn (6 Kennzahlen), braucht neighbour_weather
+  nachbarindex:
+    mode: nachbarindex
+    codes: [cap_wind_onshore_at, cap_solar_at, cap_wind_onshore_be, cap_wind_offshore_be,
+            cap_solar_be, cap_wind_onshore_ch, cap_solar_ch, cap_wind_onshore_cz, cap_solar_cz,
+            cap_wind_onshore_dk, cap_wind_offshore_dk, cap_solar_dk, cap_wind_onshore_fr,
+            cap_wind_offshore_fr, cap_solar_fr, cap_wind_onshore_nl, cap_wind_offshore_nl,
+            cap_solar_nl, cap_wind_onshore_no, cap_solar_no, cap_wind_onshore_pl, cap_solar_pl,
+            cap_wind_onshore_se, cap_solar_se]
   # Day-Ahead-Preise der Nachbarzonen (Energy-Charts, CC BY 4.0), bekannt wie der Preis DE-LU
   nachbarn:
     mode: lags
@@ -94,15 +103,46 @@ series_groups:
     codes: [mw_base, mw_wind_onshore, mw_wind_offshore, mw_solar, jw_base, jw_wind_onshore,
             jw_wind_offshore, jw_solar]
     change_days: 35
+  # Kühlwasserlage der französischen Kernkraftwerke (Abflüsse Hub'eau, Temperatur am Standort
+  # aus site_weather), braucht site_weather
+  kuehlwasser:
+    mode: kuehlwasser
+    codes: [river_flow_rhone_lagnieu, river_flow_rhone_st_rambert, river_flow_rhone_ternay,
+            river_flow_rhone_viviers, river_flow_garonne_lamagistere, river_flow_moselle_uckange,
+            river_flow_meuse_chooz]
 
 # Wind- und PV-Index der Nachbarzonen aus dem Gold von GFS Europa (gfs_0p5, Flächenmittel je
 # Zone aus regions_v2), Gruppe nachbarwetter. Im Analyse-Backtest erklärte das Netto-Import und
 # Grenzflüsse deutlich besser, den Preis etwas (docs/analysen/austausch-nachbarlaender).
 # Zonen mit Grenze bzw. Kabel zu DE-LU.
+# Verdichtet: installierte Wind- und PV-Leistung je Nachbarland (Energy-Charts, je Jahr) mal
+# mittlerem Kapazitätsfaktor seiner Zonen, als Summe in MW und leistungsgewichteter Faktor
+# (Gruppe nachbarindex, 6 Merkmale statt 22 in nachbarwetter).
 neighbour_weather:
   source: gfs_0p5
   zones: [AT, BE, CH, CZ, DK1, DK2, FR, NL, NO2, PL, SE4]
   features: [wind_cf, pv_cf]
+
+# Französische Kernkraftwerke mit umweltbedingter Drosselung 2021 bis 2026
+# (docs/analysen/kkw-kuehlwasser-fr): Lufttemperatur am Gitterpunkt aus dem Gold von GFS Europa
+# (Regionen config/process/kkw_standorte.json, Version sites_kkw_v1), Abfluss am Pegel davor.
+# Leistung aus tabellen/standorte.csv, Schwellen aus tabellen/schwellen.csv (Beginn des steilen
+# Anstiegs der Tage mit Drosselung). Saint-Alban: Saint-Rambert ab 07/2024, davor Ternay.
+site_weather:
+  source: gfs_0p5
+  features: [t2m]
+  sites:
+    - {code: BUG, mw: 3630, flows: [river_flow_rhone_lagnieu], t7_from: 22}
+    - code: SAL
+      mw: 2638
+      flows: [river_flow_rhone_st_rambert, river_flow_rhone_ternay]
+      t7_from: 24
+      flow_below: 0.5
+    - {code: TRI, mw: 3739, flows: [river_flow_rhone_viviers], t7_from: 24, flow_below: 0.5}
+    - {code: BLA, mw: 3773, t7_from: 24}
+    - {code: GOL, mw: 2632, flows: [river_flow_garonne_lamagistere], t7_from: 24, flow_below: 0.5}
+    - {code: CAT, mw: 5198, flows: [river_flow_moselle_uckange], t7_from: 22, flow_below: 0.3}
+    - {code: CHO, mw: 3007, flows: [river_flow_meuse_chooz], t7_from: 22, flow_below: 0.3}
 
 variants:
   # Maßstab wie de_lu_v1/kalender: Kalender, Lags, Bestand; ab Start der Gebotszone DE-LU
@@ -178,6 +218,21 @@ variants:
     train_from: 2021-03-23
   - name: wetter_frei_gk_skaliert_nachbarwetter
     groups: [calendar, lags, capacity, weather, nachbarwetter, nachbarn, lastprognose,
+             brennstoffe, marktwerte, grenzkosten, stage1]
+    scale: {da_price_de_lu: gk_niveau}
+    requires_weather: true
+    train_from: 2021-03-23
+  # statt der 22 Zonenmerkmale nur der verdichtete Index
+  - name: wetter_frei_gk_skaliert_nachbarindex
+    groups: [calendar, lags, capacity, weather, nachbarindex, nachbarn, lastprognose,
+             brennstoffe, marktwerte, grenzkosten, stage1]
+    scale: {da_price_de_lu: gk_niveau}
+    requires_weather: true
+    train_from: 2021-03-23
+  # dazu die Kühlwasserlage der französischen Kernkraftwerke (Ablation gegen
+  # wetter_frei_gk_skaliert)
+  - name: wetter_frei_gk_skaliert_kuehlwasser
+    groups: [calendar, lags, capacity, weather, kuehlwasser, nachbarn, lastprognose,
              brennstoffe, marktwerte, grenzkosten, stage1]
     scale: {da_price_de_lu: gk_niveau}
     requires_weather: true

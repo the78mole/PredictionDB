@@ -21,9 +21,9 @@ Die Dateien liegen flach nebeneinander, damit sie später 1:1 Layer des Artefakt
 ``cluster_capacity.parquet`` nur Wetter-Varianten: Leistung je Cluster (``technology``,
                              ``cluster_no``, ``day``, ``capacity_mw``), letzte 30 Tage
 ``wx_process.yaml``          nur Wetter-Varianten: Feature-Definitionen (Leistungskurven, PV)
-``neighbour_cells.parquet``  nur mit ``nachbarwetter``: ``zone``, ``technology``, ``lat``, ``lon``,
+``neighbour_cells.parquet``  nur mit Nachbarzonen: ``zone``, ``technology``, ``lat``, ``lon``,
                              ``share`` je Gitterzelle der Nachbarzonen (0,5°, ``regions_v2``)
-``neighbour_wx.yaml``        nur mit ``nachbarwetter``: Feature-Definitionen der Quelle
+``neighbour_wx.yaml``        nur mit Nachbarzonen: Feature-Definitionen der Quelle
                              (``config/process/gfs_0p5.yaml``)
 ============================ ==================================================================
 
@@ -98,6 +98,15 @@ def neighbour_cells(nb: NeighbourWeather, regions_path: Path) -> pd.DataFrame:
     return pd.concat(parts, ignore_index=True)
 
 
+def uses_neighbour(cfg: ModelConfig, variant: Variant) -> bool:
+    """Braucht die Variante das Wetter der Nachbarzonen (``nachbarwetter`` oder ein Index)?
+
+    @relation(SWR-MLT-071, scope=function)
+    """
+    index = {n for n, g in cfg.series_groups.items() if g.mode == "nachbarindex"}
+    return "nachbarwetter" in variant.groups or bool(index & set(variant.groups))
+
+
 def write_package(
     out: Path,
     *,
@@ -119,8 +128,21 @@ def write_package(
     """
     spec = json.loads((model_dir / "model.json").read_text())
     variant = Variant.model_validate(spec["variant"])
-    nb = cfg.neighbour_weather if "nachbarwetter" in variant.groups else None
-    if "nachbarwetter" in variant.groups:
+    cooling = [
+        g
+        for g in variant.groups
+        if g in cfg.series_groups and cfg.series_groups[g].mode == "kuehlwasser"
+    ]
+    if cooling:
+        # Der schlanke Stack rechnet das Standort-Wetter noch nicht; ohne es blieben die
+        # Merkmale im Betrieb leer
+        raise ValueError(
+            f"Variante {variant.name}: Gruppe {cooling[0]} (kuehlwasser) im Paket noch nicht "
+            "unterstützt"
+        )
+    needs_nb = uses_neighbour(cfg, variant)
+    nb = cfg.neighbour_weather if needs_nb else None
+    if needs_nb:
         # ohne Zellen entstünde ein Paket, das die Merkmale der Gruppe im Betrieb leer lässt
         if not variant.requires_weather or nb is None:
             raise ValueError(f"Variante {variant.name}: Nachbarwetter braucht Wetter und Zonen")
@@ -267,7 +289,7 @@ def export_package(
         ]
         wx = {"technologies": wx["technologies"], "pv": wx.get("pv", {})}
     nb_cells = nb_wx = None
-    if "nachbarwetter" in model.variant.groups and cfg.neighbour_weather is not None:
+    if uses_neighbour(cfg, model.variant) and cfg.neighbour_weather is not None:
         nb_wx = yaml.safe_load(
             (neighbour_config_dir / f"{cfg.neighbour_weather.source}.yaml").read_text()
         )

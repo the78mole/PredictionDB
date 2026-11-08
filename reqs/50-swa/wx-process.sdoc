@@ -129,6 +129,8 @@ ORT: services/wx_process/src/wx_process/regions.py
 RELATIONS:
 - TYPE: Parent
   VALUE: SWR-WXP-035
+- TYPE: Parent
+  VALUE: SWR-WXP-042
 
 [ELEMENT]
 UID: SWA-WXP-PIPELINE
@@ -156,6 +158,8 @@ RELATIONS:
   VALUE: SWR-WXP-040
 - TYPE: Parent
   VALUE: SWR-WXP-041
+- TYPE: Parent
+  VALUE: SWR-WXP-042
 
 [ELEMENT]
 UID: SWA-WXP-STORE

@@ -7,6 +7,7 @@ Create Date: 2026-10-23
 
 from collections.abc import Sequence
 
+import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0008_source_free"
@@ -23,8 +24,12 @@ def upgrade() -> None:
     # energy-ingest setzt sie beim Start aus PDB_ALLOW_*. Bis dahin sind unfreie Quellen aus.
     op.execute("ALTER TABLE meta.source ADD COLUMN free boolean NOT NULL DEFAULT true")
     op.execute("ALTER TABLE meta.source ADD COLUMN enabled boolean NOT NULL DEFAULT true")
-    codes = ", ".join(f"'{c}'" for c in UNFREE)
-    op.execute(f"UPDATE meta.source SET free = false, enabled = false WHERE code IN ({codes})")
+    codes: sa.BindParameter[list[str]] = sa.bindparam("codes", list(UNFREE), expanding=True)
+    op.execute(
+        sa.text(
+            "UPDATE meta.source SET free = false, enabled = false WHERE code IN :codes"
+        ).bindparams(codes)
+    )
     op.execute("UPDATE meta.source SET priority = 10 WHERE code = 'smard'")
     op.execute("UPDATE meta.source SET priority = 20 WHERE code = 'entsoe'")
     op.execute("""

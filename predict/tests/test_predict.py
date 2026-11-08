@@ -474,3 +474,15 @@ def test_next_slot() -> None:
     assert next_slot(now, 60, 20) == datetime(2026, 10, 24, 19, 20, tzinfo=UTC)
     assert next_slot(now.replace(minute=5), 60, 20) == datetime(2026, 10, 24, 18, 20, tzinfo=UTC)
     assert next_slot(now, 15, 5) == datetime(2026, 10, 24, 18, 35, tzinfo=UTC)
+
+
+def test_neighbour_capacity_routes() -> None:
+    """Die Leistung der Nachbarländer für ``nachbarindex`` kommt von Energy-Charts.
+
+    @relation(SWR-PRD-020, scope=function)
+    """
+    from pdb_predict.energy import routes
+
+    r = routes()
+    assert r["cap_solar_fr"] == [("energy_charts", "installed_fr")]
+    assert r["cap_wind_offshore_dk"] == [("energy_charts", "installed_dk")]

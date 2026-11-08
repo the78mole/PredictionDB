@@ -1,0 +1,433 @@
+{
+ "set": "sites",
+ "version": "kkw_v1",
+ "grid": {
+  "res": 0.5
+ },
+ "note": "Binnenstandorte der französischen Kernkraftwerke, bilinear auf dem 0,5°-Gitter (GFS Europa). Koordinaten auf zwei Nachkommastellen aus docs/analysen/kkw-kuehlwasser-fr/tabellen/standorte.csv.",
+ "sources": [
+  "Wikipedia (fr), Artikel „Centrale nucléaire de …“, CC BY-SA 4.0, Link je Standort in docs/analysen/kkw-kuehlwasser-fr/tabellen/standorte.csv"
+ ],
+ "regions": [
+  {
+   "code": "KKW_BUG:site",
+   "technology": "site",
+   "name": "Bugey",
+   "gewaesser": "Rhône",
+   "lat": 45.8,
+   "lon": 5.27,
+   "cells": [
+    [
+     45.5,
+     5.0,
+     0.184
+    ],
+    [
+     45.5,
+     5.5,
+     0.216
+    ],
+    [
+     46.0,
+     5.0,
+     0.276
+    ],
+    [
+     46.0,
+     5.5,
+     0.324
+    ]
+   ]
+  },
+  {
+   "code": "KKW_SAL:site",
+   "technology": "site",
+   "name": "Saint-Alban",
+   "gewaesser": "Rhône",
+   "lat": 45.4,
+   "lon": 4.76,
+   "cells": [
+    [
+     45.0,
+     4.5,
+     0.096
+    ],
+    [
+     45.0,
+     5.0,
+     0.104
+    ],
+    [
+     45.5,
+     4.5,
+     0.384
+    ],
+    [
+     45.5,
+     5.0,
+     0.416
+    ]
+   ]
+  },
+  {
+   "code": "KKW_TRI:site",
+   "technology": "site",
+   "name": "Tricastin",
+   "gewaesser": "Rhône",
+   "lat": 44.33,
+   "lon": 4.73,
+   "cells": [
+    [
+     44.0,
+     4.5,
+     0.1836
+    ],
+    [
+     44.0,
+     5.0,
+     0.1564
+    ],
+    [
+     44.5,
+     4.5,
+     0.3564
+    ],
+    [
+     44.5,
+     5.0,
+     0.3036
+    ]
+   ]
+  },
+  {
+   "code": "KKW_BLA:site",
+   "technology": "site",
+   "name": "Blayais",
+   "gewaesser": "Gironde",
+   "lat": 45.26,
+   "lon": -0.69,
+   "cells": [
+    [
+     45.0,
+     -1.0,
+     0.1824
+    ],
+    [
+     45.0,
+     -0.5,
+     0.2976
+    ],
+    [
+     45.5,
+     -1.0,
+     0.1976
+    ],
+    [
+     45.5,
+     -0.5,
+     0.3224
+    ]
+   ]
+  },
+  {
+   "code": "KKW_CRU:site",
+   "technology": "site",
+   "name": "Cruas",
+   "gewaesser": "Rhône",
+   "lat": 44.63,
+   "lon": 4.76,
+   "cells": [
+    [
+     44.5,
+     4.5,
+     0.3552
+    ],
+    [
+     44.5,
+     5.0,
+     0.3848
+    ],
+    [
+     45.0,
+     4.5,
+     0.1248
+    ],
+    [
+     45.0,
+     5.0,
+     0.1352
+    ]
+   ]
+  },
+  {
+   "code": "KKW_GOL:site",
+   "technology": "site",
+   "name": "Golfech",
+   "gewaesser": "Garonne",
+   "lat": 44.11,
+   "lon": 0.85,
+   "cells": [
+    [
+     44.0,
+     0.5,
+     0.234
+    ],
+    [
+     44.0,
+     1.0,
+     0.546
+    ],
+    [
+     44.5,
+     0.5,
+     0.066
+    ],
+    [
+     44.5,
+     1.0,
+     0.154
+    ]
+   ]
+  },
+  {
+   "code": "KKW_BEL:site",
+   "technology": "site",
+   "name": "Belleville",
+   "gewaesser": "Loire",
+   "lat": 47.51,
+   "lon": 2.88,
+   "cells": [
+    [
+     47.5,
+     2.5,
+     0.2352
+    ],
+    [
+     47.5,
+     3.0,
+     0.7448
+    ],
+    [
+     48.0,
+     2.5,
+     0.0048
+    ],
+    [
+     48.0,
+     3.0,
+     0.0152
+    ]
+   ]
+  },
+  {
+   "code": "KKW_DAM:site",
+   "technology": "site",
+   "name": "Dampierre",
+   "gewaesser": "Loire",
+   "lat": 47.73,
+   "lon": 2.52,
+   "cells": [
+    [
+     47.5,
+     2.5,
+     0.5184
+    ],
+    [
+     47.5,
+     3.0,
+     0.0216
+    ],
+    [
+     48.0,
+     2.5,
+     0.4416
+    ],
+    [
+     48.0,
+     3.0,
+     0.0184
+    ]
+   ]
+  },
+  {
+   "code": "KKW_SLB:site",
+   "technology": "site",
+   "name": "Saint-Laurent",
+   "gewaesser": "Loire",
+   "lat": 47.72,
+   "lon": 1.58,
+   "cells": [
+    [
+     47.5,
+     1.5,
+     0.4704
+    ],
+    [
+     47.5,
+     2.0,
+     0.0896
+    ],
+    [
+     48.0,
+     1.5,
+     0.3696
+    ],
+    [
+     48.0,
+     2.0,
+     0.0704
+    ]
+   ]
+  },
+  {
+   "code": "KKW_CHI:site",
+   "technology": "site",
+   "name": "Chinon",
+   "gewaesser": "Loire",
+   "lat": 47.23,
+   "lon": 0.17,
+   "cells": [
+    [
+     47.0,
+     0.0,
+     0.3564
+    ],
+    [
+     47.0,
+     0.5,
+     0.1836
+    ],
+    [
+     47.5,
+     0.0,
+     0.3036
+    ],
+    [
+     47.5,
+     0.5,
+     0.1564
+    ]
+   ]
+  },
+  {
+   "code": "KKW_CIV:site",
+   "technology": "site",
+   "name": "Civaux",
+   "gewaesser": "Vienne",
+   "lat": 46.46,
+   "lon": 0.65,
+   "cells": [
+    [
+     46.0,
+     0.5,
+     0.056
+    ],
+    [
+     46.0,
+     1.0,
+     0.024
+    ],
+    [
+     46.5,
+     0.5,
+     0.644
+    ],
+    [
+     46.5,
+     1.0,
+     0.276
+    ]
+   ]
+  },
+  {
+   "code": "KKW_CAT:site",
+   "technology": "site",
+   "name": "Cattenom",
+   "gewaesser": "Moselle",
+   "lat": 49.42,
+   "lon": 6.22,
+   "cells": [
+    [
+     49.0,
+     6.0,
+     0.0896
+    ],
+    [
+     49.0,
+     6.5,
+     0.0704
+    ],
+    [
+     49.5,
+     6.0,
+     0.4704
+    ],
+    [
+     49.5,
+     6.5,
+     0.3696
+    ]
+   ]
+  },
+  {
+   "code": "KKW_CHO:site",
+   "technology": "site",
+   "name": "Chooz",
+   "gewaesser": "Meuse",
+   "lat": 50.09,
+   "lon": 4.79,
+   "cells": [
+    [
+     50.0,
+     4.5,
+     0.3444
+    ],
+    [
+     50.0,
+     5.0,
+     0.4756
+    ],
+    [
+     50.5,
+     4.5,
+     0.0756
+    ],
+    [
+     50.5,
+     5.0,
+     0.1044
+    ]
+   ]
+  },
+  {
+   "code": "KKW_NOG:site",
+   "technology": "site",
+   "name": "Nogent",
+   "gewaesser": "Seine",
+   "lat": 48.52,
+   "lon": 3.52,
+   "cells": [
+    [
+     48.5,
+     3.5,
+     0.9216
+    ],
+    [
+     48.5,
+     4.0,
+     0.0384
+    ],
+    [
+     49.0,
+     3.5,
+     0.0384
+    ],
+    [
+     49.0,
+     4.0,
+     0.0016
+    ]
+   ]
+  }
+ ]
+}

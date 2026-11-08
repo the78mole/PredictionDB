@@ -13,15 +13,23 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](.pre-commit-config.yaml)
 [![Renovate](https://img.shields.io/badge/Renovate-enabled-brightgreen?logo=renovatebot)](renovate.json)
-![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/the78mole/PredictionDB?utm_source=oss&utm_medium=github&utm_campaign=the78mole%2FPredictionDB&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+[![Sourcery](https://img.shields.io/badge/Sourcery-Reviews-FF7A00)](https://sourcery.ai)
 
 Strombedarfs- und Strompreisprognose für Deutschland auf Basis kostenfreier Wettermodelle
-(NOAA GFS u. a.) und Energiedaten. Architektur: [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md), Prognosemodelle:
-[docs/PROGNOSEMODELLE.md](docs/PROGNOSEMODELLE.md), Backtest:
-[docs/BACKTEST.md](docs/BACKTEST.md). Gespeicherte Wetterdaten: [docs/WETTERDATEN.md](docs/WETTERDATEN.md). Quellen mit
-Schlüssel- oder Lizenzbedarf: [docs/DATENQUELLEN-ZUGANG.md](docs/DATENQUELLEN-ZUGANG.md).
-Projektseite mit Anforderungen (Traceability, Projektstatistik) und aktuellen Testberichten:
-[the78mole.github.io/PredictionDB](https://the78mole.github.io/PredictionDB/).
+(NOAA GFS u. a.) und Energiedaten.
+
+**Projektseite:** [the78mole.github.io/PredictionDB](https://the78mole.github.io/PredictionDB/)
+mit Anforderungen (Traceability, Projektstatistik) und aktuellen Testberichten.
+
+## Dokumentation
+
+| Dokument | Inhalt |
+|---|---|
+| [ARCHITEKTUR.md](docs/ARCHITEKTUR.md) | Gesamtarchitektur: Dienste, Datenhaltung, Betrieb |
+| [PROGNOSEMODELLE.md](docs/PROGNOSEMODELLE.md) | Prognosemodelle für Last DE und Day-Ahead-Preis DE-LU: Aufbau, Training, Freigabe |
+| [BACKTEST.md](docs/BACKTEST.md) | Backtest: wie gut eine Modellvariante im Betrieb gewesen wäre, und wie man ihn liest |
+| [WETTERDATEN.md](docs/WETTERDATEN.md) | Gespeicherte Wetterdaten je Modell und Stufe (Bronze, Silber, Gold) |
+| [DATENQUELLEN-ZUGANG.md](docs/DATENQUELLEN-ZUGANG.md) | Quellen mit Schlüssel- oder Lizenzbedarf |
 
 ## Aufbau
 
@@ -114,7 +122,14 @@ von ihm genutzten Pakete ändern, und berührt die Tags `vX.Y.Z` nicht (`naechst
 ## Beiträge
 
 Beiträge setzen die Annahme der [Beitragsbedingungen](CONTRIBUTING.md) voraus,
-insbesondere die Einräumung von Nutzungsrechten an den Projektinhaber.
+insbesondere die Einräumung von Nutzungsrechten an den Projektinhaber. Wer was entscheidet, steht
+in [GOVERNANCE.md](GOVERNANCE.md), die Ziele in [ROADMAP.md](ROADMAP.md).
+
+## Sicherheit
+
+Lücken bitte vertraulich melden, siehe [SECURITY.md](SECURITY.md). Was Du an Sicherheit erwarten
+kannst, das Sicherheitskonzept und wie sich Images und Release-Anhänge prüfen lassen, steht in
+[docs/SICHERHEIT.md](docs/SICHERHEIT.md).
 
 ## Lizenz
 
