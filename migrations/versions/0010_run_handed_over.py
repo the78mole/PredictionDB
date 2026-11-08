@@ -22,6 +22,8 @@ def upgrade() -> None:
     # oft noch nicht (vollständig) veröffentlicht und wird vom Folgejob geladen. Bisher blieb er
     # 'queued' bzw. 'aborted' und drückte den Fortschritt des beendeten Jobs unter 100 %.
     op.execute("ALTER TABLE meta.backfill_run DROP CONSTRAINT backfill_run_status_check")
+    # Bezeichner/SQL aus Modulkonstanten, keine externe Eingabe; DDL nimmt keine Parameter
+    # nosemgrep
     op.execute(f"""
         ALTER TABLE meta.backfill_run ADD CONSTRAINT backfill_run_status_check
           CHECK (status IN ({STATUSES}, 'handed_over'))""")
@@ -37,6 +39,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.execute("UPDATE meta.backfill_run SET status = 'aborted' WHERE status = 'handed_over'")
     op.execute("ALTER TABLE meta.backfill_run DROP CONSTRAINT backfill_run_status_check")
+    # nosemgrep
     op.execute(f"""
         ALTER TABLE meta.backfill_run ADD CONSTRAINT backfill_run_status_check
           CHECK (status IN ({STATUSES}))""")

@@ -38,8 +38,11 @@ _EUROSTAT = """WHEN s.resolution <= interval '31 days' AND src.code = 'eurostat'
 
 
 def upgrade() -> None:
+    # Bezeichner/SQL aus Modulkonstanten, keine externe Eingabe; DDL nimmt keine Parameter
+    # nosemgrep
     op.execute(_VIEW.format(eurostat=_EUROSTAT))
 
 
 def downgrade() -> None:
+    # nosemgrep
     op.execute(_VIEW.format(eurostat=""))
