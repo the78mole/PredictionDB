@@ -176,3 +176,19 @@ def test_capacity_published_after_year_end() -> None:
     # laufendes Jahr: bekannt ab dem Abruf
     now = datetime(2025, 11, 7, tzinfo=UTC)
     assert published_at(Kind.CAPACITY_YEAR, ts, YEAR, now) == now
+
+
+def test_installed_power_without_wind_or_pv(make_http: Callable[..., Http]) -> None:
+    """Geänderte Namen fallen auf, statt die Reihen still zu verlieren.
+
+    @relation(SWR-ENI-055, scope=function)
+    """
+
+    def renamed(req: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, json={"time": ["2025"], "production_types": [{"name": "Wind", "data": [1.0]}]}
+        )
+
+    start = datetime(2024, 6, 1, tzinfo=UTC)
+    with pytest.raises(FormatError, match="weder Wind noch PV"):
+        EnergyCharts(make_http(renamed)).fetch("installed_fr", start, start + timedelta(days=900))

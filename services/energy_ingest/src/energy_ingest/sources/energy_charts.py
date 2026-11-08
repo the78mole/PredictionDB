@@ -273,9 +273,13 @@ class EnergyCharts:
             if len(values) != len(stamps):
                 raise SourceError(f"Energy-Charts: {len(values)} Werte für {len(stamps)} Jahre")
             acc = sums.setdefault(tech, [None] * len(stamps))
+            # Teilreihen einer Technik (Solar AC und DC) addieren; ein fehlender Teil zählt als 0
             for i, v in enumerate(values):
                 if v is not None:
                     acc[i] = (acc[i] or 0.0) + float(v) * GW
+        if not sums:
+            names = [pt.get("name") for pt in data.get("production_types", [])]
+            raise FormatError(f"Energy-Charts {country}: weder Wind noch PV in {names!r}")
         out = []
         for tech, vals in sums.items():
             pts = _points(stamps, vals, start, end)

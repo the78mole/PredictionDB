@@ -680,17 +680,24 @@ class FeatureBuilder:
         return out
 
     def _capacity_asof(self, code: str, issues: pd.DatetimeIndex) -> np.ndarray:
-        """Zum Ausgabezeitpunkt veröffentlichter Stand einer Jahresreihe (NaN, wenn keiner)."""
+        """Zum Ausgabezeitpunkt veröffentlichter Stand einer Jahresreihe (NaN, wenn keiner).
+
+        @relation(SWR-MLT-029, scope=function)
+        """
         e = self.energy_long
         if "published" not in e.columns:
             raise ValueError(
                 "Snapshot ohne Spalte published: mit aktuellem ml-train neu exportieren"
             )
-        s = e.loc[(e["code"] == code) & e["published"].notna(), ["published", "value"]]
+        s = e.loc[(e["code"] == code) & e["published"].notna(), ["ts", "published", "value"]]
         if s.empty:
             return np.full(len(issues), np.nan)
-        s = s.sort_values("published").astype({"value": np.float64})
+        s = s.sort_values("published").astype({"value": np.float64}).reset_index(drop=True)
         s["published"] = pd.DatetimeIndex(s["published"]).as_unit("ns")
+        # Unter den schon veröffentlichten Werten gilt das jüngste Jahr, nicht der zuletzt
+        # veröffentlichte Wert: der Vorjahreswert erscheint regulär erst nach dem laufenden Jahr
+        newest = s["ts"].cummax()
+        s["value"] = s["value"].where(s["ts"] == newest).ffill()
         uniq = pd.DataFrame({"issue": issues.unique().sort_values().as_unit("ns")})
         cur = pd.merge_asof(uniq, s, left_on="issue", right_on="published")["value"]
         out: np.ndarray = pd.Series(cur.to_numpy(), index=uniq["issue"]).reindex(issues).to_numpy()
@@ -731,6 +738,7 @@ class FeatureBuilder:
                     continue
                 with np.errstate(invalid="ignore"):
                     cf = np.nanmean(nbw[cols].to_numpy(np.float64), axis=1)
+                # eine fehlende Teilreihe (z. B. Wind auf See ohne Küste) zählt als 0 MW
                 cap = np.nansum(np.vstack([caps[c] for c in codes]), axis=0)
                 has_cap = ~np.all(np.isnan(np.vstack([caps[c] for c in codes])), axis=0)
                 ok = has_cap & ~np.isnan(cf)

@@ -399,6 +399,19 @@ def test_neighbour_index_capacity_weighted(snap, cfg) -> None:  # type: ignore[n
     np.testing.assert_allclose(x["nbi_wind_cf"], 0.4, rtol=1e-5)
     np.testing.assert_allclose(x["nbi_cap_wind_mw"], 3000.0)
     assert x["nbi_pv_mw"].isna().all()  # keine PV-Leistung, kein pv_cf
+    # laufendes Jahr früh abgerufen: der später veröffentlichte Vorjahreswert verdrängt es nicht
+    fb = FeatureBuilder(s2, cfg)
+    early = pd.DataFrame(
+        {
+            "ts": [ts + pd.Timedelta(days=365), ts],
+            "code": "cap_solar_fr",
+            "value": [3000.0, 2000.0],
+            "published": pd.to_datetime(["2023-01-05", "2023-03-01"], utc=True),
+        }
+    )
+    fb.energy_long = pd.concat([snap.energy, early.astype(snap.energy.dtypes.to_dict())])
+    when = pd.DatetimeIndex(pd.to_datetime(["2023-02-01", "2023-05-01"], utc=True))
+    np.testing.assert_allclose(fb._capacity_asof("cap_solar_fr", when), [3000.0, 3000.0])
     with pytest.raises(ValueError, match="neighbour_weather"):
         ModelConfig.model_validate({**cfg.model_dump(), "neighbour_weather": None})
 
