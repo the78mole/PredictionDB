@@ -300,6 +300,23 @@ def ensemble_rows(
     return df[df["feature"].isin(en.wanted())]
 
 
+def compact_weather(df: pd.DataFrame) -> pd.DataFrame:
+    """Wetter-Teil platzsparend: ``feature`` als Kategorie, ``value`` float32, Zeiten in UTC.
+
+    Ein Teil aus ``read_sql`` hält je Zeile ein eigenes Python-Objekt für den Feature-Namen.
+    Über 16 Tage und mehrere Quellen sind das zig Millionen Zeilen, und ``pd.concat`` kopiert
+    sie noch einmal (13,6 GB beim Export für ``de_lu_v2`` bis D+15, OOM auf der VM).
+
+    @relation(SWR-MLT-010, scope=function)
+    """
+    out = df[["run_time", "valid_time", "feature", "value"]].copy()
+    for col in ("run_time", "valid_time"):
+        out[col] = pd.to_datetime(out[col], utc=True)
+    out["feature"] = out["feature"].astype("category")
+    out["value"] = out["value"].astype("float32")
+    return out
+
+
 def latest_clustering(engine: Engine) -> str | None:
     with engine.connect() as c:
         v = c.execute(
@@ -377,21 +394,21 @@ def export_snapshot(
                         "max_lead": max_lead_h,
                     },
                 )
-                weather_parts.append(df)
+                weather_parts.append(compact_weather(df))
                 log.info("snapshot.weather", month=a.strftime("%Y-%m"), rows=len(df))
                 if neighbour is not None:
                     nb = neighbour_rows(c, neighbour, a, b, hours, max_lead_h)
-                    weather_parts.append(nb)
+                    weather_parts.append(compact_weather(nb))
                     log.info("snapshot.neighbour", month=a.strftime("%Y-%m"), rows=len(nb))
                 if ensemble is not None:
                     en = ensemble_rows(c, ensemble, a, b, max_lead_h)
-                    weather_parts.append(en)
+                    weather_parts.append(compact_weather(en))
                     log.info("snapshot.ensemble", month=a.strftime("%Y-%m"), rows=len(en))
             if sites is not None and wx_start < wx_end:
                 site_start = wx_start - timedelta(days=sites.history_days)
                 for a, b in _months(site_start, wx_end):
                     st = site_rows(c, sites, a, b, hours, max_lead_h)
-                    weather_parts.append(st)
+                    weather_parts.append(compact_weather(st))
                     log.info("snapshot.sites", month=a.strftime("%Y-%m"), rows=len(st))
             progress("Bestand")
             capacity = pd.read_sql(CAPACITY_SQL, c, params={"cv": cv})
@@ -407,6 +424,9 @@ def export_snapshot(
     )
     for col in ("run_time", "valid_time"):
         weather[col] = pd.to_datetime(weather[col], utc=True)
+    # Teile mit verschiedenen Kategorien ergeben beim concat object (Zeiger auf dieselben
+    # Namen, also klein); einheitlich als str-Spalte wie bisher in weather.parquet
+    weather["feature"] = weather["feature"].astype(object)
     weather["value"] = weather["value"].astype("float32")
     capacity["day"] = pd.to_datetime(capacity["day"]).dt.date
     manifest = {
