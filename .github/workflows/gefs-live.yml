@@ -59,10 +59,13 @@ jobs:
           START=$(date -u -d "$DAYS days ago" +%Y-%m-%dT00)
           END=$(date -u +%Y-%m-%dT%H)
           rc=0
-          for MONTH in $(date -u -d "$DAYS days ago" +%Y-%m) $(date -u +%Y-%m); do
-            [ "${seen:-}" = "$MONTH" ] && continue
-            seen=$MONTH
+          # jeder Kalendermonat von START bis heute (auch dazwischen bei großem DAYS)
+          MONTH=$(date -u -d "$DAYS days ago" +%Y-%m)
+          LAST=$(date -u +%Y-%m)
+          while :; do
             uv run --no-sync wx-exchange gefs publish "$MONTH" 0 \
               --start "$START" --end "$END" --parallel-runs 2 || rc=1
+            [ "$MONTH" = "$LAST" ] && break
+            MONTH=$(date -u -d "$MONTH-01 +1 month" +%Y-%m)
           done
           exit $rc
