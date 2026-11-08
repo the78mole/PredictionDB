@@ -13,7 +13,7 @@ from __future__ import annotations
 import pandas as pd
 
 from ml_train.calendar import CALENDAR_COLUMNS
-from ml_train.config import NEIGHBOUR_PREFIX, ModelConfig, Variant
+from ml_train.config import ENSEMBLE_PREFIX, NEIGHBOUR_PREFIX, ModelConfig, Variant
 from ml_train.models import RESIDUAL, TwoStageModel
 
 OTHER = "sonstige"
@@ -34,6 +34,8 @@ def feature_group(feature: str, cfg: ModelConfig, variant: Variant) -> str:
         return "nwp_version"
     if feature.startswith(f"wx_{NEIGHBOUR_PREFIX}"):
         return "nachbarwetter"
+    if feature.startswith(f"wx_{ENSEMBLE_PREFIX}"):
+        return "gefs"
     if feature.startswith("wx_"):
         return "weather"
     for name in variant.groups:

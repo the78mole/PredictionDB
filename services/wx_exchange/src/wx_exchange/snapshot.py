@@ -1,8 +1,8 @@
-"""Öffentlicher Grafana-Snapshot der Wochenprognose mit festem Kurzlink.
+"""Öffentlicher Grafana-Snapshot der 16-Tage-Prognose mit festem Kurzlink.
 
 Ablauf je Durchgang: Dashboard „Prognose öffentlich“ aus der eigenen Grafana holen (nur
-Standard-Panels, raintank kennt keine Zusatz-Plugins), die Abfragen der Wochenpanels für heute
-00:00 bis Ende D+7 (Europe/Berlin) über ``/api/ds/query`` ausführen und einbetten, mit
+Standard-Panels, raintank kennt keine Zusatz-Plugins), die Abfragen der Prognosepanels für heute
+00:00 bis Ende D+15 (Europe/Berlin) über ``/api/ds/query`` ausführen und einbetten, mit
 ``external: true`` als Snapshot hochladen (Grafana reicht ihn an ``snapshots.raintank.io``
 weiter) und das Ziel eines Kurzlinks auf die neue Snapshot-Adresse umbiegen. Ein Snapshot ist
 ein interaktives Standbild (Tooltips, Zoom, Legende), aktualisiert sich aber nicht; jeder hat
@@ -10,11 +10,12 @@ eine neue Adresse, daher der Kurzlink. Jeder Snapshot listet die früheren, noch
 abgelaufenen Stände mit Link, damit man Prognosen später mit dem Eingetretenen vergleichen kann.
 
 Panels mit eigener Zeitüberschreibung wertet Grafana im Snapshot nicht aus (absoluter Zeitraum,
-dann gilt ``timeFrom`` nicht). Die vier Panels „Morgen“ (Preis und Last mit D+1 bis D+7, je
+dann gilt ``timeFrom`` nicht). Die vier Panels „Morgen“ (Preis und Last mit D+1 bis D+15, je
 Champion und Challenger) laufen daher für den Liefertag nach dem Stand und werden zu einem
 Trend-Panel umgebaut: x-Achse in Stunden seit 0 Uhr, beschriftet mit der Uhrzeit (Wertzuordnung
 je Viertelstunde, an Tagen der Zeitumstellung mit doppelter bzw. fehlender Stunde). Ein
-Zeitreihen-Panel hätte sonst den Wochenbereich als x-Achse. Gestern und Heute bleiben draußen.
+Zeitreihen-Panel hätte sonst den ganzen Prognosebereich als x-Achse. Gestern und Heute bleiben
+draußen.
 
 @relation(SWA-WXX-SNAPSHOT, scope=file)
 """
@@ -37,7 +38,7 @@ log = get_logger(__name__)
 DASHBOARD_UID = "pdb-prognose-oeffentlich"
 #: Panels „Morgen“: Preis Champion, Preis Challenger, Last Champion, Last Challenger
 DAY_PANELS = (60, 62, 73, 75)
-#: Wochenpanels (Last und Preis, Champion und Challenger), „Morgen“ und das Quellen-Panel
+#: Panels über 16 Tage (Last und Preis, Champion und Challenger), „Morgen“ und das Quellen-Panel
 PANELS = (67, 68, 69, 70, *DAY_PANELS, 71)
 #: x-Feld der Trend-Panels „Morgen“ (Stunden seit 0 Uhr Ortszeit)
 X_FIELD = "Uhrzeit"
@@ -47,17 +48,19 @@ TITLE = "Strompreis- und Lastprognose DE-LU · Stand"
 WOCHENTAG = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
 #: Standardwerte der Dashboard-Variablen im Snapshot (die übrigen kommen aus ihren Abfragen)
 FIXED_VARS = {"tagesmittel_last": "aus"}
+#: Länge des Bereichs in Tagen: heute bis D+15 wie das Dashboard (now/d bis now+15d/d)
+DAYS = 16
 
 
 def week_range(now: datetime) -> tuple[datetime, datetime]:
-    """Heute 00:00 bis Ende D+7 in Ortszeit (Sommer-/Winterzeit beachtet).
+    """Heute 00:00 bis Ende D+15 in Ortszeit (Sommer-/Winterzeit beachtet).
 
     @relation(SWR-WXX-050, scope=function)
     """
     local = now.astimezone(TZ)
     start = datetime(local.year, local.month, local.day, tzinfo=TZ)
-    # Rechnen mit ZoneInfo geht über die Wanduhr: +8 Tage ist wieder 00:00 Ortszeit
-    return start, start + timedelta(days=8)
+    # Rechnen mit ZoneInfo geht über die Wanduhr: +16 Tage ist wieder 00:00 Ortszeit
+    return start, start + timedelta(days=DAYS)
 
 
 def day_range(now: datetime) -> tuple[datetime, datetime]:

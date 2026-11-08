@@ -270,6 +270,24 @@ RELATIONS:
 TITLE: Modell
 
 [REQUIREMENT]
+UID: SWR-MLT-034
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: GEFS-Ensemble als Merkmalsgruppe
+STATEMENT: >>>
+Kennzahlen über die Mitglieder des GEFS-Ensembles (Mittel, Streuung, Quantile) für feste Regionen
+aus dem Gold von GEFS müssen als eigene Merkmalsgruppe ``gefs`` konfigurierbar sein. Je
+Ausgabezeitpunkt muss der jüngste GEFS-Lauf gelten, der mit seinem eigenen Verzug zum
+Ausgabezeitpunkt verarbeitet vorlag, unabhängig vom Lauf des DE-Wetters. Die Schritte müssen wie
+beim DE-Wetter auf Stunden ausgerichtet werden, Mittel über Intervalle für das Intervall bis zum
+Schritt.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PR-001
+
+[REQUIREMENT]
 UID: SWR-MLT-030
 ART: Funktional
 STATUS: Umgesetzt
@@ -277,7 +295,8 @@ NACHWEIS: Test
 TITLE: Zweistufiges Quantilmodell
 STATEMENT: >>>
 Eine Variante muss in Stufe 1 Last, Wind an Land, Wind auf See und PV und in Stufe 2 den Preis
-als Quantile P10, P50 und P90 je Stunde für D+1 bis D+7 lernen. Stufe 2 erhält P50 und
+als Quantile P10, P50 und P90 je Stunde für die Liefertage aus ``issue.lead_days`` lernen
+(``de_lu_v1`` D+1 bis D+7, ``de_lu_v2`` D+0 bis D+15). Stufe 2 erhält P50 und
 Residuallast aus Stufe 1, im Training out-of-fold aus zeitlich zusammenhängenden Blöcken.
 <<<
 RELATIONS:
@@ -483,10 +502,12 @@ STATUS: Umgesetzt
 NACHWEIS: Test
 TITLE: Champion/Challenger
 STATEMENT: >>>
-``promote`` darf einen Challenger nur zum Champion machen, wenn er auf den gemeinsamen
-Backtest-Zeilen je Ziel im Mittel (Pinball über P10/P50/P90) besser ist und in keiner Gruppe aus
-Ziel, Vorlauftag und Jahreszeit mit mindestens 200 Werten mehr als 5 % schlechter; ``--force``
-übergeht die Prüfung.
+``promote`` darf einen Challenger nur zum Champion machen, wenn er je Horizontklasse (D+0–7,
+ab D+8) auf den gemeinsamen Backtest-Zeilen je Ziel im Mittel (Pinball über P10/P50/P90) besser
+ist und in keiner Gruppe aus Ziel, Vorlauftag und Jahreszeit mit mindestens 200 Werten mehr als
+5 % schlechter. In einer Klasse ohne Werte des Champions ist die Vorwochenprognose (bekannter
+Ist-Wert vor k Wochen, Median) der Gegner; fehlt dem Challenger eine Klasse des Champions, wird
+er nicht Champion. ``--force`` übergeht die Prüfung.
 <<<
 QUELLE: ARCHITEKTUR.md 7.7
 RELATIONS:

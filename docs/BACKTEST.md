@@ -66,7 +66,7 @@ bestimmten Zeitpunkt**. Eine Zeile ist das Paar (`issue_time`, `ts`):
 - `ts`: die Zielstunde (UTC, Intervallbeginn), für alle Stunden der Liefertage
   `issue.lead_days` in Ortszeit. Vorlauftag 1 ist der Folgetag, 0 der Rest des Ausgabetags.
 - `lead_day`: der Vorlauftag. Ein Ausgabetag mit D+1 bis D+7 ergibt also etwa 7 × 24 Zeilen je
-  Zielgröße.
+  Zielgröße, mit D+0 bis D+15 (`de_lu_v2`) etwa 16 × 24.
 
 Alle Merkmale einer Zeile sind mit dem Wissensstand von `issue_time` gebildet (Ist-Werte erst
 2 h nach Intervallende, Preise des Folgetags ab 13 Uhr, GFS-Lauf erst 6 h nach Laufzeit, siehe
@@ -142,6 +142,10 @@ berühren. Der Preis dafür: Das Modell einer Faltung kennt die letzte Woche vor
 Im Betrieb ist das ähnlich, denn auch dort trainiert `ml-train fit` nur bis `gap_days` vor dem
 letzten Datentag.
 
+Bei längeren Horizonten (`de_lu_v2` bis D+15) bleibt `gap_days` bei 8: Regel 3 schneidet die
+Zielstunden ohnehin am Tag `train_to` ab, Training und Test berühren sich also auch mit D+15 in
+keiner Zielstunde. Eine größere Lücke würde dem Modell nur weitere Tage vor dem Test nehmen.
+
 Der Beginn des Trainings ist je Variante `train_from` (für die meisten Varianten der Start der
 Gebotszone DE-LU am 08.10.2018, für Wettervarianten der Beginn der GFS-Historie am 23.03.2021),
 frühestens aber acht Tage nach der ersten Stunde mit Ist-Werten im Snapshot (damit die
@@ -191,6 +195,9 @@ Das Training einer Faltung ist dasselbe `TwoStageModel.fit` wie beim endgültige
 Varianten mit Wetter (`requires_weather`) trainieren und testen nur auf Ausgabezeitpunkten, zu
 denen ein verarbeiteter GFS-Lauf vorlag. Ihre Kennzahlen beruhen deshalb auf weniger Zeilen als
 die der übrigen Varianten. Vergleiche müssen auf gemeinsamen Zeilen laufen (Kap. 7).
+Die Gruppe `gefs` verlangt dagegen keinen GEFS-Lauf: Fehlt er (oder reicht er nicht bis zur
+Zielstunde), bleiben ihre Spalten leer, und LightGBM behandelt sie als fehlend. Der GEFS-Lauf
+wird je Ausgabezeitpunkt eigens gewählt (00Z, `run_time` + `ensemble_weather.delay_h`).
 
 ## 5. Varianten und Vergleichsverfahren
 
@@ -442,7 +449,9 @@ Die Kennzahlen mit `scope = 'all'` laufen über **alle** Zeilen der Version, nic
 gemeinsamen Zeilen mit anderen Versionen. Haben zwei Versionen Backtests über verschiedene
 Zeiträume, ist ihr Vergleich nur ein Anhaltspunkt. Vergleichbar sind die Zeilen im Fenster; das
 Panel „Champion und Challenger im Backtest“ zeigt beide Sichten (Spalte „Zeitraum“), die Zeilen
-im Fenster zuerst. Das Panel „Backtest je Jahreszeit im Vergleichsfenster“ zeigt je aktiver
+im Fenster zuerst. Es gruppiert die Versionen nach Prognosetiefe (Spalte „Tiefe“, längste zuerst)
+und zeigt „Ø D+1–7“ und „Ø D+8–15“ getrennt, passend zu den Horizontklassen der Freigabe
+(Kap. 10). Das Panel „Backtest je Jahreszeit im Vergleichsfenster“ zeigt je aktiver
 Version den MAE je Jahreszeit im Fenster und daneben den Abstand zum Champion derselben
 Konfiguration (negativ = besser). Entscheidend für die Freigabe bleibt der Vergleich in Kap. 10. Versionen ohne
 `backtest.parquet` erscheinen im Panel ohne Kennzahlen.
@@ -454,11 +463,23 @@ echten Läufen von `ml-predict`.
 ## 10. Champion/Challenger auf Basis des Backtests
 
 Ob ein Challenger Champion wird, entscheidet `registry evaluate` bzw. `registry promote` allein
-aus den `backtest.parquet` beider Versionen (`registry.compare`):
+aus den `backtest.parquet` beider Versionen (`registry.compare`). Geprüft wird je
+**Horizontklasse** getrennt: „kurz“ (D+0 bis D+7) und „lang“ (ab D+8). Ein Challenger muss in
+jeder Klasse bestehen, die er abdeckt:
+
+- Hat der Champion Zeilen in der Klasse, ist er der Gegner (Ablauf unten).
+- Hat er keine (Champion bis D+7, Challenger bis D+15), ist der Gegner die **Vorwochenprognose**
+  aus den Ist-Werten des Challenger-Backtests: Wert vor k Wochen mit dem kleinsten k, der zur
+  Ausgabezeit schon bekannt war (für D+8 bis D+13 also meist zwei Wochen). Sie hat keine
+  Quantile, verglichen wird deshalb über `pinball50`.
+- Deckt der Challenger eine Klasse des Champions nicht ab, wird er nicht Champion.
+
+`registry evaluate` gibt die Tabelle je Klasse mit Spalte `reference` (`champion` oder
+`vorwoche`) aus. Ablauf je Klasse:
 
 ```mermaid
 flowchart TD
-    A["backtest.parquet Champion<br/>backtest.parquet Challenger"] --> B["common_rows:<br/>nur Zeilen, die beide haben"]
+    A["backtest.parquet Champion<br/>(oder Vorwoche)<br/>backtest.parquet Challenger<br/>je Horizontklasse"] --> B["common_rows:<br/>nur Zeilen, die beide haben"]
     B -->|keine| X1["nein: keine gemeinsamen Backtest-Zeilen"]
     B --> C{"q10 überall vorhanden?"}
     C -->|ja| M1["Maß: pinball"]

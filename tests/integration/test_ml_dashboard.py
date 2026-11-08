@@ -224,6 +224,7 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
         assert [r["Rolle"] for r in mv] == ["Champion", "Challenger"]
         assert mv[0]["MAE Last D+1"] == pytest.approx(500.0)
         assert any(r["Ziel"] == "Preis €/MWh" and r["Gesamt"] for r in rows[41])
+        assert all(r["Tiefe"].startswith("bis D+") for r in rows[41])
         live = [r for r in rows[42] if "Champion" in r["Version"] and r["Ziel"] == "Last MW"]
         assert live and live[0]["Bias"] == pytest.approx(1.0)
         assert any(r["Aktion"] == "Champion" for r in rows[43])
@@ -266,6 +267,16 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
                 for t in d1
             ],
         )
+        # dieselben Stunden mit D+10 (Lauf neun Tage früher), damit die Sortierung nach
+        # Vorlauftag zweistellige Tage sieht (als Text käme D+10 vor D+3)
+        d10_issue = (d1_issue.tz_convert("Europe/Berlin") - pd.DateOffset(days=9)).tz_convert("UTC")
+        c.execute(
+            text("INSERT INTO fcst.prediction VALUES (:m, 'load_actual', :i, :t, 0.5, :v)"),
+            [
+                {"m": versions[0], "i": d10_issue.to_pydatetime(), "t": t.to_pydatetime(), "v": 1}
+                for t in d1
+            ],
+        )
     with engine.connect() as c:
         for pid, version in ((55, versions[0]), (57, versions[1])):
             sql = _sql(panels[pid], 1).replace("${challenger}", version)
@@ -285,6 +296,11 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
             sql = _sql(panels[pid]).replace("${challenger}", versions[1])
             got = c.execute(text(sql)).mappings().all()
             assert all({"Vorlauf", "Verfahren", "MAE"} <= set(r) for r in got)
+            # nach Vorlauftag als Zahl sortiert (bis D+15: als Text käme D+10 vor D+2)
+            leads = [int(r["Vorlauf"].removeprefix("D+")) for r in got]
+            assert leads == sorted(leads)
+            if pid == 64:
+                assert {3, 10} <= set(leads)
             if pid == 64:
                 d3 = {r["Verfahren"].split()[0] for r in got if r["Vorlauf"] == "D+3"}
                 assert {"Champion", "Challenger"} <= d3

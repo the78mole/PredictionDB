@@ -329,3 +329,12 @@ def test_gefs_unpack_fehlende_datei() -> None:
     np.save(buf, np.array(["a"]), allow_pickle=False)
     with pytest.raises(ArtifactError, match="Zahlen"):
         gefs.unpack(_tar([("meta.json", b"{}"), ("values.npy", buf.getvalue())], compressed=True))
+
+
+def test_safe_name_lehnt_surrogate_ab() -> None:
+    """Tar-Namen aus ungültigem UTF-8 (Surrogate) gelten als unzulässig.
+
+    @relation(SWR-WXX-060, scope=function)
+    """
+    with pytest.raises(ArtifactError):
+        safe_name("a\udc80b")
