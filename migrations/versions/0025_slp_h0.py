@@ -16,6 +16,7 @@ zählen als FT, der 24. und 31.12. wie im BDEW-Verfahren als SA (sofern kein Son
 
 from collections.abc import Sequence
 
+import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0025_slp_h0"
@@ -55,13 +56,26 @@ sommer    FT 16 0.43352 0.43836 0.50660 0.60808 0.63764 0.60216 0.56080 0.43228
 """
 
 
-def _werte() -> str:
-    rows = []
+_TABLE = sa.table(
+    "slp_h0",
+    sa.column("season", sa.Text),
+    sa.column("daytype", sa.Text),
+    sa.column("hour", sa.SmallInteger),
+    sa.column("w", sa.Float),
+    schema="meta",
+)
+
+
+def _werte() -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
     for line in H0.split("\n"):
         if line:
             season, daytype, first, *ws = line.split()
-            rows += [f"('{season}', '{daytype}', {int(first) + i}, {w})" for i, w in enumerate(ws)]
-    return ", ".join(rows)
+            rows += [
+                {"season": season, "daytype": daytype, "hour": int(first) + i, "w": float(w)}
+                for i, w in enumerate(ws)
+            ]
+    return rows
 
 
 def upgrade() -> None:
@@ -73,7 +87,7 @@ def upgrade() -> None:
           w        double precision NOT NULL,
           PRIMARY KEY (season, daytype, hour)
         )""")
-    op.execute(f"INSERT INTO meta.slp_h0 VALUES {_werte()}")
+    op.execute(sa.insert(_TABLE).values(_werte()))
     # Ostersonntag nach der Gaußschen Osterformel (gregorianisch, anonymer Algorithmus)
     op.execute("""
         CREATE FUNCTION meta.ostersonntag(y int) RETURNS date
