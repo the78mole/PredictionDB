@@ -1296,9 +1296,13 @@ def test_compact_weather_parts() -> None:
             }
         )
 
-    a, b = compact_weather(part(["x", "y"])), compact_weather(part(["z", "x"]))
+    raw = part(["x", "y"])
+    a, b = compact_weather(raw), compact_weather(part(["z", "x"]))
     assert list(a.columns) == ["run_time", "valid_time", "feature", "value"]
     assert a["feature"].dtype == "category" and a["value"].dtype == np.float32
+    np.testing.assert_array_equal(a["value"].to_numpy(), np.asarray(raw["value"], dtype=np.float32))
+    for col in ("run_time", "valid_time"):
+        pd.testing.assert_series_equal(a[col], raw[col].dt.tz_convert("UTC"), check_dtype=False)
     both = pd.concat([a, b], ignore_index=True)
     assert list(both["feature"].astype(object)) == ["x", "y", "z", "x"]
     assert both["valid_time"].dt.tz is not None
