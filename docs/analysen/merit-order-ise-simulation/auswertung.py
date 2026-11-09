@@ -31,6 +31,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import matplotlib
 
@@ -39,6 +40,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import yaml
 
+BERLIN = ZoneInfo("Europe/Berlin")
 HIER = Path(__file__).resolve().parent
 TAB = HIER / "tabellen"
 GRA = HIER / "grafiken"
@@ -129,7 +131,7 @@ def lies_woche(pfad: Path, jahr: int, kw: int) -> Woche | None:
     n = {name_en(s): s for s in reihen}
     x = np.array(reihen[0]["xAxisValues"], dtype=float)
     p0 = arr(n["Day Ahead Auction (DE-LU)"])
-    if len(x) < 672 or np.isnan(p0).any():
+    if len(x) < 668 or np.isnan(p0).any():
         return None  # Woche unvollständig
     start = dt.datetime.fromtimestamp(x[0] / 1000, tz=dt.UTC)
     stunde = start < UMSTELLUNG_15MIN
@@ -283,7 +285,16 @@ def main() -> None:
             unvollstaendig.append(f"{jahr}-W{kw:02d}")
             continue
         n_mtu += len(w.p0)
-        tag = w.p0.reshape(7, -1)
+        ortstag = np.array(
+            [
+                (w.start + dt.timedelta(minutes=i * w.mtu_min))
+                .astimezone(BERLIN)
+                .date()
+                .toordinal()
+                for i in range(len(w.p0))
+            ]
+        )
+        spannen = [np.ptp(w.p0[ortstag == t]) for t in np.unique(ortstag)]
         zeile: dict[str, Any] = {
             "jahr": jahr,
             "kw": kw,
@@ -292,7 +303,7 @@ def main() -> None:
             "preis_mittel": float(w.p0.mean()),
             "preis_min": float(w.p0.min()),
             "preis_max": float(w.p0.max()),
-            "tagesspanne_mittel": float((tag.max(axis=1) - tag.min(axis=1)).mean()),
+            "tagesspanne_mittel": float(np.mean(spannen)),
             "residuallast_mittel_gw": float(w.resid.mean()),
             "residuallast_min_gw": float(w.resid.min()),
             "residuallast_max_gw": float(w.resid.max()),
