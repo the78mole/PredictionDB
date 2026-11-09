@@ -68,7 +68,8 @@ class Woche:
     jahr: int
     kw: int
     start: dt.datetime
-    mtu_min: int
+    mtu_min: int  # 60, 15 oder 0 (Woche mit dem Wechsel am 01.10.2025)
+    zeit: list[dt.datetime]  # Beginn jeder Marktzeiteinheit, UTC
     last: np.ndarray
     resid: np.ndarray  # eigene Residuallast, GW
     resid_ec: np.ndarray  # Residuallast laut Energy-Charts, GW
@@ -99,18 +100,25 @@ def iso_wochen(von: str, bis: str) -> list[tuple[int, int]]:
 
 def hole(url: str, ziel: Path) -> bool:
     if ziel.exists():
-        return True
+        try:
+            gzip.decompress(ziel.read_bytes())
+            return True
+        except (OSError, EOFError):
+            ziel.unlink()  # abgebrochener Download, neu holen
     for versuch in range(4):
         try:
             with urllib.request.urlopen(url, timeout=120) as r:
                 daten = r.read()
-            ziel.write_bytes(daten)
+            tmp = ziel.with_suffix(".tmp")
+            tmp.write_bytes(daten)
+            gzip.decompress(daten)  # vollständig?
+            tmp.replace(ziel)
             return True
         except urllib.error.HTTPError as e:
             if e.code == 404:
                 return False
             time.sleep(2**versuch)
-        except (urllib.error.URLError, TimeoutError):
+        except (urllib.error.URLError, TimeoutError, OSError, EOFError):
             time.sleep(2**versuch)
     raise RuntimeError(f"Abruf fehlgeschlagen: {url}")
 
@@ -134,10 +142,16 @@ def lies_woche(pfad: Path, jahr: int, kw: int) -> Woche | None:
     if len(x) < 668 or np.isnan(p0).any():
         return None  # Woche unvollständig
     start = dt.datetime.fromtimestamp(x[0] / 1000, tz=dt.UTC)
-    stunde = start < UMSTELLUNG_15MIN
+    # Bis 30.09.2025 stündliche Auktion: die Datei wiederholt den Stundenwert viermal.
+    n_h = int((x < UMSTELLUNG_15MIN.timestamp() * 1000).sum())
+    n_h -= n_h % 4
 
     def verdichte(a: np.ndarray) -> np.ndarray:
-        return a.reshape(-1, 4).mean(axis=1) if stunde else a
+        return np.concatenate([a[:n_h].reshape(-1, 4).mean(axis=1), a[n_h:]])
+
+    zeit = [
+        dt.datetime.fromtimestamp(t / 1000, tz=dt.UTC) for t in np.concatenate([x[:n_h:4], x[n_h:]])
+    ]
 
     last = arr(n["Load"])
     wind = arr(n["Wind onshore (Grid feed-in potential)"]) + arr(
@@ -148,7 +162,8 @@ def lies_woche(pfad: Path, jahr: int, kw: int) -> Woche | None:
         jahr=jahr,
         kw=kw,
         start=start,
-        mtu_min=60 if stunde else 15,
+        mtu_min=60 if n_h == len(x) else (15 if n_h == 0 else 0),
+        zeit=zeit,
         last=verdichte(last) / 1000,
         resid=verdichte(last - wind - pv) / 1000,
         resid_ec=verdichte(arr(n["Residual load"])) / 1000,
@@ -178,7 +193,7 @@ def punkte(w: Woche, sz: str) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.nd
     idx = np.concatenate([np.arange(n)] * (len(var) + 1))
     zus = np.concatenate([np.zeros(n)] + [v[0] for v in var])
     pr = np.concatenate([w.p0] + [v[1] for v in var])
-    ok = np.isfinite(zus) & np.isfinite(pr)
+    ok = np.isfinite(zus) & np.isfinite(pr) & np.isfinite(w.resid[idx])
     return idx[ok], zus[ok], w.resid[idx[ok]] + zus[ok], pr[ok]
 
 
@@ -272,6 +287,7 @@ def main() -> None:
     unvollstaendig: list[str] = []
     n_mtu = 0
     n_punkte = 0
+    n_resid_fehlt = 0
 
     for jahr, kw in iso_wochen(src["wochen"]["von"], src["wochen"]["bis"]):
         name = f"week_15min_{jahr}_{kw}.json.gz"
@@ -285,15 +301,9 @@ def main() -> None:
             unvollstaendig.append(f"{jahr}-W{kw:02d}")
             continue
         n_mtu += len(w.p0)
-        ortstag = np.array(
-            [
-                (w.start + dt.timedelta(minutes=i * w.mtu_min))
-                .astimezone(BERLIN)
-                .date()
-                .toordinal()
-                for i in range(len(w.p0))
-            ]
-        )
+        ortstag = np.array([t.astimezone(BERLIN).date().toordinal() for t in w.zeit])
+        gueltig = np.isfinite(w.resid)
+        n_resid_fehlt += int((~gueltig).sum())
         spannen = [np.ptp(w.p0[ortstag == t]) for t in np.unique(ortstag)]
         zeile: dict[str, Any] = {
             "jahr": jahr,
@@ -312,10 +322,10 @@ def main() -> None:
         for sz in ("base", "mc", "cb", "mc_cb"):
             iso, _idx, _zus, xs, _pr = wochenkurve(w, sz)
             n_punkte += len(xs)
-            fit0 = iso.predict(w.resid)
-            fehler = w.p0 - fit0
+            p_ist = w.p0[gueltig]
+            fehler = p_ist - iso.predict(w.resid[gueltig])
             zeile[f"mae_{sz}"] = float(np.abs(fehler).mean())
-            zeile[f"r2_{sz}"] = float(1 - (fehler**2).sum() / ((w.p0 - w.p0.mean()) ** 2).sum())
+            zeile[f"r2_{sz}"] = float(1 - (fehler**2).sum() / ((p_ist - p_ist.mean()) ** 2).sum())
             for s in stuetz:
                 lo, hi = np.percentile(xs, [0.5, 99.5])
                 zeile[f"p{int(s)}_{sz}"] = float(iso.predict([s])[0]) if lo <= s <= hi else ""
@@ -455,6 +465,9 @@ def main() -> None:
             "wochen": len(wochen_tab),
             "wochen_stundenraster": sum(1 for z in wochen_tab if z["mtu_min"] == 60),
             "wochen_viertelstundenraster": sum(1 for z in wochen_tab if z["mtu_min"] == 15),
+            "wochen_gemischt": [
+                f"{z['jahr']}-W{z['kw']:02d}" for z in wochen_tab if z["mtu_min"] == 0
+            ],
             "marktzeiteinheiten": n_mtu,
             "punkte_alle_szenarien": n_punkte,
             "varianten_je_woche": 2000,
@@ -462,10 +475,19 @@ def main() -> None:
         "wochen_nicht_veroeffentlicht": fehlend,
         "wochen_unvollstaendig": unvollstaendig,
         "fehlende_werte_ersetzt": 0,
+        "marktzeiteinheiten_ohne_residuallast_ausgelassen": n_resid_fehlt,
         "schritte_zeitlich_interpoliert": 0,
         "eingaben_sha256": hashes,
+        "parameter_der_quelle": {
+            "wirkungsgrad_rundlauf": 0.86,
+            "leistungsstufen": 100,
+            "leistung_gw": [0.1, 20.0],
+            "dauer_h": [2, 3, 4, 5, 6],
+            "szenarien": list(SZENARIO_NAME),
+            "methodik": "Gandhi, Fraunhofer ISE, v1.0 vom 24.09.2026",
+        },
         "annahmen": {
-            "stundenwochen": "vier gleiche Viertelstundenwerte je Stunde zu einem Wert verdichtet",
+            "stundenwerte": "bis 30.09.2025 vier gleiche Viertelstundenwerte je Stunde verdichtet",
             "steigung_bereich_gw": [wmin, wmax],
             "residuallast": m["residuallast"],
         },
