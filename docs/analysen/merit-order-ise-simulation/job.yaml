@@ -16,11 +16,17 @@ inputs:
     # ins Repo kommen nur aggregierte Kennzahlen (wie intraday-schaetzung).
     url: https://www.energy-charts.info/charts/price_spot_market_simulated/data/de/week_15min_{jahr}_{kw}.json.gz
     wochen: {von: 2025-W10, bis: 2026-W45}   # alle veröffentlichten, vollständigen ISO-Wochen
-    reihen: [Load, Wind onshore (Grid feed-in potential), Wind offshore (Grid feed-in potential),
-             Solar (Grid feed-in potential), Residual load, Cross border electricity trading,
-             Day Ahead Auction (DE-LU), DA price (DE-LU) with P GW / τ h battery[, Szenario],
-             Battery power P GW / τ h battery[, Szenario]]
-    varianten: {leistungsstufen_gw: 100 (0,1 bis 20), dauer_h: [2, 3, 4, 5, 6],
+    reihen:
+      - Load
+      - Wind onshore (Grid feed-in potential)
+      - Wind offshore (Grid feed-in potential)
+      - Solar (Grid feed-in potential)
+      - Residual load
+      - Cross border electricity trading
+      - Day Ahead Auction (DE-LU)
+      - "DA price (DE-LU) with <P> GW / <τ> h battery[, <Szenario>]"
+      - "Battery power <P> GW / <τ> h battery[, <Szenario>]"
+    varianten: {leistungsstufen_gw: 100 Stufen von 0.1 bis 20, dauer_h: [2, 3, 4, 5, 6],
                 szenarien: [base, mc, cb, mc_cb]}   # vom ISE vorgerechnet, 2000 je Woche
   vergleich:
     steigung_variante_d: ../batteriespeicher-2025-ise/tabellen/steigung_preisniveau.csv
