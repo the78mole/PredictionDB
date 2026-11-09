@@ -1,9 +1,9 @@
 {
  "job": "merit-order-ise-simulation",
  "job_sha256": "c527383c1d3080e918145a36d7c81632d72bafa0538ccab212981e15abdfb9f7",
- "git_commit": "c645921d480bbff5e636e6d979d382bfcc7eee0c",
- "gestartet": "2026-11-09T18:46:04+00:00",
- "beendet": "2026-11-09T18:48:30+00:00",
+ "git_commit": "eff1bc1af6c1d547d4c6facad002257e43dfc925",
+ "gestartet": "2026-11-09T19:15:17+00:00",
+ "beendet": "2026-11-09T19:16:50+00:00",
  "quelle_abgerufen": "2026-11-09",
  "zeitraum": {
   "von": "2025-03-03",
@@ -11,10 +11,13 @@
  },
  "umfang": {
   "wochen": 79,
-  "wochen_stundenraster": 31,
+  "wochen_stundenraster": 30,
   "wochen_viertelstundenraster": 48,
-  "marktzeiteinheiten": 37467,
-  "punkte_alle_szenarien": 75083868,
+  "wochen_gemischt": [
+   "2025-W40"
+  ],
+  "marktzeiteinheiten": 37827,
+  "punkte_alle_szenarien": 75805308,
   "varianten_je_woche": 2000
  },
  "wochen_nicht_veroeffentlicht": [
@@ -30,6 +33,7 @@
  ],
  "wochen_unvollstaendig": [],
  "fehlende_werte_ersetzt": 0,
+ "marktzeiteinheiten_ohne_residuallast_ausgelassen": 0,
  "schritte_zeitlich_interpoliert": 0,
  "eingaben_sha256": {
   "week_15min_2025_10.json.gz": "5bef8c15458cf9464806f5581ccc8b987ad3292517bf0f32662083ba74b2d5d8",
@@ -112,8 +116,30 @@
   "week_15min_2026_44.json.gz": "18b19e87b4b17ac54e58c1e01b45c674a56fab35ccad8c024a191949cb6721e3",
   "week_15min_2026_45.json.gz": "3987c8f2195147cf84109ef209d1cb5fdcfd1b95bbedf22c1032cfc969ce8dd4"
  },
+ "parameter_der_quelle": {
+  "wirkungsgrad_rundlauf": 0.86,
+  "leistungsstufen": 100,
+  "leistung_gw": [
+   0.1,
+   20.0
+  ],
+  "dauer_h": [
+   2,
+   3,
+   4,
+   5,
+   6
+  ],
+  "szenarien": [
+   "base",
+   "mc",
+   "cb",
+   "mc_cb"
+  ],
+  "methodik": "Gandhi, Fraunhofer ISE, v1.0 vom 24.09.2026"
+ },
  "annahmen": {
-  "stundenwochen": "vier gleiche Viertelstundenwerte je Stunde zu einem Wert verdichtet",
+  "stundenwerte": "bis 30.09.2025 vier gleiche Viertelstundenwerte je Stunde verdichtet",
   "steigung_bereich_gw": [
    0.05,
    2.0

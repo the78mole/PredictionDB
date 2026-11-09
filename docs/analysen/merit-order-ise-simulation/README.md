@@ -59,8 +59,8 @@ mit Kennzahlen je Szenario in [wochen.csv](tabellen/wochen.csv), die Kurven im 1
 
 ![Zwei Wochen im Detail](grafiken/woche_detail.png)
 
-Die grauen Punkte zeigen, was die Simulation hergibt: Jede Viertelstunde ist ein kurzer, steiler
-Strich nach oben (Laden) oder unten (Entladen) um den Ist-Preis (schwarz). Die Striche einer
+Die grauen Punkte zeigen, was die Simulation hergibt: Die Varianten einer Marktzeiteinheit liegen
+als kurze, schräge Punktreihe rechts (Laden) oder links (Entladen) vom Ist-Preis (schwarz). Die Striche einer
 Woche liegen nicht exakt auf einer Kurve, weil sich Austausch, Kraftwerksverfügbarkeit und
 Gebote von Stunde zu Stunde ändern. Die Wochenkurve ist der monotone Ausgleich darüber. Im
 September 2025 sieht man die Stufe bei 0 €/MWh deutlich: Bis etwa 5 GW Residuallast bleibt der
@@ -70,24 +70,25 @@ Preis bei null, dann springt er auf 70–80 €/MWh.
 
 ![Steigung](grafiken/steigung_preisniveau.png)
 
-| Preisklasse €/MWh | Viertelstunden | `base` Laden | `base` Entladen | `mc_cb` Laden | `mc_cb` Entladen | Variante D |
+| Preisklasse €/MWh | Marktzeiteinheiten | `base` Laden | `base` Entladen | `mc_cb` Laden | `mc_cb` Entladen | Variante D |
 |---|---:|---:|---:|---:|---:|---:|
-| < −50 | 178 | 15,0 | (12) | 8,6 | (16) | 37,1 |
+| < −50 | 178 | 15,0 | (5,6) | 8,6 | (14,6) | 37,1 |
 | −50 bis −10 | 388 | 5,8 | 4,8 | 3,6 | 4,7 | 8,2 |
-| −10 bis −2 | 553 | 1,9 | 2,7 | 1,3 | 2,1 | 2,8 |
-| −2 bis 0,5 | 2111 | 0,6 | 0,1 | 0,1 | 0,04 | 0,3 |
-| 0,5 bis 10 | 1053 | 25,2 | 4,5 | 11,1 | 4,9 | 2,1 |
-| 10 bis 40 | 1638 | 30,2 | 21,6 | 16,4 | 15,3 | 12,2 |
-| 40 bis 70 | 2573 | 24,6 | 25,6 | 11,9 | 13,2 | 5,6 |
-| 70 bis 90 | 5010 | 17,7 | 19,9 | 6,6 | 6,0 | 2,3 |
-| 90 bis 110 | 6174 | 21,0 | 21,5 | 9,3 | 5,0 | 3,0 |
-| 110 bis 130 | 5143 | 22,5 | 23,2 | 12,1 | 6,7 | 4,7 |
-| 130 bis 160 | 5624 | 22,3 | 22,8 | 13,6 | 8,0 | 6,7 |
-| 160 bis 200 | 3676 | 29,4 | 26,3 | 14,3 | 10,5 | 10,3 |
-| 200 bis 260 | 2339 | 28,6 | 29,3 | 14,6 | 14,3 | 28,3 |
-| > 260 | 1007 | (91) | 43,6 | (75) | 27,6 | 41,0 |
+| −10 bis −2 | 598 | 1,9 | 2,7 | 1,3 | 2,0 | 2,8 |
+| −2 bis 0,5 | 2186 | 0,6 | 0,1 | 0,1 | 0,04 | 0,3 |
+| 0,5 bis 10 | 1073 | 25,1 | 4,1 | 11,1 | 4,2 | 2,1 |
+| 10 bis 40 | 1660 | 30,2 | 21,5 | 16,4 | 15,3 | 12,2 |
+| 40 bis 70 | 2612 | 24,6 | 25,5 | 12,0 | 13,3 | 5,6 |
+| 70 bis 90 | 5077 | 17,7 | 19,9 | 6,6 | 6,0 | 2,3 |
+| 90 bis 110 | 6218 | 21,1 | 21,6 | 9,3 | 5,0 | 3,0 |
+| 110 bis 130 | 5163 | 22,5 | 23,2 | 12,1 | 6,7 | 4,7 |
+| 130 bis 160 | 5632 | 22,2 | 22,8 | 13,6 | 8,0 | 6,7 |
+| 160 bis 200 | 3686 | 29,4 | 26,4 | 14,3 | 10,5 | 10,3 |
+| 200 bis 260 | 2345 | 28,6 | 29,4 | 14,6 | 14,3 | 28,3 |
+| > 260 | 1011 | (90,9) | 44,0 | (75,3) | 27,7 | 41,0 |
 
-Median der lokalen Steigung in €/MWh je GW, Werte in Klammern aus weniger als 20 Viertelstunden.
+Median der lokalen Steigung in €/MWh je GW, Werte in Klammern aus weniger als 20 Marktzeiteinheiten.
+Marktzeiteinheiten sind bis 30.09.2025 Stunden, danach Viertelstunden; die Zählung mischt beide.
 Quartile in [steigung_preisniveau.csv](tabellen/steigung_preisniveau.csv), je Woche in
 [steigung_wochen.csv](tabellen/steigung_wochen.csv). „Laden“ heißt Zusatznachfrage (Kurve nach
 rechts), „Entladen“ Zusatzangebot (nach links). Der Unterschied bei 0,5–10 €/MWh ist die Stufe:
@@ -123,7 +124,9 @@ der Residuallast.
   Residuallast hier = Last − Wind an Land − Wind auf See − PV (Netzeinspeisepotenzial). Die
   Reihe „Residuallast“ der Datei weicht davon um ±4 GW ab, ihre Definition ist nicht
   dokumentiert. Bis 30.09.2025 war die Auktion stündlich; die Datei wiederholt den Stundenwert
-  viermal, die Auswertung verdichtet wieder auf Stunden.
+  viermal, die Auswertung verdichtet diese Werte wieder auf Stunden (in KW 40/2025 nur bis
+30.09.). Marktzeiteinheiten ohne Last- oder Erzeugungswert fallen heraus (Anzahl in
+[lauf.json](tabellen/lauf.json), dort auch die Parameter der Quelle wie der Wirkungsgrad).
 - **Wochenkurve.** Gewichtete isotone Regression (Pool Adjacent Violators auf 0,1-GW-Klassen),
   jede Marktzeiteinheit zählt gleich viel.
 - **Lokale Steigung.** Je Marktzeiteinheit Kleinste Quadrate durch den Ist-Punkt über alle
@@ -151,11 +154,13 @@ der Residuallast.
 - Fraunhofer ISE, Energy-Charts, „Simulierte Börsenstrompreise“, Wochendateien abgerufen am
   09.11.2026; Grundlage: EPEX SPOT (aggregierte Kurven, Blockgebote), JAO, ENTSO-E
   Transparency. Die Dateien tragen **keine Lizenzangabe**, die EPEX-Kurven selbst sind nicht frei.
+  JAO- und ENTSO-E-Daten gehen nur über die ISE-Rechnung ein; wir haben sie nicht selbst abgerufen,
+  eine Lizenz für die abgeleiteten Reihen nennt die Quelle nicht.
   Deshalb liegen die Rohdateien nur im lokalen Cache; veröffentlicht sind nur aggregierte
   Kennzahlen (Wochenkurven im 1-GW-Raster, Mediane der Steigung) wie in
   [intraday-schaetzung](../intraday-schaetzung/README.md). Kein regelmäßiger Datenbank-Input.
 - L. Gandhi, Simulated Day-Ahead Prices with Additional Battery Storage, Description of the
-  Method, v1.0, 24.09.2026, Fraunhofer ISE.
+  Method, v1.0, 24.09.2026, Fraunhofer ISE. Ohne Lizenzangabe, nur zitiert.
 - Vergleich: Variante D aus [batteriespeicher-2025-ise](../batteriespeicher-2025-ise/README.md)
   (Energy-Charts/SMARD, CC BY 4.0).
 
