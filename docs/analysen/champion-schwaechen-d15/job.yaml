@@ -1,0 +1,36 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; Daten mit daten.py (auf der VM), Auswertung auswertung.py
+id: champion-schwaechen-d15
+title: Wo und warum der D+15-Champion schlechter ist als v1 bzw. die Vorwoche
+question: >
+  Warum ist der neue Champion de_lu_v2-wetter_frei-202611082227-53e301 in einzelnen Gruppen
+  schlechter als der v1-Champion de_lu_v1-kalender-202610270115-7e355b (Preis D+6/D+7 im
+  Frühling, D+7 im Sommer, Last D+7 im Sommer) bzw. als die Vorwoche (Preis D+10 bis D+13 im
+  Frühling)? Liegt es an Wetterumschwüngen, die die GFS-Prognose nicht vorhersieht?
+requested_by: Maulwurf
+kind: comparison
+inputs:
+  registry: s3://ml-artifacts/models     # Backtest-Prognosen beider Versionen (backtest.parquet)
+  versions:
+    neu: {config: config/ml/de_lu_v2.yaml, version: de_lu_v2-wetter_frei-202611082227-53e301}
+    v1: {config: config/ml/de_lu_v1.yaml, version: de_lu_v1-kalender-202610270115-7e355b}
+  targets: [da_price_de_lu, load_actual, gen_wind_onshore, gen_wind_offshore, gen_solar]
+  period: Ausgabetage beider Backtests (Test ab 01.01.2024)
+method:
+  rows: gemeinsame Zeilen (Ziel, Ausgabezeitpunkt, Stunde) beider Versionen, also Ausgabe 08 UTC
+  reference_long: Vorwoche wie ml_train.registry.week_reference (Ist vor k Wochen, k ≤ 4)
+  groups: Klasse kurz (D+1 bis D+7, gegen v1) und lang (D+8 bis D+15, gegen Vorwoche), je
+    Vorlauftag und meteorologischer Jahreszeit wie ml_train.metrics
+  metrics: [mae, pinball (P10/P50/P90 bzw. nur P50), coverage80, bias, band_width]
+  questions:
+    konzentration: Anteil der schlechtesten 10 % der Ausgabetage am Mehrfehler, schlimmste
+      Episoden mit Datum
+    wetterfehler: Fehler der Residuallast aus Stufe 1 (Last - Wind an Land - Wind auf See - PV,
+      jeweils P50) gegen Ist; Mehrfehler Preis je Quintil dieses Fehlers
+    bandbreite: Abdeckung P10-P90, Bandbreite und Pinball je Vorlauftag, nach Quintil des
+      Residuallastfehlers
+    andere: Preisniveausprung (Tagesmittel Ziel gegen letzten bekannten Tag), Feiertage
+      (Bevölkerungsanteil > 0), Zeitumstellung (7 Tage ab Umstellung)
+outputs:
+  tables: [gruppen, konzentration, episoden, wetterfehler, bandbreite, andere]
+  figures: [mehrfehler_je_vorlauf, mehrfehler_nach_wetterfehler, abdeckung_je_vorlauf]
+schedule: once

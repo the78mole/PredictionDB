@@ -1,0 +1,31 @@
+{
+ "job": "champion-schwaechen-d15",
+ "git_commit": "a45b5203f2f971c2284a8efb0d02286e013af61e",
+ "job_sha256": "3aad946f3bf4f4cc963a241fffd74a280f1551fc75c4439c46cb88b0f1f7fa99",
+ "gestartet": "2026-11-10T20:19:19+00:00",
+ "beendet": "2026-11-10T20:19:44+00:00",
+ "eingang": {
+  "datei": "zeilen.parquet (daten.py, Registry-Backtests)",
+  "zeilen": 2786210,
+  "versionen": [
+   "de_lu_v1-kalender-202610270115-7e355b",
+   "de_lu_v2-wetter_frei-202611082227-53e301"
+  ]
+ },
+ "zeitraum": {
+  "ausgabe_von": "2024-01-04 08:00:00+00:00",
+  "ausgabe_bis": "2026-11-01 08:00:00+00:00"
+ },
+ "umfang": {
+  "gemeinsame_zeilen_kurz": 215880,
+  "zeilen_lang_mit_vorwoche": 966963,
+  "ausgabestunde_utc_kurz": [
+   8
+  ]
+ },
+ "annahmen": [
+  "Jahreszeit meteorologisch nach Ortszeit der Zielstunde (ml_train.metrics)",
+  "Residuallast = Last - Wind an Land - Wind auf See - PV, je P50 der Stufe 1",
+  "Zeitumstellung: 7 Tage ab dem letzten Sonntag im März"
+ ]
+}

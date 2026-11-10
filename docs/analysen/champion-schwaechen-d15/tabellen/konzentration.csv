@@ -1,0 +1,5 @@
+gruppe,ausgabetage,mehrfehler_summe,top10_tage,anteil_top10,anteil_2024
+da_price_de_lu D+6 bis D+7 Frühling (kurz),70,3762.9,7,0.905,1.604
+da_price_de_lu D+7 Sommer (kurz),69,1149.3,7,1.004,0.846
+load_actual D+7 Sommer (kurz),69,47324.1,7,0.785,0.929
+da_price_de_lu D+10 bis D+13 Frühling (lang),285,35669.8,29,1.056,1.363
