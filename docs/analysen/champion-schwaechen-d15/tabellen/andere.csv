@@ -1,0 +1,22 @@
+auspraegung,year,n,pinball_neu,pinball_ref,bias_neu,mehr_pinball,faktor
+Feiertag,2024,95,20.632,13.4672,-32.8276,0.532,feiertag
+Feiertag,2025,96,8.4426,9.4946,-6.8963,-0.1108,feiertag
+Feiertag,2026,96,14.3707,20.115,9.1058,-0.2856,feiertag
+kein Feiertag,2024,1008,14.3132,9.0011,-26.2388,0.5902,feiertag
+kein Feiertag,2025,1007,9.085,10.0036,-8.5378,-0.0918,feiertag
+kein Feiertag,2026,1007,11.4514,12.1414,-7.9791,-0.0568,feiertag
+7 Tage ab Umstellung,2024,71,19.8375,6.7038,-43.0718,1.9592,zeitumstellung
+7 Tage ab Umstellung,2025,71,13.8614,17.3917,18.6284,-0.203,zeitumstellung
+7 Tage ab Umstellung,2026,71,8.4567,9.3527,-16.566,-0.0958,zeitumstellung
+übrige Tage,2024,1032,14.5148,9.5703,-25.6872,0.5166,zeitumstellung
+übrige Tage,2025,1032,8.6966,9.448,-10.2541,-0.0795,zeitumstellung
+übrige Tage,2026,1032,11.929,13.0749,-5.799,-0.0876,zeitumstellung
+Sprung klein,2024,432,16.2006,10.0436,-32.3754,0.613,sprung
+Sprung klein,2025,360,6.9899,7.682,-13.3423,-0.0901,sprung
+Sprung klein,2026,312,10.0683,9.5658,-8.3216,0.0525,sprung
+mittel,2024,383,14.9255,7.5802,-30.4711,0.969,sprung
+mittel,2025,456,8.8159,9.0605,-17.2245,-0.027,sprung
+mittel,2026,263,9.4091,9.9607,-24.6541,-0.0554,sprung
+groß,2024,288,12.7522,10.8002,-13.5788,0.1807,sprung
+groß,2025,287,11.9256,14.244,11.8398,-0.1628,sprung
+groß,2026,528,13.8167,16.1992,3.6355,-0.1471,sprung
