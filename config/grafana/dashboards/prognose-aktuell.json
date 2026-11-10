@@ -15,7 +15,7 @@
     "to": "now+15d/d"
   },
   "timepicker": {
-    "hidden": true
+    "hidden": false
   },
   "annotations": {
     "list": []

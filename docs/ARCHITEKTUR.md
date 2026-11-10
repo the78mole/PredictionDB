@@ -1440,8 +1440,10 @@ Analyse-Jobs sind bewusst einfach gehalten: eine YAML-Datei, ein Befehl, ein Ord
 > laufende Trainings, Prognosefehler D+1 im Betrieb (aus der Sicht `fcst.prediction_error`) und
 > Last und Preis der eigenen Modelle gegen ÜNB-Prognose bzw. Day-Ahead-Preis (Lauf vom Vortag
 > 10 Uhr). Das Dashboard „Prognose aktuell“ (`prognose-aktuell.json`) hat einen festen
-> Zeitraum heute 00:00 bis Ende D+15 ohne Zeitauswahl (Panel-Zeitüberschreibungen ignoriert
-> Grafana bei absolutem Dashboard-Zeitraum, etwa nach Zoomen). Es zeigt Champion und einen
+> Zeitraum heute 00:00 bis Ende D+15 (Panel-Zeitüberschreibungen ignoriert Grafana bei
+> absolutem Dashboard-Zeitraum, etwa nach Zoomen). Die Zeitauswahl bleibt sichtbar: Ein
+> Zeitbereich in der Adresse (`from`/`to`, etwa aus einem alten Lesezeichen mit `now+7d/d`)
+> geht dem Dashboard vor und ließe sich sonst nicht korrigieren. Es zeigt Champion und einen
 > wählbaren Challenger: 16 Tage bis D+15 mit P50 und Band P10–P90 (Versionen bis D+7 enden
 > dort), beim Preis je Tag das
 > H0-gewichtete Tagesmittel mit Fehlerbalken (lastgewichtet zuschaltbar, Profil in
