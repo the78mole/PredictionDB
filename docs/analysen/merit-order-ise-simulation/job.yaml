@@ -1,0 +1,57 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; ausgeführt von auswertung.py im selben Ordner
+id: merit-order-ise-simulation
+title: Merit-Order-Angebotskurven aus dem Speichersimulator von Energy-Charts
+question: >
+  Kannst Du Dir anhand der Simulation auf der Energy-Charts-Seite die
+  Merit-Order-Angebotskurven mal für verschiedene Wochen ableiten, indem Du an der
+  Speichergröße und Leistung drehst?
+  (https://www.energy-charts.info/charts/price_spot_market_simulated/chart.htm?l=de&c=DE)
+requested_by: Maulwurf
+kind: custom
+inputs:
+  energy_charts_simulation:
+    # Wochendateien der Seite „Simulierte Börsenstrompreise“ (Fraunhofer ISE, L. Gandhi,
+    # Methodik v1.0 vom 24.09.2026). Grundlage sind die aggregierten Kauf-/Verkaufskurven
+    # der EPEX SPOT; die Dateien tragen keine Lizenzangabe. Deshalb nur lokal im Cache,
+    # ins Repo kommen nur aggregierte Kennzahlen (wie intraday-schaetzung).
+    url: https://www.energy-charts.info/charts/price_spot_market_simulated/data/de/week_15min_{jahr}_{kw}.json.gz
+    wochen: {von: 2025-W10, bis: 2026-W45}   # alle veröffentlichten, vollständigen ISO-Wochen
+    reihen:
+      - Load
+      - Wind onshore (Grid feed-in potential)
+      - Wind offshore (Grid feed-in potential)
+      - Solar (Grid feed-in potential)
+      - Residual load
+      - Cross border electricity trading
+      - Day Ahead Auction (DE-LU)
+      - "DA price (DE-LU) with <P> GW / <τ> h battery[, <Szenario>]"
+      - "Battery power <P> GW / <τ> h battery[, <Szenario>]"
+    varianten: {leistungsstufen_gw: 100 Stufen von 0.1 bis 20, dauer_h: [2, 3, 4, 5, 6],
+                szenarien: [base, mc, cb, mc_cb]}   # vom ISE vorgerechnet, 2000 je Woche
+  vergleich:
+    steigung_variante_d: ../batteriespeicher-2025-ise/tabellen/steigung_preisniveau.csv
+method:
+  zeitraster: Marktzeiteinheit (bis 30.09.2025 1 h, danach 15 min); Stundenwochen auf 1 h verdichtet
+  zusatznachfrage: w = −Batterieleistung (Laden positiv), GW
+  residuallast: Last − Wind an Land − Wind auf See − PV (jeweils Netzeinspeisepotenzial), GW
+  punkte: je Marktzeiteinheit (Residuallast + w, simulierter Preis) über alle Stufen und Dauern,
+          dazu der Ist-Preis bei w = 0; Gewicht je Marktzeiteinheit zusammen 1
+  wochenkurve: isotone (monoton steigende) Regression Preis über Residuallast je Woche und Szenario,
+               ausgewertet im 1-GW-Raster zwischen 0,5- und 99,5-Perzentil
+  steigung: lokale Steigung je Marktzeiteinheit, Kleinste Quadrate durch den Ist-Punkt über alle
+            Punkte mit 0,05 ≤ |w| ≤ 2 GW, getrennt nach Laden (w > 0) und Entladen (w < 0)
+  preisklassen_eur_mwh: [-1.0e9, -50, -10, -2, 0.5, 10, 40, 70, 90, 110, 130, 160, 200, 260, 1.0e9]
+  stuetzstellen_gw: [10, 20, 30, 40, 50, 60]
+  repraesentative_wochen:   # automatisch gewählt, doppelte entfallen
+    - höchste mittlere Residuallast
+    - niedrigste mittlere Residuallast
+    - höchster mittlerer Preis
+    - niedrigster mittlerer Preis
+    - größte Tagesspanne im Mittel
+    - letzte vollständige Woche
+  szenarien_grafik: [base, mc_cb]
+  metrics: [preis_bei_residuallast, steigung_median, mae_wochenkurve, r2_wochenkurve]
+outputs:
+  tables: [wochen, kurven, steigung_preisniveau, steigung_wochen, repraesentativ]
+  figures: [kurven_wochen, woche_detail, steigung_preisniveau, preis_bei_residuallast]
+schedule: once

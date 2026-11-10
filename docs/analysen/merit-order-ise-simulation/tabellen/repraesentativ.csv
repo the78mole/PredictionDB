@@ -1,0 +1,5 @@
+jahr,kw,montag,grund,preis_mittel,residuallast_mittel_gw,p10_mc_cb,p20_mc_cb,p30_mc_cb,p40_mc_cb,p50_mc_cb,p60_mc_cb,p10_base,p20_base,p30_base,p40_base,p50_base,p60_base,steigung_median_base,steigung_median_mc_cb,mae_mc_cb,r2_mc_cb
+2025,11,2025-03-10,höchste mittlere Residuallast,110.62,42.42,,58.92,84.96,103.13,124.05,164.03,,62.4,85.9,105.69,122.31,148.26,12.38,3.26,9.03,0.86
+2025,38,2025-09-15,niedrigste mittlere Residuallast; niedrigster mittlerer Preis,50.97,9.06,44.69,84.14,105.21,159.31,,,46.54,78.39,89.55,96.72,,,10.28,3.51,11.14,0.93
+2026,45,2026-11-02,höchster mittlerer Preis; letzte vollständige Woche,256.59,40.94,,,228.64,251.98,283.87,,,,235.52,251.23,282.88,,25.93,13.8,26.5,0.41
+2026,26,2026-06-22,größte Tagesspanne im Mittel,137.13,27.48,89.65,104.02,121.01,136.61,233.91,,105.45,108.0,116.24,120.86,172.14,,24.01,10.07,21.28,0.86
