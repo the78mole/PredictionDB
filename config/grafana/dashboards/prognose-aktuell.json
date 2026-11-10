@@ -1,7 +1,7 @@
 {
   "uid": "pdb-prognose-aktuell",
   "title": "PredictionDB Prognose aktuell",
-  "description": "Fester Zeitraum heute 00:00 bis Ende D+15 (Ortszeit), ohne Zeitauswahl. Nach Zoomen per Mausziehen neu laden, dann gilt wieder heute.",
+  "description": "Fester Zeitraum heute 00:00 bis Ende D+15 (Ortszeit). Nach Zoomen oder bei altem Lesezeichen in der Zeitauswahl „now/d“ bis „now+15d/d“ wählen oder die Adresse ohne from/to aufrufen.",
   "tags": [
     "predictiondb"
   ],
