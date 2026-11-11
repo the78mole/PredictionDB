@@ -1448,7 +1448,10 @@ Analyse-Jobs sind bewusst einfach gehalten: eine YAML-Datei, ein Befehl, ein Ord
 > dort), beim Preis je Tag das
 > H0-gewichtete Tagesmittel mit Fehlerbalken (lastgewichtet zuschaltbar, Profil in
 > `meta.slp_h0`), dazu den gestrigen Liefertag (beim Preis auch heute und morgen) mit den
-> Prognosen D+1 bis D+15. Der Ausblick −2 bis +7 Tage, der Fehlerschlauch, die Views
+> Prognosen D+1 bis D+15. Im Rückblick (Panel 77, Variablen „Rückblick: Ausgabetag“ und
+> „Rückblick: Modell“) steht der Preis-Lauf, der an einem gewählten Tag um 14:00 Ortszeit galt
+> (Day-Ahead-Preise für morgen bekannt), gegen den Day-Ahead-Preis, mit Tagesmitteln und MAE je
+> Tag; Vorgabe ist der Tag vor einer Woche und der aktuelle Champion. Der Ausblick −2 bis +7 Tage, der Fehlerschlauch, die Views
 > `fcst.v_outlook`/`fcst.v_yesterday_envelope`, `energy.forecast_vintage`, die
 > Week-Ahead-Lastprognose und `fcst.model_spread` (7.7) sind noch nicht umgesetzt; der Rest
 > dieses Abschnitts beschreibt sie als Plan. Die übrigen Status-Dashboards sind „Wetter“

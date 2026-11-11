@@ -379,6 +379,29 @@ def test_sync_and_dashboard_queries(engine: Engine, tmp_path: Path) -> None:
             titles = [p["title"] for p in d["panels"] if "Challenger" in p.get("title", "")]
             assert titles and all("${challenger_name}" in t for t in titles)
 
+    # Rückblick (Panel 77): Lauf, der am Ausgabetag um 14:00 Ortszeit galt, gegen den Ist-Preis
+    tag = ((now - timedelta(days=3)).floor("D") + timedelta(hours=8)).tz_convert("Europe/Berlin")
+    sub = {"${rb_tag}": tag.strftime("%Y-%m-%d"), "${rb_modell}": versions[0]}
+
+    def _rb(sql: str) -> str:
+        for k, v in sub.items():
+            sql = sql.replace(k, v)
+        return sql
+
+    with engine.connect() as c:
+        rb = {v["name"]: v for v in dash["templating"]["list"] if v["name"].startswith("rb_")}
+        tage = c.execute(text(rb["rb_tag"]["query"])).mappings().all()
+        woche = (pd.Timestamp.now(tz="Europe/Berlin") - pd.Timedelta(days=7)).strftime("%Y-%m-%d")
+        assert tage[0]["__value"] == woche and len(tage) == 61
+        modelle = c.execute(text(rb["rb_modell"]["query"])).mappings().all()
+        assert {m["__value"] for m in modelle} >= set(versions)
+        assert c.execute(text(_rb(rb["rb_lauf"]["query"]))).scalar_one() != "kein Lauf"
+        got = c.execute(text(_rb(_sql(panels[77], 1)))).mappings().all()
+        assert got and {r["metric"] for r in got} == {"P50"}
+        assert c.execute(text(_rb(_sql(panels[77], 0)))).all()
+        tage_c = c.execute(text(_rb(_sql(panels[77], 2)))).mappings().all()
+        assert all({"h0", "h0_lo", "h0_hi", "ist_h0", "mae"} <= set(r) for r in tage_c)
+
 
 def test_slp_h0(engine: Engine) -> None:
     with engine.connect() as c:
