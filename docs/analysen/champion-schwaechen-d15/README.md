@@ -38,12 +38,14 @@ deshalb nur die Spalte „alle“.
 - **Feiertage, Ostern, Zeitumstellung und Preissprünge erklären es nicht:** 2024 ist das Modell
   auch an gewöhnlichen Tagen 59 % schlechter, an Feiertagen 53 %.
 
-Wahrscheinliche Ursache: Für die erste Faltung (Test 01–06/2024) trainierten die Wettervarianten
-nur auf 03/2021 bis 12/2023, also überwiegend auf der Energiekrise und dem Preisrückgang danach.
-Das Kalendermodell v1 trainierte ab 10/2018. Sobald 2024 im Training liegt (Faltungen ab
-07/2024), verschwindet die Schwäche. Für das produktive Modell, das bis 10/2026 trainiert ist,
-ist sie damit kein Grund zur Sorge. Ein offener Punkt steht unter [Grenzen](#grenzen):
-Faltung 6 (07 bis 11/2026) zeigt erneut einen großen Preis-Bias.
+~~Wahrscheinliche Ursache: kurze Trainingshistorie~~ **Korrigiert am 12.11.2026, siehe
+[Nachtrag](#nachtrag-vom-12112026-gegenproben-zur-faltung-0106-2024):** Die Gegenproben
+widerlegen die kurze Trainingshistorie als Ursache. Mit Training ab 10/2018 wird es deutlich
+schlechter. Die Ursache ist ein Fehler in der Kalibrierung der Quantile. Er verschiebt nicht nur
+das Band, sondern über das Umsortieren der Quantile auch den Median. Ohne Kalibrierung ist
+dasselbe Modell im Frühjahr 2024 besser als v1. Der Fehler betrifft auch den Live-Champion.
+Ein offener Punkt steht unter [Grenzen](#grenzen): Faltung 6 (07 bis 11/2026) zeigt erneut
+einen großen Preis-Bias.
 
 ![Mehrfehler je Vorlauftag im Frühling, je Jahr](grafiken/mehrfehler_je_vorlauf.png)
 
@@ -144,7 +146,8 @@ erklären es nicht; 2024 war der Mehrfehler bei kleinen und mittleren Sprüngen 
 
 - Für D+1 bis D+7 zählen nur die Ausgaben um 08 UTC (etwa ein Viertel des neuen Backtests). Je
   Gruppe und Jahr sind das rund 550 bis 1 100 Stunden.
-- Die Ursache „kurze Trainingshistorie“ ist naheliegend, aber nicht durch einen eigenen Lauf
+- (Überholt durch den [Nachtrag](#nachtrag-vom-12112026-gegenproben-zur-faltung-0106-2024).)
+  Die Ursache „kurze Trainingshistorie“ ist naheliegend, aber nicht durch einen eigenen Lauf
   belegt. Den Beleg brächte ein Backtest der Faltung 01–06/2024 mit `wetter_frei` ab 10/2018
   ohne Wetter für die Jahre davor.
 - **Faltung 6 (07–11/2026):** Dort liegt der Preis des neuen Modells über alle Vorlauftage im
@@ -154,6 +157,89 @@ erklären es nicht; 2024 war der Mehrfehler bei kleinen und mittleren Sprüngen 
   Frage.
 - Die Last D+7 im Sommer ist 2024 und 2025 schlechter, ohne Zusammenhang mit dem Wetterfehler
   oder der Ausgabestunde. Der Effekt ist klein (+6 % über alle Jahre); hier fehlt eine Erklärung.
+
+## Nachtrag vom 12.11.2026: Gegenproben zur Faltung 01–06/2024
+
+Auftrag in [nachtrag-job.yaml](nachtrag-job.yaml), Protokoll in
+[tabellen/lauf-nachtrag.json](tabellen/lauf-nachtrag.json). Zwei Backtests derselben Faltung auf
+demselben Snapshot, gleiche Konfiguration bis auf je eine Änderung:
+
+- `ab2018`: `wetter_frei` mit Training ab 08.10.2018. Vor 03/2021 gibt es kein Wetter, die
+  Wettermerkmale sind dort leer.
+- `ohne_kal`: `wetter_frei` wie im Champion, aber ohne Kalibrierung der Quantile
+  (`calibration.months: 0`).
+
+Gemeinsame Zeilen aller vier Verfahren (Ausgabe 08 UTC), D+1 bis D+7
+([tabellen/nachtrag_vergleich.csv](tabellen/nachtrag_vergleich.csv)):
+
+| Preis | Pinball | MAE | Bias | Abdeckung | gegen v1 |
+|---|---|---|---|---|---|
+| v1 | 9,32 | 29,4 €/MWh | −15,4 €/MWh | 56 % | – |
+| Champion (mit Kalibrierung) | 12,20 | 27,4 €/MWh | −23,1 €/MWh | 31 % | +31 % |
+| **ohne Kalibrierung** | **7,32** | **20,6 €/MWh** | **−12,4 €/MWh** | 54 % | **−21 %** |
+| Training ab 2018 | 19,16 | 59,0 €/MWh | −58,4 €/MWh | 21 % | +106 % |
+
+Preis D+6/D+7 im Frühling 2024 (die Gruppe, die die Freigabe blockierte): Champion +58 % gegen
+v1, ohne Kalibrierung −6 %, mit Training ab 2018 +147 %. Bei der Last sind alle drei Varianten
+besser als v1 (−4 bis −11 %), die Variante ab 2018 am deutlichsten.
+
+**Die kurze Trainingshistorie ist nicht die Ursache.** Die längere Historie macht den Preis viel
+schlechter. Die Jahre 2018 bis 2021 haben ein ganz anderes Preisniveau und kein Wetter; das
+Modell lernt dort Zusammenhänge, die 2024 nicht mehr gelten.
+
+**Die Ursache ist die Kalibrierung, genauer ein Fehler darin.** `QuantileModel.predict` addiert
+die Verschiebung je Vorlauftag auf P10 und P90 und sortiert danach die drei Quantile, damit sie
+sich nicht kreuzen. Für die Faltung 2024 wurde die Verschiebung auf 2023 bestimmt, als die
+Preise fielen und das Modell meist zu hoch lag. Die Verschiebung von P90 war deshalb stark
+negativ. Liegt das verschobene P90 unter P50, gibt das Sortieren den verschobenen Wert als
+Median aus. Die Kalibrierung sollte den Median nie verändern (`CalibrationConfig`), tut es aber:
+
+| Ziel, Faltung 01–06/2024 | Median verschoben (Anteil Stunden) | mittlere Verschiebung |
+|---|---|---|
+| Preis | 78 % | −10,7 €/MWh |
+| PV | 19 % | −3,3 MW |
+| Last | 4 % | +5,0 MW |
+| Wind an Land | 5 % | +37,6 MW |
+| Wind auf See | 3 % | −0,3 MW |
+
+Quelle: [tabellen/nachtrag_median.csv](tabellen/nachtrag_median.csv), Median des Champions gegen
+den desselben Modells ohne Kalibrierung. Beim Preis wirkt zusätzlich die Verschiebung der
+Stufe-1-Mediane (Last, Wind, PV) als Eingang. Weil der Live-Champion ebenfalls Verschiebungen
+trägt, betrifft der Fehler auch seine Prognosen; wie stark, hängt von seinen Verschiebungen ab.
+
+**Vorschlag:** In `QuantileModel.predict` P50 unverändert lassen und nur P10 und P90 begrenzen,
+also P10 = min(P10 + Verschiebung, P50) und P90 = max(P90 + Verschiebung, P50), statt alle drei
+zu sortieren. Die Verschiebungen sind in den Modellen gespeichert, der Fix wirkt daher ohne
+neues Training. Dazu ein Test, der prüft, dass P50 mit und ohne Kalibrierung gleich bleibt.
+Danach den Champion-Backtest neu rechnen; erst dann ist die Freigaberegel für die D+15-Linie
+wieder aussagekräftig.
+
+### Energiekrise im Modell
+
+Die Krise steckt bisher nur indirekt im Modell:
+
+- **Brennstoffe** (Gruppe `brennstoffe`, im Champion): Erdgas EU, LNG Japan, Henry Hub, Kohle
+  und Brent als Monatswerte der Weltbank, verfügbar etwa einen Monat später; Diesel und Heizöl
+  wöchentlich (EU Oil Bulletin), Diesel USA täglich (EIA), Wechselkurs täglich (EZB). Heizöl
+  und Diesel folgen dem Öl, nicht dem Gas. Der Gaspreis, der in Deutschland meist den
+  Strompreis setzt, kommt also nur als verspäteter Monatswert an. Täglicher TTF- und CO₂-Preis
+  wären passender, sind aber nicht frei.
+- **Preis relativ zum Vortag:** Das Modell lernt die Abweichung vom Tagesmittel des letzten
+  bekannten Tags, nicht den absoluten Preis.
+- **Grenzkostenindex** (Gruppe `grenzkosten`, nicht im Champion): ein täglicher, freier Ersatz
+  für das Gas- und CO₂-Niveau aus SMARD; die Variante `wetter_frei_gk_skaliert` lernt den Preis
+  zusätzlich relativ zu diesem Niveau.
+
+Wie man die Krise besser abbildet, nach erwartetem Nutzen:
+
+1. Den Kalibrierfehler beheben (oben). Er macht aus einem Niveaufehler nach einer Krise einen
+   noch größeren.
+2. `grenzkosten` und Skalierung in die D+15-Linie nehmen. Der D+15-Challenger
+   `wetter_frei_gk_skaliert` wird gerade trainiert.
+3. Die Krisenjahre im Training geringer gewichten. Die Gegenprobe zeigt, dass mehr alte Jahre
+   ohne Gewichtung nicht helfen.
+
+Ein Merkmal „Krise ja/nein“ hilft nicht, weil es für die Zukunft niemand kennt.
 
 ## Quellen
 
