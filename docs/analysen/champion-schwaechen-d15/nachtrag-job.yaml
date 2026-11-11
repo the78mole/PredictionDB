@@ -1,0 +1,35 @@
+# Nachtrag zum Auftrag in job.yaml (docs/ARCHITEKTUR.md 7.9); Backtests auf der VM, Daten mit
+# nachtrag_daten.py, Auswertung nachtrag.py. Geschrieben vor der Auswertung, Backtests liefen
+# am 11.11.2026 00:13 bis 02:10 UTC.
+id: champion-schwaechen-d15
+title: Gegenproben zur Faltung 01-06/2024 (lange Trainingshistorie, ohne Kalibrierung)
+question: >
+  Ist die kurze Trainingshistorie (03/2021 bis 12/2023) die Ursache der Schwäche im Frühjahr
+  2024? Gegenprobe: Faltung 01-06/2024 mit wetter_frei ab 10/2018 (vor 03/2021 ohne Wetter).
+  Zusätzlich, weil die Bänder auffielen: dieselbe Faltung ohne Kalibrierung der Quantile.
+  Außerdem: Wie ist die Energiekrise im Modell abgebildet, und wie könnte man sie einbauen?
+requested_by: Maulwurf
+kind: backtest
+inputs:
+  snapshot: /data/snap-v2-d15-20261108b (de_lu_v2 bis D+15, Wetter ab 2021-03-22)
+  configs:
+    ab2018: config/ml/de_lu_v2.yaml plus Variante wetter_frei_ab2018 (Gruppen wie wetter_frei,
+      requires_weather false, train_from 2018-10-08)
+    ohne_kal: config/ml/de_lu_v2.yaml mit calibration.months 0
+  vergleich: Champion-Backtest (Faltung 0) und v1 aus zeilen.parquet (daten.py)
+method:
+  runs:
+    - label: ab2018
+      command: >
+        ml-train --config de_lu_v2_ab2018.yaml backtest --variant wetter_frei_ab2018
+        --test-from 2024-01-01 --test-to 2024-06-30
+    - label: ohne_kal
+      command: >
+        ml-train --config de_lu_v2_ohne_kal.yaml backtest --variant wetter_frei
+        --test-from 2024-01-01 --test-to 2024-06-30
+  rows: gemeinsame Zeilen aller vier Verfahren (Ausgabe 08 UTC), Ziele Preis und Last, D+1 bis D+7
+  metrics: [pinball, mae, bias, coverage80, band_width, anteil_median_verschoben]
+outputs:
+  tables: [nachtrag_vergleich, nachtrag_median]
+  figures: []
+schedule: once

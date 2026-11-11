@@ -1,0 +1,18 @@
+{
+ "job": "champion-schwaechen-d15 (Nachtrag)",
+ "git_commit": "00a53aadbdb7e881b30d669b2b5aaba6b62bef85",
+ "job_sha256": "518ead1b2a4ba74be58ef15e4cdb0d61a106a475830cb2d88b50a34fe5dfca21",
+ "gestartet": "2026-11-11T23:34:04+00:00",
+ "beendet": "2026-11-11T23:34:07+00:00",
+ "backtests": {
+  "ab2018": "2026-11-11T00:13:50Z bis 01:25:47Z, rc 0",
+  "ohne_kal": "2026-11-11T01:25:47Z bis 02:10:23Z, rc 0",
+  "snapshot": "/data/snap-v2-d15-20261108b"
+ },
+ "umfang": {
+  "zeilen_eingang": 611380,
+  "gemeinsame_zeilen": 37790,
+  "ausgabe_von": "2024-01-04 08:00:00+00:00",
+  "ausgabe_bis": "2024-06-28 08:00:00+00:00"
+ }
+}

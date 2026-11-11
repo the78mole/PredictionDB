@@ -57,6 +57,24 @@ def qname(q: float) -> str:
     return f"q{round(q * 100):02d}"
 
 
+def _ordered(raw: np.ndarray, quantiles: list[float]) -> np.ndarray:
+    """Quantile ohne Kreuzungen, der Median bleibt dabei unverändert.
+
+    Die Kalibrierung verschiebt nur die äußeren Quantile. Ein bloßes Sortieren aller Spalten
+    machte aus einem unter P50 verschobenen P90 den Median; deshalb werden die unteren Quantile
+    nach oben und die oberen nach unten am Median begrenzt.
+
+    @relation(SWR-MLT-031, scope=function)
+    """
+    if 0.5 not in quantiles:
+        return np.sort(raw, axis=1)
+    m = quantiles.index(0.5)
+    med = raw[:, m : m + 1]
+    lo = np.minimum(np.sort(raw[:, :m], axis=1), med)
+    hi = np.maximum(np.sort(raw[:, m + 1 :], axis=1), med)
+    return np.hstack([lo, med, hi])
+
+
 @dataclass
 class QuantileModel:
     """@relation(SWR-MLT-030, scope=class)"""
@@ -114,7 +132,7 @@ class QuantileModel:
                 rows = lead == d
                 for j, q in enumerate(self.quantiles):
                     raw[rows, j] += sh.get(qname(q), 0.0)
-        raw.sort(axis=1)  # keine sich kreuzenden Quantile
+        raw = _ordered(raw, self.quantiles)
         vals = raw * self._scale(X)[:, None] + self._offset(X)[:, None]
         return pd.DataFrame(vals, index=X.index, columns=[qname(q) for q in self.quantiles])
 

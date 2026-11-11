@@ -1,0 +1,6 @@
+target,n,anteil_median_verschoben,mittlere_verschiebung
+da_price_de_lu,7558,0.7812,-10.7043
+gen_solar,7558,0.1924,-3.2587
+gen_wind_offshore,7558,0.0315,-0.2638
+gen_wind_onshore,7558,0.0495,37.6249
+load_actual,7558,0.0431,5.0222

@@ -534,7 +534,10 @@
                   "Lastprognose (ÜNB)",
                   "Prognose P50",
                   "Band P10–P90",
-                  "P10"
+                  "P10",
+                  "Residuallast",
+                  "Residuallast Prognose P50",
+                  "Residuallast-Prognose (ÜNB)"
                 ],
                 "prefix": "All except:",
                 "readOnly": true
@@ -553,7 +556,7 @@
           }
         ]
       },
-      "description": "Zeitraum des Dashboards (Standard heute 00:00 bis Ende D+15, Ortszeit) mit der Prognose des aktuellen Champions: Median P50 als Linie, das Band P10–P90 (nominell 80 %) als grauer Schlauch. Je Stunde gilt der jüngste Lauf, der sie abdeckt; vergangene Stunden von heute stammen daher aus früheren Läufen. Zum Vergleich die Last (gelb) und die Day-Ahead-Lastprognose der ÜNB (gelb gestrichelt), soweit vorhanden. Ausgeblendet und über die Legende zuschaltbar (Klick zeigt nur diese Serie, Strg-Klick schaltet sie dazu): Wind + PV (grün), EE gesamt mit Biomasse, Wasser und sonstigen EE (dunkelgrün) und Residuallast = Last − Wind − PV (orange, SMARD), jeweils als Ist, dazu die Modellprognose aus Stufe 1 (hell, P50 desselben Laufs, mit der auch der Preis rechnet) und die Residuallast-Prognose der ÜNB (orange gestrichelt).",
+      "description": "Zeitraum des Dashboards (Standard heute 00:00 bis Ende D+15, Ortszeit) mit der Prognose des aktuellen Champions: Median P50 als Linie, das Band P10–P90 (nominell 80 %) als grauer Schlauch. Je Stunde gilt der jüngste Lauf, der sie abdeckt; vergangene Stunden von heute stammen daher aus früheren Läufen. Zum Vergleich die Last (gelb) und die Day-Ahead-Lastprognose der ÜNB (gelb gestrichelt), soweit vorhanden. Sichtbar ist außerdem die Residuallast = Last − Wind − PV (orange: Ist aus SMARD, hell: Modellprognose aus Stufe 1, P50 desselben Laufs, mit der auch der Preis rechnet, gestrichelt: Prognose der ÜNB). Ausgeblendet und über die Legende zuschaltbar (Klick zeigt nur diese Serie, Strg-Klick schaltet sie dazu): Wind + PV (grün) und EE gesamt mit Biomasse, Wasser und sonstigen EE (dunkelgrün), jeweils als Ist und als Modellprognose (hell).",
       "options": {
         "tooltip": {
           "mode": "multi",
@@ -1201,7 +1204,10 @@
                   "Lastprognose (ÜNB)",
                   "Prognose P50",
                   "Band P10–P90",
-                  "P10"
+                  "P10",
+                  "Residuallast",
+                  "Residuallast Prognose P50",
+                  "Residuallast-Prognose (ÜNB)"
                 ],
                 "prefix": "All except:",
                 "readOnly": true
@@ -1220,7 +1226,7 @@
           }
         ]
       },
-      "description": "Zeitraum des Dashboards (Standard heute 00:00 bis Ende D+15, Ortszeit) mit der Prognose des oben gewählten Challengers (Variable Challenger): Median P50 als Linie, das Band P10–P90 (nominell 80 %) als grauer Schlauch. Je Stunde gilt der jüngste Lauf, der sie abdeckt; vergangene Stunden von heute stammen daher aus früheren Läufen. Zum Vergleich die Last (gelb) und die Day-Ahead-Lastprognose der ÜNB (gelb gestrichelt), soweit vorhanden. Ausgeblendet und über die Legende zuschaltbar (Klick zeigt nur diese Serie, Strg-Klick schaltet sie dazu): Wind + PV (grün), EE gesamt mit Biomasse, Wasser und sonstigen EE (dunkelgrün) und Residuallast = Last − Wind − PV (orange, SMARD), jeweils als Ist, dazu die Modellprognose aus Stufe 1 (hell, P50 desselben Laufs, mit der auch der Preis rechnet) und die Residuallast-Prognose der ÜNB (orange gestrichelt).",
+      "description": "Zeitraum des Dashboards (Standard heute 00:00 bis Ende D+15, Ortszeit) mit der Prognose des oben gewählten Challengers (Variable Challenger): Median P50 als Linie, das Band P10–P90 (nominell 80 %) als grauer Schlauch. Je Stunde gilt der jüngste Lauf, der sie abdeckt; vergangene Stunden von heute stammen daher aus früheren Läufen. Zum Vergleich die Last (gelb) und die Day-Ahead-Lastprognose der ÜNB (gelb gestrichelt), soweit vorhanden. Sichtbar ist außerdem die Residuallast = Last − Wind − PV (orange: Ist aus SMARD, hell: Modellprognose aus Stufe 1, P50 desselben Laufs, mit der auch der Preis rechnet, gestrichelt: Prognose der ÜNB). Ausgeblendet und über die Legende zuschaltbar (Klick zeigt nur diese Serie, Strg-Klick schaltet sie dazu): Wind + PV (grün) und EE gesamt mit Biomasse, Wasser und sonstigen EE (dunkelgrün), jeweils als Ist und als Modellprognose (hell).",
       "options": {
         "tooltip": {
           "mode": "multi",
