@@ -231,8 +231,10 @@ flowchart TB
 
 Jedes Quantil ist ein eigener Booster mit Pinball-Verlust (LightGBM-Ziel `quantile`, `alpha` =
 0,1, 0,5 bzw. 0,9). Weil die drei Booster unabhängig lernen, können sich ihre Werte in
-einzelnen Stunden kreuzen. Die Vorhersage sortiert die drei Werte je Zeile deshalb aufsteigend,
-sodass immer P10 ≤ P50 ≤ P90 gilt.
+einzelnen Stunden kreuzen. Die Vorhersage lässt P50 deshalb unverändert und begrenzt P10 nach
+oben und P90 nach unten auf P50, sodass immer P10 ≤ P50 ≤ P90 gilt. Bis 11/2026 wurden die drei
+Werte stattdessen sortiert; schob die Kalibrierung P90 unter P50, wurde so das verschobene P90
+zum Median (Befund in [`analysen/champion-schwaechen-d15`](analysen/champion-schwaechen-d15/README.md)).
 
 **Kalibrierung je Vorlauftag** (Block `calibration`, in `de_lu_v2` 12 Monate): Ungekalibriert
 enthielt das Band P10–P90 nur 55–70 % statt 80 % der Ist-Werte. Vor dem eigentlichen Training
@@ -242,7 +244,7 @@ Verschiebung bestimmt, mit der der Anteil der Ist-Werte unter dem Quantil genau 
 entspricht. Gerechnet wird im Modellraum, also nach Kapazitäts- und Niveaunormierung, damit die
 Verschiebung mit Bestand und Preisniveau mitwächst. Vorlauftage mit weniger als `min_rows`
 Zeilen bleiben unverändert. Danach wird auf allen Daten trainiert; die Verschiebungen werden mit
-dem Modell gespeichert und vor dem Sortieren der Quantile addiert. Für Stufe 2 nutzt die
+dem Modell gespeichert und vor dem Begrenzen der Quantile addiert. Für Stufe 2 nutzt die
 Kalibrierung Stufe-1-Werte des Kalibriermodells, wie im Betrieb. Kosten: etwa doppelte
 Trainingszeit. Im Backtest wird jede Faltung genauso kalibriert, die Abdeckung dort ist also
 ehrlich.

@@ -1237,6 +1237,26 @@ def test_calibration_widens_bands_per_lead_day(snap, cfg, tmp_path) -> None:  # 
     )
 
 
+def test_calibration_keeps_median(snap, cfg) -> None:  # type: ignore[no-untyped-def]
+    """Verschiebt die Kalibrierung P90 unter P50, bleibt der Median gleich.
+
+    @relation(SWR-MLT-031, scope=function)
+    """
+    cfg.lgbm.n_estimators = 20
+    cfg.calibration.months = 0
+    fb = FeatureBuilder(snap, cfg)
+    frame = fb.build([date(2022, 7, 1) + pd.Timedelta(days=i) for i in range(0, 200, 4)])
+    m = TwoStageModel(cfg, cfg.variant("kalender"))
+    m.fit(frame)
+    test = fb.build([date(2023, 9, 1)])
+    before = m.predict(test)["da_price_de_lu"]
+    qm = m.stage2["da_price_de_lu"]
+    qm.shifts = {d: {"q90": -500.0} for d in cfg.issue.lead_days}
+    after = m.predict(test)["da_price_de_lu"]
+    pd.testing.assert_series_equal(after["q50"], before["q50"])
+    assert (after["q10"] <= after["q50"]).all() and (after["q90"] >= after["q50"]).all()
+
+
 def test_feature_importance_by_group(snap, cfg) -> None:  # type: ignore[no-untyped-def]
     """@relation(SWR-MLT-072, scope=function)"""
     cfg.lgbm.n_estimators = 10
