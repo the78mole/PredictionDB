@@ -51,6 +51,15 @@
       "automerge": true
     },
     {
+      "description": "Container-Images in Workflows (services: in mastr-weights.yml) mit den übrigen Images in einen PR, sonst kommt derselbe Tag-Sprung doppelt",
+      "matchManagers": ["github-actions"],
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
+      "groupName": "Container-Images (minor/patch)",
+      "groupSlug": "docker-minor-patch",
+      "automerge": true
+    },
+    {
       "description": [
         "Python-Laufzeit (Basis-Image, .python-version) eigenständig, weil ein Sprung 3.14 -> 3.15 für Docker als Minor zählt.",
         "MERKER: auf 3.14.x festgehalten, weil eccodeslib/eckitlib noch keine Wheels für 3.15 liefern (https://github.com/ecmwf/eccodes/issues/629).",
