@@ -66,15 +66,23 @@ gh attestation verify analyse-<name>.pdf -R the78mole/PredictionDB \
 Die Prüfung ist erfolgreich, wenn die Ausgabe den Workflow dieses Repositorys und den
 zugehörigen Commit auf `main` nennt.
 
-**Quellcode:** Jedes Release `vX.Y.Z` trägt das Quellcode-Archiv `PredictionDB-vX.Y.Z.tar.gz`
-(`git archive` des Release-Commits) mit SHA-256-Prüfsumme und signierter Build-Provenance:
+**Quellcode:** Jedes Release `vX.Y.Z` ab dem ersten Release nach PR #280 trägt
+das Quellcode-Archiv `PredictionDB-vX.Y.Z.tar.gz` (`git archive` des Release-Commits) mit
+SHA-256-Prüfsumme und signierter Build-Provenance. Ältere Releases haben kein solches Archiv.
 
 ```sh
 gh release download vX.Y.Z -R the78mole/PredictionDB -p 'PredictionDB-*' -p quellcode.intoto.jsonl
 sha256sum -c PredictionDB-vX.Y.Z.tar.gz.sha256
 gh attestation verify PredictionDB-vX.Y.Z.tar.gz -R the78mole/PredictionDB \
-  --bundle quellcode.intoto.jsonl
+  --source-ref refs/heads/main --bundle quellcode.intoto.jsonl
+# Commit, aus dem das Archiv stammt (steht im Archiv selbst), muss der des Tags sein
+gzip -dc PredictionDB-vX.Y.Z.tar.gz | git get-tar-commit-id
+git ls-remote https://github.com/the78mole/PredictionDB 'refs/tags/vX.Y.Z'
 ```
+
+Die Provenance nennt den Release-Workflow und den Commit von `main`, auf dem er lief. Weil der
+Workflow nach der CI startet, kann `main` dann schon einen neueren Commit haben; welcher Commit
+im Archiv steckt, zeigt `git get-tar-commit-id`, und dieser Commit ist der des Tags.
 
 Die von GitHub automatisch erzeugten Archive („Source code (zip/tar.gz)“) sind nicht signiert;
 für eine geprüfte Kopie das Archiv `PredictionDB-vX.Y.Z.tar.gz` verwenden. Die Release-Tags
