@@ -1,6 +1,6 @@
 # Roadmap
 
-*Entwurf, Stand 2026-11-05. An English summary follows the German text.*
+*Stand 2026-11-12, wird mindestens halbjährlich überprüft. An English summary follows the German text.*
 
 Ziele für die nächsten zwölf Monate. Die Reihenfolge ist eine Absicht, kein Versprechen; das
 Projekt wird in der Freizeit gepflegt. Entscheidungen und Details stehen in
@@ -30,13 +30,30 @@ Projekt wird in der Freizeit gepflegt. Entscheidungen und Details stehen in
 - Steuer-UI als optionale Control Plane (Konzept in [docs/STEUER-UI.md](docs/STEUER-UI.md)).
 - Wärmepumpen- und Klimalast als eigene Prognosen.
 
+## Nicht geplant
+
+Bewusst nicht Ziel des Projekts, auch nicht im kommenden Jahr:
+
+- **Unfreie Daten:** keine Quellen, deren Lizenz die Veröffentlichung von Modellen und Daten
+  verbietet (etwa EEX-Terminpreise oder Gebotskurven der Börse). Was nur fürs Training erlaubt
+  ist, bleibt aus öffentlichen Exporten heraus.
+- **Handel und Steuerung:** keine Handelsempfehlungen, kein Anschluss an Börsen oder
+  Handelssysteme, keine direkte Anlagensteuerung; Prognosen sind Eingänge für eigene Systeme.
+- **Andere Märkte:** keine Prognosen für Gebotszonen außerhalb DE-LU und kein Intraday-Preis,
+  solange es dafür keine freie Datenquelle gibt.
+- **Mandantenfähiger Dienst:** kein gehosteter Mehrbenutzerdienst mit Konten und Rechten; eine
+  Installation gehört einem Betreiber.
+- **Langzeitsupport:** keine gepflegten Altversionen, nur der jeweils neueste Stand.
+
 ---
 
 ## English summary
 
-Draft roadmap for the next twelve months: multi-day forecast quality and calibration with the
+Roadmap for the next twelve months: multi-day forecast quality and calibration with the
 GEFS ensemble, better price-level features from free data, provenance for model and data
 artifacts and more fuzzing (by early 2027); weekly retraining and publication of models once
 three years of GFS training data are available, battery storage and neighbouring-country
 capacity as features, a per-plant forecast API and Python 3.15 (2027); an optional control UI
-and heat-pump/air-conditioning load later.
+and heat-pump/air-conditioning load later. Not planned: non-free data sources, trading advice or
+direct plant control, bidding zones other than DE-LU or intraday prices without a free source, a
+hosted multi-tenant service, and long-term support branches.

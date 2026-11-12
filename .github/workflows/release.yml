@@ -2,7 +2,7 @@ name: Release
 
 # Nach jeder grünen CI auf main: nächste Version nach Semantic Versioning
 # berechnen (scripts/naechste-version.sh), Tag und GitHub-Release anlegen und
-# die Analyse-PDFs daran hängen. Releases, die mit dem GITHUB_TOKEN entstehen,
+# das signierte Quellcode-Archiv sowie die Analyse-PDFs daran hängen. Releases, die mit dem GITHUB_TOKEN entstehen,
 # lösen keine weiteren Workflows aus; deshalb wird der PDF-Workflow hier
 # direkt aufgerufen.
 on:
@@ -64,3 +64,46 @@ jobs:
     uses: ./.github/workflows/analysen-pdf.yml
     with:
       tag: ${{ needs.version.outputs.version }}
+
+  quellcode:
+    # Quellcode-Archiv des Release-Commits mit Build-Provenance (SLSA, Sigstore,
+    # keyless), damit auch der Quellcode signiert ist und nicht nur Images und
+    # PDFs (Best Practices signed_releases, SYSR-SEC-005). Prüfen mit
+    #   gh attestation verify PredictionDB-<tag>.tar.gz -R the78mole/PredictionDB
+    name: Quellcode-Archiv
+    needs: version
+    if: needs.version.outputs.version != ''
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: write      # gh release upload
+      id-token: write      # Sigstore-Zertifikat (keyless)
+      attestations: write  # Attestation im Repo ablegen
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha }}
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Commit von main auschecken
+        run: scripts/main-commit-auschecken.sh "$SHA"
+      - name: Archiv und Prüfsumme
+        run: |
+          mkdir -p dist
+          git archive --format=tar.gz --prefix="PredictionDB-$VERSION/" \
+            -o "dist/PredictionDB-$VERSION.tar.gz" "$SHA"
+          (cd dist && sha256sum "PredictionDB-$VERSION.tar.gz" > "PredictionDB-$VERSION.tar.gz.sha256")
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        id: attest
+        with:
+          subject-path: dist/PredictionDB-${{ needs.version.outputs.version }}.tar.gz
+      - name: An das Release hängen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          cp "$BUNDLE" dist/quellcode.intoto.jsonl
+          gh release upload "$VERSION" -R "$GITHUB_REPOSITORY" --clobber \
+            "dist/PredictionDB-$VERSION.tar.gz" "dist/PredictionDB-$VERSION.tar.gz.sha256" \
+            dist/quellcode.intoto.jsonl

@@ -83,6 +83,30 @@ Bedienung: `systemctl list-timers 'predictiondb-update*'`, Protokoll mit
 `sudo systemctl start predictiondb-update@<benutzer>.service` oder von Hand
 `scripts/vm-update.sh --force`.
 
+## Aktualisieren und entfernen
+
+Ohne Auto-Update aktualisiert man einen Stand von Hand; Datenbankänderungen spielt `migrate`
+vorwärts ein (Alembic), die Daten bleiben erhalten:
+
+```sh
+git pull                              # oder: git checkout vX.Y.Z
+docker compose pull                   # bzw. docker compose build
+docker compose run --rm garage-init
+docker compose run --rm migrate
+docker compose up -d
+```
+
+Gepflegt wird nur der neueste Stand, es gibt keine Altversionen mit eigenen Korrekturen. Der Weg
+nach vorn ist immer derselbe: auf ein neueres Release wechseln und die Schritte oben ausführen,
+auch über mehrere Versionen hinweg. Inkompatible Änderungen (Konfiguration, Schnittstellen,
+Datenformate) sind als `typ!:` bzw. `BREAKING CHANGE:` markiert und erscheinen so in den
+Release-Notes, zusammen mit den nötigen Schritten. Für den Prognose-Stack genügen
+`docker compose pull && docker compose up -d` im Ordner `predict/`.
+
+Entfernen: `docker compose down` hält die Dienste an und löscht die Container,
+`docker compose down -v --rmi all` zusätzlich Volumes (Datenbank, Garage) und Images. Danach
+den Checkout löschen und, falls eingerichtet, die systemd-Units aus `/etc/systemd/system/`.
+
 ## Entwicklung
 
 ```sh

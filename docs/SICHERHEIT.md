@@ -16,7 +16,7 @@ Die zugehörigen Anforderungen stehen als SYSR-SEC-001 bis -009 in
   vergeben Schreibrechte nur auf Job-Ebene und checken bei `workflow_run` nur Commits von `main`
   aus.
 - **Herkunft:** Die Images `ghcr.io/the78mole/predictiondb` und
-  `ghcr.io/the78mole/predictiondb-predict` sowie die Analyse-PDFs jedes Releases tragen eine
+  `ghcr.io/the78mole/predictiondb-predict` sowie Quellcode-Archiv und Analyse-PDFs jedes Releases tragen eine
   signierte Build-Provenance (Sigstore, SLSA), siehe [Abschnitt 3](#3-signaturen-prüfen).
 - **Robuste Eingaben:** Parser für externe Daten (GRIB-Index, GHCR-Artefakte, ENTSO-E) sind mit
   Property-Tests und Fuzzern (Atheris) geprüft, Archive werden mit Pfad- und Größengrenzen
@@ -66,9 +66,27 @@ gh attestation verify analyse-<name>.pdf -R the78mole/PredictionDB \
 Die Prüfung ist erfolgreich, wenn die Ausgabe den Workflow dieses Repositorys und den
 zugehörigen Commit auf `main` nennt.
 
-**Quellcode:** Releases `vX.Y.Z` sind Tags auf Commits von `main`. Diese Commits entstehen als
-Squash-Merge auf GitHub und tragen dessen Signatur (in der Commit-Ansicht als „Verified“
-markiert, `git log --show-signature`). Die Tags selbst sind nicht signiert.
+**Quellcode:** Jedes Release `vX.Y.Z` trägt das Quellcode-Archiv `PredictionDB-vX.Y.Z.tar.gz`
+(`git archive` des Release-Commits) mit SHA-256-Prüfsumme und signierter Build-Provenance:
+
+```sh
+gh release download vX.Y.Z -R the78mole/PredictionDB -p 'PredictionDB-*' -p quellcode.intoto.jsonl
+sha256sum -c PredictionDB-vX.Y.Z.tar.gz.sha256
+gh attestation verify PredictionDB-vX.Y.Z.tar.gz -R the78mole/PredictionDB \
+  --bundle quellcode.intoto.jsonl
+```
+
+Die von GitHub automatisch erzeugten Archive („Source code (zip/tar.gz)“) sind nicht signiert;
+für eine geprüfte Kopie das Archiv `PredictionDB-vX.Y.Z.tar.gz` verwenden. Die Release-Tags
+zeigen auf Commits von `main`; diese entstehen als Squash-Merge auf GitHub und tragen dessen
+Signatur (in der Commit-Ansicht als „Verified“ markiert, `git log --show-signature`). Die Tags
+selbst sind nicht signiert.
+
+**Wo die Schlüssel liegen:** Signiert wird keyless über Sigstore. Der private Schlüssel ist
+kurzlebig, entsteht im GitHub-Actions-Lauf und wird nach dem Signieren verworfen; er liegt nie
+auf GitHub Releases, GHCR oder einer anderen Verteilstelle. Das öffentliche Zertifikat steckt im
+Bundle und im Transparenzlog Rekor, die Vertrauensanker liefert `gh attestation verify` aus dem
+Sigstore-Root mit.
 
 ## 4. Assurance Case
 
@@ -142,8 +160,12 @@ forecasts or external data, no multi-tenant operation, no long-term support for 
 **Verifying signatures:** `gh attestation verify oci://ghcr.io/the78mole/predictiondb:<tag> -R
 the78mole/PredictionDB` for images and `gh attestation verify analyse-<name>.pdf -R
 the78mole/PredictionDB [--bundle analysen-pdf.intoto.jsonl]` for release PDFs. Signing is keyless
-(Sigstore); there is no long-lived project key. Release tags point to GitHub-signed squash-merge
-commits on `main`; the tags themselves are not signed.
+(Sigstore); there is no long-lived project key, and the short-lived signing key never resides on
+a distribution site. Every release `vX.Y.Z` carries a source archive `PredictionDB-vX.Y.Z.tar.gz`
+with SHA-256 checksum and provenance bundle `quellcode.intoto.jsonl`; verify it with
+`gh attestation verify PredictionDB-vX.Y.Z.tar.gz -R the78mole/PredictionDB --bundle
+quellcode.intoto.jsonl`. GitHub's auto-generated source archives are not signed. Release tags
+point to GitHub-signed squash-merge commits on `main`; the tags themselves are not signed.
 
 The assurance case (threat model, trust boundaries, secure design principles, handling of common
 weaknesses) is in section 4 of the German text.
