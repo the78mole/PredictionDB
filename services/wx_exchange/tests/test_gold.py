@@ -12,6 +12,7 @@ import pyarrow.parquet as pq
 import pytest
 
 from wx_exchange import gold
+from wx_exchange.artifact import DESCRIPTION_LIMIT, DOCS, description
 from wx_exchange.mastr_weights import weights_due
 from wx_exchange.oci import Registry, RegistryError, digest
 from wx_exchange.publish import Publisher
@@ -250,3 +251,14 @@ def test_registry_read_only_scope_and_foreign_realm() -> None:
     leaky = Registry("registry.test", "x", client, "bot", "secret", (0.0,))
     with pytest.raises(RegistryError, match="gehört nicht"):
         leaky.tags()
+
+
+def test_package_descriptions() -> None:
+    """@relation(SWR-WXX-002, scope=function)"""
+    fake = FakeRegistry(repository="owner/data/weights")
+    gold.publish_weights(registry(fake), weights(), SOURCE)
+    text = fake.manifest("latest")["annotations"]["org.opencontainers.image.description"]
+    assert text.startswith("Gewichte von PredictionDB") and DOCS in text
+    assert len(text) <= DESCRIPTION_LIMIT
+    with pytest.raises(ValueError):
+        description("x" * DESCRIPTION_LIMIT)

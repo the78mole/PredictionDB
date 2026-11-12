@@ -42,7 +42,7 @@ from numpy.typing import NDArray
 from pydantic import BaseModel, Field
 
 from predictiondb_core.log import get_logger
-from wx_exchange.artifact import LICENSE, PREFIX, month_bounds, tag
+from wx_exchange.artifact import LICENSE, PREFIX, description, month_bounds, tag
 from wx_exchange.oci import EMPTY, MANIFEST, Registry
 from wx_exchange.safe import (
     GUARDED,
@@ -707,6 +707,12 @@ class GefsMonth:
                 "org.opencontainers.image.source": source,
                 "org.opencontainers.image.created": datetime.now(UTC).isoformat(timespec="seconds"),
                 "org.opencontainers.image.licenses": LICENSE,
+                "org.opencontainers.image.description": description(
+                    "Silber von PredictionDB: GEFS-Ensemble 0,5° (31 Mitglieder), je Lauf"
+                    " Kennzahlen je Region (Gebotszonen Europas) und Mitglied über 16 Tage."
+                    " Ein Manifest je Monat und Laufzeit (Tag"
+                    " JJJJ-MM-HHz), ein Layer je Lauf. Quelle NOAA/NCEP, CC BY 4.0."
+                ),
                 PREFIX + "attribution": ATTRIBUTION,
                 PREFIX + "model": "gefs",
                 PREFIX + "grid": "0p5",
