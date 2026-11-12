@@ -60,6 +60,28 @@ ATTRIBUTION_GDEX = (
 #: Letzter Monat mit Läufen aus GDEX
 GDEX_UNTIL = "2021-03"
 PREFIX = "org.predictiondb."
+#: Doku zu allen Paketen unter predictiondb-data, verlinkt aus der Paketbeschreibung
+DOCS = "https://github.com/the78mole/PredictionDB/tree/main/services/wx_exchange"
+#: GitHub zeigt ``org.opencontainers.image.description`` auf der Paketseite, höchstens so lang
+DESCRIPTION_LIMIT = 512
+#: Ausschnitt des Silbers je Gitter (``config/sources/gfs_*.yaml``)
+SILVER_AREAS = {
+    "0p25": "Mitteleuropa (44-58° N, 0-20° O)",
+    "0p5": "Europa (34,5-71,5° N, 10,5° W-45° O)",
+}
+
+
+def description(text: str) -> str:
+    """Beschreibung für die GHCR-Paketseite, mit Link auf die Doku.
+
+    @relation(SWR-WXX-002, scope=function)
+    """
+    out = f"{text} Doku: {DOCS}"
+    if len(out) > DESCRIPTION_LIMIT:
+        raise ValueError(f"Beschreibung länger als {DESCRIPTION_LIMIT} Zeichen: {len(out)}")
+    return out
+
+
 #: Silber-Attribute, die sich bei jedem Bau ändern und nicht zum Inhalt zählen
 VOLATILE = ("bronze_completed_at",)
 
@@ -299,6 +321,13 @@ class MonthArtifact:
                 "org.opencontainers.image.source": source,
                 "org.opencontainers.image.created": datetime.now(UTC).isoformat(timespec="seconds"),
                 "org.opencontainers.image.licenses": LICENSE,
+                "org.opencontainers.image.description": description(
+                    f"Silber von PredictionDB: {self.model.upper()}-Vorhersagen"
+                    f" {self.resolution.replace('p', ',')}°,"
+                    f" {SILVER_AREAS.get(self.resolution, 'zugeschnitten')}, je Lauf die"
+                    " Wetterfelder als Zarr im nativen Gitter. Ein Manifest je Monat und"
+                    " Laufzeit (Tag JJJJ-MM-HHz), ein Layer je Lauf. Quelle NOAA/NCEP, CC BY 4.0."
+                ),
                 PREFIX + "attribution": (
                     ATTRIBUTION_GDEX if self.month <= GDEX_UNTIL else ATTRIBUTION
                 ),
