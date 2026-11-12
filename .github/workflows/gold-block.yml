@@ -1,0 +1,60 @@
+name: Gold-Historie (Block)
+
+# Ein Block des Workflows gold-history.yml: je Matrix-Eintrag ein Monat einer Laufzeit.
+# Silber liest der Job anonym aus GHCR (öffentliche Pakete), Gold schreibt er mit GITHUB_TOKEN.
+# Höchstens 8 Jobs gleichzeitig, wie bei der GFS-Historie.
+on:
+  workflow_call:
+    inputs:
+      matrix:
+        type: string
+        required: true
+      process_config:
+        type: string
+        default: config/process/gfs_0p25.yaml
+      weights:
+        type: string
+        default: latest
+      rebuild:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  month:
+    name: ${{ matrix.month }} ${{ matrix.hour }}Z
+    runs-on: ubuntu-26.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      max-parallel: 8
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.matrix) }}
+    env:
+      WX_EXCHANGE_USERNAME: ${{ github.actor }}
+      WX_EXCHANGE_TOKEN: ${{ github.token }}
+      PDB_LOG_JSON: "false"
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          save-cache: false
+      - run: uv sync --locked --no-dev --package wx-exchange
+      - name: Gold des Monats rechnen und nach GHCR
+        env:
+          PROCESS_CONFIG: ${{ inputs.process_config }}
+          WEIGHTS: ${{ inputs.weights }}
+          MONTH: ${{ matrix.month }}
+          HOUR: ${{ matrix.hour }}
+          REBUILD: ${{ inputs.rebuild }}
+        run: |
+          args=(gold --process-config "$PROCESS_CONFIG" --weights "$WEIGHTS" build "$MONTH" "$HOUR")
+          [ "$REBUILD" = "true" ] && args+=(--rebuild)
+          uv run --no-sync wx-exchange "${args[@]}"

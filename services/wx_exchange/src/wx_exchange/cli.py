@@ -35,6 +35,11 @@ Beispiele::
     # VM: aktueller Monat live (Bronze 6 Monate, Silber nach GHCR), Historie importieren, Gold
     wx-exchange gefs vm --history-start 2021-03-22T12 --watch 1800 --no-live
 
+    # Gold-Pakete und Gewichte der Cluster (Workflows gold-history.yml, mastr-weights.yml)
+    wx-exchange gold plan 2021-03-22T12 --runs 0,12,6,18
+    wx-exchange gold build 2026-10 0
+    wx-exchange gold weights-build
+
     # VM: täglich um 14:30 öffentlichen Grafana-Snapshot der Wochenprognose, Kurzlink umbiegen
     wx-exchange snapshot --at 14:30
 
@@ -70,7 +75,7 @@ from predictiondb_core.db import create_db_engine
 from predictiondb_core.log import configure_logging, get_logger
 from predictiondb_core.s3 import s3_store
 from predictiondb_core.settings import get_settings
-from wx_exchange import gefs, gefs_regions, gefs_vm, idx, snapshot
+from wx_exchange import cli_gold, gefs, gefs_regions, gefs_vm, idx, snapshot
 from wx_exchange.importer import Importer
 from wx_exchange.oci import Registry, RegistryError
 from wx_exchange.publish import Publisher, plan
@@ -103,6 +108,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="model", required=True)
     _gefs_parser(sub)
     _snapshot_parser(sub)
+    cli_gold.add_parser(sub)
     gfs = sub.add_parser("gfs", help="NOAA GFS 0,25°")
     gfs.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     gfs.add_argument("--process-config", type=Path, help="Standard: PDB_WX_PROCESS_CONFIG")
@@ -236,6 +242,8 @@ def main(argv: list[str] | None = None) -> int:
         return _gefs_main(args)
     if args.model == "snapshot":
         return _snapshot_main(args)
+    if args.model == "gold":
+        return cli_gold.main(args)
     config = GfsConfig.from_yaml(args.config)
     timeout = httpx.Timeout(120.0, connect=15.0)
 

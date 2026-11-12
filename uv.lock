@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.15' and sys_platform == 'win32'",
@@ -4304,8 +4304,10 @@ source = { editable = "services/wx_exchange" }
 dependencies = [
     { name = "gribkit" },
     { name = "httpx" },
+    { name = "mastr-ingest" },
     { name = "obstore" },
     { name = "predictiondb-core" },
+    { name = "pyarrow" },
     { name = "wx-ingest" },
     { name = "wx-process" },
 ]
@@ -4314,8 +4316,10 @@ dependencies = [
 requires-dist = [
     { name = "gribkit", specifier = "~=0.2" },
     { name = "httpx", specifier = ">=0.27" },
+    { name = "mastr-ingest", editable = "services/mastr_ingest" },
     { name = "obstore", specifier = ">=0.6" },
     { name = "predictiondb-core", editable = "packages/core" },
+    { name = "pyarrow", specifier = ">=18" },
     { name = "wx-ingest", editable = "services/wx_ingest" },
     { name = "wx-process", editable = "services/wx_process" },
 ]

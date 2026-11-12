@@ -1,0 +1,112 @@
+name: MaStR-Gewichte
+
+# Gewichte der MaStR-Cluster für das Gold im Runner, ohne die VM: Täglich prüft der erste Job,
+# ob das Gewichte-Artefakt ghcr.io/the78mole/predictiondb-data/gfs-0p25-weights:latest aus
+# einem Export des laufenden Quartals stammt. Wenn nicht, lädt der zweite Job den heutigen
+# Gesamtdatenexport des Marktstammdatenregisters (erscheint nachts gegen 02-04 Uhr), importiert
+# ihn mit mastr-ingest in ein Postgres/Timescale im Service-Container, schreibt die Clusterung
+# des letzten Artefakts fort (neu geclustert wird erst nach recluster_after_days) und
+# veröffentlicht Gewichte, Bestand je Cluster und Tag und den Stand der Clusterung.
+#
+# Daten: Marktstammdatenregister der Bundesnetzagentur, Datenlizenz Deutschland - Namensnennung
+# - Version 2.0. Nur der aggregierte Stand (Gewichte je Gitterzelle) geht nach GHCR, nicht der
+# Export selbst.
+on:
+  schedule:
+    - cron: "23 5 * * *"
+  workflow_dispatch:
+    inputs:
+      date:
+        description: Exportdatum JJJJ-MM-TT (leer = heute; der Export liegt nur an seinem Tag vor)
+        default: ""
+      force:
+        description: Auch bauen, wenn die Gewichte schon aus diesem Quartal stammen
+        type: boolean
+        default: false
+
+concurrency:
+  group: mastr-weights
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  PDB_LOG_JSON: "false"
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  due:
+    name: Neuer Export fällig?
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+      # Gewichte lesen, auch solange das Paket privat ist (nur pull)
+      packages: read
+    env:
+      WX_EXCHANGE_USERNAME: ${{ github.actor }}
+      WX_EXCHANGE_TOKEN: ${{ github.token }}
+    outputs:
+      due: ${{ steps.due.outputs.due }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          save-cache: false
+      - run: uv sync --locked --no-dev --package wx-exchange
+      - id: due
+        env:
+          DAY: ${{ inputs.date }}
+        run: |
+          args=(gold weights-due)
+          [ -n "$DAY" ] && args+=(--date "$DAY")
+          uv run --no-sync wx-exchange "${args[@]}"
+
+  build:
+    name: MaStR verarbeiten, Gewichte nach GHCR
+    needs: due
+    if: needs.due.outputs.due == 'true' || inputs.force == true
+    runs-on: ubuntu-26.04
+    timeout-minutes: 300
+    permissions:
+      contents: read
+      packages: write
+    services:
+      postgres:
+        image: timescale/timescaledb:2.31.0-pg17
+        env:
+          POSTGRES_USER: predictiondb
+          POSTGRES_PASSWORD: predictiondb
+          POSTGRES_DB: predictiondb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U predictiondb" --health-interval 5s --health-timeout 5s
+          --health-retries 20 --shm-size 1g
+    env:
+      PDB_DATABASE_URL: postgresql+psycopg://predictiondb:predictiondb@localhost:5432/predictiondb
+      WX_EXCHANGE_USERNAME: ${{ github.actor }}
+      WX_EXCHANGE_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          save-cache: false
+      - name: Platz schaffen (Export und Datenbank brauchen mehrere GB)
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h / "$RUNNER_TEMP"
+      - run: uv sync --locked --no-dev --package wx-exchange
+      - name: Datenbankschema
+        run: uv run --no-sync alembic upgrade head
+      - name: MaStR laden, clustern, Gewichte veröffentlichen
+        env:
+          DAY: ${{ inputs.date }}
+          FORCE: ${{ inputs.force == true }}
+        run: |
+          args=(gold weights-build --workdir "$RUNNER_TEMP/mastr")
+          [ -n "$DAY" ] && args+=(--date "$DAY")
+          [ "$FORCE" = "true" ] && args+=(--force)
+          uv run --no-sync wx-exchange "${args[@]}"
