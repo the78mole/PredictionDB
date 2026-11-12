@@ -577,6 +577,9 @@ Mit ECMWF, ICON-EU (höhere Auflösung, aber kürzerer Horizont) und GEFS-Mittel
 > - **Prüfung:** `wx-exchange gfs verify` vergleicht selbst gebautes Silber über den Inhalts-Hash
 >   mit GHCR.
 >
+> - **Gold und Gewichte:** `gold-history.yml` rechnet Gold aus dem Silber in GHCR im Runner,
+>   `mastr-weights.yml` die Gewichte der MaStR-Cluster (5.5.7).
+>
 > Noch offen sind `wx-publish` für den laufenden Betrieb, das Bronze-Artefakt und die
 > `cosign`-Signatur. Einzelheiten: `services/wx_exchange/README.md`.
 
@@ -607,7 +610,8 @@ Ein fehlendes Bronze ist nicht endgültig: Das AWS-Archiv hält GFS v16 ab 2021-
 |---|---|---|---|
 | `predictiondb-data/gfs-0p25-silver` | Zarr-Store je Lauf, unverändert aus `wx-silver` | ~13 MB/Lauf, ~19 GB/Jahr | Pflicht |
 | `predictiondb-data/gfs-0p25-bronze` | zugeschnittene GRIB2 je Schritt plus `run.json`, `fSSS.json` | ~22 MB/Lauf, ~32 GB/Jahr | optional, später |
-| `predictiondb-data/feat-gfs` | Gold-Features als Parquet je Monat, nur zusammen mit `clustering_version` und `FEATURES_VERSION` | < 1 GB/Jahr | optional; nur nutzbar bei identischer Clusterung |
+| `predictiondb-data/gfs-0p25-gold`, `gfs-0p5-gold` | Gold-Features als Parquet je Monat und Laufzeit, mit den Gewichten, mit denen gerechnet wurde (5.5.7) | ≈ 10 MB je Monat und Laufzeit, ≈ 0,5 GB/Jahr je Quelle | umgesetzt (`gold-history.yml`) |
+| `predictiondb-data/gfs-0p25-weights` | Gewichte und Stand der MaStR-Clusterung (5.5.7) | < 2 MB | umgesetzt (`mastr-weights.yml`) |
 | `predictiondb-data/gfs-0p25-gdex-idx:v1` | vollständige `.idx` zu allen GDEX-Dateien, ein Layer (`tar.gz`) je Monat und Laufzeit | einige hundert MB | umgesetzt; Hilfsmittel für den GDEX-Backfill |
 
 Nicht veröffentlicht werden Energie- und Marktdaten (ENTSO-E, SMARD, Energy-Charts, Netztransparenz): Sie sind klein, jede Instanz ruft sie per API selbst ab, und ihre Nutzungsbedingungen regeln die Weitergabe unterschiedlich. Ebenso wenig Prognosen und Modelle (Lizenz, 12.1), Geheimnisse oder Inhalte von `assets.*` zu Anlagen von Nutzern.
@@ -668,6 +672,39 @@ flowchart LR
 
   Jedes Manifest trägt den Quellenvermerk in `org.predictiondb.attribution`, zusätzlich liegt ein `ATTRIBUTION.md` als eigener Layer im Index-Artefakt. Weitere Modelle bekommen eigene Artefakt-Repositories (`ecmwf-ifs-0p25-silver` usw.), damit Lizenzen nicht gemischt werden.
 - **Lizenz der Daten selbst:** Die AGPL-3.0 bzw. kommerzielle Lizenz (12.1) gilt für den Code. Die veröffentlichten Daten stehen unter **CC BY 4.0** (`org.opencontainers.image.licenses: CC-BY-4.0`), Namensnennung: „PredictionDB (the78mole)“ plus die Quellenvermerke der Tabelle oben (12.9).
+
+#### 5.5.7 Gold und Gewichte im Runner
+
+Damit Training und Backtest später ohne die VM laufen können, entsteht auch Gold in GitHub
+Actions, aus dem Silber in GHCR. Für die MaStR-Cluster braucht das die Gewichte je Gitterzelle;
+auch sie rechnet ein Runner, aus dem Gesamtexport des Marktstammdatenregisters.
+
+- **Gewichte (`mastr-weights.yml`):** Täglich prüft ein kleiner Job, ob
+  `gfs-0p25-weights:latest` aus einem Export des laufenden Quartals stammt. Wenn nicht, lädt
+  ein zweiter Job den Export des Tages, importiert ihn mit `mastr-ingest` in ein
+  Postgres/Timescale im Service-Container (dieselbe Verarbeitung wie auf der VM, 7.5), schreibt
+  die Clusterung des letzten Artefakts fort und veröffentlicht Gewichte (`clusters.parquet`),
+  Bestand je Cluster an den Tagen seiner Änderung (`capacity.parquet`) und den Stand der
+  Clusterung (`cells.parquet`). Weil die Datenbank danach weg ist, wird die Clusterung vor dem
+  Import aus `cells.parquet` wiederhergestellt; neu geclustert wird wie auf der VM höchstens
+  jährlich. Der Export selbst wird nicht veröffentlicht, nur der aggregierte Stand
+  (DL-DE BY 2.0 mit Namensnennung).
+- **Gold (`gold-history.yml`):** je Monat und Laufzeit ein Paket
+  `gfs-0p25-gold:<Clusterung>-JJJJ-MM-HHz` bzw. `gfs-0p5-gold:<Regionen>-JJJJ-MM-HHz` (feste
+  Zonen und Standorte aus dem Repo). Layer: `gold.parquet` (`run_time, valid_time, region,
+  feature, value`) und die Gewichte, mit denen gerechnet wurde, byte-gleich mit dem
+  Gewichte-Artefakt. Ein Fingerabdruck aus `FEATURES_VERSION`, Feature-Konfiguration, Gewichten
+  und den Inhalts-Hashes des Silbers entscheidet, ob ein Monat neu gerechnet wird; täglich
+  kommen so die neuen Läufe des laufenden Monats dazu, neue Gewichte machen alle Monate neu
+  fällig (ein Durchlauf der ganzen Historie, rund 270 Jobs, dauert in Actions grob ein bis zwei Stunden).
+- **Lizenz:** `CC-BY-4.0 AND DL-DE-BY-2.0` (NOAA gemeinfrei, MaStR mit Namensnennung); Quellenvermerk
+  in `org.predictiondb.attribution`.
+- **Abweichung von der VM:** Die VM behält für schon gerechnete Läufe die Gewichte ihres
+  Rechenzeitpunkts, ein Gold-Paket rechnet alle Läufe eines Monats mit demselben Stand. Die
+  Clusterung im Runner ist eine eigene Linie; mit `wx-exchange gold weights-publish` auf der VM
+  kann sie einmal von der VM übernommen werden und wird danach im Runner fortgeschrieben.
+
+Einzelheiten: `services/wx_exchange/README.md`, Abschnitt „Gold und Gewichte der Cluster“.
 
 ### 5.6 GEFS-Ensemble: Silber im Runner, je Region und Mitglied
 

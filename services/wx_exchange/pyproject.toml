@@ -10,7 +10,9 @@ dependencies = [
     "predictiondb-core",
     "wx-ingest",
     "wx-process",
+    "mastr-ingest",
     "httpx>=0.27",
+    "pyarrow>=18",
     "obstore>=0.6",
 ]
 
@@ -21,6 +23,7 @@ wx-exchange = "wx_exchange.cli:main"
 predictiondb-core = { workspace = true }
 wx-ingest = { workspace = true }
 wx-process = { workspace = true }
+mastr-ingest = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

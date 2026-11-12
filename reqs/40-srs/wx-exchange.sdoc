@@ -443,6 +443,111 @@ RELATIONS:
 [[/SECTION]]
 
 [[SECTION]]
+TITLE: Gold und Gewichte im Runner
+
+[REQUIREMENT]
+UID: SWR-WXX-070
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Gewichte-Artefakt
+STATEMENT: >>>
+wx-exchange muss die Gewichte einer Clusterung als OCI-Artefakt
+``predictiondb-data/gfs-0p25-weights`` mit den Tags ``<Version>``, ``<Version>-<MaStR-Export>``
+und ``latest`` schreiben können: Anteil je Gitterzelle und Region samt Nabenhöhe
+(``clusters.parquet``), Bestand je Cluster nur an den Tagen seiner Änderung
+(``capacity.parquet``) und den Stand der Clusterung (``cells.parquet``). Feste Regionen aus dem
+Repo (Zonen, Standorte) ergeben dieselbe Form ohne Bestand.
+<<<
+QUELLE: ARCHITEKTUR.md 5.5.7
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-002
+- TYPE: Parent
+  VALUE: SYSR-EN-004
+
+[REQUIREMENT]
+UID: SWR-WXX-071
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Gold-Artefakt
+STATEMENT: >>>
+wx-exchange muss je Monat und Laufzeit ein Manifest mit Tag ``<Version>-JJJJ-MM-HHz`` schreiben,
+mit einem Layer ``gold.parquet`` (``run_time, valid_time, region, feature, value``, sortiert nach
+Feature, Region, Lauf und Zeit) und den Gewichten, mit denen gerechnet wurde. Das Manifest trägt
+Lizenz, Quellenvermerk, die enthaltenen und fehlenden Läufe und einen Fingerabdruck aus
+``FEATURES_VERSION``, Feature-Konfiguration, Gewichten und den Inhalts-Hashes des Silbers.
+<<<
+QUELLE: ARCHITEKTUR.md 5.5.7
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-002
+- TYPE: Parent
+  VALUE: SYSR-QA-004
+
+[REQUIREMENT]
+UID: SWR-WXX-072
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Gold ohne Datenbank rechnen
+STATEMENT: >>>
+``gold build`` muss Gold eines Monats und einer Laufzeit nur aus dem Silber in GHCR und dem
+Gewichte-Artefakt bzw. den festen Regionen rechnen, mit denselben Features wie ``wx-process``,
+und es nur schreiben, wenn sich der Fingerabdruck geändert hat (``--rebuild``: immer).
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-002
+
+[REQUIREMENT]
+UID: SWR-WXX-073
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Plan für veraltetes Gold
+STATEMENT: >>>
+``gold plan`` muss die Monate und Laufzeiten mit Silber im Zeitraum ausgeben, deren Gold fehlt
+oder einen anderen Fingerabdruck trägt, in der Reihenfolge der Laufzeiten und darin die jüngsten
+Monate zuerst, aufgeteilt in Matrix-Blöcke für GitHub Actions.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-002
+
+[REQUIREMENT]
+UID: SWR-WXX-074
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Neuer MaStR-Stand fällig
+STATEMENT: >>>
+``gold weights-due`` muss neue Gewichte als fällig melden, wenn es noch keine gibt oder ihr
+MaStR-Export vor dem laufenden Quartal liegt.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-004
+
+[REQUIREMENT]
+UID: SWR-WXX-075
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Clusterung im Runner fortschreiben
+STATEMENT: >>>
+``gold weights-build`` muss den MaStR-Export in eine leere Datenbank importieren und vorher die
+Clusterung des letzten Gewichte-Artefakts wiederherstellen, damit ``mastr-ingest`` sie wie auf
+der VM fortschreibt und erst nach ``recluster_after_days`` neu clustert.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-004
+
+[[/SECTION]]
+
+[[SECTION]]
 TITLE: Robustheit
 
 [REQUIREMENT]

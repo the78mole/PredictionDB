@@ -1,0 +1,141 @@
+name: Gold-Historie
+run-name: >-
+  Gold-Historie ${{ inputs.source || (github.event.schedule == '47 10 * * *' && 'eu') || 'de' }}
+
+# Rechnet Gold (Wetter-Features je Cluster bzw. Region) im Runner aus dem Silber in GHCR, ohne
+# Datenbank und ohne die VM: je Job ein Monat einer Laufzeit, Ergebnis als OCI-Artefakt nach
+# ghcr.io/the78mole/predictiondb-data/gfs-0p25-gold (DE, MaStR-Cluster) bzw. gfs-0p5-gold
+# (Europa, feste Gebotszonen und Kraftwerksstandorte aus dem Repo). Tag
+# <Version der Clusterung bzw. Regionen>-JJJJ-MM-HHz; jedes Paket trägt die Gewichte, mit denen
+# gerechnet wurde. Die Gewichte der DE-Cluster kommen aus gfs-0p25-weights (mastr-weights.yml).
+#
+# Der Plan vergleicht den Fingerabdruck jedes Monats (Feature-Version, Gewichte, Inhalt des
+# Silbers) mit dem vorhandenen Gold und nimmt nur veraltete oder fehlende Monate auf. Täglich
+# nach der GFS-Historie (gfs-history.yml) kommen so die neuen Läufe des laufenden Monats dazu;
+# neue Gewichte (neuer MaStR-Snapshot) machen alle Monate neu fällig.
+on:
+  schedule:
+    - cron: "17 10 * * *"
+    # GFS 0,5° Verbundnetz (source: eu)
+    - cron: "47 10 * * *"
+  workflow_dispatch:
+    inputs:
+      source:
+        description: de = GFS 0,25° mit MaStR-Clustern, eu = GFS 0,5° Gebotszonen und Standorte
+        type: choice
+        options: [de, eu]
+        default: de
+      start:
+        description: Frühester Lauf
+        default: 2021-03-22T12
+      end:
+        description: Spätester Lauf (leer = jetzt)
+        default: ""
+      runs:
+        description: Laufzeiten in Reihenfolge der Priorität
+        default: 0,12,6,18
+      weights:
+        description: Tag der Gewichte (nur de)
+        default: latest
+      rebuild:
+        description: Alle Monate neu bauen, auch bei gleichem Fingerabdruck
+        type: boolean
+        default: false
+
+concurrency:
+  group: gold-history-${{ inputs.source || (github.event.schedule == '47 10 * * *' && 'eu') || 'de' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  PDB_LOG_JSON: "false"
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  plan:
+    name: Veraltetes Gold planen
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+      # Gewichte und Gold lesen, auch solange die Pakete noch privat sind (der Client fordert
+      # beim Anmelden mit Token immer pull,push an)
+      packages: write
+    env:
+      WX_EXCHANGE_USERNAME: ${{ github.actor }}
+      WX_EXCHANGE_TOKEN: ${{ github.token }}
+    outputs:
+      block1: ${{ steps.plan.outputs.block1 }}
+      block2: ${{ steps.plan.outputs.block2 }}
+      block3: ${{ steps.plan.outputs.block3 }}
+      process_config: ${{ steps.source.outputs.process_config }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          save-cache: false
+      - run: uv sync --locked --no-dev --package wx-exchange
+      - id: source
+        env:
+          SOURCE: ${{ inputs.source || (github.event.schedule == '47 10 * * *' && 'eu') || 'de' }}
+        run: |
+          if [ "$SOURCE" = "eu" ]; then
+            echo "process_config=config/process/gfs_0p5.yaml" >> "$GITHUB_OUTPUT"
+          else
+            echo "process_config=config/process/gfs_0p25.yaml" >> "$GITHUB_OUTPUT"
+          fi
+      - id: plan
+        env:
+          PROCESS_CONFIG: ${{ steps.source.outputs.process_config }}
+          START: ${{ inputs.start || '2021-03-22T12' }}
+          END: ${{ inputs.end }}
+          RUNS: ${{ inputs.runs || '0,12,6,18' }}
+          WEIGHTS: ${{ inputs.weights || 'latest' }}
+          REBUILD: ${{ inputs.rebuild == true }}
+        run: |
+          args=(gold --process-config "$PROCESS_CONFIG" --weights "$WEIGHTS" plan "$START")
+          [ -n "$END" ] && args+=("$END")
+          args+=(--runs "$RUNS")
+          [ "$REBUILD" = "true" ] && args+=(--all)
+          uv run --no-sync wx-exchange "${args[@]}"
+
+  block1:
+    needs: plan
+    if: needs.plan.outputs.block1 != '[]'
+    uses: ./.github/workflows/gold-block.yml
+    with:
+      matrix: ${{ needs.plan.outputs.block1 }}
+      process_config: ${{ needs.plan.outputs.process_config }}
+      weights: ${{ inputs.weights || 'latest' }}
+      rebuild: ${{ inputs.rebuild == true }}
+    permissions:
+      contents: read
+      packages: write
+
+  block2:
+    needs: [plan, block1]
+    if: ${{ !cancelled() && needs.plan.outputs.block2 != '[]' }}
+    uses: ./.github/workflows/gold-block.yml
+    with:
+      matrix: ${{ needs.plan.outputs.block2 }}
+      process_config: ${{ needs.plan.outputs.process_config }}
+      weights: ${{ inputs.weights || 'latest' }}
+      rebuild: ${{ inputs.rebuild == true }}
+    permissions:
+      contents: read
+      packages: write
+
+  block3:
+    needs: [plan, block2]
+    if: ${{ !cancelled() && needs.plan.outputs.block3 != '[]' }}
+    uses: ./.github/workflows/gold-block.yml
+    with:
+      matrix: ${{ needs.plan.outputs.block3 }}
+      process_config: ${{ needs.plan.outputs.process_config }}
+      weights: ${{ inputs.weights || 'latest' }}
+      rebuild: ${{ inputs.rebuild == true }}
+    permissions:
+      contents: read
+      packages: write
