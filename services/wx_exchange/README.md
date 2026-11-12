@@ -230,6 +230,43 @@ docker compose run --rm wx-import wx-exchange gold weights-publish
 Gelesen wird ein Monat mit `wx_exchange.gold.load_month(registry, tag)` (Tabelle, Gewichte,
 Annotationen).
 
+## Energiedaten
+
+Die Energiereihen für den Trainings-Snapshot kommen im Runner ohne Datenbank aus den freien
+Quellen, mit den Abrufen von `energy-ingest`. Je Kalenderjahr (Ortszeit Berlin) ein Paket:
+
+```
+energy-history.yml (täglich 12:37 UTC, nach der Day-Ahead-Auktion)
+  plan ── fehlende Jahre, laufendes Jahr, bis Ende Februar das Vorjahr
+  build JJJJ (Matrix, max. 3) ── Quellen abrufen → ein Parquet je Quelle → energy:JJJJ
+```
+
+| Layer | Inhalt |
+|---|---|
+| `<quelle>.parquet` | `code`, `ts` (UTC), `value`, `published` (regulärer Veröffentlichungstermin wie in `energy.value`) |
+| `sources.json` | Rang (`priority`), `free`, `train`, Lizenz und Reihen (Art, Einheit, Auflösung) je Quelle, Status je Datensatz |
+
+`wx_exchange.energy.load_best(registry, years, codes)` liefert daraus je Reihe und Zeitpunkt den
+Wert der Quelle mit dem kleinsten Rang, wie `energy.value_best`. Die Marktwerte
+(`pdb_marktwert`) rechnet der Runner selbst aus dieser Auswahl.
+
+- **Quellen:** SMARD, Energy-Charts, EIA, EIA STEO, EZB, Weltbank, Oil Bulletin, Eurostat,
+  Hub'eau; mit `PDB_ENTSOE_TOKEN` bzw. `PDB_GIE_API_KEY` auch `entsoe_last` und GIE. Nur
+  Quellen mit `free = True`, unfreie und „nur Training“ lehnt der Bau ab.
+- **Laufendes Jahr:** Datensätze mit kurzen Blöcken (bis 31 Tage) nur für die letzten 62 Tage
+  neu, zusammengeführt mit den bisherigen Werten; ganze Dateien (Monatswerte, STEO) vollständig.
+  `--full` ruft alles ab, `--source` nur einzelne Quellen (die übrigen bleiben im Paket).
+- **Ausfälle:** Scheitert ein Datensatz, behält das Paket die bisherigen Werte dieser Quelle
+  (Annotation `org.predictiondb.stale`), und der Plan nimmt das Jahr wieder auf.
+- **Gemessen** (2025, aus der Cloud-Sandbox): 27 Minuten, davon 22 für Energy-Charts (HTTP 429,
+  Drosselung), 2,7 Mio. Werte in 269 Reihen, 22 MB.
+
+```bash
+uv run wx-exchange energy plan
+WX_EXCHANGE_USERNAME=… WX_EXCHANGE_TOKEN=… uv run wx-exchange energy build 2025
+uv run wx-exchange energy --source smard build 2026 --full
+```
+
 ## Aufruf
 
 ```bash
@@ -255,7 +292,7 @@ uv run pytest services/wx_exchange   # offline, mit simulierter Registry und GFS
 
 - Signatur der Manifeste mit `cosign` (5.5.3).
 - `wx-publish` für den laufenden Betrieb der VM (neue Läufe nach GHCR), Bronze-Artefakt.
-- Trainings-Snapshot aus Gold-Paketen statt aus der Datenbank (`ml-train`), Gold für GEFS.
+- Trainings-Snapshot aus Gold- und Energie-Paketen statt aus der Datenbank (`ml-train`), Gold für GEFS.
 
 ## Öffentlicher Grafana-Snapshot (`wx-exchange snapshot`)
 
