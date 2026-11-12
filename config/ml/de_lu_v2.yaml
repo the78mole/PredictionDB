@@ -238,6 +238,12 @@ variants:
              marktwerte, stage1]
     requires_weather: true
     train_from: 2021-03-23
+  - name: wetter_frei_gk_skaliert_gefs
+    groups: [calendar, lags, capacity, weather, gefs, nachbarn, lastprognose, brennstoffe,
+             marktwerte, grenzkosten, stage1]
+    scale: {da_price_de_lu: gk_niveau}
+    requires_weather: true
+    train_from: 2021-03-23
   # dazu Wind und PV der Nachbarzonen (Ablation gegen wetter bzw. wetter_frei_gk_skaliert)
   - name: wetter_nachbarwetter
     groups: [calendar, lags, capacity, weather, nachbarwetter, stage1]

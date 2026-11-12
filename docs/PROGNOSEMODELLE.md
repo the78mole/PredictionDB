@@ -665,7 +665,7 @@ zum Ausgabezeitpunkt veröffentlicht war. Als Gegenprobe gibt es die Gruppe `pre
 | `wetter` | `weather` (ab 23.03.2021, nur mit Wetterlauf) |
 | `wetter_frei` | `weather` und die Gruppen von `frei` |
 | `wetter_frei_gk_skaliert` | `weather` und die Gruppen von `frei_gk`, skaliert wie `frei_gk_skaliert` |
-| `wetter_gefs`, `wetter_frei_gefs` | wie `wetter` bzw. `wetter_frei`, dazu `gefs` (GEFS-Ensemble, [4.2](#42-merkmalsgruppen)); noch nicht im schlanken Stack (`ml-train bundle` lehnt sie ab) |
+| `wetter_gefs`, `wetter_frei_gefs`, `wetter_frei_gk_skaliert_gefs` | wie `wetter`, `wetter_frei` bzw. `wetter_frei_gk_skaliert`, dazu `gefs` (GEFS-Ensemble, [4.2](#42-merkmalsgruppen)); noch nicht im schlanken Stack (`ml-train bundle` lehnt sie ab) |
 
 Ergebnisse der Ablation (Backtest 01/2025 bis 10/2026, alle Varianten auf denselben Stunden,
 Analyse in [`docs/analysen/prognose-de-lu-v2/`](analysen/prognose-de-lu-v2/README.md)):
