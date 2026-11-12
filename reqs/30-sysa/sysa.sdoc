@@ -202,6 +202,8 @@ Garage.
 ORT: packages/core
 RELATIONS:
 - TYPE: Parent
+  VALUE: SYSR-QA-007
+- TYPE: Parent
   VALUE: SYSR-QA-003
 - TYPE: Parent
   VALUE: SYSR-OPS-005
@@ -217,6 +219,8 @@ Lädt GFS-Läufe per Partial Download nach Bronze, live und als Backfill.
 ORT: services/wx_ingest
 QUELLE: ARCHITEKTUR.md 4, 6.4
 RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-QA-007
 - TYPE: Parent
   VALUE: SYSR-WX-001
 - TYPE: Parent
@@ -241,6 +245,8 @@ Bronze nach Silber (Zarr) und Silber nach Gold (Features je Cluster bzw. Gebotsz
 ORT: services/wx_process
 RELATIONS:
 - TYPE: Parent
+  VALUE: SYSR-QA-007
+- TYPE: Parent
   VALUE: SYSR-WX-006
 - TYPE: Parent
   VALUE: SYSR-WX-008
@@ -255,6 +261,8 @@ Silber und ``.idx`` als ORAS-Artefakte bauen, veröffentlichen, prüfen und impo
 <<<
 ORT: services/wx_exchange
 RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-QA-007
 - TYPE: Parent
   VALUE: SYSR-PUB-001
 - TYPE: Parent
@@ -276,6 +284,8 @@ Energie-, Markt- und Brennstoffdaten je Quelle abgleichen, prüfen und nachladen
 <<<
 ORT: services/energy_ingest
 RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-QA-007
 - TYPE: Parent
   VALUE: SYSR-EN-001
 - TYPE: Parent
@@ -301,6 +311,8 @@ rekonstruieren.
 ORT: services/mastr_ingest
 RELATIONS:
 - TYPE: Parent
+  VALUE: SYSR-QA-007
+- TYPE: Parent
   VALUE: SYSR-EN-004
 
 [ELEMENT]
@@ -313,6 +325,8 @@ Datensätze, Training, Backtest, Modellregister, Modellpakete und laufende Progn
 <<<
 ORT: services/ml_train
 RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-QA-007
 - TYPE: Parent
   VALUE: SYSR-PR-001
 - TYPE: Parent
@@ -338,6 +352,8 @@ Software des schlanken Prognose-Stacks.
 <<<
 ORT: predict/src/pdb_predict
 RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-QA-007
 - TYPE: Parent
   VALUE: SYSR-PUB-004
 

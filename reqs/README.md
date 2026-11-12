@@ -57,6 +57,9 @@ async def put_step(...) -> StepManifest:
 Mehrere IDs werden mit Komma getrennt: `@relation(SWR-WXI-010, SWR-WXI-022, scope=function)`.
 Für Methoden gilt derselbe Docstring-Marker, `scope=class` für ganze Klassen.
 
+Ein Paketeinstieg `__init__.py` verweist nicht auf eine SWA-Komponente, sondern auf sein
+Softwareelement in der SYSA, z. B. `@relation(SYSA-SW-CORE, scope=file)` (SYSR-QA-007).
+
 ## Prüfen und ansehen
 
 ```sh
@@ -73,5 +76,5 @@ CI-Lauf auf `main`, zusammen mit den Testberichten.
 
 Beides läuft als pre-commit-Hook und damit im CI-Job „Lint und Typen“. Der Export bricht ab, wenn
 eine Relation oder ein `@relation`-Marker auf eine unbekannte ID zeigt. `pruefen.py` meldet jede
-umgesetzte SWR ohne Verweis aus dem Code und jede mit Nachweis `Test` ohne Verweis aus einem
-Test. Das HTML hängt als Artefakt `anforderungen-html` am CI-Lauf.
+umgesetzte SWR ohne Verweis aus dem Code, jede mit Nachweis `Test` ohne Verweis aus einem
+Test und jedes Modul unter `src/` ohne Verweis mit `scope=file`. Das HTML hängt als Artefakt `anforderungen-html` am CI-Lauf.

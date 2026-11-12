@@ -1,3 +1,4 @@
-"""Ingest von Markt- und Netzdaten für Deutschland (Gebotszone DE-LU) nach TimescaleDB."""
+"""Ingest von Markt- und Netzdaten für Deutschland (Gebotszone DE-LU) nach TimescaleDB.
 
-__version__ = "0.1.0"
+@relation(SYSA-SW-ENI, scope=file)
+"""

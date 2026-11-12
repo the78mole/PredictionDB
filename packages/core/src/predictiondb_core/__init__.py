@@ -1,3 +1,4 @@
-"""Gemeinsame Basis aller PredictionDB-Dienste."""
+"""Gemeinsame Basis aller PredictionDB-Dienste.
 
-__version__ = "0.1.0"
+@relation(SYSA-SW-CORE, scope=file)
+"""
