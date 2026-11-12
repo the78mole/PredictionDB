@@ -710,8 +710,9 @@ class GefsMonth:
                 "org.opencontainers.image.description": description(
                     "Silber von PredictionDB: GEFS-Ensemble 0,5° (31 Mitglieder), je Lauf"
                     " Kennzahlen je Region (Gebotszonen Europas) und Mitglied über 16 Tage."
-                    " Ein Manifest je Monat und Laufzeit (Tag"
-                    " JJJJ-MM-HHz), ein Layer je Lauf. Quelle NOAA/NCEP, CC BY 4.0."
+                    " Ein Manifest je Monat (Tag JJJJ-MM-00z), ein Layer je Lauf. Quelle"
+                    " NOAA/NCEP, Gewichte aus dem MaStR (DL-DE BY 2.0) und Natural Earth"
+                    " (gemeinfrei); CC BY 4.0."
                 ),
                 PREFIX + "attribution": ATTRIBUTION,
                 PREFIX + "model": "gefs",
