@@ -11,7 +11,7 @@ ausfällt.
 | Rolle | Wer | Aufgaben und Rechte |
 |---|---|---|
 | Projektinhaber und Maintainer | Daniel (the78mole) Glaser | Entscheidet über Ziele, Architektur, Lizenz und Releases; merged Pull Requests; verwaltet Repository, GHCR-Pakete, Secrets und den Betrieb der Referenzinstallation; bearbeitet Sicherheitsmeldungen ([SECURITY.md](SECURITY.md)). |
-| Vertretung | siehe [Kontinuität](#kontinuität) | Übernimmt bei Ausfall des Maintainers Issues, Merges und Releases. |
+| Vertretung | [@mrwiora](https://github.com/mrwiora) | Übernimmt bei Ausfall des Maintainers Issues, Merges und Releases. |
 | Beitragende | alle, die Pull Requests, Issues oder Kommentare einreichen | Schlagen Änderungen vor; Voraussetzung sind die [Beitragsbedingungen](CONTRIBUTING.md) mit `Signed-off-by`. |
 | Automatisierte Helfer | Renovate, CodeRabbit, GitHub Actions, KI-Assistenten (Claude Code) | Aktualisieren Abhängigkeiten, prüfen und bauen. Renovate merged nur grüne Minor-/Patch-Gruppen selbst ([renovate.json](renovate.json)); alles andere entscheidet der Maintainer. Von Assistenten erstellte Änderungen laufen wie jede andere über einen Pull Request. |
 
@@ -33,13 +33,13 @@ bearbeiten, Pull Requests annehmen, Releases erzeugen.
 - Code, Doku, Anforderungen, Workflows und Betriebsanleitungen liegen vollständig im Repository.
   Geheimnisse liegen nicht im Repository, sondern in OpenBao bzw. `.env`; welche Schlüssel eine
   neue Installation braucht, beschreibt [docs/DATENQUELLEN-ZUGANG.md](docs/DATENQUELLEN-ZUGANG.md).
-- Vertretung mit Schreibrechten auf das Repository: *noch festzulegen*.
+- Vertretung mit Schreibrechten auf das Repository: [@mrwiora](https://github.com/mrwiora).
 
 Was die Vertretung braucht und was nicht:
 
 | Aufgabe | nötig | Stand |
 |---|---|---|
-| Issues anlegen und schließen, Pull Requests mergen | Collaborator mit Schreibrecht auf `the78mole/PredictionDB` | offen |
+| Issues anlegen und schließen, Pull Requests mergen | Collaborator mit Schreibrecht auf `the78mole/PredictionDB` | erfüllt (@mrwiora) |
 | Releases und Images erzeugen | nichts weiter: Workflows „Release“, „Image“, „Predict“ laufen mit dem `GITHUB_TOKEN` | erfüllt |
 | Pakete auf GHCR verwalten (Rechte, Löschen) | Admin-Rolle je Paket in den Paketeinstellungen | offen, für die Kontinuität nicht zwingend |
 | Einstellungen, Rulesets, Secrets des Repositorys | Admin: Nachfolger im GitHub-Konto („Account successor“) oder Übertragung des Repositorys auf eine Organisation mit zwei Inhabern | offen |
@@ -61,4 +61,4 @@ Contributors propose changes via issues and pull requests under the
 assistants only act through pull requests; Renovate merges green minor/patch groups on its own.
 Decisions are recorded in `docs/ARCHITEKTUR.md` (section 12) and `reqs/`. Releases are created
 automatically from `main`. The deputy with write access who takes over if the maintainer is
-unavailable is still to be named.
+unavailable is @mrwiora.

@@ -1517,7 +1517,11 @@ Analyse-Jobs sind bewusst einfach gehalten: eine YAML-Datei, ein Befehl, ein Ord
 > Prognosen D+1 bis D+15. Im Rückblick (Panel 77, Variablen „Rückblick: Ausgabetag“ und
 > „Rückblick: Modell“) steht der Preis-Lauf, der an einem gewählten Tag um 14:00 Ortszeit galt
 > (Day-Ahead-Preise für morgen bekannt), gegen den Day-Ahead-Preis, mit Tagesmitteln und MAE je
-> Tag; Vorgabe ist der Tag vor einer Woche und der aktuelle Champion. Der Ausblick −2 bis +7 Tage, der Fehlerschlauch, die Views
+> Tag; Vorgabe ist der Tag vor einer Woche und der aktuelle Champion. Beide Prognose-Dashboards
+> stehen auf „Shared tooltip“ (`graphTooltip: 2`): Beim Überfahren eines Diagramms zeigen alle
+> anderen Marker und Werte zum selben Zeitpunkt. Die ECharts-Panels machen über eigenen Code mit
+> (Mausposition als `data-hover`-Ereignis auf dem Event-Bus des Panels senden, fremde Ereignisse
+> als ECharts-Tooltip zeigen, Abo per `unsubscribe` im Rückgabewert `version: 2`). Der Ausblick −2 bis +7 Tage, der Fehlerschlauch, die Views
 > `fcst.v_outlook`/`fcst.v_yesterday_envelope`, `energy.forecast_vintage`, die
 > Week-Ahead-Lastprognose und `fcst.model_spread` (7.7) sind noch nicht umgesetzt; der Rest
 > dieses Abschnitts beschreibt sie als Plan. Die übrigen Status-Dashboards sind „Wetter“
