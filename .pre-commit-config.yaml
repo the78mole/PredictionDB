@@ -60,3 +60,9 @@ repos:
         files: ^(reqs/.*|.*\.py)$
         pass_filenames: false
         require_serial: true
+      - id: shellcheck
+        name: shellcheck (Shell-Skripte)
+        entry: uv run --no-sync shellcheck
+        language: system
+        types: [shell]
+        require_serial: true

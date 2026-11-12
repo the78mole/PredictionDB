@@ -83,6 +83,38 @@ Bedienung: `systemctl list-timers 'predictiondb-update*'`, Protokoll mit
 `sudo systemctl start predictiondb-update@<benutzer>.service` oder von Hand
 `scripts/vm-update.sh --force`.
 
+## Aktualisieren und entfernen
+
+Ohne Auto-Update aktualisiert man einen Stand von Hand. Die Images auf GHCR tragen den vollen
+Commit-Hash als Tag; `TAG` in der `.env` muss deshalb zum ausgecheckten Commit passen.
+Datenbankänderungen spielt `migrate` vorwärts ein (Alembic), die Daten bleiben erhalten:
+
+```sh
+git fetch --tags && git checkout vX.Y.Z      # oder: git pull für den neuesten Stand
+sed -i "s/^TAG=.*/TAG=$(git rev-parse HEAD)/" .env
+docker compose -f compose.yaml pull
+docker compose -f compose.yaml run --rm garage-init
+docker compose -f compose.yaml run --rm migrate
+docker compose -f compose.yaml up -d
+```
+
+`-f compose.yaml` lässt das Entwicklungs-Override (`compose.override.yaml`, lokales Image
+`predictiondb:dev`) außen vor; wer lokal entwickelt, baut stattdessen mit `docker compose build`.
+
+Gepflegt wird nur der neueste Stand, es gibt keine Altversionen mit eigenen Korrekturen. Der Weg
+nach vorn ist immer derselbe: auf ein neueres Release wechseln und die Schritte oben ausführen,
+auch über mehrere Versionen hinweg. Inkompatible Änderungen (Konfiguration, Schnittstellen,
+Datenformate) sind als `typ!:` bzw. `BREAKING CHANGE:` markiert und erscheinen so in den
+Release-Notes, zusammen mit den nötigen Schritten. Für den Prognose-Stack genügen
+`docker compose pull && docker compose up -d` im Ordner `predict/`.
+
+Entfernen: Zuerst ein eingerichtetes Auto-Update anhalten, damit es den Stack nicht neu startet
+(`sudo systemctl disable --now predictiondb-update@<benutzer>.timer` und
+`sudo systemctl stop predictiondb-update@<benutzer>.service`). Dann hält
+`docker compose -f compose.yaml down` die Dienste an und löscht die Container,
+`docker compose -f compose.yaml down -v --rmi all` zusätzlich Volumes (Datenbank, Garage) und
+Images. Zuletzt den Checkout und die systemd-Units aus `/etc/systemd/system/` löschen.
+
 ## Entwicklung
 
 ```sh

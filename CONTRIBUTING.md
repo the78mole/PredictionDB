@@ -97,6 +97,26 @@ uv run pre-commit run --all-files  # dieselben Prüfungen wie die CI
 uv run pytest
 ```
 
+### Coding-Standards
+
+Beiträge halten sich an diese Standards. Was ein Werkzeug prüfen kann, prüft die CI über die pre-commit-Hooks; der Rest wird im Review geprüft.
+
+| Bereich | Standard | Durchgesetzt von |
+|---|---|---|
+| Python-Stil | [PEP 8](https://peps.python.org/pep-0008/), Zeilenlänge 100, Formatierung im Stil von Black | `ruff format`, `ruff check` (Regelgruppen `E`, `W`, `F`, `I`, `UP`, `B`, `SIM`, `RUF`, `DTZ`, siehe `pyproject.toml`) |
+| Typen | [PEP 484](https://peps.python.org/pep-0484/), vollständige Typannotationen | `mypy --strict`, Analyse-Skripte je Ordner einzeln |
+| Docstrings | [PEP 257](https://peps.python.org/pep-0257/) | Review |
+| Anforderungsbezug | `@relation(...)` im Docstring von Modulen, Funktionen und Tests | `strictdoc`, `reqs-abdeckung` |
+| Zeitstempel | nur zeitzonenbewusst (UTC intern) | Ruff `DTZ` |
+| Commit- und PR-Titel | [Conventional Commits](https://www.conventionalcommits.org/de/), Text auf Deutsch | Review; `scripts/naechste-version.sh` wertet sie für die Version aus, unbekannte Titel zählen als Patch |
+| Analysen | Konvention aus [CLAUDE.md](CLAUDE.md) und Kapitel 7.9 der Architektur | `scripts/analysen-pruefen.py` |
+| Shell-Skripte | Bash mit `set -euo pipefail` | `shellcheck` |
+| Sprache | Doku, Kommentare und Commit-Texte auf Deutsch | Review |
+
+Ausnahmen von einer Lint- oder Typregel stehen als `# noqa: <Regel>` bzw.
+`# type: ignore[<code>]` direkt an der Stelle, immer mit der konkreten Regel und, wo es nicht
+offensichtlich ist, mit kurzem Grund. Pauschale Ausnahmen ohne Regelcode sind nicht erlaubt.
+
 **Neue Funktionen und Fehlerkorrekturen brauchen automatisierte Tests**, die im selben Pull
 Request hinzukommen: eine neue Funktion mit Tests für ihr Verhalten, ein Fix mit einem
 Regressionstest, der ohne den Fix fehlschlägt. Pull Requests ohne passende Tests werden nicht
@@ -132,6 +152,11 @@ material) you agree that
 You keep the copyright in your contribution. Confirm these terms by signing off
 every commit (`git commit -s`) and by ticking the confirmation in the pull
 request description.
+
+Code follows PEP 8 (Ruff format/check, line length 100), PEP 484 with `mypy --strict` and
+shellcheck for shell scripts, all enforced by the pre-commit hooks in CI; PEP 257 docstrings and
+Conventional Commit titles are checked in review.
+Exceptions are rare and marked in place with the specific rule code.
 
 New features and bug fixes must come with automated tests in the same pull request (a
 regression test for every fix); pull requests without suitable tests are not merged.

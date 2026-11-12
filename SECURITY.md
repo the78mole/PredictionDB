@@ -32,9 +32,28 @@ Melde sie vertraulich über
 - Eine erste Einschätzung innerhalb von **14 Tagen**.
 - Eine Korrektur so schnell, wie es ein Ein-Personen-Projekt erlaubt. Den Stand erfährst
   Du im Advisory.
-- Nach der Korrektur wird das Advisory veröffentlicht. Auf Wunsch wirst Du darin genannt.
+- Nach der Korrektur wird das Advisory veröffentlicht. Du wirst darin als Melder genannt, es
+  sei denn, Du möchtest anonym bleiben.
 
 Es gibt kein Bug-Bounty-Programm.
+
+## Ablauf nach einer Meldung
+
+1. **Eingang:** Der Maintainer bestätigt die Meldung im privaten Advisory (bis 7 Tage).
+2. **Einschätzung:** Er prüft, ob und welche Bestandteile betroffen sind, und bewertet den
+   Schweregrad mit CVSS im Advisory (bis 14 Tage). Ist es keine Lücke, wird das Advisory mit
+   Begründung geschlossen.
+3. **Korrektur:** Die Korrektur entsteht in einem privaten temporären Fork des Advisorys, mit
+   Regressionstest. Kritische und hohe Schweregrade gehen allen anderen Arbeiten vor; Ziel ist
+   eine Korrektur innerhalb von 60 Tagen nach Eingang.
+4. **Release:** Der Merge auf `main` erzeugt automatisch ein neues Release `vX.Y.Z` und, falls
+   betroffen, neue Images bzw. `predict/vX.Y.Z`. Die Referenzinstallation rollt es per Auto-Update
+   aus.
+5. **Veröffentlichung:** Das Advisory wird veröffentlicht, bei Bedarf mit CVE-Kennung über
+   GitHub als CNA. Es nennt betroffene und korrigierte Versionen, den Melder (siehe oben) und,
+   wo möglich, Umgehungen. Die Release-Notes verweisen auf das Advisory.
+6. **Nachbereitung:** Lässt sich die Fehlerklasse allgemein verhindern (Lint-Regel, Fuzzer,
+   Test), kommt diese Prüfung hinzu.
 
 Was Du an Sicherheit erwarten kannst und wie sich Images und Release-Anhänge prüfen lassen,
 steht in [docs/SICHERHEIT.md](docs/SICHERHEIT.md).
@@ -63,7 +82,10 @@ Only the latest release (`vX.Y.Z`, `predict/vX.Y.Z`) and `main` receive security
 Please do not report vulnerabilities publicly; use
 [GitHub private vulnerability reporting](https://github.com/the78mole/PredictionDB/security/advisories/new).
 This is a one-person project: expect an acknowledgement within 7 days and a first
-assessment within 14 days. There is no bug bounty. Already public advisories for dependencies may be
+assessment within 14 days. Fixes are developed in a private advisory fork with a regression
+test, released automatically from `main`, and the advisory (with CVE via GitHub where needed) is
+published afterwards. Reporters are credited in the advisory unless they ask to stay anonymous.
+There is no bug bounty. Already public advisories for dependencies may be
 filed as a normal issue without project-specific exploit details; anything new or specific
 to PredictionDB must be reported privately. Third-party deployments are out of scope.
 Security expectations, the assurance case and how to verify signatures:

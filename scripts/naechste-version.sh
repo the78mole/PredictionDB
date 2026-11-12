@@ -50,11 +50,11 @@ else
   else
     log=$(git log --format='%s%n%b%n--ende--' "$bereich" -- "${pfade[@]}")
     if grep -qE '^[a-zA-Z]+(\([^)]*\))?!:|^BREAKING[ -]CHANGE:' <<<"$log"; then
-      stufe=major
+      stufe="major"
     elif grep -qE '^feat(\([^)]*\))?:' <<<"$log"; then
-      stufe=minor
+      stufe="minor"
     else
-      stufe=patch
+      stufe="patch"
     fi
     IFS=. read -r major minor patch <<<"${vorher#"${praefix}"v}"
     if [[ $stufe == major && $major == 0 ]]; then
