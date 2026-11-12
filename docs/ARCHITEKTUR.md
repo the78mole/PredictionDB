@@ -668,7 +668,8 @@ flowchart LR
 | ECMWF Open Data (IFS/AIFS) | erlaubt, CC BY 4.0 | Quellenvermerk und Hinweis auf Veränderung |
 | DWD Open Data (ICON) | erlaubt | Quellenvermerk „Deutscher Wetterdienst“ (GeoNutzV), Hinweis auf Veränderung |
 | MSC GEM | vor Aufnahme prüfen (Open Government Licence – Canada) | Quellenvermerk |
-| Open-Meteo, Energie- und Marktdaten | nicht vorgesehen | — |
+| Energie- und Marktdaten freier Quellen (SMARD, Energy-Charts, EIA, EZB, Weltbank, Oil Bulletin, Eurostat, Hub'eau, mit Schlüssel ENTSO-E-Lastprognose und GIE) | erlaubt, Lizenz je Quelle in `sources.json` (5.5.8) | Quellenvermerk je Quelle in `org.predictiondb.attribution` |
+| Open-Meteo, unfreie Energiedaten und „nur Training“ (Netztransparenz, regelleistung.net) | nicht vorgesehen | — |
 
   Jedes Manifest trägt den Quellenvermerk in `org.predictiondb.attribution`, zusätzlich liegt ein `ATTRIBUTION.md` als eigener Layer im Index-Artefakt. Weitere Modelle bekommen eigene Artefakt-Repositories (`ecmwf-ifs-0p25-silver` usw.), damit Lizenzen nicht gemischt werden.
 - **Lizenz der Daten selbst:** Die AGPL-3.0 bzw. kommerzielle Lizenz (12.1) gilt für den Code. Die veröffentlichten Daten stehen unter **CC BY 4.0** (`org.opencontainers.image.licenses: CC-BY-4.0`), Namensnennung: „PredictionDB (the78mole)“ plus die Quellenvermerke der Tabelle oben (12.9).

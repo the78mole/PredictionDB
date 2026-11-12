@@ -187,3 +187,82 @@ def test_current_year_incremental_and_partial_sources() -> None:
     w = Window("smard", 10, 56.0)
     builder(fake, w).build_year(2026, full=True)
     assert w.first == start
+
+
+def test_redact_and_earliest_published() -> None:
+    """@relation(SWR-WXX-080, scope=function)"""
+    msg = "Server error for url 'https://web-api.tp.entsoe.eu/api?securityToken=abc-123&x=1'"
+    assert "abc-123" not in energy.redact(msg) and "securityToken=***&x=1" in energy.redact(msg)
+    assert energy.redact("api_key=XYZ") == "api_key=***"
+    t = pd.Timestamp("2025-01-01", tz="UTC")
+    rows = pd.DataFrame(
+        {
+            "code": ["x", "x"],
+            "ts": [t, t],
+            "value": [1.0, 2.0],
+            "published": [t, t + pd.Timedelta(days=5)],
+        }
+    )
+    merged = energy.merge_rows(rows)
+    assert merged["value"].tolist() == [2.0] and merged["published"].tolist() == [t]
+
+
+def test_secret_in_error_not_published() -> None:
+    """@relation(SWR-WXX-080, scope=function)"""
+
+    @dataclass
+    class Leaky(FakeSource):
+        def fetch(self, dataset: str, start: datetime, end: datetime) -> list[SeriesData]:
+            raise RuntimeError("url 'https://x.example/api?securityToken=geheim'")
+
+    layer = energy.fetch_source(Leaky("entsoe_last", 20, 1.0), *energy.year_bounds(2025), NOW)
+    assert all("geheim" not in s for s in layer.status.values())
+
+
+def test_fallback_marktwert_and_stale_kept() -> None:
+    """@relation(SWR-WXX-080, SWR-WXX-082, scope=function)"""
+    fake = FakeRegistry(repository="owner/data/energy")
+    builder(fake, FakeSource("smard", 10, 50.0)).build_year(2025)
+    # Preis scheitert, Wind kommt neu: SMARD bleibt vollständig alt, Marktwerte passen dazu
+    r = builder(fake, FakeSource("smard", 10, 60.0, fail={"price"})).build_year(2025)
+    assert r.status == "published"
+    values, meta = energy.load_year(registry(fake, write=False), 2025)
+    assert values["pdb_marktwert"].query("code == 'mw_base'")["value"].eq(50.0).all()
+    assert meta["smard"]["status"]["price"].startswith("failed")
+    # Lauf nur mit einer anderen Quelle: SMARD bleibt veraltet und das Jahr fällig
+    builder(fake, FakeSource("energy_charts", 30, 70.0)).build_year(2025)
+    assert fake.manifest("2025")["annotations"]["org.predictiondb.stale"] == "smard"
+    assert energy.plan(registry(fake), 2025, 2025, datetime(2027, 6, 1, tzinfo=UTC)) == [2025]
+    # Erholung mit denselben Werten: nur der Zustand ändert sich, trotzdem ein neues Manifest
+    puts = fake.manifest_puts()
+    ok = builder(fake, FakeSource("smard", 10, 50.0), FakeSource("energy_charts", 30, 70.0))
+    assert ok.build_year(2025).status == "published" and fake.manifest_puts() == puts + 1
+    assert fake.manifest("2025")["annotations"]["org.predictiondb.stale"] == ""
+
+
+def test_duplicate_sources_rejected() -> None:
+    """@relation(SWR-WXX-080, scope=function)"""
+    fake = FakeRegistry(repository="owner/data/energy")
+    with pytest.raises(ValueError, match="doppelt"):
+        builder(fake, FakeSource("smard", 10, 1.0), FakeSource("smard", 10, 2.0))
+
+
+def test_gie_key_not_sent_to_other_host() -> None:
+    """@relation(SWR-WXX-080, scope=function)"""
+    from wx_exchange.cli_energy import _strip_foreign_keys
+
+    seen: dict[str, str | None] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen[request.url.host] = request.headers.get("x-key")
+        if request.url.host == "agsi.gie.eu":
+            return httpx.Response(302, headers={"Location": "https://evil.example/x"})
+        return httpx.Response(200, json={})
+
+    client = httpx.Client(
+        transport=httpx.MockTransport(handler),
+        follow_redirects=True,
+        event_hooks={"request": [_strip_foreign_keys]},
+    )
+    client.get("https://agsi.gie.eu/api", headers={"x-key": "k"})
+    assert seen == {"agsi.gie.eu": "k", "evil.example": None}

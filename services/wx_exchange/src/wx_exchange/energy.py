@@ -98,6 +98,27 @@ SCHEMA = pa.schema(
     ]
 )
 _SOURCE = re.compile(r"\A[a-z][a-z0-9_]{0,31}\Z")
+#: Schlüssel in Abfrage-URLs (ENTSO-E ``securityToken``, EIA ``api_key``), die in Fehlertexten
+#: stehen können; Fehlertexte landen im öffentlichen ``sources.json``
+_SECRET_PARAM = re.compile(r"(?i)\b([a-z_]*(?:token|key|secret)[a-z_]*=)[^&\s'\"]+")
+
+
+def redact(text: str) -> str:
+    """Schlüssel aus URLs in Fehlertexten entfernen.
+
+    @relation(SWR-WXX-080, scope=function)
+    """
+    return _SECRET_PARAM.sub(r"\1***", text)
+
+
+def merge_rows(rows: pd.DataFrame) -> pd.DataFrame:
+    """Doppelte ``(code, ts)``: der zuletzt abgerufene Wert gilt, ``published`` bleibt der
+    früheste Zeitpunkt (wie das Upsert in ``energy.value``)."""
+    if rows.empty:
+        return rows.reset_index(drop=True)
+    first = rows.groupby(["code", "ts"], sort=False)["published"].transform("min")
+    rows = rows.assign(published=first)
+    return rows.drop_duplicates(["code", "ts"], keep="last").reset_index(drop=True)
 
 
 def year_bounds(year: int) -> tuple[datetime, datetime]:
@@ -203,7 +224,7 @@ def to_rows(
     df["ts"] = pd.to_datetime(df["ts"], utc=True).dt.as_unit("us")
     df["published"] = pd.to_datetime(df["published"], utc=True).dt.as_unit("us")
     # überlappende Blöcke: der zuletzt abgerufene Wert gilt, wie beim Überschreiben in der DB
-    return df.drop_duplicates(["code", "ts"], keep="last").reset_index(drop=True)
+    return merge_rows(df)
 
 
 def _series_meta(batch: Iterable[SeriesData]) -> dict[str, dict[str, Any]]:
@@ -251,15 +272,15 @@ def fetch_source(
                 n += len(rows)
                 parts.append(rows)
         except Exception as exc:
-            status[ds] = f"failed: {type(exc).__name__}: {str(exc)[:200]}"
-            log.warning("energy.dataset_failed", source=source.code, dataset=ds, error=str(exc))
+            error = redact(str(exc))
+            status[ds] = f"failed: {type(exc).__name__}: {error[:200]}"
+            log.warning("energy.dataset_failed", source=source.code, dataset=ds, error=error)
             continue
         status[ds] = "ok"
         log.info("energy.dataset", source=source.code, dataset=ds, values=n)
     if old is not None and not old.empty:
         parts.insert(0, old)
-    rows = pd.concat(parts, ignore_index=True) if parts else empty_rows()
-    rows = rows.drop_duplicates(["code", "ts"], keep="last").reset_index(drop=True)
+    rows = merge_rows(pd.concat(parts, ignore_index=True)) if parts else empty_rows()
     return SourceLayer(
         source.code,
         source.priority,
@@ -403,6 +424,9 @@ class EnergyBuilder:
         source_url: str,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
+        codes = [s.code for s in sources]
+        if len(set(codes)) != len(codes) or MARKTWERT in codes:
+            raise ValueError(f"Quellen doppelt oder {MARKTWERT} angegeben: {codes}")
         self.registry = registry
         self.sources = sources
         self.source_url = source_url
@@ -416,9 +440,9 @@ class EnergyBuilder:
         old: dict[str, bytes] | None = None,
         old_meta: dict[str, Any] | None = None,
     ) -> list[SourceLayer]:
-        start, end = year_bounds(year)
+        """Abgerufene Quellen plus die nicht abgerufenen aus ``old``, ohne Marktwerte."""
+        start, end = self.window(year)
         now = self.clock()
-        end = min(end, now + timedelta(days=14))  # Prognosen reichen etwas in die Zukunft
         layers = []
         for s in self.sources:
             prev = old.get(s.code) if old else None
@@ -441,12 +465,16 @@ class EnergyBuilder:
                     str(meta.get("license", "")),
                     read_values(data),
                     dict(meta.get("series") or {}),
-                    {},
+                    # bisheriger Zustand, damit ein veraltetes Jahr veraltet bleibt
+                    {str(k): str(v) for k, v in (meta.get("status") or {}).items()},
                 )
             )
-        best = value_best((s.priority, s.rows) for s in layers)
-        layers.append(marktwert_layer(best, start, end, now))
         return layers
+
+    def window(self, year: int) -> tuple[datetime, datetime]:
+        start, end = year_bounds(year)
+        # Prognosen reichen etwas in die Zukunft
+        return start, min(end, self.clock() + timedelta(days=14))
 
     def build_year(self, year: int, *, full: bool = False) -> YearResult:
         """Ein Jahr abrufen; ohne ``full`` im laufenden Jahr nur den Rückblick neu.
@@ -475,13 +503,21 @@ class EnergyBuilder:
                 failed.update({f"{s.code}.{ds}": st for ds, st in bad.items()})
                 if s.code not in old:
                     return YearResult(year, "failed", t, {}, failed)
+                # bisherige Werte der Quelle bleiben vollständig, auch für die Marktwerte
                 blobs[s.code] = old[s.code]
+                s.rows = read_values(old[s.code])
                 prev = old_meta.get(s.code)
                 if isinstance(prev, dict) and isinstance(prev.get("series"), dict):
                     s.series = prev["series"]
                 stale.append(s.code)
             else:
                 blobs[s.code] = s.parquet()
+        # Marktwerte aus genau den Werten, die ins Artefakt kommen
+        start, end = self.window(year)
+        best = value_best((s.priority, s.rows) for s in layers)
+        mw = marktwert_layer(best, start, end, now)
+        layers.append(mw)
+        blobs[mw.code] = mw.parquet()
         sources_json = _sources_json(layers)
         rows = {s.code: len(s.rows) for s in layers}
         descriptors = [
@@ -489,8 +525,15 @@ class EnergyBuilder:
             for s in sorted(layers, key=lambda s: s.code)
         ]
         descriptors.append(_descriptor(SOURCES_TYPE, sources_json, "sources.json"))
+        # Werte und veraltete Quellen: ändert sich nur der Zustand, gibt es trotzdem ein Manifest
         content = digest(
-            json.dumps([d["digest"] for d in descriptors if d["mediaType"] == VALUES_TYPE]).encode()
+            json.dumps(
+                {
+                    "values": [d["digest"] for d in descriptors if d["mediaType"] == VALUES_TYPE],
+                    "stale": sorted(stale),
+                },
+                sort_keys=True,
+            ).encode()
         )
         if (
             existing is not None
