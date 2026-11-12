@@ -47,7 +47,7 @@ from obstore.store import MemoryStore
 from sqlalchemy import Engine, text
 
 from predictiondb_core.log import get_logger
-from wx_exchange.artifact import MonthArtifact, files_from_tar, parse_tag, unpack
+from wx_exchange.artifact import MonthArtifact, description, files_from_tar, parse_tag, unpack
 from wx_exchange.artifact import tag as silver_tag
 from wx_exchange.oci import EMPTY, MANIFEST, Registry
 from wx_exchange.safe import ArtifactError, annotations_of, check_digest
@@ -445,6 +445,13 @@ def publish_weights(registry: Registry, weights: Weights, source: str) -> list[s
             "org.opencontainers.image.source": source,
             "org.opencontainers.image.created": datetime.now(UTC).isoformat(timespec="seconds"),
             "org.opencontainers.image.licenses": "DL-DE-BY-2.0",
+            "org.opencontainers.image.description": description(
+                "Gewichte von PredictionDB: Anteil jeder GFS-Gitterzelle an den Clustern der"
+                " Wind-, PV-, Wasser- und Biomasseanlagen in Deutschland aus dem"
+                " Marktstammdatenregister, dazu installierte Leistung je Cluster und Tag und"
+                " der Stand der Clusterung. Tags <Clusterung>, <Clusterung>-<Exportdatum>,"
+                " latest. DL-DE BY 2.0."
+            ),
             PREFIX + "attribution": (
                 "Marktstammdatenregister der Bundesnetzagentur (Datenlizenz Deutschland -"
                 " Namensnennung - Version 2.0), Cluster und Gewichte von PredictionDB (the78mole)"
@@ -735,6 +742,13 @@ class GoldBuilder:
                 "org.opencontainers.image.source": self.source_url,
                 "org.opencontainers.image.created": datetime.now(UTC).isoformat(timespec="seconds"),
                 "org.opencontainers.image.licenses": LICENSE,
+                "org.opencontainers.image.description": description(
+                    "Gold von PredictionDB: Wetter-Features (Wind in Nabenhöhe, PV, Temperatur"
+                    " usw.) aus dem GFS-Silber, gewichtet je Cluster bzw. Region, als Parquet"
+                    " (run_time, valid_time, region, feature, value). Ein Paket je Monat und"
+                    " Laufzeit (Tag <Gewichte>-JJJJ-MM-HHz), die verwendeten Gewichte liegen"
+                    " als eigene Layer bei. CC BY 4.0 und DL-DE BY 2.0."
+                ),
                 PREFIX + "attribution": ATTRIBUTION,
                 PREFIX + "source": self.process.source,
                 PREFIX + "model": art.model,
