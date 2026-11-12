@@ -949,4 +949,26 @@ RELATIONS:
 - TYPE: Parent
   VALUE: STK-017
 
+[REQUIREMENT]
+UID: SYSR-QA-007
+ART: Randbedingung
+STATUS: Umgesetzt
+NACHWEIS: Inspektion
+TITLE: Softwareelemente als Python-Pakete
+STATEMENT: >>>
+Jedes Softwareelement muss als eigenes, reguläres Python-Paket im uv-Workspace vorliegen
+(src-Layout mit ``__init__.py`` und ``py.typed``). Der Paket-Docstring muss den Zweck des
+Elements in einem Satz nennen und auf sein Softwareelement verweisen. Die Version steht nur in
+``pyproject.toml``.
+<<<
+RATIONALE: >>>
+Reguläre Pakete statt Namespace-Paketen machen den Paketeinstieg eindeutig und rückverfolgbar;
+``py.typed`` lässt mypy die Typen auch über Paketgrenzen prüfen. Eine zweite Versionsangabe im
+Code veraltet unbemerkt.
+<<<
+QUELLE: reqs/README.md (Verweise aus Code und Tests); reqs/pruefen.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-030
+
 [[/SECTION]]

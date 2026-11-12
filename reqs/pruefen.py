@@ -7,6 +7,9 @@ gar keinen Verweis hat. Dieses Skript ergänzt das für die SRS-Ebene:
   referenziert werden.
 - Jede umgesetzte SWR mit Nachweisart ``Test`` muss von mindestens einem Test referenziert
   werden.
+- Jedes Modul unter ``src/`` muss im Modul-Docstring einen Verweis mit ``scope=file`` tragen,
+  der Paketeinstieg ``src/<paket>/__init__.py`` auf sein Softwareelement (``SYSA-SW-...``,
+  SYSR-QA-007), alle anderen Module auf ihre SWA-Komponente.
 
 Aufruf aus dem Repo-Wurzelverzeichnis: ``uv run python reqs/pruefen.py``. Rückgabewert 1, wenn
 etwas fehlt.
@@ -14,6 +17,7 @@ etwas fehlt.
 
 from __future__ import annotations
 
+import ast
 import re
 import sys
 from dataclasses import dataclass
@@ -26,6 +30,7 @@ SOURCES = ("packages", "services", "predict", "tests")
 _BLOCK = re.compile(r"^\[REQUIREMENT\]\n(.*?)(?=^\[|\Z)", re.M | re.S)
 _FIELD = re.compile(r"^(UID|STATUS|NACHWEIS): (.+)$", re.M)
 _RELATION = re.compile(r"@relation\(([^)]*)\)")
+_FILE_SCOPE = re.compile(r"@relation\(([^)]*)\)")
 
 
 @dataclass
@@ -69,9 +74,39 @@ def read_markers() -> tuple[set[str], set[str]]:
     return code, tests
 
 
+def file_marker_problem(path: Path) -> str | None:
+    """Fehlender oder falscher Dateiverweis im Modul-Docstring, sonst ``None``.
+
+    Das ``__init__.py`` direkt unter ``src/<paket>/`` muss auf sein Softwareelement
+    (``SYSA-SW-``) verweisen, jedes andere Modul, auch das ``__init__.py`` eines Unterpakets, auf
+    eine SWA-Komponente (``SWA-``), jeweils mit genau ``scope=file``.
+    """
+    docstring = ast.get_docstring(ast.parse(path.read_text(encoding="utf-8")), clean=False)
+    top_level = path.name == "__init__.py" and path.parent.parent.name == "src"
+    prefix = "SYSA-SW-" if top_level else "SWA-"
+    for match in _FILE_SCOPE.finditer(docstring or ""):
+        parts = [p.strip() for p in match.group(1).split(",")]
+        if "scope=file" in parts and any(p.startswith(prefix) for p in parts):
+            return None
+    return f"Modul-Docstring ohne @relation({prefix}..., scope=file)"
+
+
+def modules_without_file_marker() -> list[str]:
+    """Module unter ``src/`` ohne gültigen Dateiverweis."""
+    out = []
+    for top in SOURCES:
+        for path in sorted((ROOT / top).rglob("*.py")):
+            rel = path.relative_to(ROOT)
+            if ".venv" in rel.parts or "src" not in rel.parts:
+                continue
+            if problem := file_marker_problem(path):
+                out.append(f"{rel}: {problem}")
+    return out
+
+
 def main() -> int:
     code, tests = read_markers()
-    missing = []
+    missing = modules_without_file_marker()
     for req in read_requirements():
         if not req.uid.startswith("SWR-") or req.status != "Umgesetzt":
             continue

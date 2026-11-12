@@ -18,4 +18,4 @@ WORKDIR /app
 COPY --from=build --chown=app:app /app /app
 ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1
 USER app
-CMD ["python", "-c", "import predictiondb_core; print(predictiondb_core.__version__)"]
+CMD ["python", "-c", "from importlib.metadata import version; print(version('predictiondb-core'))"]
