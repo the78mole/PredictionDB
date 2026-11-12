@@ -78,7 +78,7 @@ LICENSE = "CC-BY-4.0 AND DL-DE-BY-2.0"
 ATTRIBUTION = (
     "NOAA/NCEP Global Forecast System (GFS); Anlagenbestand aus dem Marktstammdatenregister der"
     " Bundesnetzagentur (Datenlizenz Deutschland - Namensnennung - Version 2.0); verdichtet von"
-    " PredictionDB"
+    " PredictionDB (the78mole)"
 )
 #: Gold je Quelle; Gewichte nur, wo sie aus der Clusterung der Datenbank kommen
 REPOSITORIES = {
@@ -447,7 +447,7 @@ def publish_weights(registry: Registry, weights: Weights, source: str) -> list[s
             "org.opencontainers.image.licenses": "DL-DE-BY-2.0",
             PREFIX + "attribution": (
                 "Marktstammdatenregister der Bundesnetzagentur (Datenlizenz Deutschland -"
-                " Namensnennung - Version 2.0), Cluster und Gewichte von PredictionDB"
+                " Namensnennung - Version 2.0), Cluster und Gewichte von PredictionDB (the78mole)"
             ),
             PREFIX + "version": weights.version,
             PREFIX + "content": weights.digest,

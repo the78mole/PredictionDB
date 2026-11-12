@@ -13,7 +13,7 @@ import pytest
 
 from wx_exchange import gold
 from wx_exchange.mastr_weights import weights_due
-from wx_exchange.oci import Registry, digest
+from wx_exchange.oci import Registry, RegistryError, digest
 from wx_exchange.publish import Publisher
 from wx_exchange.safe import ArtifactError
 from wx_exchange.testing import FakeRegistry
@@ -230,3 +230,23 @@ async def test_build_month_publishes_gold_with_weights(tmp_path: Path) -> None:
 
     # kein Silber im Monat
     assert builder.build_month("2026-09", 6).status == "no_silver"
+
+
+def test_registry_read_only_scope_and_foreign_realm() -> None:
+    """@relation(SWR-WXX-001, SWR-WXX-074, scope=function)"""
+    fake = FakeRegistry(repository="owner/data/weights")
+    gold.publish_weights(registry(fake), weights(), SOURCE)
+    client = httpx.Client(transport=httpx.MockTransport(fake))
+    reader = Registry(fake.host, fake.repository, client, "bot", "secret", (0.0,), read_only=True)
+    assert gold.load_weights(reader).version == "v2026Q4"
+    scopes = [r.url.params.get("scope") for r in fake.requests if r.url.path == "/token"]
+    assert scopes[-1] == "repository:owner/data/weights:pull"
+
+    def foreign(request: httpx.Request) -> httpx.Response:
+        challenge = 'Bearer realm="https://evil.test/token",scope="repository:x:pull"'
+        return httpx.Response(401, headers={"www-authenticate": challenge})
+
+    client = httpx.Client(transport=httpx.MockTransport(foreign))
+    leaky = Registry("registry.test", "x", client, "bot", "secret", (0.0,))
+    with pytest.raises(RegistryError, match="gehört nicht"):
+        leaky.tags()

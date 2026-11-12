@@ -48,6 +48,8 @@ SILVER = {
 #: höchstens so viele Einträge je Matrix (Grenze von GitHub Actions)
 MATRIX_LIMIT = 256
 BLOCKS = 3
+#: Befehle, die GHCR nur lesen (Token mit ``packages: read`` reicht)
+READ_ONLY = frozenset({"weights-due", "plan"})
 
 
 def add_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -62,7 +64,8 @@ def add_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None
     )
     cmd = gp.add_subparsers(dest="cmd", required=True)
 
-    cmd.add_parser("weights-due", help="neuer MaStR-Export fällig? (Ausgabe due=true|false)")
+    wd = cmd.add_parser("weights-due", help="neuer MaStR-Export fällig? (Ausgabe due=true|false)")
+    wd.add_argument("--date", type=date.fromisoformat, help="Exportdatum (Standard: heute, UTC)")
 
     wb = cmd.add_parser(
         "weights-build", help="MaStR laden, clustern und Gewichte veröffentlichen (Runner)"
@@ -96,6 +99,7 @@ def _registry(args: argparse.Namespace, client: httpx.Client, repository: str) -
         client,
         username=os.environ.get("WX_EXCHANGE_USERNAME"),
         password=os.environ.get("WX_EXCHANGE_TOKEN") or None,
+        read_only=args.cmd in READ_ONLY,
     )
 
 
@@ -129,6 +133,14 @@ def _previous(args: argparse.Namespace, client: httpx.Client, repo: str) -> gold
         return None
 
 
+def _pinned(args: argparse.Namespace, process: ProcessConfig, weights: gold.Weights) -> str:
+    """Tag, der genau diese Gewichte nennt (``<version>-<Exportdatum>`` bleibt fest)."""
+    export = weights.info.get("mastr_export_date")
+    if process.regions is not None or not export:
+        return str(args.weights)
+    return f"{weights.version}-{export}"
+
+
 def main(args: argparse.Namespace) -> int:
     """@relation(SWR-WXX-070, SWR-WXX-073, SWR-WXX-074, scope=function)"""
     process = _process(args)
@@ -141,7 +153,7 @@ def main(args: argparse.Namespace) -> int:
         if args.cmd == "weights-due":
             assert weights_repo is not None
             previous = _previous(args, client, weights_repo)
-            due = weights_due(previous, datetime.now(UTC).date())
+            due = weights_due(previous, args.date or datetime.now(UTC).date())
             _github_output("due", "true" if due else "false")
             print(
                 json.dumps(
@@ -221,6 +233,8 @@ def main(args: argparse.Namespace) -> int:
             for i, block in enumerate(blocks, start=1):
                 _github_output(f"block{i}", json.dumps(block, separators=(",", ":")))
             _github_output("weights", weights.version)
+            # die Jobs sollen genau diese Gewichte nehmen, auch wenn latest inzwischen weiter ist
+            _github_output("weights_ref", _pinned(args, process, weights))
             print(
                 json.dumps(
                     {"weights": weights.version, "jobs": len(entries), "matrix": entries}, indent=1

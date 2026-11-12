@@ -17,6 +17,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -56,6 +57,8 @@ class Registry:
     password: str | None = None
     #: Wartezeiten zwischen Wiederholungen bei 5xx oder Verbindungsfehlern (Sekunden)
     retry_waits: tuple[float, ...] = (2.0, 8.0, 30.0)
+    #: nur Lesen: mit Token nur ``pull`` anfordern (reicht für ``packages: read`` in Actions)
+    read_only: bool = False
     _token: str | None = field(default=None, repr=False)
 
     @property
@@ -69,7 +72,10 @@ class Registry:
         realm = params.pop("realm", None)
         if not challenge.lower().startswith("bearer") or realm is None:
             raise RegistryError(f"unbekannte Anmeldung: {challenge}")
-        if self.password and "scope" in params:
+        if self.password and urlsplit(realm)[:2] != ("https", self.host):
+            # Zugangsdaten nur an den Token-Dienst der Registry selbst, nie an einen fremden Host
+            raise RegistryError(f"Token-Dienst {realm} gehört nicht zu {self.host}")
+        if self.password and not self.read_only and "scope" in params:
             # Schreibrecht gleich mit anfordern, sonst gibt es nur ein Lese-Token
             params["scope"] = f"repository:{self.repository}:pull,push"
         auth = (self.username or "token", self.password) if self.password else None

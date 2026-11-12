@@ -59,9 +59,8 @@ jobs:
     runs-on: ubuntu-26.04
     permissions:
       contents: read
-      # Gewichte und Gold lesen, auch solange die Pakete noch privat sind (der Client fordert
-      # beim Anmelden mit Token immer pull,push an)
-      packages: write
+      # Gewichte und Gold lesen, auch solange die Pakete noch privat sind (nur pull)
+      packages: read
     env:
       WX_EXCHANGE_USERNAME: ${{ github.actor }}
       WX_EXCHANGE_TOKEN: ${{ github.token }}
@@ -69,6 +68,7 @@ jobs:
       block1: ${{ steps.plan.outputs.block1 }}
       block2: ${{ steps.plan.outputs.block2 }}
       block3: ${{ steps.plan.outputs.block3 }}
+      weights_ref: ${{ steps.plan.outputs.weights_ref }}
       process_config: ${{ steps.source.outputs.process_config }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -108,7 +108,7 @@ jobs:
     with:
       matrix: ${{ needs.plan.outputs.block1 }}
       process_config: ${{ needs.plan.outputs.process_config }}
-      weights: ${{ inputs.weights || 'latest' }}
+      weights: ${{ needs.plan.outputs.weights_ref }}
       rebuild: ${{ inputs.rebuild == true }}
     permissions:
       contents: read
@@ -121,7 +121,7 @@ jobs:
     with:
       matrix: ${{ needs.plan.outputs.block2 }}
       process_config: ${{ needs.plan.outputs.process_config }}
-      weights: ${{ inputs.weights || 'latest' }}
+      weights: ${{ needs.plan.outputs.weights_ref }}
       rebuild: ${{ inputs.rebuild == true }}
     permissions:
       contents: read
@@ -134,7 +134,7 @@ jobs:
     with:
       matrix: ${{ needs.plan.outputs.block3 }}
       process_config: ${{ needs.plan.outputs.process_config }}
-      weights: ${{ inputs.weights || 'latest' }}
+      weights: ${{ needs.plan.outputs.weights_ref }}
       rebuild: ${{ inputs.rebuild == true }}
     permissions:
       contents: read

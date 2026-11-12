@@ -39,6 +39,13 @@ jobs:
   due:
     name: Neuer Export fällig?
     runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+      # Gewichte lesen, auch solange das Paket privat ist (nur pull)
+      packages: read
+    env:
+      WX_EXCHANGE_USERNAME: ${{ github.actor }}
+      WX_EXCHANGE_TOKEN: ${{ github.token }}
     outputs:
       due: ${{ steps.due.outputs.due }}
     steps:
@@ -49,7 +56,12 @@ jobs:
           save-cache: false
       - run: uv sync --locked --no-dev --package wx-exchange
       - id: due
-        run: uv run --no-sync wx-exchange gold weights-due
+        env:
+          DAY: ${{ inputs.date }}
+        run: |
+          args=(gold weights-due)
+          [ -n "$DAY" ] && args+=(--date "$DAY")
+          uv run --no-sync wx-exchange "${args[@]}"
 
   build:
     name: MaStR verarbeiten, Gewichte nach GHCR
