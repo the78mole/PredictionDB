@@ -22,6 +22,7 @@ dev = [
     "pytest-html>=4.1",
     "pytest-xdist>=3.6",
     "ruff>=0.8",
+    "shellcheck-py>=0.11",
     "strictdoc>=0.30.4",
     "types-defusedxml>=0.7.0.20260504",
     "types-PyYAML",

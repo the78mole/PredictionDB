@@ -5,9 +5,12 @@
     "Grüne Minor-/Patch-Gruppen und die Lockfile-Wartung mergt Renovate selbst.",
     "platformAutomerge ist aus, damit Renovate vor dem Merge alle Checks selbst prüft, auch ohne Pflicht-Checks im Branchschutz.",
     "Major-Updates und die Python-Laufzeit brauchen eine Entscheidung und werden nie automatisch gemergt.",
-    "Actions laufen per Commit-SHA, Basis-Images in Dockerfiles per Digest (OpenSSF Scorecard, Pinned-Dependencies); Renovate hält beide aktuell."
+    "Actions laufen per Commit-SHA, Basis-Images in Dockerfiles per Digest (OpenSSF Scorecard, Pinned-Dependencies); Renovate hält beide aktuell.",
+    "Bekannte Schwachstellen (OSV-Datenbank und GitHub-Advisories) bekommen sofort eigene PRs mit Label security, ohne Zeitplan und ohne automatischen Merge."
   ],
   "platformAutomerge": false,
+  "osvVulnerabilityAlerts": true,
+  "vulnerabilityAlerts": { "labels": ["security"], "automerge": false },
   "dependencyDashboard": true,
   "dependencyDashboardTitle": "📦 Dependency Dashboard",
   "labels": ["dependencies"],

@@ -35,6 +35,17 @@ bearbeiten, Pull Requests annehmen, Releases erzeugen.
   neue Installation braucht, beschreibt [docs/DATENQUELLEN-ZUGANG.md](docs/DATENQUELLEN-ZUGANG.md).
 - Vertretung mit Schreibrechten auf das Repository: *noch festzulegen*.
 
+Was die Vertretung braucht und was nicht:
+
+| Aufgabe | nötig | Stand |
+|---|---|---|
+| Issues anlegen und schließen, Pull Requests mergen | Collaborator mit Schreibrecht auf `the78mole/PredictionDB` | offen |
+| Releases und Images erzeugen | nichts weiter: Workflows „Release“, „Image“, „Predict“ laufen mit dem `GITHUB_TOKEN` | erfüllt |
+| Pakete auf GHCR verwalten (Rechte, Löschen) | Admin-Rolle je Paket in den Paketeinstellungen | offen, für die Kontinuität nicht zwingend |
+| Einstellungen, Rulesets, Secrets des Repositorys | Admin: Nachfolger im GitHub-Konto („Account successor“) oder Übertragung des Repositorys auf eine Organisation mit zwei Inhabern | offen |
+| Referenzinstallation (VM) weiterbetreiben | nicht nötig für das Projekt; jeder kann nach [docs/DATENQUELLEN-ZUGANG.md](docs/DATENQUELLEN-ZUGANG.md) neu aufsetzen | — |
+| Lizenzrechte (kommerzielle Lizenz) | gehen per Nachlassregelung auf den Rechtsnachfolger über ([CONTRIBUTING.md](CONTRIBUTING.md), Abschnitt 4) | offen |
+
 ## Änderungen an dieser Datei
 
 Änderungen beschließt der Maintainer per Pull Request.

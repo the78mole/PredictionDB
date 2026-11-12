@@ -748,8 +748,10 @@ und Workflow-Lauf dieses Repositorys zuordnet.
 <<<
 RATIONALE: >>>
 Umgesetzt für die Images ``predictiondb`` und ``predictiondb-predict`` (Attestation per
-``actions/attest-build-provenance`` an GHCR) und für die Analyse-PDFs der Releases (Bundle
-``analysen-pdf.intoto.jsonl`` als Release-Anhang). Offen: Modell- und Silber-Artefakte auf GHCR.
+``actions/attest-build-provenance`` an GHCR), für die Analyse-PDFs der Releases (Bundle
+``analysen-pdf.intoto.jsonl`` als Release-Anhang) und für das Quellcode-Archiv jedes Releases
+(``PredictionDB-vX.Y.Z.tar.gz`` mit Bundle ``quellcode.intoto.jsonl``). Offen: Modell- und
+Silber-Artefakte auf GHCR.
 <<<
 QUELLE: OpenSSF Scorecard Signed-Releases
 RELATIONS:
