@@ -80,3 +80,32 @@ def test_pace_grows_after_429_and_relaxes(monkeypatch: pytest.MonkeyPatch) -> No
         for _ in range(100):
             h.get(f"https://{host}/price")
     assert h.current_pace[host] == pytest.approx(2.0)
+
+
+def test_pace_never_below_base_and_follows_redirect(monkeypatch: pytest.MonkeyPatch) -> None:
+    """@relation(SWR-ENI-032, scope=function)"""
+    monkeypatch.setattr("tenacity.nap.time.sleep", lambda s: None)
+    monkeypatch.setattr("energy_ingest.http.time.sleep", lambda s: None)
+    slow, other = "agsi.gie.eu", "cdn.example.org"
+
+    def handler(r: httpx.Request) -> httpx.Response:
+        if r.url.host == slow:
+            return httpx.Response(429)
+        return httpx.Response(429 if r.url.path == "/limit" else 200)
+
+    with httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=True) as c:
+        h = Http(c, attempts=1, pace={slow: 40.0}, pace_max=30.0)
+        with pytest.raises(httpx.HTTPStatusError):
+            h.get(f"https://{slow}/x")
+        assert h.current_pace[slow] == 40.0
+
+    def redirect(r: httpx.Request) -> httpx.Response:
+        if r.url.host == "api.energy-charts.info":
+            return httpx.Response(302, headers={"Location": f"https://{other}/limit"})
+        return httpx.Response(429)
+
+    with httpx.Client(transport=httpx.MockTransport(redirect), follow_redirects=True) as c:
+        h = Http(c, attempts=1, pace={}, pace_max=30.0)
+        with pytest.raises(httpx.HTTPStatusError):
+            h.get("https://api.energy-charts.info/price")
+        assert h.current_pace == {other: 1.0}
