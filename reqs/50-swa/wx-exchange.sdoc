@@ -11,8 +11,8 @@ Softwarearchitektur nach ISO/IEC/IEEE 12207 für das Softwareelement SYSA-SW-WXX
 entspricht einem Modul unter ``services/wx_exchange/src/wx_exchange``.
 
 Abhängigkeiten: ``predictiondb_core``, ``wx_ingest`` (Endpunkte, Quellendefinition, Bronze) und
-``wx_process`` (Silber, Gold) sowie ``mastr_ingest`` (MaStR im Runner). Läuft im GitHub-Actions-Runner (Workflows ``gfs-history``,
-``gefs-history``, ``gfs-idx``, ``gfs-templates``, ``gold-history``, ``mastr-weights``) und auf der VM (``wx-import``, ``wx-gefs``,
+``wx_process`` (Silber, Gold) sowie ``mastr_ingest`` (MaStR im Runner) und ``energy_ingest`` (Energiedaten im Runner). Läuft im GitHub-Actions-Runner (Workflows ``gfs-history``,
+``gefs-history``, ``gfs-idx``, ``gfs-templates``, ``gold-history``, ``mastr-weights``, ``energy-history``) und auf der VM (``wx-import``, ``wx-gefs``,
 ``grafana-snapshot``).
 <<<
 
@@ -25,7 +25,7 @@ ART: Komponente
 STATUS: Umgesetzt
 TITLE: Kommandozeile
 STATEMENT: >>>
-Befehle ``gfs plan|publish|import|verify|templates|idx-*``, ``gefs plan|publish|regions|vm``, ``gold weights-due|weights-build|weights-publish|plan|build`` und ``snapshot``.
+Befehle ``gfs plan|publish|import|verify|templates|idx-*``, ``gefs plan|publish|regions|vm``, ``gold weights-due|weights-build|weights-publish|plan|build``, ``energy plan|build`` und ``snapshot``.
 <<<
 ORT: services/wx_exchange/src/wx_exchange/cli.py
 RELATIONS:
@@ -35,6 +35,10 @@ RELATIONS:
   VALUE: SWR-WXX-073
 - TYPE: Parent
   VALUE: SWR-WXX-074
+- TYPE: Parent
+  VALUE: SWR-WXX-080
+- TYPE: Parent
+  VALUE: SWR-WXX-082
 - TYPE: Parent
   VALUE: SWR-WXX-011
 - TYPE: Parent
@@ -239,6 +243,26 @@ RELATIONS:
   VALUE: SWR-WXX-074
 - TYPE: Parent
   VALUE: SWR-WXX-075
+
+[ELEMENT]
+UID: SWA-WXX-ENERGY
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Energiedaten im Runner
+STATEMENT: >>>
+Abruf der freien Quellen von ``energy_ingest`` ohne Datenbank, eigene Marktwerte, Artefakt je
+Jahr, Plan und Auswahl wie ``energy.value_best``.
+<<<
+ORT: services/wx_exchange/src/wx_exchange/energy.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-WXX-080
+- TYPE: Parent
+  VALUE: SWR-WXX-081
+- TYPE: Parent
+  VALUE: SWR-WXX-082
+- TYPE: Parent
+  VALUE: SWR-WXX-083
 
 [ELEMENT]
 UID: SWA-WXX-TESTING

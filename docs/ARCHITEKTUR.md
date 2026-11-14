@@ -668,7 +668,8 @@ flowchart LR
 | ECMWF Open Data (IFS/AIFS) | erlaubt, CC BY 4.0 | Quellenvermerk und Hinweis auf Veränderung |
 | DWD Open Data (ICON) | erlaubt | Quellenvermerk „Deutscher Wetterdienst“ (GeoNutzV), Hinweis auf Veränderung |
 | MSC GEM | vor Aufnahme prüfen (Open Government Licence – Canada) | Quellenvermerk |
-| Open-Meteo, Energie- und Marktdaten | nicht vorgesehen | — |
+| Energie- und Marktdaten freier Quellen (SMARD, Energy-Charts, EIA, EZB, Weltbank, Oil Bulletin, Eurostat, Hub'eau, mit Schlüssel ENTSO-E-Lastprognose und GIE) | erlaubt, Lizenz je Quelle in `sources.json` (5.5.8) | Quellenvermerk je Quelle in `org.predictiondb.attribution` |
+| Open-Meteo, unfreie Energiedaten und „nur Training“ (Netztransparenz, regelleistung.net) | nicht vorgesehen | — |
 
   Jedes Manifest trägt den Quellenvermerk in `org.predictiondb.attribution`, zusätzlich liegt ein `ATTRIBUTION.md` als eigener Layer im Index-Artefakt. Weitere Modelle bekommen eigene Artefakt-Repositories (`ecmwf-ifs-0p25-silver` usw.), damit Lizenzen nicht gemischt werden.
 - **Lizenz der Daten selbst:** Die AGPL-3.0 bzw. kommerzielle Lizenz (12.1) gilt für den Code. Die veröffentlichten Daten stehen unter **CC BY 4.0** (`org.opencontainers.image.licenses: CC-BY-4.0`), Namensnennung: „PredictionDB (the78mole)“ plus die Quellenvermerke der Tabelle oben (12.9).
@@ -705,6 +706,34 @@ auch sie rechnet ein Runner, aus dem Gesamtexport des Marktstammdatenregisters.
   kann sie einmal von der VM übernommen werden und wird danach im Runner fortgeschrieben.
 
 Einzelheiten: `services/wx_exchange/README.md`, Abschnitt „Gold und Gewichte der Cluster“.
+
+#### 5.5.8 Energiedaten im Runner
+
+Der Trainings-Snapshot braucht neben Gold die Energiereihen, die auf der VM in `energy.value`
+liegen. Damit er ohne die VM entsteht, ruft `energy-history.yml` die freien Quellen im Runner
+ab, mit denselben Abrufen wie `energy-ingest` (7.2), aber ohne Datenbank:
+
+- **Ein Paket je Kalenderjahr** (Ortszeit Berlin, wie die Jahresmarktwerte):
+  `predictiondb-data/energy:JJJJ`, ab 2015. Layer: ein `<quelle>.parquet` je Quelle mit `code`,
+  `ts` (UTC), `value` und `published` (regulärer Veröffentlichungstermin wie in `energy.value`,
+  7.4) und `sources.json` mit Rang, Lizenzklasse, Lizenz und den Reihen je Quelle.
+- **Auswahl wie `energy.value_best`:** je Reihe und Zeitpunkt der Wert der Quelle mit dem
+  kleinsten Rang (`wx_exchange.energy.load_best`). Die eigenen Marktwerte (`pdb_marktwert`)
+  entstehen im Runner aus dieser Auswahl, wie auf der VM.
+- **Quellen:** SMARD, Energy-Charts, EIA (Bulk-Dateien), EIA STEO, EZB, Weltbank, Oil Bulletin,
+  Eurostat, Hub'eau; mit Secret `PDB_ENTSOE_TOKEN` bzw. `PDB_GIE_API_KEY` auch die freien
+  ENTSO-E-Lastprognosen und GIE. Unfreie Quellen und „nur Training“ kommen nicht ins Paket, weil
+  es öffentlich ist (7.11.1).
+- **Täglich** nach der Day-Ahead-Auktion: das laufende Jahr (Ist- und Prognosewerte nur die
+  letzten 62 Tage neu, ganze Dateien vollständig), bis Ende Februar das Vorjahr, fehlende Jahre.
+  Scheitert ein Datensatz, bleiben die bisherigen Werte der Quelle stehen (`stale`), der nächste
+  Lauf versucht es erneut. Ein ganzes Jahr dauert rund 27 Minuten, 2025 ergab 2,7 Mio. Werte in
+  22 MB (davon Energy-Charts 15 MB, SMARD 7 MB).
+- **Abweichung von der VM:** `published` ist beim Abruf im Nachhinein immer der reguläre Termin;
+  auf der VM ist es bei laufend abgerufenen Werten der frühere Abrufzeitpunkt. Für den
+  Leakage-Schutz ist der Runner damit gleich streng oder strenger.
+
+Einzelheiten: `services/wx_exchange/README.md`, Abschnitt „Energiedaten“.
 
 ### 5.6 GEFS-Ensemble: Silber im Runner, je Region und Mitglied
 
@@ -1488,7 +1517,11 @@ Analyse-Jobs sind bewusst einfach gehalten: eine YAML-Datei, ein Befehl, ein Ord
 > Prognosen D+1 bis D+15. Im Rückblick (Panel 77, Variablen „Rückblick: Ausgabetag“ und
 > „Rückblick: Modell“) steht der Preis-Lauf, der an einem gewählten Tag um 14:00 Ortszeit galt
 > (Day-Ahead-Preise für morgen bekannt), gegen den Day-Ahead-Preis, mit Tagesmitteln und MAE je
-> Tag; Vorgabe ist der Tag vor einer Woche und der aktuelle Champion. Der Ausblick −2 bis +7 Tage, der Fehlerschlauch, die Views
+> Tag; Vorgabe ist der Tag vor einer Woche und der aktuelle Champion. Beide Prognose-Dashboards
+> stehen auf „Shared tooltip“ (`graphTooltip: 2`): Beim Überfahren eines Diagramms zeigen alle
+> anderen Marker und Werte zum selben Zeitpunkt. Die ECharts-Panels machen über eigenen Code mit
+> (Mausposition als `data-hover`-Ereignis auf dem Event-Bus des Panels senden, fremde Ereignisse
+> als ECharts-Tooltip zeigen, Abo per `unsubscribe` im Rückgabewert `version: 2`). Der Ausblick −2 bis +7 Tage, der Fehlerschlauch, die Views
 > `fcst.v_outlook`/`fcst.v_yesterday_envelope`, `energy.forecast_vintage`, die
 > Week-Ahead-Lastprognose und `fcst.model_spread` (7.7) sind noch nicht umgesetzt; der Rest
 > dieses Abschnitts beschreibt sie als Plan. Die übrigen Status-Dashboards sind „Wetter“
