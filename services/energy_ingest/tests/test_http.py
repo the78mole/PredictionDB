@@ -62,3 +62,21 @@ def test_retry_after_is_capped(monkeypatch: pytest.MonkeyPatch) -> None:
         h = Http(c, attempts=2, wait_max=0.01, pace={}, retry_after_max=10)
         h.get("https://api.energy-charts.info/price")
     assert sleeps == [10.0]
+
+
+def test_pace_grows_after_429_and_relaxes(monkeypatch: pytest.MonkeyPatch) -> None:
+    """@relation(SWR-ENI-032, scope=function)"""
+    monkeypatch.setattr("tenacity.nap.time.sleep", lambda s: None)
+    monkeypatch.setattr("energy_ingest.http.time.sleep", lambda s: None)
+    host = "api.energy-charts.info"
+    calls = iter([httpx.Response(429), httpx.Response(429), httpx.Response(200)])
+    with _client(lambda r: next(calls)) as c:
+        h = Http(c, attempts=3, wait_max=0.01, pace={host: 2.0}, pace_max=6.0)
+        assert h.get(f"https://{host}/price").status_code == 200
+        # 2 → 4 → 6 (Grenze), danach ein Erfolg: 6 · 0,95
+        assert h.current_pace[host] == pytest.approx(5.7)
+    with _client(lambda r: httpx.Response(200)) as c:
+        h.client = c
+        for _ in range(100):
+            h.get(f"https://{host}/price")
+    assert h.current_pace[host] == pytest.approx(2.0)
