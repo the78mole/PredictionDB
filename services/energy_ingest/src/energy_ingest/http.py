@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import threading
 import time
 from collections.abc import Mapping
 from datetime import UTC, datetime
@@ -37,6 +38,12 @@ PACE_S: dict[str, float] = {
 }
 #: Obergrenze für eine vom Server per Retry-After verlangte Wartezeit
 RETRY_AFTER_MAX_S = 120.0
+#: Nach einem 429 verdoppelt sich der Mindestabstand des Hosts bis zu dieser Grenze und sinkt
+#: mit jedem erfolgreichen Abruf um ``PACE_RELAX`` wieder auf den Grundwert. So hält sich ein
+#: Lauf mit vielen Abrufen (Historie in Actions) dauerhaft unter der Grenze des Servers, statt
+#: sie alle paar Anfragen erneut zu reißen.
+PACE_MAX_S = 30.0
+PACE_RELAX = 0.95
 
 
 def _retryable(exc: BaseException) -> bool:
@@ -72,7 +79,8 @@ class Http:
 
     Vor jedem Abruf wird der Mindestabstand des Hosts (``pace``) eingehalten. Verlangt der
     Server per Retry-After eine Pause, wartet die Wiederholung mindestens so lange (höchstens
-    ``retry_after_max``).
+    ``retry_after_max``). Jede Antwort 429 verdoppelt den Mindestabstand des Hosts (höchstens
+    ``pace_max``), jeder erfolgreiche Abruf senkt ihn um ``PACE_RELAX`` bis zum Grundwert.
 
     @relation(SWR-ENI-032, scope=class)
     """
@@ -85,9 +93,15 @@ class Http:
         wait_max: float = 30.0,
         pace: Mapping[str, float] | None = None,
         retry_after_max: float = RETRY_AFTER_MAX_S,
+        pace_max: float = PACE_MAX_S,
     ) -> None:
         self.client = client
         self.pace = dict(PACE_S if pace is None else pace)
+        #: aktueller Mindestabstand je Host, nach 429 erhöht
+        self.current_pace = dict(self.pace)
+        self._pace_max = pace_max
+        #: Mindestabstand und Anpassung je Host auch bei geteilter Instanz in Threads konsistent
+        self._lock = threading.Lock()
         self._retry_after_max = retry_after_max
         self._last_call: dict[str, float] = {}
         self._backoff = wait_exponential_jitter(initial=1, max=wait_max)
@@ -115,22 +129,45 @@ class Http:
 
     def _throttle(self, url: str) -> None:
         host = httpx.URL(url).host
-        gap = self.pace.get(host, 0.0)
-        if gap <= 0:
-            return
-        wait = self._last_call.get(host, float("-inf")) + gap - time.monotonic()
-        if wait > 0:
-            time.sleep(wait)
-        self._last_call[host] = time.monotonic()
+        with self._lock:
+            gap = self.current_pace.get(host, 0.0)
+            if gap <= 0:
+                return
+            wait = self._last_call.get(host, float("-inf")) + gap - time.monotonic()
+            if wait > 0:
+                time.sleep(wait)
+            self._last_call[host] = time.monotonic()
 
     def _get_once(
         self, url: str, params: Params | None, headers: dict[str, str] | None = None
     ) -> httpx.Response:
         self._throttle(url)
         r = self.client.get(url, params=params, headers=headers)
+        # Host der Antwort (nach Weiterleitungen), nicht der angefragten Adresse
+        self._adapt(r.url.host, r.status_code)
         if r.status_code == httpx.codes.TOO_MANY_REQUESTS or r.status_code >= 500:
             r.raise_for_status()
         return r
+
+    def _adapt(self, host: str, status: int) -> None:
+        """Mindestabstand nach 429 verdoppeln, nach Erfolg langsam zum Grundwert zurück.
+
+        @relation(SWR-ENI-032, scope=function)
+        """
+        with self._lock:
+            base = self.pace.get(host, 0.0)
+            cur = self.current_pace.get(host, base)
+            if status == httpx.codes.TOO_MANY_REQUESTS:
+                # nie unter den konfigurierten Grundwert, auch wenn er über pace_max liegt
+                new = max(base, min(self._pace_max, max(cur * 2, 1.0)))
+                if new != cur:
+                    log.info("http.pace", host=host, pace_s=round(new, 2))
+            elif status < 400:
+                new = max(base, cur * PACE_RELAX)
+            else:
+                return
+            if new > 0:
+                self.current_pace[host] = new
 
     def get(
         self,
