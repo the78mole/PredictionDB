@@ -24,7 +24,7 @@ x-app: &app
 
 services:
   postgres:
-    image: timescale/timescaledb:2.31.0-pg17
+    image: timescale/timescaledb:2.32.0-pg17
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -474,7 +474,7 @@ services:
   #
   # Einmalig: Rolle und Datenbank mlflow im vorhandenen Postgres (idempotent)
   mlflow-db-init:
-    image: timescale/timescaledb:2.31.0-pg17
+    image: timescale/timescaledb:2.32.0-pg17
     profiles: [mlflow]
     restart: "no"
     environment:
