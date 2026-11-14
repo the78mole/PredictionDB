@@ -548,6 +548,78 @@ RELATIONS:
 [[/SECTION]]
 
 [[SECTION]]
+TITLE: Energiedaten im Runner
+
+[REQUIREMENT]
+UID: SWR-WXX-080
+ART: Schnittstelle
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Energie-Artefakt je Jahr
+STATEMENT: >>>
+``energy build JJJJ`` muss alle Datensätze der freien Quellen für das Kalenderjahr (Ortszeit
+Berlin) ohne Datenbank abrufen und als OCI-Artefakt ``predictiondb-data/energy:JJJJ`` ablegen:
+ein Parquet je Quelle mit ``code``, ``ts``, ``value`` und ``published`` (wie
+``energy.value``) und ``sources.json`` mit Rang, Lizenzklasse, Lizenz und Reihen je Quelle. Die
+eigenen Marktwerte werden wie auf der VM aus Preis und Erzeugung gerechnet. Unfreie Quellen
+und solche der Klasse „nur Training“ dürfen nicht ins Artefakt.
+<<<
+QUELLE: Nutzerwunsch 2026-11-12, ARCHITEKTUR.md 5.5.8
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-001
+- TYPE: Parent
+  VALUE: SYSR-PUB-002
+
+[REQUIREMENT]
+UID: SWR-WXX-081
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Beste Quelle je Reihe
+STATEMENT: >>>
+Aus den Energie-Artefakten muss sich je Reihe und Zeitpunkt der Wert der Quelle mit dem
+kleinsten Rang ergeben, wie in der Sicht ``energy.value_best``.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-EN-001
+
+[REQUIREMENT]
+UID: SWR-WXX-082
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Jahre planen, Ausfälle überbrücken
+STATEMENT: >>>
+``energy plan`` muss fehlende Jahre, Jahre mit anderer Formatversion oder veralteten Quellen,
+das laufende Jahr und bis Ende Februar das Vorjahr auswählen. Scheitert beim Bau ein Datensatz,
+müssen die bisherigen Werte dieser Quelle im Artefakt bleiben (Annotation ``stale``); ohne
+bisherige Werte wird nichts veröffentlicht. Unveränderte Jahre bekommen kein neues Manifest.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-002
+
+[REQUIREMENT]
+UID: SWR-WXX-083
+ART: Qualität
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Laufendes Jahr nur im Rückblick abrufen
+STATEMENT: >>>
+Im laufenden Jahr muss ``energy build`` Datensätze mit Blöcken bis 31 Tage nur für die letzten
+62 Tage neu abrufen und mit den bisherigen Werten zusammenführen; ganze Dateien kommen
+vollständig, ``--full`` ruft alles ab. Quellen, die ein Lauf nicht abruft, bleiben unverändert
+im Artefakt.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-002
+
+[[/SECTION]]
+
+[[SECTION]]
 TITLE: Robustheit
 
 [REQUIREMENT]

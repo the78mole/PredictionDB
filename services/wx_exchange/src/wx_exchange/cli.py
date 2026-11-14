@@ -75,7 +75,7 @@ from predictiondb_core.db import create_db_engine
 from predictiondb_core.log import configure_logging, get_logger
 from predictiondb_core.s3 import s3_store
 from predictiondb_core.settings import get_settings
-from wx_exchange import cli_gold, gefs, gefs_regions, gefs_vm, idx, snapshot
+from wx_exchange import cli_energy, cli_gold, gefs, gefs_regions, gefs_vm, idx, snapshot
 from wx_exchange.importer import Importer
 from wx_exchange.oci import Registry, RegistryError
 from wx_exchange.publish import Publisher, plan
@@ -109,6 +109,7 @@ def build_parser() -> argparse.ArgumentParser:
     _gefs_parser(sub)
     _snapshot_parser(sub)
     cli_gold.add_parser(sub)
+    cli_energy.add_parser(sub)
     gfs = sub.add_parser("gfs", help="NOAA GFS 0,25°")
     gfs.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     gfs.add_argument("--process-config", type=Path, help="Standard: PDB_WX_PROCESS_CONFIG")
@@ -244,6 +245,8 @@ def main(argv: list[str] | None = None) -> int:
         return _snapshot_main(args)
     if args.model == "gold":
         return cli_gold.main(args)
+    if args.model == "energy":
+        return cli_energy.main(args)
     config = GfsConfig.from_yaml(args.config)
     timeout = httpx.Timeout(120.0, connect=15.0)
 

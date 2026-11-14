@@ -1,0 +1,109 @@
+name: Energie-Historie
+
+# Energiedaten freier Quellen im Runner, ohne Datenbank und ohne die VM: je Job ein Kalenderjahr
+# (Ortszeit Berlin) mit den Abrufen von energy-ingest (SMARD, Energy-Charts, EIA, EZB, Weltbank,
+# Oil Bulletin, Eurostat, Hub'eau, eigene Marktwerte), Ergebnis als OCI-Artefakt
+# ghcr.io/the78mole/predictiondb-data/energy:JJJJ mit einem Parquet je Quelle. Grundlage für den
+# Trainings-Snapshot in Actions (Auswahl je Reihe wie energy.value_best).
+#
+# Täglich nach der Day-Ahead-Auktion (Ergebnis gegen 12:45 Uhr Ortszeit): laufendes Jahr, bis
+# Ende Februar auch das Vorjahr (späte Korrekturen, Jahresmarktwert), dazu fehlende Jahre ab
+# 2015. Im laufenden Jahr werden Ist- und Prognosewerte nur für die letzten 62 Tage neu
+# abgerufen (ein ganzes Jahr dauert etwa 30 Minuten, vor allem wegen der Drosselung von
+# Energy-Charts). Unveränderte Jahre bekommen kein neues Manifest.
+#
+# Nur freie Quellen; unfreie und „nur Training“ (Netztransparenz, regelleistung.net) bleiben
+# draußen, weil das Paket öffentlich ist. Mit den Secrets PDB_ENTSOE_TOKEN bzw. PDB_GIE_API_KEY
+# kommen die freien Lastprognosen von ENTSO-E bzw. die Gasspeicher (GIE) dazu.
+on:
+  schedule:
+    - cron: "37 12 * * *"
+  workflow_dispatch:
+    inputs:
+      from:
+        description: Erstes Jahr
+        default: "2015"
+      to:
+        description: Letztes Jahr (leer = laufendes)
+        default: ""
+      all:
+        description: Alle Jahre neu abrufen, auch vorhandene
+        type: boolean
+        default: false
+
+concurrency:
+  group: energy-history
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  PDB_LOG_JSON: "false"
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  plan:
+    name: Jahre planen
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+      packages: read
+    env:
+      WX_EXCHANGE_USERNAME: ${{ github.actor }}
+      WX_EXCHANGE_TOKEN: ${{ github.token }}
+    outputs:
+      years: ${{ steps.plan.outputs.years }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          save-cache: false
+      - run: uv sync --locked --no-dev --package wx-exchange
+      - id: plan
+        env:
+          FROM: ${{ inputs.from || '2015' }}
+          TO: ${{ inputs.to }}
+          ALL: ${{ inputs.all == true }}
+        run: |
+          args=(energy plan --from "$FROM")
+          [ -n "$TO" ] && args+=(--to "$TO")
+          [ "$ALL" = "true" ] && args+=(--all)
+          uv run --no-sync wx-exchange "${args[@]}"
+
+  year:
+    name: ${{ matrix.year }}
+    needs: plan
+    if: needs.plan.outputs.years != '[]'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      # die Quellen nicht mit vielen Jahren gleichzeitig belasten
+      max-parallel: 3
+      fail-fast: false
+      matrix:
+        year: ${{ fromJSON(needs.plan.outputs.years) }}
+    env:
+      WX_EXCHANGE_USERNAME: ${{ github.actor }}
+      WX_EXCHANGE_TOKEN: ${{ github.token }}
+      PDB_ENTSOE_TOKEN: ${{ secrets.PDB_ENTSOE_TOKEN }}
+      PDB_GIE_API_KEY: ${{ secrets.PDB_GIE_API_KEY }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          save-cache: false
+      - run: uv sync --locked --no-dev --package wx-exchange
+      - name: Jahr abrufen und nach GHCR
+        env:
+          YEAR: ${{ matrix.year }}
+          FULL: ${{ inputs.all == true }}
+        run: |
+          args=(energy build "$YEAR")
+          [ "$FULL" = "true" ] && args+=(--full)
+          uv run --no-sync wx-exchange "${args[@]}"

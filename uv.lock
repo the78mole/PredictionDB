@@ -4316,6 +4316,7 @@ name = "wx-exchange"
 version = "0.1.0"
 source = { editable = "services/wx_exchange" }
 dependencies = [
+    { name = "energy-ingest" },
     { name = "gribkit" },
     { name = "httpx" },
     { name = "mastr-ingest" },
@@ -4328,6 +4329,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "energy-ingest", editable = "services/energy_ingest" },
     { name = "gribkit", specifier = "~=0.2" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "mastr-ingest", editable = "services/mastr_ingest" },
