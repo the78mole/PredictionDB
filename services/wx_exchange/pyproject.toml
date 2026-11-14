@@ -13,7 +13,9 @@ dependencies = [
     "mastr-ingest",
     "energy-ingest",
     "httpx>=0.27",
+    "pandas>=2.2",
     "pyarrow>=18",
+    "sqlalchemy>=2",
     "obstore>=0.6",
 ]
 
