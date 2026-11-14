@@ -266,3 +266,14 @@ def test_gie_key_not_sent_to_other_host() -> None:
     )
     client.get("https://agsi.gie.eu/api", headers={"x-key": "k"})
     assert seen == {"agsi.gie.eu": "k", "evil.example": None}
+
+
+def test_window_ends_like_vm_sync() -> None:
+    """@relation(SWR-WXX-080, scope=function)"""
+    fake = FakeRegistry(repository="owner/data/energy")
+    b = builder(fake)
+    start, end = b.window(2026)
+    assert start == energy.year_bounds(2026)[0]
+    # bis übermorgen 0 Uhr UTC wie der Abgleich auf der VM, kein Block ganz in der Zukunft
+    assert end == datetime(2026, 3, 22, tzinfo=UTC)
+    assert b.window(2025)[1] == energy.year_bounds(2025)[1]

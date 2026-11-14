@@ -41,7 +41,7 @@ from sqlalchemy import Engine
 from energy_ingest.cli import build_sources
 from energy_ingest.config import EnergySettings
 from energy_ingest.http import Http
-from energy_ingest.ingest import chunks
+from energy_ingest.ingest import chunks, day_window
 from energy_ingest.model import BERLIN, SeriesData, next_period, published_at
 from energy_ingest.sources import Source
 from energy_ingest.sources.marktwert import PRICE, WEIGHTS, Marktwert, market_values, period_starts
@@ -81,6 +81,8 @@ INCREMENTAL_DAYS = 62
 #: Datensätze mit Blöcken bis zu dieser Größe werden im laufenden Jahr nur ab dem Rückblick
 #: abgerufen; größere Blöcke sind ganze Dateien (Monatswerte, Prognosen) und kommen vollständig
 INCREMENTAL_CHUNK = timedelta(days=31)
+#: Wie ``EnergySettings.horizon_days`` auf der VM: Prognosen bis übermorgen
+HORIZON_DAYS = 2
 ATTRIBUTION = (
     "Bundesnetzagentur | SMARD.de (CC BY 4.0); Energy-Charts, Fraunhofer ISE (CC BY 4.0);"
     " U.S. Energy Information Administration (Public Domain); Europäische Zentralbank;"
@@ -472,9 +474,10 @@ class EnergyBuilder:
         return layers
 
     def window(self, year: int) -> tuple[datetime, datetime]:
+        """Jahr bis höchstens ``HORIZON_DAYS`` nach dem heutigen Tag (UTC), wie der Abgleich
+        auf der VM; Blöcke ganz in der Zukunft beantworten manche Quellen mit Fehlern."""
         start, end = year_bounds(year)
-        # Prognosen reichen etwas in die Zukunft
-        return start, min(end, self.clock() + timedelta(days=14))
+        return start, min(end, day_window(self.clock(), 0, HORIZON_DAYS)[1])
 
     def build_year(self, year: int, *, full: bool = False) -> YearResult:
         """Ein Jahr abrufen; ohne ``full`` im laufenden Jahr nur den Rückblick neu.
