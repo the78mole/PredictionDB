@@ -2014,6 +2014,9 @@ dependencies = [
 bundle = [
     { name = "wx-process" },
 ]
+ghcr = [
+    { name = "wx-exchange" },
+]
 plots = [
     { name = "matplotlib" },
 ]
@@ -2032,9 +2035,10 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.10" },
     { name = "pyyaml", specifier = ">=6" },
     { name = "sqlalchemy", specifier = ">=2.0" },
+    { name = "wx-exchange", marker = "extra == 'ghcr'", editable = "services/wx_exchange" },
     { name = "wx-process", marker = "extra == 'bundle'", editable = "services/wx_process" },
 ]
-provides-extras = ["plots", "bundle"]
+provides-extras = ["plots", "bundle", "ghcr"]
 
 [[package]]
 name = "mlflow-skinny"
