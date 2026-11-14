@@ -4321,8 +4321,10 @@ dependencies = [
     { name = "httpx" },
     { name = "mastr-ingest" },
     { name = "obstore" },
+    { name = "pandas" },
     { name = "predictiondb-core" },
     { name = "pyarrow" },
+    { name = "sqlalchemy" },
     { name = "wx-ingest" },
     { name = "wx-process" },
 ]
@@ -4334,8 +4336,10 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27" },
     { name = "mastr-ingest", editable = "services/mastr_ingest" },
     { name = "obstore", specifier = ">=0.6" },
+    { name = "pandas", specifier = ">=2.2" },
     { name = "predictiondb-core", editable = "packages/core" },
     { name = "pyarrow", specifier = ">=18" },
+    { name = "sqlalchemy", specifier = ">=2" },
     { name = "wx-ingest", editable = "services/wx_ingest" },
     { name = "wx-process", editable = "services/wx_process" },
 ]
