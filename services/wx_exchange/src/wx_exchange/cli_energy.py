@@ -106,7 +106,9 @@ def main(args: argparse.Namespace) -> int:
             # ausdrücklich verlangt, aber unfrei, unbekannt oder ohne Schlüssel
             print(f"Quellen nicht verfügbar: {', '.join(sorted(missing))}")
             return 2
-        builder = energy.EnergyBuilder(registry, sources, source_url=SOURCE_URL)
+        builder = energy.EnergyBuilder(
+            registry, sources, source_url=SOURCE_URL, horizon_days=settings.horizon_days
+        )
         result = builder.build_year(args.year, full=args.full)
         print(json.dumps(result.as_dict(), indent=1))
         return 1 if result.status == "failed" else 0

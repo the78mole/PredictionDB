@@ -81,7 +81,7 @@ INCREMENTAL_DAYS = 62
 #: Datensätze mit Blöcken bis zu dieser Größe werden im laufenden Jahr nur ab dem Rückblick
 #: abgerufen; größere Blöcke sind ganze Dateien (Monatswerte, Prognosen) und kommen vollständig
 INCREMENTAL_CHUNK = timedelta(days=31)
-#: Wie ``EnergySettings.horizon_days`` auf der VM: Prognosen bis übermorgen
+#: Standard von ``EnergySettings.horizon_days`` (``PDB_ENERGY_HORIZON_DAYS``): bis übermorgen
 HORIZON_DAYS = 2
 ATTRIBUTION = (
     "Bundesnetzagentur | SMARD.de (CC BY 4.0); Energy-Charts, Fraunhofer ISE (CC BY 4.0);"
@@ -283,6 +283,8 @@ def fetch_source(
     if old is not None and not old.empty:
         parts.insert(0, old)
     rows = merge_rows(pd.concat(parts, ignore_index=True)) if parts else empty_rows()
+    # alte Werte außerhalb des Fensters (z. B. Prognosen jenseits des Horizonts) fallen weg
+    rows = rows[(rows["ts"] >= start) & (rows["ts"] < end)].reset_index(drop=True)
     return SourceLayer(
         source.code,
         source.priority,
@@ -425,6 +427,7 @@ class EnergyBuilder:
         *,
         source_url: str,
         clock: Callable[[], datetime] | None = None,
+        horizon_days: int = HORIZON_DAYS,
     ) -> None:
         codes = [s.code for s in sources]
         if len(set(codes)) != len(codes) or MARKTWERT in codes:
@@ -433,6 +436,7 @@ class EnergyBuilder:
         self.sources = sources
         self.source_url = source_url
         self.clock = clock or (lambda: datetime.now(UTC))
+        self.horizon_days = horizon_days
 
     def fetch(
         self,
@@ -474,10 +478,10 @@ class EnergyBuilder:
         return layers
 
     def window(self, year: int) -> tuple[datetime, datetime]:
-        """Jahr bis höchstens ``HORIZON_DAYS`` nach dem heutigen Tag (UTC), wie der Abgleich
+        """Jahr bis höchstens ``horizon_days`` nach dem heutigen Tag (UTC), wie der Abgleich
         auf der VM; Blöcke ganz in der Zukunft beantworten manche Quellen mit Fehlern."""
         start, end = year_bounds(year)
-        return start, min(end, day_window(self.clock(), 0, HORIZON_DAYS)[1])
+        return start, min(end, day_window(self.clock(), 0, self.horizon_days)[1])
 
     def build_year(self, year: int, *, full: bool = False) -> YearResult:
         """Ein Jahr abrufen; ohne ``full`` im laufenden Jahr nur den Rückblick neu.
