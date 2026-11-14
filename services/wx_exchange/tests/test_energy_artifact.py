@@ -266,3 +266,33 @@ def test_gie_key_not_sent_to_other_host() -> None:
     )
     client.get("https://agsi.gie.eu/api", headers={"x-key": "k"})
     assert seen == {"agsi.gie.eu": "k", "evil.example": None}
+
+
+def test_window_ends_like_vm_sync() -> None:
+    """@relation(SWR-WXX-080, scope=function)"""
+    fake = FakeRegistry(repository="owner/data/energy")
+    b = builder(fake)
+    start, end = b.window(2026)
+    assert start == energy.year_bounds(2026)[0]
+    # bis übermorgen 0 Uhr UTC wie der Abgleich auf der VM, kein Block ganz in der Zukunft
+    assert end == datetime(2026, 3, 22, tzinfo=UTC)
+    assert b.window(2025)[1] == energy.year_bounds(2025)[1]
+
+
+def test_window_horizon_and_old_rows_clipped() -> None:
+    """@relation(SWR-WXX-080, SWR-WXX-083, scope=function)"""
+    b = energy.EnergyBuilder(
+        registry(FakeRegistry(repository="owner/data/energy")),
+        [],
+        source_url=SOURCE,
+        clock=lambda: NOW,
+        horizon_days=5,
+    )
+    assert b.window(2026)[1] == datetime(2026, 3, 25, tzinfo=UTC)
+    start, end = b.window(2026)
+    late = pd.Timestamp(end + timedelta(days=3))
+    old = pd.DataFrame({"code": ["x"], "ts": [late], "value": [1.0], "published": [late]}).astype(
+        {"ts": "datetime64[us, UTC]", "published": "datetime64[us, UTC]"}
+    )
+    layer = energy.fetch_source(FakeSource("smard", 10, 1.0), start, end, NOW, since=NOW, old=old)
+    assert layer.rows["ts"].max() < end and "x" not in set(layer.rows["code"])
