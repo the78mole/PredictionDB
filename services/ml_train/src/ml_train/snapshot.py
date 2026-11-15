@@ -317,6 +317,19 @@ def compact_weather(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def only_free(manifest: dict[str, Any]) -> list[str]:
+    """Quellen im Manifest, die nicht ``frei`` sind (leer = darf öffentlich verwendet werden).
+
+    Ohne Eintrag ``sources`` gilt der Snapshot als nicht frei (``["?"]``).
+
+    @relation(SWR-MLT-011, scope=function)
+    """
+    sources = manifest.get("sources")
+    if not isinstance(sources, dict):
+        return ["?"]
+    return sorted(k for k, v in sources.items() if v != "frei")
+
+
 def latest_clustering(engine: Engine) -> str | None:
     with engine.connect() as c:
         v = c.execute(

@@ -94,6 +94,31 @@ def test_push_blob_retries_server_errors() -> None:
         registry(fake).push_blob(b"hello")
 
 
+def test_manifest_and_tags_retry_server_errors() -> None:
+    """@relation(SWR-WXX-001, scope=function)"""
+    fake = FakeRegistry()
+    reg = registry(fake)
+    reg.put_manifest("2026-01-00z", {"layers": [], "config": {}})
+    fails = iter([503, 502])
+
+    def flaky(request: httpx.Request) -> httpx.Response:
+        code = next(fails, None)
+        if code is not None and request.method == "GET" and "/manifests/" in request.url.path:
+            return httpx.Response(code)
+        return fake(request)
+
+    ro = Registry(
+        fake.host,
+        fake.repository,
+        httpx.Client(transport=httpx.MockTransport(flaky)),
+        "bot",
+        "secret",
+        (0.0, 0.0),
+    )
+    assert ro.manifest("2026-01-00z") is not None
+    assert ro.tags() == ["2026-01-00z"]
+
+
 def _silver(run: datetime = RUN, completed: str = "2099-01-02T10:00:00+00:00") -> MemoryStore:
     bronze, silver = MemoryStore(), MemoryStore()
     fill_bronze(bronze, [0, 1, 2, 3], run)

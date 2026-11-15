@@ -90,6 +90,24 @@ RELATIONS:
 - TYPE: Parent
   VALUE: SYSR-TR-001
 
+[REQUIREMENT]
+UID: SWR-MLT-011
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Snapshot ohne Datenbank aus GHCR
+STATEMENT: >>>
+``snapshot --ghcr`` muss denselben Snapshot wie ``snapshot`` ohne Datenbank aus den öffentlichen
+Paketen in GHCR bauen: Energie aus ``energy`` (Rangfolge wie ``energy.value_best``), Wetter aus dem
+Gold (Cluster je Technologie mit der Leistung der Cluster gewichtet, ``*_power`` summiert, feste
+Regionen unverändert), GEFS-Kennzahlen aus dem GEFS-Silber und den Bestand aus den Gewichten.
+Das Manifest muss die verwendeten Pakete samt Digest nennen. Mit ``--require-free`` muss der
+Befehl abbrechen, wenn eine Energiequelle nicht frei ist.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-TR-001
+
 [[/SECTION]]
 
 [[SECTION]]

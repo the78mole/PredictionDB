@@ -49,7 +49,7 @@ from ml_train.dataset import FeatureBuilder, issue_days_between
 from ml_train.jobs import JobLog, open_job_log
 from ml_train.models import TwoStageModel
 from ml_train.registry import Registry
-from ml_train.snapshot import export_snapshot, export_steps, load_snapshot
+from ml_train.snapshot import Snapshot, export_snapshot, export_steps, load_snapshot, only_free
 from predictiondb_core.log import configure_logging, get_logger
 
 log = get_logger(__name__)
@@ -112,6 +112,25 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--weather-from", type=parse_date, default=date(2021, 3, 22))
     s.add_argument("--run-hours", default="0,12")
     s.add_argument("--extra-codes", default="", help="weitere Reihen, kommagetrennt")
+    s.add_argument(
+        "--ghcr",
+        action="store_true",
+        help="ohne Datenbank aus den Paketen in GHCR bauen (Extra ghcr, wx-exchange)",
+    )
+    s.add_argument("--weights", default="latest", help="mit --ghcr: Tag der Cluster-Gewichte")
+    s.add_argument(
+        "--eu-version", default=None, help="mit --ghcr: Version der Regionen im Gold Europa"
+    )
+    s.add_argument(
+        "--allow-missing",
+        action="store_true",
+        help="mit --ghcr: fehlende Pakete überspringen statt abbrechen",
+    )
+    s.add_argument(
+        "--require-free",
+        action="store_true",
+        help="abbrechen, wenn eine Energiequelle nicht frei ist (unfrei oder nur Training)",
+    )
 
     b = cmd.add_parser("backtest", help="Backtest aller oder einzelner Varianten")
     b.add_argument("--snapshot", required=True, type=Path)
@@ -218,29 +237,80 @@ def build_parser() -> argparse.ArgumentParser:
 # --- Befehle ---------------------------------------------------------------------------------
 
 
-def cmd_snapshot(cfg: ModelConfig, a: argparse.Namespace, job: JobLog) -> int:
-    """@relation(SWR-MLT-010, scope=function)"""
-    from predictiondb_core.db import create_db_engine
+def _ghcr_snapshot(
+    cfg: ModelConfig,
+    a: argparse.Namespace,
+    codes: list[str],
+    start: datetime,
+    end: datetime,
+    run_hours: list[int],
+    max_lead_h: int,
+    job: JobLog,
+) -> Snapshot:
+    """Snapshot aus GHCR; Anmeldung optional über ``WX_EXCHANGE_USERNAME``/``_TOKEN``."""
+    import httpx
 
+    from ml_train.snapshot_ghcr import Packages, ghcr_snapshot
+
+    with httpx.Client(timeout=httpx.Timeout(120.0, connect=30.0)) as client:
+        packages = Packages.connect(
+            client,
+            host=os.environ.get("WX_EXCHANGE_REGISTRY", "ghcr.io"),
+            username=os.environ.get("WX_EXCHANGE_USERNAME"),
+            password=os.environ.get("WX_EXCHANGE_TOKEN") or None,
+        )
+        return ghcr_snapshot(
+            packages,
+            codes,
+            start,
+            end,
+            weather_from=to_dt(a.weather_from),
+            run_hours=run_hours,
+            max_lead_h=max_lead_h,
+            weights_ref=a.weights,
+            eu_version=a.eu_version,
+            allow_missing=a.allow_missing,
+            neighbour=cfg.neighbour_weather,
+            sites=cfg.site_weather,
+            ensemble=cfg.ensemble_weather,
+            progress=job.step,
+        )
+
+
+def cmd_snapshot(cfg: ModelConfig, a: argparse.Namespace, job: JobLog) -> int:
+    """@relation(SWR-MLT-010, SWR-MLT-011, scope=function)"""
     end = a.end or (datetime.now(UTC).date() + timedelta(days=2))
     codes = list(dict.fromkeys(cfg.targets + cfg.lag_series + cfg.series_codes))
     codes += sorted({b for t in cfg.stage1 + cfg.stage2 for b in t.benchmarks})
     codes += [c for c in a.extra_codes.split(",") if c]
     codes = list(dict.fromkeys(codes))
-    job.total(export_steps(codes, to_dt(a.start), to_dt(end), to_dt(a.weather_from)) + 1)
-    snap = export_snapshot(
-        create_db_engine(),
-        codes,
-        to_dt(a.start),
-        to_dt(end),
-        weather_from=to_dt(a.weather_from),
-        run_hours=[int(h) for h in a.run_hours.split(",")],
-        max_lead_h=24 * (max(cfg.issue.lead_days) + 2),
-        neighbour=cfg.neighbour_weather,
-        sites=cfg.site_weather,
-        ensemble=cfg.ensemble_weather,
-        progress=job.step,
-    )
+    run_hours = [int(h) for h in a.run_hours.split(",")]
+    max_lead_h = 24 * (max(cfg.issue.lead_days) + 2)
+    if a.ghcr:
+        snap = _ghcr_snapshot(cfg, a, codes, to_dt(a.start), to_dt(end), run_hours, max_lead_h, job)
+    else:
+        from predictiondb_core.db import create_db_engine
+
+        job.total(export_steps(codes, to_dt(a.start), to_dt(end), to_dt(a.weather_from)) + 1)
+        snap = export_snapshot(
+            create_db_engine(),
+            codes,
+            to_dt(a.start),
+            to_dt(end),
+            weather_from=to_dt(a.weather_from),
+            run_hours=run_hours,
+            max_lead_h=max_lead_h,
+            neighbour=cfg.neighbour_weather,
+            sites=cfg.site_weather,
+            ensemble=cfg.ensemble_weather,
+            progress=job.step,
+        )
+    if a.require_free:
+        bad = only_free(snap.manifest)
+        if bad:
+            log.error("snapshot.not_free", sources=bad)
+            print(f"Snapshot enthält nicht freie Quellen: {', '.join(bad)}", file=sys.stderr)
+            return 3
     job.step("Speichern")
     sid = snap.save(a.out)
     job.result = sid

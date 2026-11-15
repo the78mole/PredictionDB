@@ -82,6 +82,7 @@ Was ein Backtest genau tut (Faltungen, Kennzahlen, Freigabe): [`docs/BACKTEST.md
 
 ```bash
 uv run ml-train snapshot --out .ml-data/snap                      # aus PDB_DATABASE_URL
+uv run --extra ghcr ml-train snapshot --ghcr --require-free --out .ml-data/snap  # ohne DB
 uv run ml-train backtest --snapshot .ml-data/snap --out .ml-data/bt
 uv run ml-train backtest --snapshot .ml-data/snap --out .ml-data/bt-wx \
     --variant kalender --variant wetter --test-from 2026-09-15 --fold-months 1 --stride 1
@@ -95,6 +96,13 @@ uv run ml-train registry sync                                      # Spiegel fü
 uv run ml-train registry attach-backtest <version> --backtest .ml-data/bt # Backtest nachreichen
 uv run ml-train predict --dry-run                                  # aktive Versionen, jetzt
 ```
+
+`snapshot --ghcr` baut denselben Snapshot ohne Datenbank aus den öffentlichen Paketen unter
+`ghcr.io/the78mole/predictiondb-data` (Energie je Jahr, Gold DE und Europa, GEFS-Silber,
+Cluster-Gewichte). Das Manifest nennt die verwendeten Pakete samt Digest unter `ghcr`. In
+GitHub Actions läuft das als Workflow `training-snapshot.yml`, der den Snapshot als Artefakt
+für Backtest und Training ablegt. Unterschied zur VM: Das Gold rechnet alle Läufe mit den
+Gewichten einer Clusterung, und Energie kommt nur aus freien Quellen.
 
 Auf der VM laufen dieselben Befehle über das Compose-Profil `ml` (`docker compose --profile ml
 run --rm ml-train …`, Ordner `/data` im Volume `ml-data`), die Inferenz als Dienst

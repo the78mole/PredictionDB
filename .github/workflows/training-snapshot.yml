@@ -1,0 +1,124 @@
+name: Trainings-Snapshot
+run-name: Trainings-Snapshot ${{ inputs.config || 'config/ml/de_lu_v2.yaml' }}
+
+# Baut den Trainings-Snapshot (energy.parquet, weather.parquet, capacity.parquet, manifest.json)
+# ohne Datenbank aus den öffentlichen Paketen unter ghcr.io/the78mole/predictiondb-data:
+# Energiedaten (energy:JJJJ), Gold DE und Europa, GEFS-Silber und Cluster-Gewichte. Ergebnis ist
+# ein Actions-Artefakt, das Backtest- und Trainings-Jobs herunterladen (workflow_call).
+#
+# Der Snapshot darf nur freie Energiequellen enthalten (--require-free); zusätzlich prüft ein
+# eigener Schritt das Manifest. Unfreie Reihen und „nur Training“ kommen nie in ein Artefakt
+# dieses öffentlichen Repositorys.
+on:
+  workflow_dispatch:
+    inputs:
+      config:
+        description: Modellkonfiguration
+        default: config/ml/de_lu_v2.yaml
+      to:
+        description: Ende (JJJJ-MM-TT, leer = übermorgen)
+        default: ""
+      weights:
+        description: Tag der Cluster-Gewichte
+        default: latest
+      allow_missing:
+        description: Fehlende Pakete überspringen statt abbrechen
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      config:
+        type: string
+        default: config/ml/de_lu_v2.yaml
+      to:
+        type: string
+        default: ""
+      weights:
+        type: string
+        default: latest
+      allow_missing:
+        type: boolean
+        default: false
+    outputs:
+      artifact:
+        description: Name des Artefakts mit dem Snapshot
+        value: ${{ jobs.snapshot.outputs.artifact }}
+      snapshot_id:
+        description: snapshot_id aus manifest.json
+        value: ${{ jobs.snapshot.outputs.snapshot_id }}
+
+permissions:
+  contents: read
+
+env:
+  PDB_LOG_JSON: "false"
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  snapshot:
+    name: Snapshot aus GHCR
+    runs-on: ubuntu-26.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: read
+    env:
+      WX_EXCHANGE_USERNAME: ${{ github.actor }}
+      WX_EXCHANGE_TOKEN: ${{ github.token }}
+    outputs:
+      artifact: ${{ steps.check.outputs.artifact }}
+      snapshot_id: ${{ steps.check.outputs.snapshot_id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          save-cache: false
+      - run: uv sync --locked --no-dev --package ml-train --extra ghcr
+      - name: Snapshot bauen
+        env:
+          CONFIG: ${{ inputs.config || 'config/ml/de_lu_v2.yaml' }}
+          TO: ${{ inputs.to }}
+          WEIGHTS: ${{ inputs.weights || 'latest' }}
+          ALLOW_MISSING: ${{ inputs.allow_missing == true }}
+        run: |
+          args=(--config "$CONFIG" snapshot --ghcr --require-free --weights "$WEIGHTS" --out snapshot)
+          [ -n "$TO" ] && args+=(--to "$TO")
+          [ "$ALLOW_MISSING" = "true" ] && args+=(--allow-missing)
+          uv run --no-sync ml-train "${args[@]}"
+      - name: Manifest prüfen (nur freie Quellen)
+        id: check
+        run: |
+          python3 - <<'EOF'
+          import json, os
+          m = json.load(open("snapshot/manifest.json"))
+          bad = sorted(k for k, v in m["sources"].items() if v != "frei")
+          if bad or not m.get("publishable"):
+              raise SystemExit(f"nicht freie Quellen im Snapshot: {bad}")
+          sid = m["snapshot_id"]
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"snapshot_id={sid}\nartifact=snapshot-{sid}\n")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write(f"## Snapshot {sid}\n\n")
+              f.write(f"Zeitraum {m['range'][0]} bis {m['range'][1]}, Clusterung"
+                      f" {m['clustering_version']}\n\n")
+              f.write("| Teil | Zeilen |\n|---|---:|\n")
+              for k, v in m["rows"].items():
+                  f.write(f"| {k} | {v:,} |\n")
+              f.write("\nQuellen: " + ", ".join(sorted(m["sources"])) + "\n")
+              missing = m.get("ghcr", {}).get("missing", [])
+              f.write(f"\nFehlende Pakete: {len(missing)}\n")
+              for t in missing[:50]:
+                  f.write(f"- `{t}`\n")
+          EOF
+          du -sh snapshot
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.check.outputs.artifact }}
+          path: snapshot/
+          # Parquet ist schon mit zstd gepackt
+          compression-level: 0
+          # Wiederholung oder zweiter Aufruf im selben Lauf mit gleichem Inhalt
+          overwrite: true
+          retention-days: 14
+          if-no-files-found: error

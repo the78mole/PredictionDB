@@ -23,6 +23,8 @@ dependencies = [
 plots = ["matplotlib>=3.9"]
 # ml-train bundle für Wetter-Varianten (Nabenhöhen der Cluster wie in wx-process)
 bundle = ["wx-process"]
+# ml-train snapshot --ghcr: Snapshot ohne Datenbank aus den Paketen in GHCR (Actions)
+ghcr = ["wx-exchange"]
 
 [project.scripts]
 ml-train = "ml_train.cli:main"
@@ -30,6 +32,7 @@ ml-train = "ml_train.cli:main"
 [tool.uv.sources]
 predictiondb-core = { workspace = true }
 wx-process = { workspace = true }
+wx-exchange = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
