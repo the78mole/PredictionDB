@@ -21,6 +21,10 @@ on:
       weights:
         description: Tag der Cluster-Gewichte
         default: latest
+      allow_missing:
+        description: Fehlende Pakete überspringen statt abbrechen
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       config:
@@ -32,6 +36,9 @@ on:
       weights:
         type: string
         default: latest
+      allow_missing:
+        type: boolean
+        default: false
     outputs:
       artifact:
         description: Name des Artefakts mit dem Snapshot
@@ -73,9 +80,11 @@ jobs:
           CONFIG: ${{ inputs.config || 'config/ml/de_lu_v2.yaml' }}
           TO: ${{ inputs.to }}
           WEIGHTS: ${{ inputs.weights || 'latest' }}
+          ALLOW_MISSING: ${{ inputs.allow_missing == true }}
         run: |
           args=(--config "$CONFIG" snapshot --ghcr --require-free --weights "$WEIGHTS" --out snapshot)
           [ -n "$TO" ] && args+=(--to "$TO")
+          [ "$ALLOW_MISSING" = "true" ] && args+=(--allow-missing)
           uv run --no-sync ml-train "${args[@]}"
       - name: Manifest prüfen (nur freie Quellen)
         id: check
@@ -109,5 +118,7 @@ jobs:
           path: snapshot/
           # Parquet ist schon mit zstd gepackt
           compression-level: 0
+          # Wiederholung oder zweiter Aufruf im selben Lauf mit gleichem Inhalt
+          overwrite: true
           retention-days: 14
           if-no-files-found: error

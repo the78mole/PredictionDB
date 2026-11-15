@@ -119,6 +119,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     s.add_argument("--weights", default="latest", help="mit --ghcr: Tag der Cluster-Gewichte")
     s.add_argument(
+        "--eu-version", default=None, help="mit --ghcr: Version der Regionen im Gold Europa"
+    )
+    s.add_argument(
+        "--allow-missing",
+        action="store_true",
+        help="mit --ghcr: fehlende Pakete überspringen statt abbrechen",
+    )
+    s.add_argument(
         "--require-free",
         action="store_true",
         help="abbrechen, wenn eine Energiequelle nicht frei ist (unfrei oder nur Training)",
@@ -260,6 +268,8 @@ def _ghcr_snapshot(
             run_hours=run_hours,
             max_lead_h=max_lead_h,
             weights_ref=a.weights,
+            eu_version=a.eu_version,
+            allow_missing=a.allow_missing,
             neighbour=cfg.neighbour_weather,
             sites=cfg.site_weather,
             ensemble=cfg.ensemble_weather,

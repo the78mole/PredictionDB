@@ -48,6 +48,7 @@ def test_cluster_capacity_and_daily() -> None:
         "pv_roof:v1:c00": ("pv_roof", 5.0),
     }
     cap = capacity_daily(w)
+    assert len(cap) == 7
     got = {(d.isoformat(), t): v for d, t, v in cap.itertuples(index=False)}
     # Cluster fehlen vor ihrem ersten Tag, danach gilt der letzte Wert
     assert got == {
@@ -92,6 +93,7 @@ def test_weather_de_weights_by_cluster_capacity() -> None:
         ]
     )
     out = weather_de(gold, caps, T0, T0 + timedelta(days=30), [0, 12], 24)
+    assert len(out) == 4
     got = {
         (r.valid_time - r.run_time, r.feature): round(float(r.value), 4) for r in out.itertuples()
     }
@@ -144,6 +146,7 @@ def test_ensemble_run_like_vm_gold() -> None:
     }
     en = EnsembleWeather(regions={"DE:pv": ["pv_cf_mean", "pv_cf_p90"]})
     out = ensemble_run(meta, values, en, T0, T0 + timedelta(days=1), 6)
+    assert len(out) == 2
     got = {
         (r.valid_time - r.run_time, r.feature): round(float(r.value), 3) for r in out.itertuples()
     }
@@ -178,3 +181,11 @@ def test_energy_hourly_and_sources() -> None:
     sources = energy_sources(meta, ["load_actual"])
     assert sources == {"nt": "nur Training", "smard": "frei"}
     assert only_free({"sources": sources}) == ["nt"]
+    # strengste Klasse über die Jahre; liefernde Quelle ohne Angabe ist unbekannt
+    later = [{"nt": {"free": True, "train": True, "series": {"load_actual": {}}}}]
+    assert energy_sources(meta + later, ["load_actual"], {"smard", "neu"}) == {
+        "neu": "unbekannt",
+        "nt": "nur Training",
+        "smard": "frei",
+    }
+    assert only_free({}) == ["?"]

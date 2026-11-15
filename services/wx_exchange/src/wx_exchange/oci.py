@@ -122,7 +122,13 @@ class Registry:
     # --- Lesen -------------------------------------------------------------------------------
 
     def tags(self) -> list[str]:
-        """@relation(SWR-WXX-001, scope=function)"""
+        """Alle Tags; 5xx und Netzfehler werden wiederholt.
+
+        @relation(SWR-WXX-001, scope=function)
+        """
+        return self._retry(self._tags)
+
+    def _tags(self) -> list[str]:
         out: list[str] = []
         url: str | None = f"{self.base}/tags/list?n=1000"
         while url:
@@ -144,6 +150,13 @@ class Registry:
         return out
 
     def manifest(self, tag: str) -> dict[str, Any] | None:
+        """Manifest zu ``tag`` oder ``None``; 5xx und Netzfehler werden wiederholt.
+
+        @relation(SWR-WXX-001, scope=function)
+        """
+        return self._retry(lambda: self._manifest(tag))
+
+    def _manifest(self, tag: str) -> dict[str, Any] | None:
         try:
             r = self._request("GET", f"{self.base}/manifests/{tag}", headers={"Accept": MANIFEST})
         except AccessDenied:

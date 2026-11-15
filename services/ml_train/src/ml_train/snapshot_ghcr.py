@@ -55,8 +55,10 @@ from ml_train.snapshot import Snapshot, _months, compact_weather, source_classes
 from predictiondb_core.log import get_logger
 from wx_exchange import energy as energy_pkg
 from wx_exchange.artifact import tag as month_tag
+from wx_exchange.gefs import ATTRIBUTION as GEFS_ATTRIBUTION
 from wx_exchange.gefs import GefsMonth, unpack
 from wx_exchange.gefs_vm import ensemble_stats
+from wx_exchange.gold import ATTRIBUTION as GOLD_ATTRIBUTION
 from wx_exchange.gold import LATEST, Weights, gold_tag, load_month, load_weights, parse_gold_tag
 from wx_exchange.oci import Registry, digest
 
@@ -71,6 +73,8 @@ REPOSITORIES = {
     "gefs": f"{OWNER}/gefs-0p5-silver",
 }
 WEATHER_COLUMNS = ["run_time", "valid_time", "feature", "value"]
+#: Klasse einer Quelle, die Werte liefert, aber in ``sources.json`` fehlt
+UNKNOWN = "unbekannt"
 
 
 @dataclass
@@ -84,6 +88,8 @@ class Packages:
     gefs: Registry
     used: dict[str, dict[str, str]] = field(default_factory=dict)
     missing: list[str] = field(default_factory=list)
+    #: fehlende Pakete, ohne die der Snapshot trotzdem vollständig ist (Vorlauf der Standorte)
+    optional_missing: list[str] = field(default_factory=list)
 
     @classmethod
     def connect(
@@ -112,10 +118,21 @@ class Packages:
             gefs=reg("gefs"),
         )
 
-    def note(self, registry: Registry, tag: str, manifest: dict[str, Any] | None) -> None:
-        """Merkt sich den Digest eines gelesenen Manifests (fürs ``manifest.json``)."""
+    def note(
+        self,
+        registry: Registry,
+        tag: str,
+        manifest: dict[str, Any] | None,
+        *,
+        optional: bool = False,
+    ) -> None:
+        """Merkt sich ein gelesenes Manifest fürs ``manifest.json``: SHA-256 über das Manifest
+        als JSON mit sortierten Schlüsseln (nicht der Digest der Registry; die Layer darin sind
+        inhaltsadressiert und bestimmen die Daten eindeutig)."""
         if manifest is None:
-            self.missing.append(f"{registry.repository}:{tag}")
+            (self.optional_missing if optional else self.missing).append(
+                f"{registry.repository}:{tag}"
+            )
             return
         raw = json.dumps(manifest, sort_keys=True).encode()
         self.used.setdefault(registry.repository, {})[tag] = digest(raw)
@@ -341,15 +358,40 @@ def energy_hourly(
     return energy
 
 
-def energy_sources(meta: Iterable[dict[str, Any]], codes: list[str]) -> dict[str, str]:
-    """Lizenzklasse aller Quellen, die eine der Reihen liefern (wie ``SOURCES_SQL``)."""
+#: Rangfolge der Lizenzklassen, die strengste gewinnt (über Jahre und Angaben hinweg)
+CLASS_ORDER = {"frei": 0, "nur Training": 1, "unfrei": 2, UNKNOWN: 3}
+
+
+def energy_sources(
+    meta: Iterable[dict[str, Any]],
+    codes: list[str],
+    delivered: Iterable[str] = (),
+) -> dict[str, str]:
+    """Lizenzklasse aller Quellen, die eine der Reihen liefern (wie ``SOURCES_SQL``).
+
+    Je Quelle gilt die strengste Klasse aller Jahre. ``delivered`` sind die Quellen, die Werte
+    der Reihen geliefert haben; fehlt eine davon in ``sources.json``, ist sie ``unbekannt``.
+
+    @relation(SWR-MLT-011, scope=function)
+    """
     want = set(codes)
-    rows: dict[str, tuple[str, bool, bool]] = {}
+    out: dict[str, str] = {}
+
+    def keep(code: str, cls: str) -> None:
+        if CLASS_ORDER.get(cls, 3) >= CLASS_ORDER.get(out.get(code, "frei"), 0):
+            out[code] = cls
+
     for year in meta:
         for code, info in year.items():
             if want & set(info.get("series", {})):
-                rows[code] = (code, bool(info.get("free")), bool(info.get("train")))
-    return source_classes(sorted(rows.values()))
+                keep(
+                    code,
+                    source_classes([(code, bool(info.get("free")), bool(info.get("train")))])[code],
+                )
+    for code in delivered:
+        if code not in out:
+            out[code] = UNKNOWN
+    return dict(sorted(out.items()))
 
 
 def _chunked[T](items: list[T], n: int) -> Iterator[list[T]]:
@@ -390,9 +432,13 @@ def ghcr_snapshot(
     sites: SiteWeather | None = None,
     ensemble: EnsembleWeather | None = None,
     workers: int = 4,
+    allow_missing: bool = False,
     progress: Progress = no_progress,
 ) -> Snapshot:
     """Snapshot für ``[start, end)`` wie :func:`ml_train.snapshot.export_snapshot`, aus GHCR.
+
+    Fehlt ein benötigtes Paket, bricht der Bau ab (``LookupError``), außer mit
+    ``allow_missing``; die fehlenden Tags stehen dann im Manifest unter ``ghcr.missing``.
 
     @relation(SWR-MLT-011, scope=function)
     """
@@ -402,6 +448,7 @@ def ghcr_snapshot(
     progress("Energie")
     parts = []
     metas = []
+    delivered: set[str] = set()
     for y in range(first, last + 1):
         m = packages.energy.manifest(energy_pkg.tag(y))
         packages.note(packages.energy, energy_pkg.tag(y), m)
@@ -412,7 +459,10 @@ def ghcr_snapshot(
         ranked = []
         for src, df in values.items():
             prio = int(meta.get(src, {}).get("priority", 100))
-            ranked.append((prio, df[df["code"].isin(codes)]))
+            sel = df[df["code"].isin(codes)]
+            if not sel.empty:
+                delivered.add(src)
+            ranked.append((prio, sel))
         parts.append(energy_pkg.value_best(ranked))
         log.info("snapshot.energy_year", year=y, sources=len(values))
     best = (
@@ -421,7 +471,7 @@ def ghcr_snapshot(
         else energy_pkg.empty_rows()
     )
     energy = energy_hourly(best, codes, start, end)
-    sources = energy_sources(metas, codes)
+    sources = energy_sources(metas, codes, delivered)
 
     # --- Gewichte und Bestand
     wm = packages.weights.manifest(weights_ref)
@@ -459,7 +509,8 @@ def ghcr_snapshot(
         assert eu is not None
         t = gold_tag(eu, f"{a:%Y-%m}", hour)
         m = packages.gold_eu.manifest(t)
-        packages.note(packages.gold_eu, t, m)
+        # Monate nur für den Vorlauf der Standorte (vor dem ersten Wetterlauf) dürfen fehlen
+        packages.note(packages.gold_eu, t, m, optional=b <= wx_start)
         if m is None:
             return pd.DataFrame(columns=WEATHER_COLUMNS)
         gold = _frame(load_month(packages.gold_eu, t)[0])
@@ -527,6 +578,11 @@ def ghcr_snapshot(
                 if not df.empty:
                     weather_parts.append(compact_weather(df))
 
+    if packages.missing and not allow_missing:
+        raise LookupError(
+            f"{len(packages.missing)} Pakete fehlen, z. B. "
+            + ", ".join(sorted(packages.missing)[:5])
+        )
     weather = (
         pd.concat(weather_parts, ignore_index=True)
         if weather_parts
@@ -544,7 +600,8 @@ def ghcr_snapshot(
         "range": [start.isoformat(), end.isoformat()],
         "codes": codes,
         "sources": sources,
-        "publishable": "unfrei" not in sources.values(),
+        # wie export_snapshot: „nur Training“ darf in veröffentlichte Modelle einfließen
+        "publishable": not ({"unfrei", UNKNOWN} & set(sources.values())),
         "clustering_version": cv,
         "weather": {
             "source": "gfs_0p25",
@@ -556,7 +613,14 @@ def ghcr_snapshot(
             "registry": packages.energy.host,
             "packages": packages.used,
             "missing": sorted(packages.missing),
+            "optional_missing": sorted(packages.optional_missing),
             "eu_version": eu,
+        },
+        # Quellenvermerke der Wetter- und Gewichtspakete (ARCHITEKTUR.md 5.5.3)
+        "attribution": {
+            "gfs": GOLD_ATTRIBUTION,
+            "gefs": GEFS_ATTRIBUTION,
+            "energy": energy_pkg.ATTRIBUTION,
         },
     }
     if neighbour is not None:
