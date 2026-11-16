@@ -48,7 +48,12 @@ def lade(p: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, dict[str, A
 def vergleich(a: pd.DataFrame, b: pd.DataFrame, keys: list[str], group: str) -> pd.DataFrame:
     """Kennzahlen je Gruppe: Zeilen in a (VM), b (GHCR), gemeinsam, Abweichung der Werte."""
     m = a[[*keys, "value"]].merge(
-        b[[*keys, "value"]], on=keys, how="outer", suffixes=("_vm", "_ghcr"), indicator=True
+        b[[*keys, "value"]],
+        on=keys,
+        how="outer",
+        suffixes=("_vm", "_ghcr"),
+        indicator=True,
+        validate="one_to_one",  # doppelte Schlüssel brechen ab, statt Paare zu zählen
     )
     rows = []
     for g, d in m.groupby(group, sort=True):
