@@ -30,7 +30,6 @@ from __future__ import annotations
 import asyncio
 import json
 import threading
-import warnings
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -245,13 +244,15 @@ def ensemble_stats(values: F32) -> dict[str, F32]:
     @relation(SWR-WXX-047, scope=function)
     """
     valid = np.isfinite(values).sum(axis=0)
-    with warnings.catch_warnings():
-        # Schritte ohne gültiges Mitglied (Mittel und Summen in f000) ergeben NaN
-        warnings.simplefilter("ignore", RuntimeWarning)
-        out = {
-            "mean": np.nanmean(values, axis=0),
-            "std": np.nanstd(values, axis=0),
-        }
+    # Zellen ohne gültiges Mitglied (Mittel und Summen in f000) vorher mit 0 füllen, statt die
+    # RuntimeWarning von nanmean/nanstd zu unterdrücken: warnings.catch_warnings gilt für den
+    # ganzen Prozess und greift in Threads (Snapshot aus GHCR) nicht zuverlässig. Das Ergebnis
+    # dort wird unten ohnehin auf NaN gesetzt.
+    filled = np.where((valid == 0)[None], np.float32(0), values)
+    out: dict[str, F32] = {
+        "mean": np.nanmean(filled, axis=0).astype(np.float32),
+        "std": np.nanstd(filled, axis=0).astype(np.float32),
+    }
     out.update(_nan_percentiles(values, {"p10": 10, "p90": 90}))
     for k in out:
         out[k] = np.where(valid >= MIN_MEMBERS, out[k], np.nan).astype(np.float32)
