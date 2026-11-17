@@ -1,0 +1,37 @@
+# Auftrag nach docs/ARCHITEKTUR.md 7.9; ausgeführt von auswertung.py im selben Ordner
+id: snapshot-ghcr-abgleich
+title: Trainings-Snapshot aus GHCR gegen den Export aus der Datenbank der VM
+question: >
+  Liefert der Trainings-Snapshot, den GitHub Actions ohne Datenbank aus den GHCR-Paketen baut
+  (ml-train snapshot --ghcr), dieselben Eingänge wie der Export aus der Datenbank der VM
+  (ml-train snapshot)? Wo und wie stark weichen Energie, Wetter-Features und Bestand ab?
+requested_by: Maulwurf
+kind: verification
+inputs:
+  config: config/ml/de_lu_v2.yaml
+  period: {from: 2025-01-01, to: 2025-03-01}   # Winter, viel Wind; Wetterläufe im ganzen Zeitraum
+  weather_from: 2025-01-01
+  run_hours: [0, 12]
+  ghcr:
+    command: ml-train snapshot --ghcr --require-free
+    packages: [energy, gfs-0p25-gold, gfs-0p5-gold, gefs-0p5-silver, gfs-0p25-weights]
+  vm:
+    command: ml-train snapshot   # Datenbank der VM, nur lesend (Compose-Profil ml)
+method:
+  join:
+    energy: [code, ts]
+    weather: [feature, run_time, valid_time]
+    capacity: [day, technology]
+  metrics: [n_vm, n_ghcr, n_both, only_vm, only_ghcr, mae, max_abs, mae_rel_std, share_exact]
+  exact_tolerance: 1.0e-4      # relativ, float32 im Wetter
+  group_by:
+    energy: [code]
+    weather: [feature_group, feature]
+    capacity: [technology]
+  extra:
+    - Lizenzklassen der Quellen in beiden Manifesten
+    - Clusterung (clustering_version) und Gewicht je Cluster
+outputs:
+  tables: [energie, wetter, wetter_gruppen, bestand, quellen]
+  figures: [wetter_abweichung]
+schedule: once

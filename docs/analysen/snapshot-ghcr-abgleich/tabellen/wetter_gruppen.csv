@@ -1,0 +1,5 @@
+gruppe,features,n_vm,n_ghcr,n_both,only_vm,only_ghcr,mae_rel_std_median,mae_rel_std_max,share_exact_median
+de_cluster,30,738680,738680,738680,0,0,1.59649e-07,1.88215e-05,1
+gefs,12,45312,45312,45312,0,0,0,0,1
+nachbarzonen,22,333586,333586,333586,0,0,0,0,1
+standorte,7,106554,106554,106554,0,0,0,0,1

@@ -2,6 +2,7 @@ import asyncio
 import gzip
 import json
 import threading
+import warnings
 from collections import Counter
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -507,7 +508,9 @@ def test_ensemble_stats() -> None:
     values = rng.normal(10, 2, size=(31, 3, 2, 1)).astype(np.float32)
     values[:, 0, 1, 0] = np.nan  # f000 ohne Mittel
     values[:25, 2, 0, 0] = np.nan  # zu wenige Mitglieder
-    s = gefs_vm.ensemble_stats(values)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # keine RuntimeWarning bei Schritten ohne Mitglied
+        s = gefs_vm.ensemble_stats(values)
     assert s["mean"][1, 0, 0] == pytest.approx(values[:, 1, 0, 0].mean(), rel=1e-5)
     assert s["p10"][1, 0, 0] < s["mean"][1, 0, 0] < s["p90"][1, 0, 0]
     assert np.isnan(s["std"][0, 1, 0]) and np.isnan(s["mean"][2, 0, 0])
