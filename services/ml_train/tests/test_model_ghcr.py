@@ -111,6 +111,40 @@ def test_push_import_roundtrip(cfg, tmp_path: Path) -> None:  # type: ignore[no-
     assert vm.state()["challengers"] == [v]
 
 
+def test_import_refuses_unfree_and_completes_partial(cfg, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-081, scope=function)"""
+    fake = FakeRegistry(repository="owner/predictiondb-models/de_lu")
+    oci = _oci(fake)
+    src = Registry(str(tmp_path / "src"), cfg)
+    v = "de_lu_v2-frei-202611180300-abc123"
+    src.import_version(_version(tmp_path / "a", v, "frei"))
+    model_ghcr.push_version(oci, src, v)
+    model_ghcr.push_version(oci, src, v)  # gleicher Inhalt: erneut erlaubt
+    # abgebrochener Import: Manifest da, Rolle fehlt; der nächste Import holt alles nach
+    vm = Registry(str(tmp_path / "vm"), cfg)
+    vm.store.write(
+        f"de_lu_v2/{v}/manifest.json", (tmp_path / "a" / v / "manifest.json").read_bytes()
+    )
+    assert vm.has(v) and not vm.complete(v)
+    assert model_ghcr.import_versions(oci, vm).imported == [v]
+    assert vm.complete(v) and vm.state()["challengers"] == [v]
+    # anderer Inhalt unter demselben Namen wird nicht überschrieben
+    other = Registry(str(tmp_path / "other"), cfg)
+    d = _version(tmp_path / "b", v, "frei")
+    (d / "stage1_load_actual_q50.txt").write_text("anderer Baum")
+    other.import_version(d)
+    with pytest.raises(ValueError, match="anderem Inhalt"):
+        model_ghcr.push_version(oci, other, v)
+    # Artefakt ohne Nachweis freier Quellen (von Hand in GHCR gelegt) wird abgelehnt
+    bad = "de_lu_v2-frei-202611190300-abc123"
+    unfree = Registry(str(tmp_path / "unfree"), cfg)
+    unfree.import_version(_version(tmp_path / "c", bad, "frei", publishable=False))
+    files = model_ghcr.version_files(unfree, bad)
+    model_ghcr._push(oci, files, model_ghcr.ARTIFACT_MODEL, {}, [bad])
+    with pytest.raises(model_ghcr.NotPublishable):
+        model_ghcr.import_versions(oci, Registry(str(tmp_path / "vm2"), cfg), [bad])
+
+
 def test_push_refuses_unfree_snapshot(cfg, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
     """@relation(SWR-MLT-080, scope=function)"""
     reg = Registry(str(tmp_path / "r"), cfg)
@@ -138,8 +172,14 @@ def test_state_roles_and_tags(cfg, tmp_path: Path) -> None:  # type: ignore[no-u
     st["history"][-1]["at"] = "2026-11-19T10:00:00+00:00"
     reg._save_state(st)
     out = model_ghcr.publish_state(oci, reg)
-    assert out["tags"] == {"champion-2026-11-19": b, "champion": b}
-    assert out["skipped"] == {"champion-2026-11-02": a, "honor-2026-11-19": a}
+    # a liegt noch nicht in GHCR, hat aber einen freien Snapshot: wird mit hochgeladen
+    assert out["tags"] == {
+        "champion-2026-11-02": a,
+        "honor-2026-11-19": a,
+        "champion-2026-11-19": b,
+        "champion": b,
+    }
+    assert out["skipped"] == {}
     assert fake.manifest("champion")["layers"] == fake.manifest(b)["layers"]
     state = model_ghcr.read_states(oci)["de_lu_v2"]
     assert state["champion"] == b and state["previous"] == [a]
@@ -206,7 +246,9 @@ def test_pages_model_table() -> None:
         for lead in (1, 2):
             rows.append(("w2024_2025", method, "da_price_de_lu", lead, price * lead))
             rows.append(("w2024_2025", method, "load_actual", lead, load * lead))
+    rows += [("w2024_2025", "teilweise", "da_price_de_lu", 1, 5.0)]
     csv = pd.DataFrame(rows, columns=["window", "method", "target", "lead_day", "mae"])
+    csv["complete"] = csv["method"] != "teilweise"
     files = {
         "metrics_window_lead.csv": csv.to_csv(index=False).encode(),
         "lauf.json": json.dumps(
@@ -225,7 +267,7 @@ def test_pages_model_table() -> None:
     tab, unter = out
     order = [tab.index(x) for x in (">frei<", ">wetter<", ">naive_day<")]
     assert order == sorted(order)
-    assert "bench_" not in tab
+    assert "bench_" not in tab and "teilweise" not in tab
     assert "<td>20,0</td>" in tab and "<td>1,2</td>" in tab and "<td>&ndash;</td>" in tab
     assert "2024-01-01 bis 2025-12-31" in unter
     assert "kein Bericht" in modelle.kachel(None)

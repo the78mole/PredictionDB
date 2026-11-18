@@ -472,7 +472,12 @@ def cmd_backtest(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: Job
     if a.fold:
         log.warning("backtest.partial", folds=a.fold)
     job.step("Ergebnisse schreiben")
-    extra = {"snapshot_id": snap.snapshot_id, "config_sha256": cfg_sha, "reused_parts": ck.reused}
+    extra = {
+        "snapshot_id": snap.snapshot_id,
+        "config_sha256": cfg_sha,
+        "reused_parts": ck.reused,
+        "attribution": snap.manifest.get("attribution"),
+    }
     write_backtest(res, cfg, a.out, extra, today)
     shutil.rmtree(ck.root, ignore_errors=True)
     run_id = tracking.log_backtest(cfg, Path(a.config), a.out, _job_args(a))
@@ -523,6 +528,7 @@ def cmd_fit(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: JobLog) 
         # Lizenzklassen der Energiequellen: nur ``publishable`` darf nach GHCR (7.11.1)
         "sources": snap.manifest.get("sources"),
         "publishable": snap.manifest.get("publishable") is True,
+        "attribution": snap.manifest.get("attribution"),
         "train_issue_days": [str(start), str(train_to)],
         "train_rows": len(frame),
         "train_seconds": round(time.monotonic() - t0, 1),

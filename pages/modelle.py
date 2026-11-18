@@ -45,6 +45,7 @@ def bericht_holen() -> dict[str, bytes] | None:
         from ml_train import model_ghcr
 
         os.environ.setdefault("WX_EXCHANGE_TOKEN", os.environ.get("GH_TOKEN", ""))
+        os.environ.setdefault("WX_EXCHANGE_USERNAME", os.environ.get("GITHUB_ACTOR", "token"))
         with httpx.Client(timeout=httpx.Timeout(60.0, connect=20.0)) as client:
             return model_ghcr.pull_report(model_ghcr.connect(client, read_only=True), KONFIG)
     except Exception as e:  # die Seite baut auch ohne Bericht
@@ -65,6 +66,11 @@ def tabelle(files: dict[str, bytes]) -> tuple[str, str] | None:
     if name not in files:
         return None
     m = pd.read_csv(io.BytesIO(files[name]))
+    if "window" in m and fenster.get("name"):
+        m = m[m["window"] == fenster["name"]]
+    if "complete" in m:  # nur Verfahren, die das ganze Fenster abdecken
+        m = m[m["complete"].astype(str).str.lower() == "true"]
+    m = m.drop_duplicates(["method", "target", "lead_day"])
     mae = m.set_index(["method", "target", "lead_day"])["mae"]
     zeilen: list[tuple[str, str]] = []
     for rolle in REIHENFOLGE:

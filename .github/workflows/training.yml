@@ -96,7 +96,7 @@ jobs:
           names = [v.name for v in cfg.variants]
           def split(s):
               return [x.strip() for x in s.split(",") if x.strip()]
-          fit = split(os.environ["FIT"])
+          fit = list(dict.fromkeys(split(os.environ["FIT"])))
           wanted = split(os.environ["VARIANTS"]) or json.loads(os.environ["ACTIVE"])
           wanted = list(dict.fromkeys([*wanted, *fit]))
           bad = [v for v in wanted if v not in names]
@@ -265,3 +265,15 @@ jobs:
             echo
             echo "Übernahme auf der VM: \`ml-train registry import --version $VERSION\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  pages:
+    name: Pages neu bauen
+    needs: merge
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      actions: write  # pages.yml starten, damit der Modellvergleich den neuen Bericht zeigt
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml -R "$GITHUB_REPOSITORY" --ref main

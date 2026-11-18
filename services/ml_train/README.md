@@ -166,7 +166,7 @@ Alles liegt in `ghcr.io/the78mole/predictiondb-models/de_lu` (`model_ghcr.py`):
 | `<version>` (z. B. `de_lu_v2-frei-202611180300-ab12cd`) | Modell, `manifest.json`, `backtest.parquet`, Kennzahlen als Annotationen | Actions (`registry push`) |
 | `challenger-JJJJ-MM-TT-<konfig>-<variante>` | dieselbe Version, Einstiegsdatum | Actions |
 | `history` | `registry-<konfig>.json`: Rollen, Verlauf, Variante je Version | VM (`registry publish-state`) |
-| `champion`, `baseline`, `champion-JJJJ-MM-TT`, `honor-JJJJ-MM-TT` | Rollen-Tags an Versionen, die in GHCR liegen | VM |
+| `champion`, `baseline`, `champion-JJJJ-MM-TT`, `honor-JJJJ-MM-TT` | Rollen-Tags; fehlt die Version in GHCR und ist ihr Snapshot frei, lädt die VM sie vorher hoch | VM |
 | `backtest-<konfig>`, `backtest-<konfig>-JJJJ-MM-TT` | Kennzahlen (CSV, `lauf.json`, `rollen.json`), keine Prognosen | Actions (`registry push-report`) |
 
 `registry push` lehnt Versionen ab, deren Snapshot nicht nur freie Quellen enthält (`publishable`

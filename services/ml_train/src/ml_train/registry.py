@@ -263,6 +263,15 @@ class Registry:
     def has(self, version: str) -> bool:
         return self.store.read(f"{self.base}/{version}/manifest.json") is not None
 
+    def complete(self, version: str) -> bool:
+        """Version mit allen Dateien abgelegt und im Verlauf eingetragen (Import fertig)."""
+        if not self.has(version):
+            return False
+        files = self.manifest(version).get("files", [])
+        if any(self.store.read(f"{self.base}/{version}/{f}") is None for f in files):
+            return False
+        return any(h["version"] == version for h in self.state()["history"])
+
     def import_version(self, local: Path, role: str = "challenger", note: str = "") -> str:
         """Fertigen Versionsordner (z. B. aus GHCR) unter seinem Namen übernehmen.
 
@@ -278,8 +287,9 @@ class Registry:
         missing = [f for f in man.get("files", []) if not (local / f).exists()]
         if missing:
             raise FileNotFoundError(f"{version}: Dateien fehlen: {missing}")
-        if self.has(version):
+        if self.complete(version):
             return version
+        # auch nach einem abgebrochenen Import: Dateien vollständig schreiben, dann eintragen
         self.store.upload_dir(f"{self.base}/{version}", local)
         st = self.state()
         if role == "challenger" and version not in st["challengers"]:

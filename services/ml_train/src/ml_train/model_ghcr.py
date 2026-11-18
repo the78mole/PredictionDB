@@ -80,6 +80,17 @@ REPORT_FILES = (
 _TAG = re.compile(r"\A[A-Za-z0-9_][A-Za-z0-9._-]{0,127}\Z")
 
 
+#: Quellenvermerk wie bei den Datenpaketen (ARCHITEKTUR.md 5.5.3)
+ATTRIBUTION = "org.predictiondb.attribution"
+
+
+def attribution(parts: dict[str, Any] | None) -> str:
+    """Quellenvermerke des Snapshots (Wetter, GEFS, Energie) als eine Annotation."""
+    if not parts:
+        return "Quellen siehe Manifest der Version (sources); Daten verändert (aggregiert)"
+    return " | ".join(f"{k}: {v}" for k, v in sorted(parts.items()) if v)
+
+
 class NotPublishable(RuntimeError):
     """Version ohne Nachweis, dass ihr Snapshot nur freie Quellen enthält."""
 
@@ -158,6 +169,7 @@ def model_annotations(man: dict[str, Any], mae: dict[tuple[str, int], float]) ->
         f"{PREFIX}train.from": str(train[0]),
         f"{PREFIX}train.to": str(train[1]),
         f"{PREFIX}sources": json.dumps(man.get("sources") or {}, sort_keys=True),
+        ATTRIBUTION: attribution(man.get("attribution")),
     }
     for (target, lead), v in sorted(mae.items()):
         if lead in ANNOTATED_LEADS:
@@ -248,6 +260,13 @@ def push_version(oci: Any, reg: ModelRegistry, version: str, extra_tags: Iterabl
             f"{version}: Snapshot nicht als frei ausgewiesen (publishable fehlt oder false)"
         )
     files = version_files(reg, version)
+    old = oci.manifest(version)
+    if old is not None:
+        from wx_exchange.oci import digest
+
+        have = sorted(layer["digest"] for layer in old.get("layers", []))
+        if have != sorted(digest(b) for b in files.values()):
+            raise ValueError(f"{version} liegt in GHCR schon mit anderem Inhalt")
     notes = model_annotations(man, lead_mae(reg.backtest(version)))
     d = _push(oci, files, ARTIFACT_MODEL, notes, [version, *extra_tags])
     log.info("model.pushed", version=version, digest=d, tags=list(extra_tags))
@@ -289,7 +308,7 @@ def import_versions(
     wanted = list(versions) if versions is not None else remote_versions(oci, reg.base)
     done, present = [], []
     for v in wanted:
-        if reg.has(v):
+        if reg.complete(v):
             present.append(v)
             continue
         with tempfile.TemporaryDirectory() as tmp:
@@ -297,6 +316,8 @@ def import_versions(
             if man.get("config") != reg.base or man.get("version") != v:
                 other = f"{man.get('config')}/{man.get('version')}"
                 raise ValueError(f"{v}: Artefakt gehört zu {other}")
+            if man.get("publishable") is not True:
+                raise NotPublishable(f"{v}: Snapshot nicht als frei ausgewiesen, nicht übernommen")
             reg.import_version(Path(tmp), note="aus GHCR")
         done.append(v)
         log.info("model.imported", version=v)
@@ -380,7 +401,14 @@ def publish_state(oci: Any, reg: ModelRegistry) -> dict[str, Any]:
     _push(oci, files, ARTIFACT_STATE, notes, [STATE_TAG])
     remote = set(oci.tags())
     set_, skipped = {}, {}
-    for tag, version in role_tags(payload).items():
+    tags = role_tags(payload)
+    for version in sorted(set(tags.values()) - remote):
+        try:  # eigene Versionen der VM mit freiem Snapshot nachreichen, damit die Tags stimmen
+            push_version(oci, reg, version)
+            remote.add(version)
+        except (NotPublishable, KeyError, FileNotFoundError) as e:
+            log.warning("model.state_skip", version=version, reason=str(e))
+    for tag, version in tags.items():
         if version in remote:
             retag(oci, version, [tag])
             set_[tag] = version
@@ -450,6 +478,7 @@ def push_report(
         "org.opencontainers.image.created": str(run.get("finished") or ""),
         f"{PREFIX}config": config,
         f"{PREFIX}snapshot": str(run.get("snapshot_id") or ""),
+        ATTRIBUTION: attribution(run.get("attribution")),
     }
     tags = report_tags(config, day or datetime.now(UTC).date())
     _push(oci, files, ARTIFACT_REPORT, notes, tags)
