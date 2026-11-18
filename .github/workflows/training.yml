@@ -1,0 +1,267 @@
+name: Backtest und Training
+run-name: Backtest und Training ${{ inputs.config || 'config/ml/de_lu_v2.yaml' }}
+
+# Backtest und Training ohne Datenbank (ARCHITEKTUR.md 7.7, 7.11):
+#   1. Snapshot aus GHCR bauen (training-snapshot.yml, nur freie Quellen)
+#   2. Faltungen und Varianten planen; ohne Angabe die aktiven Varianten aus dem Registry-Stand in
+#      GHCR (predictiondb-models/de_lu:history, schreibt die VM)
+#   3. Backtest je Faltung als Matrix-Job, Zwischenstände als Artefakt
+#   4. Zusammensetzen, Kennzahlen als Bericht nach GHCR (backtest-<konfiguration>, für Pages)
+#   5. Gewünschte Varianten mit allen Daten trainieren und als Challenger nach GHCR pushen; die VM
+#      übernimmt sie mit `ml-train registry import`
+#
+# Prognosen mit Ist-Werten bleiben im Actions-Artefakt; nach GHCR gehen nur das Modell (mit seinen
+# Backtest-Prognosen für den Champion-Vergleich der VM) und Kennzahlen.
+on:
+  workflow_dispatch:
+    inputs:
+      config:
+        description: Modellkonfiguration
+        default: config/ml/de_lu_v2.yaml
+      variants:
+        description: Varianten im Backtest, kommagetrennt (leer = aktive laut GHCR)
+        default: ""
+      fit:
+        description: Varianten, die trainiert und als Challenger nach GHCR gehen (leer = keine)
+        default: ""
+      to:
+        description: Ende des Snapshots (JJJJ-MM-TT, leer = übermorgen)
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: training-${{ inputs.config || 'config/ml/de_lu_v2.yaml' }}
+  cancel-in-progress: false
+
+env:
+  PDB_LOG_JSON: "false"
+  PYTHONUNBUFFERED: "1"
+  CONFIG: ${{ inputs.config || 'config/ml/de_lu_v2.yaml' }}
+
+jobs:
+  snapshot:
+    uses: ./.github/workflows/training-snapshot.yml
+    with:
+      config: ${{ inputs.config || 'config/ml/de_lu_v2.yaml' }}
+      to: ${{ inputs.to }}
+    permissions:
+      contents: read
+      packages: read
+
+  plan:
+    name: Faltungen und Varianten
+    needs: snapshot
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
+    env:
+      WX_EXCHANGE_USERNAME: ${{ github.actor }}
+      WX_EXCHANGE_TOKEN: ${{ github.token }}
+    outputs:
+      folds: ${{ steps.plan.outputs.folds }}
+      variants: ${{ steps.plan.outputs.variants }}
+      fit: ${{ steps.plan.outputs.fit }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          save-cache: false
+      - run: uv sync --locked --no-dev --package ml-train --extra ghcr
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.snapshot.outputs.artifact }}
+          path: snapshot
+      - name: Planen
+        id: plan
+        env:
+          VARIANTS: ${{ inputs.variants }}
+          FIT: ${{ inputs.fit }}
+        run: |
+          folds=$(uv run --no-sync ml-train --config "$CONFIG" backtest --snapshot snapshot \
+            --out bt --list-folds | grep '^\[' | tail -n 1)
+          active="[]"
+          if [ -z "$VARIANTS" ]; then
+            active=$(uv run --no-sync ml-train --config "$CONFIG" registry --registry registry \
+              active-ghcr | grep '^\[' | tail -n 1)
+          fi
+          FOLDS="$folds" ACTIVE="$active" uv run --no-sync python - <<'EOF'
+          import json, os
+          from ml_train.config import load_config
+          cfg, _ = load_config(os.environ["CONFIG"])
+          names = [v.name for v in cfg.variants]
+          def split(s):
+              return [x.strip() for x in s.split(",") if x.strip()]
+          fit = split(os.environ["FIT"])
+          wanted = split(os.environ["VARIANTS"]) or json.loads(os.environ["ACTIVE"])
+          wanted = list(dict.fromkeys([*wanted, *fit]))
+          bad = [v for v in wanted if v not in names]
+          if bad:
+              raise SystemExit(f"unbekannte Varianten {bad}, bekannt: {names}")
+          if not wanted:
+              raise SystemExit("keine Varianten: GHCR kennt noch keine aktiven, bitte angeben")
+          folds = json.loads(os.environ["FOLDS"])
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"folds={json.dumps([x['fold'] for x in folds])}\n")
+              f.write(f"variants={','.join(wanted)}\n")
+              f.write(f"fit={json.dumps(fit)}\n")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write("## Plan\n\n| Faltung | Test von | Test bis | Training bis |\n")
+              f.write("|---:|---|---|---|\n")
+              for x in folds:
+                  f.write(f"| {x['fold']} | {x['test_from']} | {x['test_to']} | {x['train_to']} |\n")
+              f.write(f"\nVarianten: {', '.join(wanted)}\n\nTraining: {', '.join(fit) or '–'}\n")
+          EOF
+
+  backtest:
+    name: Backtest Faltung ${{ matrix.fold }}
+    needs: [snapshot, plan]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        fold: ${{ fromJSON(needs.plan.outputs.folds) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          save-cache: false
+      - run: uv sync --locked --no-dev --package ml-train
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.snapshot.outputs.artifact }}
+          path: snapshot
+      - name: Faltung rechnen
+        env:
+          FOLD: ${{ matrix.fold }}
+          VARIANTS: ${{ needs.plan.outputs.variants }}
+        run: |
+          args=(--config "$CONFIG" backtest --snapshot snapshot --out bt --fold "$FOLD" --parts-only)
+          IFS=, read -ra vs <<< "$VARIANTS"
+          for v in "${vs[@]}"; do args+=(--variant "$v"); done
+          uv run --no-sync ml-train "${args[@]}"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: backtest-teile-${{ needs.snapshot.outputs.snapshot_id }}-${{ matrix.fold }}
+          path: bt/teile/
+          compression-level: 0
+          overwrite: true
+          retention-days: 3
+          if-no-files-found: error
+
+  merge:
+    name: Backtest zusammensetzen
+    needs: [snapshot, plan, backtest]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write  # Bericht nach predictiondb-models
+    env:
+      WX_EXCHANGE_USERNAME: ${{ github.actor }}
+      WX_EXCHANGE_TOKEN: ${{ github.token }}
+    outputs:
+      artifact: backtest-${{ needs.snapshot.outputs.snapshot_id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          save-cache: false
+      - run: uv sync --locked --no-dev --package ml-train --extra ghcr
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.snapshot.outputs.artifact }}
+          path: snapshot
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: backtest-teile-${{ needs.snapshot.outputs.snapshot_id }}-*
+          merge-multiple: true
+          path: bt/teile
+      - name: Zusammensetzen
+        env:
+          VARIANTS: ${{ needs.plan.outputs.variants }}
+        run: |
+          args=(--config "$CONFIG" backtest --snapshot snapshot --out bt)
+          IFS=, read -ra vs <<< "$VARIANTS"
+          for v in "${vs[@]}"; do args+=(--variant "$v"); done
+          uv run --no-sync ml-train "${args[@]}" | tee bt-ausgabe.txt
+          {
+            echo "## Backtest ${{ needs.snapshot.outputs.snapshot_id }}"
+            echo
+            echo '```text'
+            grep -v '^{' bt-ausgabe.txt | head -n 200
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Bericht nach GHCR
+        run: |
+          uv run --no-sync ml-train --config "$CONFIG" registry --registry registry \
+            push-report --backtest bt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: backtest-${{ needs.snapshot.outputs.snapshot_id }}
+          path: bt/
+          compression-level: 0
+          overwrite: true
+          retention-days: 14
+          if-no-files-found: error
+
+  fit:
+    name: Training ${{ matrix.variant }}
+    needs: [snapshot, plan, merge]
+    if: needs.plan.outputs.fit != '[]'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      packages: write  # Modell nach predictiondb-models
+    env:
+      WX_EXCHANGE_USERNAME: ${{ github.actor }}
+      WX_EXCHANGE_TOKEN: ${{ github.token }}
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: ${{ fromJSON(needs.plan.outputs.fit) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          save-cache: false
+      - run: uv sync --locked --no-dev --package ml-train --extra ghcr
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.snapshot.outputs.artifact }}
+          path: snapshot
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.merge.outputs.artifact }}
+          path: bt
+      - name: Trainieren
+        id: fit
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          uv run --no-sync ml-train --config "$CONFIG" fit --snapshot snapshot --variant "$VARIANT" \
+            --backtest bt --registry registry --role challenger | tee fit.txt
+          version=$(grep '^{' fit.txt | tail -n 1 | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Nach GHCR
+        env:
+          VERSION: ${{ steps.fit.outputs.version }}
+        run: |
+          uv run --no-sync ml-train --config "$CONFIG" registry --registry registry \
+            push "$VERSION" --challenger | tee push.txt
+          {
+            echo "## Challenger $VERSION"
+            echo
+            echo "\`ghcr.io/the78mole/predictiondb-models/de_lu:$VERSION\`"
+            echo
+            echo "Übernahme auf der VM: \`ml-train registry import --version $VERSION\`"
+          } >> "$GITHUB_STEP_SUMMARY"

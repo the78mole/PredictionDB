@@ -160,11 +160,17 @@ def train_frame(
 
 
 def backtest_steps(
-    fb: FeatureBuilder, cfg: ModelConfig, variants: Sequence[str] | None = None
+    fb: FeatureBuilder,
+    cfg: ModelConfig,
+    variants: Sequence[str] | None = None,
+    only_folds: Sequence[int] | None = None,
 ) -> int:
     """Rückmeldungen von :func:`run_backtest`: Merkmale, dann je Faltung und Variante eine."""
     names = variants or [v.name for v in cfg.variants]
-    return 1 + len(make_folds(cfg, data_days(fb, cfg)[1])) * len(names)
+    folds = make_folds(cfg, data_days(fb, cfg)[1])
+    if only_folds is not None:
+        folds = [f for f in folds if f.no in set(only_folds)]
+    return 1 + len(folds) * len(names)
 
 
 #: Name der Zwischenstände für die Vergleichsverfahren einer Faltung (keine Variante heißt so)
@@ -203,6 +209,9 @@ class Checkpoint:
 
     def _path(self, fold: Fold, method: str) -> Path:
         return self.root / f"fold{fold.no:02d}_{method}_{self._key(fold, method)}.parquet"
+
+    def has(self, fold: Fold, method: str) -> bool:
+        return self._path(fold, method).exists()
 
     def load(self, fold: Fold, method: str) -> tuple[pd.DataFrame, float] | None:
         p = self._path(fold, method)
@@ -264,14 +273,19 @@ def run_backtest(
     checkpoint: Checkpoint | None = None,
     deadline: datetime | None = None,
     clock: Callable[[], datetime] = _now,
+    only_folds: Sequence[int] | None = None,
 ) -> BacktestResult:
     """Backtest aller oder der genannten Varianten.
+
+    ``only_folds`` rechnet nur diese Faltungen (Matrix-Job je Faltung in GitHub Actions). Liegen
+    alle Teile schon im ``checkpoint`` (Zwischenstände aller Faltungen zusammengetragen), werden
+    keine Merkmale gebildet, der Lauf setzt nur die Teile zusammen.
 
     Mit ``deadline`` beginnt der Lauf keinen Teil mehr, dessen erwartete Dauer (längste bekannte
     Faltung) über die Frist reichen würde, und wirft :class:`Paused`. Das braucht einen
     ``checkpoint``, sonst ginge die Arbeit verloren.
 
-    @relation(SWR-MLT-040, SWR-MLT-041, SWR-MLT-044, SWR-MLT-046, scope=function)
+    @relation(SWR-MLT-040, SWR-MLT-041, SWR-MLT-044, SWR-MLT-046, SWR-MLT-048, scope=function)
     """
     if deadline is not None and checkpoint is None:
         raise ValueError("deadline braucht einen Checkpoint")
@@ -279,20 +293,47 @@ def run_backtest(
     _check_deadline(deadline, clock, None, "den Merkmalen")
     first, last = data_days(fb, cfg)
     folds = make_folds(cfg, last)
+    if only_folds is not None:
+        unknown = sorted(set(only_folds) - {f.no for f in folds})
+        if unknown:
+            raise ValueError(f"Faltungen {unknown} gibt es nicht (0 bis {len(folds) - 1})")
+        folds = [f for f in folds if f.no in set(only_folds)]
     if not folds:
         raise ValueError(f"Kein Testzeitraum: test_from {cfg.backtest.test_from}, Daten bis {last}")
     names = list(variants or [v.name for v in cfg.variants])
     job.step("Merkmale bilden")
-    t0 = time.monotonic()
-    full = fb.build(issue_days_between(first, last))
-    timings = {"features_s": time.monotonic() - t0}
-    log.info("backtest.features", rows=len(full), columns=full.X.shape[1], first=first, last=last)
+    ready = checkpoint is not None and all(
+        checkpoint.has(f, m) for f in folds for m in [BASELINES, *names]
+    )
+    full: FeatureFrame | None = None
+    timings: dict[str, float] = {}
+    if not ready:
+        t0 = time.monotonic()
+        full = fb.build(issue_days_between(first, last))
+        timings["features_s"] = time.monotonic() - t0
+        log.info(
+            "backtest.features", rows=len(full), columns=full.X.shape[1], first=first, last=last
+        )
     parts: list[pd.DataFrame] = []
-    issue_day = full.meta["issue_time"].dt.date
     for fold in folds:
+        if full is None:  # alles im Zwischenspeicher
+            assert checkpoint is not None
+            for method in [BASELINES, *names]:
+                if method != BASELINES:
+                    job.step(f"Faltung {fold.no + 1}/{len(folds)} · {method} · zusammensetzen")
+                saved = checkpoint.load(fold, method)
+                assert saved is not None
+                parts.append(saved[0])
+                if saved[1]:
+                    timings[f"fold{fold.no}_{method}_s"] = saved[1]
+            continue
+        issue_day = full.meta["issue_time"].dt.date
         test_mask = ((issue_day >= fold.test_from) & (issue_day <= fold.test_to)).to_numpy()
         test = full.subset(test_mask)
         if len(test) == 0:
+            if checkpoint:  # leere Teile, damit das Zusammensetzen ohne Merkmale auskommt
+                for method in [BASELINES, *names]:
+                    checkpoint.save(fold, method, [], 0.0)
             continue
         done = checkpoint.load(fold, BASELINES) if checkpoint else None
         if done is not None:
@@ -322,6 +363,22 @@ def run_backtest(
                 checkpoint.save(fold, name, got, dt)
     pred = pd.concat([p for p in parts if not p.empty], ignore_index=True)
     return BacktestResult(pred, folds, timings)
+
+
+def fold_plan(fb: FeatureBuilder, cfg: ModelConfig) -> list[dict[str, str | int]]:
+    """Faltungen als Liste für eine Job-Matrix (``ml-train backtest --list-folds``).
+
+    @relation(SWR-MLT-048, scope=function)
+    """
+    return [
+        {
+            "fold": f.no,
+            "test_from": str(f.test_from),
+            "test_to": str(f.test_to),
+            "train_to": str(f.train_to),
+        }
+        for f in make_folds(cfg, data_days(fb, cfg)[1])
+    ]
 
 
 def _fit_predict(

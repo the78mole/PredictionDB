@@ -1339,3 +1339,45 @@ def test_snapshot_source_classes() -> None:
         [("smard", True, True), ("regelleistung", False, True), ("entsoe", False, False)]
     )
     assert classes == {"smard": "frei", "regelleistung": "nur Training", "entsoe": "unfrei"}
+
+
+def test_backtest_per_fold_then_assemble(snap, tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Je Faltung ein Lauf (Matrix-Job), danach Zusammensetzen ohne Merkmale und Training.
+
+    @relation(SWR-MLT-048, scope=function)
+    """
+    from ml_train.backtest import Checkpoint, fold_plan
+
+    c = make_cfg()
+    fb = FeatureBuilder(snap, c)
+    plan = fold_plan(fb, c)
+    assert [p["fold"] for p in plan] == [0, 1] and plan[0]["test_from"] == "2023-07-01"
+    whole = run_backtest(fb, c, ["kalender"])
+    for p in plan:  # jede Faltung in einem eigenen Ordner, wie in getrennten Jobs
+        part = run_backtest(
+            fb,
+            c,
+            ["kalender"],
+            checkpoint=Checkpoint(tmp_path / f"job{p['fold']}", "s1", c),
+            only_folds=[int(p["fold"])],
+        )
+        assert set(part.predictions["fold"]) == {p["fold"]}
+    merged = tmp_path / "teile"
+    merged.mkdir()
+    for f in tmp_path.glob("job*/*"):
+        f.rename(merged / f.name)
+
+    def boom(*_: Any, **__: Any) -> None:
+        raise AssertionError("beim Zusammensetzen neu gerechnet")
+
+    monkeypatch.setattr(TwoStageModel, "fit", boom)
+    monkeypatch.setattr(FeatureBuilder, "build", boom)
+    ck = Checkpoint(merged, "s1", c)
+    again = run_backtest(fb, c, ["kalender"], checkpoint=ck)
+    assert ck.reused == 4
+    cols = ["method", "target", "issue_time", "ts"]
+    a = whole.predictions.sort_values(cols).reset_index(drop=True)
+    b = again.predictions.sort_values(cols).reset_index(drop=True)
+    pd.testing.assert_frame_equal(a, b, check_dtype=False)
+    with pytest.raises(ValueError, match="gibt es nicht"):
+        run_backtest(fb, c, ["kalender"], only_folds=[7])

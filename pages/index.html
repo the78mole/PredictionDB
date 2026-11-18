@@ -76,6 +76,11 @@
   .card .more { margin-top: auto; padding-top: 8px; color: var(--accent); font-weight: 600; }
   .intro { grid-column: 1 / -1; }
   .intro p { color: var(--text); }
+  table.modelle { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  .modelle-wrap { overflow-x: auto; }
+  table.modelle th, table.modelle td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: right; }
+  table.modelle th[scope="row"], table.modelle thead th:first-child { text-align: left; }
+  table.modelle .rolle { display: block; color: var(--muted); font-weight: 400; font-size: 0.85rem; }
   .card .stat { color: var(--text); font-size: 1.6rem; font-weight: 700; font-variant-numeric: tabular-nums; }
   .card .ok { color: var(--ok); } .card .warn { color: var(--warn); } .card .bad { color: var(--bad); }
   .links { display: flex; flex-wrap: wrap; gap: 6px 16px; }
@@ -175,6 +180,8 @@
     </a>
 
     $test_cards
+
+    $model_card
   </div>
 
   <footer>

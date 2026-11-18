@@ -42,6 +42,7 @@ from ml_train.backtest import (
     Paused,
     backtest_steps,
     data_days,
+    fold_plan,
     run_backtest,
 )
 from ml_train.config import CompareWindow, ModelConfig, RollingWindow, load_config
@@ -159,6 +160,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="Ende: letzter voller Monat oder letzte volle Jahreszeit",
     )
     b.add_argument(
+        "--fold",
+        type=int,
+        action="append",
+        help="nur diese Faltung (0, 1, …; mehrfach möglich), z. B. je Matrix-Job in Actions",
+    )
+    b.add_argument(
+        "--parts-only",
+        action="store_true",
+        help="nur die Zwischenstände unter <out>/teile schreiben (zusammensetzen ohne --fold)",
+    )
+    b.add_argument(
+        "--list-folds",
+        action="store_true",
+        help="Faltungen als JSON ausgeben und beenden (Job-Matrix)",
+    )
+    b.add_argument(
+        "--active-ghcr",
+        action="store_true",
+        help="wie --active, aber aus dem Registry-Stand in GHCR (:history)",
+    )
+    b.add_argument(
         "--stop-at",
         type=parse_deadline,
         help="keinen Teil mehr beginnen, der nicht bis dahin fertig wird (HH:MM oder ISO-Zeit); "
@@ -182,6 +204,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     at.add_argument("version")
     at.add_argument("--backtest", required=True, type=Path, help="Ordner von ml-train backtest")
+    pu = rc.add_parser("push", help="Version nach GHCR (nur Snapshot aus freien Quellen)")
+    pu.add_argument("version")
+    pu.add_argument(
+        "--challenger", action="store_true", help="Tag challenger-JJJJ-MM-TT-<konfig>-<variante>"
+    )
+    im_ = rc.add_parser("import", help="neue Versionen aus GHCR als Challenger übernehmen")
+    im_.add_argument("--version", action="append", help="nur diese Versionen")
+    rc.add_parser("publish-state", help="Registry-Stand nach GHCR (:history) und Rollen-Tags")
+    rc.add_parser("active-ghcr", help="aktive Varianten laut GHCR-Stand als JSON")
+    rp = rc.add_parser("push-report", help="Kennzahlen eines Backtests als Bericht nach GHCR")
+    rp.add_argument("--backtest", required=True, type=Path)
     for name in ("evaluate", "promote"):
         x = rc.add_parser(name)
         x.add_argument("version")
@@ -417,17 +450,27 @@ def cmd_backtest(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: Job
     job.step("Snapshot laden")
     snap = load_snapshot(a.snapshot)
     fb = FeatureBuilder(snap, cfg)
+    if a.list_folds:
+        print(json.dumps(fold_plan(fb, cfg)))
+        return 0
     # Schritte: Snapshot laden, Backtest, Ergebnisse schreiben
-    job.total(2 + backtest_steps(fb, cfg, a.variant))
+    job.total(2 + backtest_steps(fb, cfg, a.variant, a.fold))
     # Zwischenstände je Faltung und Verfahren: ein abgebrochener Lauf setzt hier wieder an
     ck = Checkpoint(a.out / CHECKPOINT_DIR, snap.snapshot_id, cfg)
     try:
-        res = run_backtest(fb, cfg, a.variant, job, ck, deadline=a.stop_at)
+        res = run_backtest(fb, cfg, a.variant, job, ck, deadline=a.stop_at, only_folds=a.fold)
     except Paused as e:
         job.paused = str(e)
         log.info("backtest.pause", out=str(a.out), parts=len(list(ck.root.glob("*.parquet"))))
         print(f"Backtest {e}; fortsetzen mit demselben Aufruf")
         return EXIT_PAUSED
+    if a.parts_only:
+        parts = sorted(p.name for p in ck.root.glob("*.parquet"))
+        job.result = str(ck.root)
+        print(json.dumps({"parts": len(parts), "folds": a.fold, "dir": str(ck.root)}))
+        return 0
+    if a.fold:
+        log.warning("backtest.partial", folds=a.fold)
     job.step("Ergebnisse schreiben")
     extra = {"snapshot_id": snap.snapshot_id, "config_sha256": cfg_sha, "reused_parts": ck.reused}
     write_backtest(res, cfg, a.out, extra, today)
@@ -477,6 +520,9 @@ def cmd_fit(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: JobLog) 
         "config_sha256": cfg_sha,
         "snapshot_id": snap.snapshot_id,
         "clustering_version": snap.manifest.get("clustering_version"),
+        # Lizenzklassen der Energiequellen: nur ``publishable`` darf nach GHCR (7.11.1)
+        "sources": snap.manifest.get("sources"),
+        "publishable": snap.manifest.get("publishable") is True,
         "train_issue_days": [str(start), str(train_to)],
         "train_rows": len(frame),
         "train_seconds": round(time.monotonic() - t0, 1),
@@ -521,11 +567,56 @@ def try_sync(reg: Registry, engine: Engine | None = None) -> None:
     except Exception as e:  # der Spiegel darf Training und Inferenz nie aufhalten
         log.warning("sync.failed", error=str(e))
     tracking.mirror_registry(reg)  # fängt seine Fehler selbst ab
+    if os.environ.get("PDB_MODELS_PUBLISH_STATE", "").lower() in ("1", "true", "yes"):
+        from ml_train import model_ghcr
+
+        try:
+            client, oci = _models_ghcr()
+            with client:
+                model_ghcr.publish_state(oci, reg)
+        except Exception as e:  # GHCR darf Training und Inferenz nie aufhalten
+            log.warning("ghcr_state.failed", error=str(e))
+
+
+def cmd_registry_ghcr(cfg: ModelConfig, reg: Registry, a: argparse.Namespace) -> int:
+    """Austausch der Registry mit GHCR: push (Actions), import und publish-state (VM).
+
+    @relation(SWR-MLT-080, SWR-MLT-081, SWR-MLT-082, SWR-MLT-083, scope=function)
+    """
+    from ml_train import model_ghcr
+
+    client, oci = _models_ghcr(read_only=a.action == "active-ghcr")
+    with client:
+        if a.action == "push":
+            man = reg.manifest(a.version)
+            tags = []
+            if a.challenger:
+                day = datetime.now(UTC).date()
+                tags.append(model_ghcr.challenger_tag(day, cfg.name, man["variant"]["name"]))
+            d = model_ghcr.push_version(oci, reg, a.version, tags)
+            print(json.dumps({"version": a.version, "digest": d, "tags": [a.version, *tags]}))
+        elif a.action == "import":
+            res = model_ghcr.import_versions(oci, reg, a.version)
+            if res.imported:
+                try_sync(reg)
+            print(json.dumps({"imported": res.imported, "present": len(res.present)}))
+        elif a.action == "publish-state":
+            print(json.dumps(model_ghcr.publish_state(oci, reg)))
+        elif a.action == "active-ghcr":
+            state = model_ghcr.read_states(oci).get(cfg.name, {})
+            print(json.dumps(model_ghcr.active_variants(state, [v.name for v in cfg.variants])))
+        else:  # push-report
+            roles = model_ghcr.read_states(oci).get(cfg.name)
+            tags = model_ghcr.push_report(oci, a.backtest, cfg.name, roles)
+            print(json.dumps({"tags": tags}))
+    return 0
 
 
 def cmd_registry(cfg: ModelConfig, a: argparse.Namespace) -> int:
     """@relation(SWR-MLT-051, SWR-MLT-052, SWR-MLT-053, scope=function)"""
     reg = Registry(a.registry, cfg)
+    if a.action in ("push", "import", "publish-state", "active-ghcr", "push-report"):
+        return cmd_registry_ghcr(cfg, reg, a)
     if a.action == "sync":
         from ml_train.dbsync import sync_registry
         from predictiondb_core.db import create_db_engine
@@ -703,6 +794,29 @@ def active_variants(cfg: ModelConfig, registry: str) -> list[str]:
     return [v.name for v in cfg.variants if v.name in used]
 
 
+def _models_ghcr(read_only: bool = False) -> tuple[Any, Any]:
+    """httpx-Client und Registry-Client für das Modell-Repository in GHCR."""
+    import httpx
+
+    from ml_train import model_ghcr
+
+    client = httpx.Client(timeout=httpx.Timeout(120.0, connect=30.0))
+    return client, model_ghcr.connect(client, read_only=read_only)
+
+
+def ghcr_active_variants(cfg: ModelConfig) -> list[str]:
+    """Aktive Varianten laut Registry-Stand in GHCR; leer, wenn es dort keinen gibt.
+
+    @relation(SWR-MLT-046, scope=function)
+    """
+    from ml_train import model_ghcr
+
+    client, oci = _models_ghcr(read_only=True)
+    with client:
+        state = model_ghcr.read_states(oci).get(cfg.name, {})
+    return model_ghcr.active_variants(state, [v.name for v in cfg.variants])
+
+
 def run_job(cfg: ModelConfig, sha: str, a: argparse.Namespace) -> int:
     """Snapshot, Backtest oder Training mit Fortschritt in ``meta.ml_job``.
 
@@ -711,10 +825,12 @@ def run_job(cfg: ModelConfig, sha: str, a: argparse.Namespace) -> int:
     # nur der Eintrag des laufenden Befehls: snapshot hat kein --variant
     variants: list[str] = []
     if a.cmd == "backtest":
-        if a.active:
-            a.variant = [*(a.variant or []), *active_variants(cfg, a.registry)]
+        if a.active or a.active_ghcr:
+            found = ghcr_active_variants(cfg) if a.active_ghcr else active_variants(cfg, a.registry)
+            a.variant = [*(a.variant or []), *found]
             if not a.variant:
-                raise SystemExit(f"Keine aktive Version in {a.registry} für {cfg.name}")
+                where = "GHCR" if a.active_ghcr else a.registry
+                raise SystemExit(f"Keine aktive Version in {where} für {cfg.name}")
             a.variant = list(dict.fromkeys(a.variant))
         variants = a.variant or [v.name for v in cfg.variants]
     elif a.cmd == "fit":
