@@ -35,6 +35,15 @@ ROLLEN = {
 #: Vergleichsverfahren ohne Modell, die immer mit in die Tabelle kommen
 NAIV = {"naive_day": "Vortag (naiv)", "naive_week": "Vorwoche (naiv)"}
 REIHENFOLGE = ("champion", "challenger", "vorgaenger", "baseline")
+#: Fehlerkurven je Zeile: Ziel, Überschrift, Teiler, Einheit
+KURVEN = (
+    ("da_price_de_lu", "Preis", 1.0, "€/MWh"),
+    ("load_actual", "Last", 1000.0, "GW"),
+)
+#: Vorlauftage der Kurven
+TAGE = tuple(range(1, 16))
+#: Vergleichslinie in der großen Ansicht
+REFERENZ = "naive_week"
 
 
 def bericht_holen() -> dict[str, bytes] | None:
@@ -55,6 +64,70 @@ def bericht_holen() -> dict[str, bytes] | None:
 
 def _zahl(x: float) -> str:
     return f"{x:.1f}".replace(".", ",")
+
+
+def _punkte(
+    werte: dict[int, float], x0: float, x1: float, y0: float, y1: float, lo: float, hi: float
+) -> str:
+    """SVG-Koordinaten der Kurve; x über die Vorlauftage, y von ``lo`` (unten) bis ``hi``."""
+    span = (hi - lo) or 1.0
+    return " ".join(
+        f"{x0 + (x1 - x0) * (t - TAGE[0]) / (TAGE[-1] - TAGE[0]):.1f},"
+        f"{y1 - (y1 - y0) * (v - lo) / span:.1f}"
+        for t, v in sorted(werte.items())
+    )
+
+
+def kurve(werte: dict[int, float], ref: dict[int, float], titel: str, einheit: str) -> str:
+    """Miniatur der Fehlerkurve D+1 bis D+15, beim Darüberfahren groß mit Achsen und Vorwoche.
+
+    Jede Kurve hat ihre eigene Skala, damit der Anstieg über den Vorlauf sichtbar bleibt; die
+    Zahlen stehen in den Spalten davor und an der Achse der großen Ansicht.
+    """
+    if len(werte) < 2:
+        return "&ndash;"
+    beschr = f"{titel}: MAE D+{min(werte)} bis D+{max(werte)} in {einheit}"
+    linie = _punkte(werte, 2, 94, 3, 25, min(werte.values()), max(werte.values()))
+    mini = (
+        f'<svg class="mini" viewBox="0 0 96 28" width="96" height="28" aria-hidden="true">'
+        f'<polyline points="{linie}"/></svg>'
+    )
+    # große Ansicht: Achsen links und unten, Vorwoche gestrichelt, Werte als Tooltip je Punkt
+    alle = [*werte.values(), *ref.values()]
+    lo, hi = min(alle), max(alle)
+    rand = (hi - lo) * 0.08 or 1.0
+    lo, hi = max(0.0, lo - rand), hi + rand
+    x0, x1, y0, y1 = 44.0, 296.0, 14.0, 150.0
+    achsen = []
+    for i in range(3):
+        v = lo + (hi - lo) * i / 2
+        y = y1 - (y1 - y0) * i / 2
+        achsen.append(
+            f'<line class="raster" x1="{x0}" x2="{x1}" y1="{y:.1f}" y2="{y:.1f}"/>'
+            f'<text x="{x0 - 6}" y="{y + 4:.1f}" text-anchor="end">{_zahl(v)}</text>'
+        )
+    for t in (1, 5, 10, 15):
+        x = x0 + (x1 - x0) * (t - TAGE[0]) / (TAGE[-1] - TAGE[0])
+        achsen.append(f'<text x="{x:.1f}" y="{y1 + 18}" text-anchor="middle">D+{t}</text>')
+    ref_linie = ""
+    if len(ref) >= 2:
+        ref_linie = f'<polyline class="ref" points="{_punkte(ref, x0, x1, y0, y1, lo, hi)}"/>'
+    punkte = []
+    for t, v in sorted(werte.items()):
+        xy = _punkte({t: v}, x0, x1, y0, y1, lo, hi).split(",")
+        punkte.append(
+            f'<circle cx="{xy[0]}" cy="{xy[1]}" r="3"><title>D+{t}: {_zahl(v)} {einheit}</title>'
+            "</circle>"
+        )
+    gross = (
+        f'<span class="gross" role="img" aria-label="{html.escape(beschr)}">'
+        f'<span class="gross-titel">{html.escape(titel)}, MAE in {html.escape(einheit)}'
+        f"{' · gestrichelt: Vorwoche (naiv)' if ref_linie else ''}</span>"
+        f'<svg viewBox="0 0 320 172" width="320" height="172">{"".join(achsen)}{ref_linie}'
+        f'<polyline points="{_punkte(werte, x0, x1, y0, y1, lo, hi)}"/>{"".join(punkte)}'
+        "</svg></span>"
+    )
+    return f'<span class="kurve" tabindex="0" title="{html.escape(beschr)}">{mini}{gross}</span>'
 
 
 def tabelle(files: dict[str, bytes]) -> tuple[str, str] | None:
@@ -88,6 +161,16 @@ def tabelle(files: dict[str, bytes]) -> tuple[str, str] | None:
     if not zeilen:
         return None
     kopf = "".join(f"<th>{html.escape(t)}</th>" for _, _, t, _ in SPALTEN)
+    kopf += "".join(f"<th>{html.escape(t)} D+1 bis D+15</th>" for _, t, _, _ in KURVEN)
+
+    def reihe(verfahren: str, ziel: str, teiler: float) -> dict[int, float]:
+        out = {}
+        for t in TAGE:
+            v = mae.get((verfahren, ziel, t))
+            if v is not None and pd.notna(v):
+                out[t] = float(v) / teiler
+        return out
+
     body = []
     for verfahren, label in zeilen:
         zellen = []
@@ -95,6 +178,10 @@ def tabelle(files: dict[str, bytes]) -> tuple[str, str] | None:
             v = mae.get((verfahren, ziel, tag))
             text = _zahl(float(v) / teiler) if v is not None and pd.notna(v) else "&ndash;"
             zellen.append(f"<td>{text}</td>")
+        for ziel, titel, teiler, einheit in KURVEN:
+            ref = reihe(REFERENZ, ziel, teiler) if verfahren != REFERENZ else {}
+            bild = kurve(reihe(verfahren, ziel, teiler), ref, titel, einheit)
+            zellen.append(f'<td class="kurven">{bild}</td>')
         body.append(
             f'<tr><th scope="row">{html.escape(str(verfahren))}'
             f'<span class="rolle">{html.escape(label)}</span></th>{"".join(zellen)}</tr>'

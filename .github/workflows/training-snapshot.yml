@@ -52,6 +52,8 @@ permissions:
 
 env:
   PDB_LOG_JSON: "false"
+  # keine Datenbank im Runner: Job-Protokoll aus, statt bei jedem Lauf zu warnen
+  PDB_ML_JOB_LOG: "false"
   PYTHONUNBUFFERED: "1"
 
 jobs:

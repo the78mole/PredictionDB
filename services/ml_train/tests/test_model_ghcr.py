@@ -270,4 +270,7 @@ def test_pages_model_table() -> None:
     assert "bench_" not in tab and "teilweise" not in tab
     assert "<td>20,0</td>" in tab and "<td>1,2</td>" in tab and "<td>&ndash;</td>" in tab
     assert "2024-01-01 bis 2025-12-31" in unter
+    # Fehlerkurve je Zeile für Preis und Last, groß mit Wert je Vorlauftag
+    assert tab.count('class="kurve"') == 2 * 3
+    assert "<title>D+2: 36,0 €/MWh</title>" in tab and "<title>D+2: 2,4 GW</title>" in tab
     assert "kein Bericht" in modelle.kachel(None)
