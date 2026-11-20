@@ -405,9 +405,13 @@ wenn ausdrücklich gewünscht). `registry promote` macht einen Challenger nur da
 wenn in jeder Horizontklasse („kurz“ D+0 bis D+7, „lang“ ab D+8) auf den gemeinsamen
 Backtest-Zeilen gilt:
 
-1. Je Zielgröße ist der mittlere Pinball-Verlust mindestens um `min_gain` (Vorgabe 0) besser.
-2. In keiner Gruppe aus Zielgröße, Vorlauftag und Jahreszeit mit mindestens `min_group_n`
-   (200) Werten ist der Challenger mehr als `max_group_loss` (5 %) schlechter.
+1. Gemittelt über alle Zielgrößen ist der relative Gewinn im Pinball-Verlust mindestens
+   `min_gain` (Vorgabe 0). Die Zeilen zählen dabei nach Jahr gewichtet: das jüngste Jahr mit
+   `recent_weight` (5), jedes davor eins weniger, mindestens 1. Ein einzelnes Ziel darf also
+   schlechter sein, wenn die anderen das ausgleichen.
+2. Nur wenn `max_group_loss` gesetzt ist (Vorgabe: nicht gesetzt): In keiner Gruppe aus
+   Zielgröße, Vorlauftag und Jahreszeit mit mindestens `min_group_n` (200) Werten ist der
+   Challenger mehr als `max_group_loss` schlechter.
 
 Deckt der Champion eine Klasse nicht ab (etwa ein Modell bis D+7 gegen einen Challenger bis
 D+15), muss der Challenger dort die Vorwochenprognose schlagen: den Ist-Wert vor so vielen
@@ -415,8 +419,9 @@ Wochen, wie zur Ausgabe schon bekannt war (verglichen über den Median, `pinball
 Challenger eine Klasse des Champions nicht ab, wird er nicht Champion, sonst fielen Vorlauftage
 aus dem Betrieb weg. Es bleibt bei einem Champion je Registry-Linie.
 
-So kann eine Version, die im Mittel gewinnt, aber etwa im Winter für D+1 deutlich verliert,
-nicht unbemerkt Champion werden. `registry evaluate` zeigt die Gründe vorab, `--force`
+Bis 11/2026 musste der Challenger jedes Ziel schlagen und durfte in keiner Gruppe mehr als 5 %
+verlieren. Das war zu streng: Ein Modell, das den Preis um 7 % verbesserte und die Last um
+1 % verschlechterte, kam nicht durch. `registry evaluate` zeigt die Gründe vorab, `--force`
 übergeht die Regel und wird im Verlauf vermerkt.
 
 Rollen in der Registry:
@@ -735,4 +740,4 @@ Ablation; ihre Ergebnisse stehen noch aus.
 | `backtest` | `test_from`, `test_to`, `fold_months`, `gap_days`, `oof_folds`, `train_issue_stride` |
 | `compare` | festes Vergleichsfenster: `name` (Kleinbuchstaben, Ziffern, `_`), `start`, `end` (Ausgabetage, einschließlich); Kennzahlen im Fenster sind zwischen Läufen vergleichbar ([BACKTEST.md](BACKTEST.md) Kap. 7) |
 | `compare_rolling` | mitlaufendes Vergleichsfenster: `months` (Länge), `until` (`month` = bis Ende Vormonat, `season` = bis Ende der letzten vollen Jahreszeit); `ml-train backtest --rolling` rechnet genau diesen Zeitraum |
-| `promotion` | `min_gain`, `max_group_loss`, `min_group_n` |
+| `promotion` | `min_gain`, `recent_weight`, optional `max_group_loss` und `min_group_n` |

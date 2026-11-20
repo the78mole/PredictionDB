@@ -485,17 +485,25 @@ flowchart TD
     C -->|ja| M1["Maß: pinball"]
     C -->|nein| M2["Maß: pinball50"]
     M1 --> D
-    M2 --> D["je Ziel: Gewinn = 1 − Challenger / Champion"]
-    D --> E{"Gewinn ≥ min_gain<br/>für jedes Ziel?"}
-    E -->|nein| X2["nein: im Mittel nicht besser"]
-    E -->|ja| F["je Ziel × Vorlauftag × Jahreszeit<br/>mit n ≥ min_group_n:<br/>Verlust = Challenger / Champion − 1"]
-    F --> G{"Verlust ≤ max_group_loss<br/>in jeder Gruppe?"}
+    M2 --> W["Zeilen nach Jahr gewichten:<br/>jüngstes Jahr recent_weight (5),<br/>jedes davor 1 weniger, mindestens 1"]
+    W --> D["je Ziel: Gewinn = 1 − Challenger / Champion"]
+    D --> E{"Mittel der Gewinne<br/>über alle Ziele ≥ min_gain?"}
+    E -->|nein| X2["nein: im gewichteten Mittel nicht besser"]
+    E -->|ja| F{"max_group_loss gesetzt?"}
+    F -->|nein| OK
+    F -->|ja| G{"je Ziel × Vorlauftag × Jahreszeit<br/>mit n ≥ min_group_n:<br/>Verlust ≤ max_group_loss?"}
     G -->|nein| X3["nein: z. B. Preis Tag 1 Winter +7 % schlechter"]
     G -->|ja| OK["ja: Challenger wird Champion,<br/>alter Champion wird previous"]
 ```
 
-Vorgaben in beiden Konfigurationen: `min_gain: 0.0`, `max_group_loss: 0.05`,
-`min_group_n: 200`. Gibt es noch keinen Champion, wird jeder Challenger angenommen; fehlt einer
+Jede Zeile zählt mit dem Gewicht des Jahres (Ortszeit) ihrer Zielstunde. Das jüngste Jahr im
+Vergleich bekommt `recent_weight`, das davor eins weniger usw., mindestens 1. Ein einzelnes Ziel
+darf also schlechter sein, wenn die übrigen das im Mittel mehr als ausgleichen. Die Gewinne je
+Ziel stehen trotzdem in der Ausgabe von `registry evaluate`.
+
+Vorgaben in beiden Konfigurationen: `min_gain: 0.0`, `recent_weight: 5`, keine Grenze je
+Gruppe. Mit `max_group_loss` (z. B. `0.05`) und `min_group_n` (Vorgabe 200) lässt sich die
+frühere Sperre gegen deutliche Verluste in einzelnen Gruppen wieder einschalten. Gibt es noch keinen Champion, wird jeder Challenger angenommen; fehlt einer
 der beiden Versionen `backtest.parquet`, wird keiner. `--force` übergeht die Regel und wird im
 Verlauf als „erzwungen“ vermerkt.
 
