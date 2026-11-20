@@ -122,12 +122,13 @@ class JobLog:
     def step(self, label: str) -> None:
         """Vorigen Schritt als erledigt zählen und ``label`` als laufenden Schritt eintragen."""
         done, self._steps = self._steps, self._steps + 1
-        # Zählerstand auch ohne Datenbank im Log, z. B. „5/31 (13 %)“ in GitHub Actions
+        # Zählerstand auch ohne Datenbank im Log: laufender Schritt und erledigter Anteil,
+        # z. B. „5/31, 12 % erledigt“; „5/?“, solange die Gesamtzahl noch nicht feststeht
         if self._total:
             pct = 100 * done // self._total
-            fortschritt = f"{self._steps}/{self._total} ({pct} %)"
+            fortschritt = f"{self._steps}/{self._total}, {pct} % erledigt"
         else:
-            fortschritt = str(self._steps)
+            fortschritt = f"{self._steps}/?"
         log.info("ml_job.step", step=label, progress=fortschritt)
         if self.job_id is None:
             return

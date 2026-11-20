@@ -276,16 +276,21 @@ class TwoStageModel:
 
     # Training und Prognose --------------------------------------------------------------------
 
-    def fit_steps(self) -> int:
-        """Zahl der Rückmeldungen von :meth:`fit` an ``progress``."""
+    def fit_steps(self, frame: FeatureFrame | None = None) -> int:
+        """Zahl der Rückmeldungen von :meth:`fit` an ``progress``.
+
+        Mit ``frame`` genau, ohne unter der Annahme, dass die Kalibrierung läuft.
+        """
         oof = self.uses_stage1 and bool(self.cfg.stage2)
         once = len(self.cfg.stage1) * (2 if oof else 1) + len(self.cfg.stage2)
-        return once * (2 if self.cfg.calibration.months else 1)
+        calibrates = self._calibration_split(frame) is not None if frame is not None else True
+        return once * (2 if self.cfg.calibration.months and calibrates else 1)
 
     def fit(self, frame: FeatureFrame, progress: Progress = no_progress) -> TwoStageModel:
-        if self.cfg.calibration.months:
+        split = self._calibration_split(frame) if self.cfg.calibration.months else None
+        if split is not None:
             # zwei Durchgänge: Kalibriermodell ohne die letzten Monate, dann das Endmodell
-            shifts = self._calibrate(frame, lambda s: progress(f"1/2 Kalibrierung · {s}"))
+            shifts = self._calibrate(frame, split, lambda s: progress(f"1/2 Kalibrierung · {s}"))
             self._fit(frame, lambda s: progress(f"2/2 Endmodell · {s}"))
         else:
             shifts = {}
@@ -294,21 +299,29 @@ class TwoStageModel:
             (self.stage1.get(code) or self.stage2[code]).shifts = sh
         return self
 
-    def _calibrate(
-        self, frame: FeatureFrame, progress: Progress
-    ) -> dict[str, dict[int, dict[str, float]]]:
-        """Verschiebungen je Ziel aus einem Modell ohne die letzten ``months`` Monate.
-
-        @relation(SWR-MLT-031, scope=function)
-        """
+    def _calibration_split(self, frame: FeatureFrame) -> tuple[np.ndarray, np.ndarray] | None:
+        """Zeilen für Kalibriermodell und Kalibrierzeitraum, ``None`` bei zu wenig Daten."""
         cal = self.cfg.calibration
+        if not cal.months or len(frame) == 0:
+            return None
         issues = frame.meta["issue_time"]
         cut = issues.max() - pd.DateOffset(months=cal.months)
         hold = (issues > cut).to_numpy()
         # Lernziele des Kalibriermodells enden vor dem Kalibrierzeitraum
         early = (~hold) & (frame.meta["ts"] <= cut).to_numpy()
         if hold.sum() < cal.min_rows or early.sum() < 1000:
-            return {}
+            return None
+        return early, hold
+
+    def _calibrate(
+        self, frame: FeatureFrame, split: tuple[np.ndarray, np.ndarray], progress: Progress
+    ) -> dict[str, dict[int, dict[str, float]]]:
+        """Verschiebungen je Ziel aus einem Modell ohne die letzten ``months`` Monate.
+
+        @relation(SWR-MLT-031, scope=function)
+        """
+        early, hold = split
+        cal = self.cfg.calibration
         cfg0 = self.cfg.model_copy(update={"calibration": CalibrationConfig()})
         m0 = TwoStageModel(cfg0, self.variant)._fit(frame.subset(early), progress)
         test = frame.subset(hold)
