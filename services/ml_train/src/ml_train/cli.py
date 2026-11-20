@@ -52,6 +52,7 @@ from ml_train.models import TwoStageModel
 from ml_train.registry import Registry
 from ml_train.snapshot import Snapshot, export_snapshot, export_steps, load_snapshot, only_free
 from predictiondb_core.log import configure_logging, get_logger
+from predictiondb_core.settings import get_settings
 
 log = get_logger(__name__)
 
@@ -884,7 +885,8 @@ def cmd_importance(cfg: ModelConfig, a: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     """@relation(SWR-MLT-001, scope=function)"""
     a = build_parser().parse_args(argv)
-    configure_logging()
+    settings = get_settings()
+    configure_logging(settings.log_level, settings.log_json)
     cfg, sha = load_config(a.config)
     if a.cmd in ("snapshot", "backtest", "fit"):
         return run_job(cfg, sha, a)
