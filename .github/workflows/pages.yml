@@ -32,6 +32,7 @@ jobs:
     permissions:
       contents: read
       actions: read  # Testberichte aus dem CI-Lauf holen
+      packages: read  # Backtest-Bericht für den Modellvergleich
     env:
       SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:

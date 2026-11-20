@@ -95,6 +95,26 @@ RELATIONS:
   VALUE: SWR-MLT-011
 
 [ELEMENT]
+UID: SWA-MLT-MODEL-GHCR
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Modelle in GHCR
+STATEMENT: >>>
+Versionen, Registry-Stand, Rollen-Tags und Backtest-Berichte im Repository
+``predictiondb-models/<markt>``: Actions pusht, die VM importiert.
+<<<
+ORT: services/ml_train/src/ml_train/model_ghcr.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MLT-080
+- TYPE: Parent
+  VALUE: SWR-MLT-081
+- TYPE: Parent
+  VALUE: SWR-MLT-082
+- TYPE: Parent
+  VALUE: SWR-MLT-083
+
+[ELEMENT]
 UID: SWA-MLT-CALENDAR
 ART: Komponente
 STATUS: Umgesetzt
@@ -188,6 +208,8 @@ ORT: services/ml_train/src/ml_train/backtest.py
 RELATIONS:
 - TYPE: Parent
   VALUE: SWR-MLT-040
+- TYPE: Parent
+  VALUE: SWR-MLT-048
 - TYPE: Parent
   VALUE: SWR-MLT-041
 - TYPE: Parent

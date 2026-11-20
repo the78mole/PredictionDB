@@ -1,7 +1,8 @@
 """Landing Page für GitHub Pages aus der Vorlage pages/index.html bauen.
 
 Setzt die Zahl der Anforderungen (aus reqs/**/*.sdoc), die Kacheln der
-Testberichte (aus den JUnit-XML unter <ziel>/tests) sowie Commit und Datum ein.
+Testberichte (aus den JUnit-XML unter <ziel>/tests), den Modellvergleich (Backtest-Bericht
+in GHCR, pages/modelle.py) sowie Commit und Datum ein.
 Aufruf: ``python pages/build_site.py build/pages``. Umgebungsvariablen
 ``COMMIT_SHA`` und ``CI_RUN_ID`` setzt der Workflow pages.yml.
 """
@@ -9,6 +10,7 @@ Aufruf: ``python pages/build_site.py build/pages``. Umgebungsvariablen
 from __future__ import annotations
 
 import html
+import importlib
 import json
 import os
 import shutil
@@ -157,6 +159,17 @@ def scorecard_wert() -> str:
     return "&ndash;"
 
 
+def modellkachel() -> str:
+    """Modellvergleich aus dem Backtest-Bericht in GHCR (pages/modelle.py)."""
+    sys.path.insert(0, str(WURZEL / "pages"))
+    try:
+        modelle = importlib.import_module("modelle")
+    except ImportError as e:  # ml-train fehlt in der Umgebung
+        print(f"Modellvergleich übersprungen: {e}")
+        return ""
+    return str(modelle.kachel(modelle.bericht_holen()))
+
+
 def assets_kopieren(ziel: Path) -> None:
     quelle = WURZEL / "pages" / "assets"
     if quelle.is_dir():
@@ -196,6 +209,7 @@ def bauen(ziel: Path) -> Path:
         scorecard=scorecard_wert(),
         req_count=anforderungen_zaehlen(WURZEL / "reqs"),
         test_cards="\n    ".join(testkachel(ziel, *b) for b in BERICHTE),
+        model_card=modellkachel(),
         built_at=datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
         commit=html.escape(commit),
         commit_short=html.escape(commit[:7]),

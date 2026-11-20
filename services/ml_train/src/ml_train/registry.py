@@ -260,6 +260,44 @@ class Registry:
         out = [st["champion"], *st["challengers"], st["baseline"], *st["previous"][:1]]
         return [v for v in dict.fromkeys(out) if v]
 
+    def has(self, version: str) -> bool:
+        return self.store.read(f"{self.base}/{version}/manifest.json") is not None
+
+    def complete(self, version: str) -> bool:
+        """Version mit allen Dateien abgelegt und im Verlauf eingetragen (Import fertig)."""
+        if not self.has(version):
+            return False
+        files = self.manifest(version).get("files", [])
+        if any(self.store.read(f"{self.base}/{version}/{f}") is None for f in files):
+            return False
+        return any(h["version"] == version for h in self.state()["history"])
+
+    def import_version(self, local: Path, role: str = "challenger", note: str = "") -> str:
+        """Fertigen Versionsordner (z. B. aus GHCR) unter seinem Namen übernehmen.
+
+        Die Version behält Namen und Manifest; neu ist nur die Rolle ``role`` (``challenger``
+        oder ``none`` für nur ablegen). Liegt sie schon vor, bleibt alles, wie es ist.
+
+        @relation(SWR-MLT-081, scope=function)
+        """
+        man = dict(json.loads((local / "manifest.json").read_text()))
+        version = str(man["version"])
+        if man.get("config") != self.base:
+            raise ValueError(f"{version} gehört zu {man.get('config')}, nicht zu {self.base}")
+        missing = [f for f in man.get("files", []) if not (local / f).exists()]
+        if missing:
+            raise FileNotFoundError(f"{version}: Dateien fehlen: {missing}")
+        if self.complete(version):
+            return version
+        # auch nach einem abgebrochenen Import: Dateien vollständig schreiben, dann eintragen
+        self.store.upload_dir(f"{self.base}/{version}", local)
+        st = self.state()
+        if role == "challenger" and version not in st["challengers"]:
+            st["challengers"] = [*st["challengers"], version]
+        self._log(st, "import" if role == "none" else role, version, note)
+        self._save_state(st)
+        return version
+
     def manifest(self, version: str) -> dict[str, Any]:
         raw = self.store.read(f"{self.base}/{version}/manifest.json")
         if raw is None:

@@ -149,6 +149,39 @@ ins Manifest (`backtest_seconds`). Ohne `--backtest` trainierte Versionen haben 
 `registry attach-backtest` legt die Prognosen eines Backtests derselben Konfiguration und
 Variante nachträglich dazu, der nächste Abgleich füllt `meta.model_metric`.
 
+### Training in GitHub Actions und Modelle in GHCR
+
+Der Workflow `training.yml` („Backtest und Training“, von Hand gestartet) rechnet ohne Datenbank:
+Snapshot aus GHCR (`training-snapshot.yml`), Faltungen planen (`backtest --list-folds`), je
+Faltung ein Matrix-Job (`backtest --fold N --parts-only`, Zwischenstände als Artefakt), danach
+Zusammensetzen ohne neue Merkmale oder Training (`backtest` mit allen Zwischenständen unter
+`<out>/teile`). Die Kennzahlen gehen als Bericht nach GHCR (`registry push-report`), die
+Pages-Seite zeigt daraus den Modellvergleich. Varianten aus `fit` trainiert je ein Job mit allen
+Daten und legt sie als Challenger nach GHCR (`registry push --challenger`).
+
+Alles liegt in `ghcr.io/the78mole/predictiondb-models/de_lu` (`model_ghcr.py`):
+
+| Tag | Inhalt | schreibt |
+|---|---|---|
+| `<version>` (z. B. `de_lu_v2-frei-202611180300-ab12cd`) | Modell, `manifest.json`, `backtest.parquet`, Kennzahlen als Annotationen | Actions (`registry push`) |
+| `challenger-JJJJ-MM-TT-<konfig>-<variante>` | dieselbe Version, Einstiegsdatum | Actions |
+| `history` | `registry-<konfig>.json`: Rollen, Verlauf, Variante je Version | VM (`registry publish-state`) |
+| `champion`, `baseline`, `champion-JJJJ-MM-TT`, `honor-JJJJ-MM-TT` | Rollen-Tags; fehlt die Version in GHCR und ist ihr Snapshot frei, lädt die VM sie vorher hoch | VM |
+| `backtest-<konfig>`, `backtest-<konfig>-JJJJ-MM-TT` | Kennzahlen (CSV, `lauf.json`, `rollen.json`), keine Prognosen | Actions (`registry push-report`) |
+
+`registry push` lehnt Versionen ab, deren Snapshot nicht nur freie Quellen enthält (`publishable`
+im Manifest, ab jetzt von `fit` eingetragen). Auf der VM übernimmt `registry import` neue
+Versionen als Challenger; `promote` entscheidet wie bisher dort. Mit
+`PDB_MODELS_PUBLISH_STATE=true` schreibt jeder Abgleich (`fit`, `promote`, `import`, `predict`)
+den Stand nach `:history`, damit Actions mit `backtest --active-ghcr` die aktiven Varianten
+rechnet. Anmeldung wie beim Snapshot über `WX_EXCHANGE_USERNAME`/`WX_EXCHANGE_TOKEN`.
+
+```bash
+uv run ml-train --config config/ml/de_lu_v2.yaml registry import          # VM: neue Challenger
+uv run ml-train --config config/ml/de_lu_v2.yaml registry publish-state   # VM: Stand nach GHCR
+uv run ml-train --config config/ml/de_lu_v2.yaml registry push <version> --challenger
+```
+
 ### Fortschritt laufender Jobs
 
 `snapshot`, `backtest` und `fit` tragen sich beim Start in `meta.ml_job` ein und melden jeden
