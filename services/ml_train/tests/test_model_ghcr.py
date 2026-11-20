@@ -243,7 +243,7 @@ def test_pages_model_table() -> None:
         ("naive_day", 30.0, 3000.0),
         ("bench_load_da_forecast", float("nan"), 1400.0),
     ):
-        for lead in (1, 2):
+        for lead in (*range(1, 7), *range(8, 16)):  # ohne D+7: Lücke in Tabelle und Kurve
             rows.append(("w2024_2025", method, "da_price_de_lu", lead, price * lead))
             rows.append(("w2024_2025", method, "load_actual", lead, load * lead))
     rows += [("w2024_2025", "teilweise", "da_price_de_lu", 1, 5.0)]
@@ -271,3 +271,8 @@ def test_pages_model_table() -> None:
     assert "<td>20,0</td>" in tab and "<td>1,2</td>" in tab and "<td>&ndash;</td>" in tab
     assert "2024-01-01 bis 2025-12-31" in unter
     assert "kein Bericht" in modelle.kachel(None)
+    # Fehlerkurven: je Zeile Preis und Last, groß mit D+15 und naivem Vortag als Vergleich
+    assert tab.count('class="spark"') == 2 * 3  # frei, wetter, naive_day
+    assert "D+15" in tab and 'class="referenz"' in tab
+    assert modelle.achse([22.0, 30.0]) == (22.0, 30.0)
+    assert modelle.plot([None] * 15, None, (0.0, 1.0), "x", "GW") == "&ndash;"
