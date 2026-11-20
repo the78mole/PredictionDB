@@ -11,6 +11,7 @@ Langform und Kennzahlen je Verfahren, Ziel und Gruppe.
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
 import time
 from collections.abc import Callable, Sequence
@@ -391,7 +392,15 @@ def _fit_predict(
         log.warning("backtest.skip", fold=fold.no, variant=name, rows=len(tr))
         return [], 0.0
     t1 = time.monotonic()
-    model = TwoStageModel(cfg, v).fit(tr)
+    model = TwoStageModel(cfg, v)
+    total, done = model.fit_steps(), itertools.count(1)
+
+    def progress(step: str) -> None:
+        """Zwischenstand der langen Faltungsschritte im Log, z. B. „3/31“."""
+        n = f"{next(done)}/{total}"
+        log.info("backtest.fit", fold=fold.no, variant=name, step=step, progress=n)
+
+    model.fit(tr, progress=progress)
     te = test
     if v.requires_weather and "wx_lead_h" in test.X:
         te = test.subset(test.X["wx_lead_h"].notna().to_numpy())
