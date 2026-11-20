@@ -1381,3 +1381,15 @@ def test_backtest_per_fold_then_assemble(snap, tmp_path: Path, monkeypatch) -> N
     pd.testing.assert_frame_equal(a, b, check_dtype=False)
     with pytest.raises(ValueError, match="gibt es nicht"):
         run_backtest(fb, c, ["kalender"], only_folds=[7])
+
+
+def test_job_log_can_be_switched_off(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """@relation(SWR-MLT-003, scope=function)"""
+    from ml_train import jobs
+
+    def no_engine() -> None:
+        raise AssertionError("ohne Protokoll keine Verbindung aufbauen")
+
+    monkeypatch.setattr("predictiondb_core.db.create_db_engine", no_engine)
+    monkeypatch.setenv("PDB_ML_JOB_LOG", "false")
+    assert jobs.open_job_log().engine is None

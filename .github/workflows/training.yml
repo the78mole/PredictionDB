@@ -37,6 +37,8 @@ concurrency:
 
 env:
   PDB_LOG_JSON: "false"
+  # keine Datenbank in Actions: Fortschritt nicht in meta.ml_job eintragen
+  PDB_ML_JOB_LOG: "false"
   PYTHONUNBUFFERED: "1"
   CONFIG: ${{ inputs.config || 'config/ml/de_lu_v2.yaml' }}
 

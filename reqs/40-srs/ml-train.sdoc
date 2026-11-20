@@ -60,7 +60,8 @@ STATEMENT: >>>
 ``snapshot``, ``backtest`` und ``fit`` müssen sich in ``meta.ml_job`` eintragen, jeden Schritt
 mit Zählerstand melden und je Minute ein Lebenszeichen schreiben. SIGTERM wird als Fehler
 eingetragen, Jobs ohne Lebenszeichen seit 15 Minuten markiert der nächste Start als abgebrochen.
-Ohne Datenbank laufen die Befehle unverändert.
+Ohne Datenbank laufen die Befehle unverändert; ``PDB_ML_JOB_LOG=false`` schaltet das Protokoll
+ganz ab, ohne Verbindungsversuch.
 <<<
 RELATIONS:
 - TYPE: Parent
