@@ -36,7 +36,6 @@ mit Gültigkeit ``ts+1h`` und das Mittel der Momentanwerte bei ``ts`` und ``ts+1
 
 from __future__ import annotations
 
-import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -942,10 +941,12 @@ class FeatureBuilder:
                 codes = [f"cap_{t}_{country}" for t in cap_techs if f"cap_{t}_{country}" in caps]
                 if not cols or not codes:
                     continue
-                # Stunden ohne Wert in allen Zonen ergeben NaN, ohne „Mean of empty slice“
-                with np.errstate(invalid="ignore"), warnings.catch_warnings():
-                    warnings.simplefilter("ignore", RuntimeWarning)
-                    cf = np.nanmean(nbw[cols].to_numpy(np.float64), axis=1)
+                # Mittel über die Zonen mit Wert; Stunden ohne Wert in allen Zonen ergeben NaN
+                # (wie np.nanmean, aber ohne „Mean of empty slice“)
+                vals = nbw[cols].to_numpy(np.float64)
+                n_ok = np.sum(~np.isnan(vals), axis=1)
+                with np.errstate(invalid="ignore", divide="ignore"):
+                    cf = np.where(n_ok > 0, np.nansum(vals, axis=1) / n_ok, np.nan)
                 # eine fehlende Teilreihe (z. B. Wind auf See ohne Küste) zählt als 0 MW
                 cap = np.nansum(np.vstack([caps[c] for c in codes]), axis=0)
                 has_cap = ~np.all(np.isnan(np.vstack([caps[c] for c in codes])), axis=0)

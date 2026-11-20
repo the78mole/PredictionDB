@@ -191,6 +191,8 @@ Schritten frisch; das Panel „Laufende Trainings und Backtests" unter „Modell
 laufende und in den letzten 24 Stunden beendete Jobs mit Fortschritt, Laufzeit und geschätztem
 Ende. `docker stop` (SIGTERM) wird als Fehler eingetragen; hart beendete Jobs ohne Lebenszeichen
 seit 15 Minuten markiert der nächste Start als abgebrochen. Ohne Datenbank läuft alles wie bisher.
+`PDB_ML_JOB_LOG=false` schaltet den Eintrag ganz ab. Das setzen die Workflows in GitHub Actions,
+deren Läufe deshalb nicht im Panel erscheinen, sondern nur in Actions.
 
 ## Tests
 
