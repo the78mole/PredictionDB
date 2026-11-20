@@ -294,6 +294,8 @@ def run_backtest(
     _check_deadline(deadline, clock, None, "den Merkmalen")
     first, last = data_days(fb, cfg)
     folds = make_folds(cfg, last)
+    # Nenner für „Faltung 3/6“: alle Faltungen, auch wenn ein Matrix-Job nur eine davon rechnet
+    n_folds = len(folds)
     if only_folds is not None:
         unknown = sorted(set(only_folds) - {f.no for f in folds})
         if unknown:
@@ -321,7 +323,7 @@ def run_backtest(
             assert checkpoint is not None
             for method in [BASELINES, *names]:
                 if method != BASELINES:
-                    job.step(f"Faltung {fold.no + 1}/{len(folds)} · {method} · zusammensetzen")
+                    job.step(f"Faltung {fold.no + 1}/{n_folds} · {method} · zusammensetzen")
                 saved = checkpoint.load(fold, method)
                 assert saved is not None
                 parts.append(saved[0])
@@ -347,7 +349,7 @@ def run_backtest(
             if checkpoint:
                 checkpoint.save(fold, BASELINES, base, 0.0)
         for name in names:
-            job.step(f"Faltung {fold.no + 1}/{len(folds)} · {name} · {fold.test_from:%m/%Y}")
+            job.step(f"Faltung {fold.no + 1}/{n_folds} · {name} · {fold.test_from:%m/%Y}")
             done = checkpoint.load(fold, name) if checkpoint else None
             if done is not None:
                 parts.append(done[0])
