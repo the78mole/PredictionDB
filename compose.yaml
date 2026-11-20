@@ -24,7 +24,7 @@ x-app: &app
 
 services:
   postgres:
-    image: timescale/timescaledb:2.32.0-pg17
+    image: timescale/timescaledb:2.32.1-pg17
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -442,7 +442,7 @@ services:
     networks: [backend]
 
   node-exporter:
-    image: prom/node-exporter:v1.12.1
+    image: prom/node-exporter:v1.13.1
     command: ["--path.rootfs=/host"]
     pid: host
     volumes: ["/:/host:ro,rslave"]
@@ -450,7 +450,7 @@ services:
     networks: [backend]
 
   cadvisor:
-    image: ghcr.io/google/cadvisor:v0.61.0
+    image: ghcr.io/google/cadvisor:v0.61.1
     command:
       - --docker_only=true
       - --housekeeping_interval=30s
@@ -474,7 +474,7 @@ services:
   #
   # Einmalig: Rolle und Datenbank mlflow im vorhandenen Postgres (idempotent)
   mlflow-db-init:
-    image: timescale/timescaledb:2.32.0-pg17
+    image: timescale/timescaledb:2.32.1-pg17
     profiles: [mlflow]
     restart: "no"
     environment:
