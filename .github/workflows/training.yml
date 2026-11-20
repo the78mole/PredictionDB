@@ -108,7 +108,10 @@ jobs:
               raise SystemExit("keine Varianten: GHCR kennt noch keine aktiven, bitte angeben")
           folds = json.loads(os.environ["FOLDS"])
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-              f.write(f"folds={json.dumps([x['fold'] for x in folds])}\n")
+              # Späte Faltungen haben das längste Trainingsfenster und brauchen am längsten;
+              # sie zuerst einplanen, falls Runner knapp sind
+              order = sorted((x["fold"] for x in folds), reverse=True)
+              f.write(f"folds={json.dumps(order)}\n")
               f.write(f"variants={','.join(wanted)}\n")
               f.write(f"fit={json.dumps(fit)}\n")
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
