@@ -69,5 +69,5 @@
   <text x="32" y="394" font-weight="bold" fill="#5c4f05">Unterschied zu LightGBM heute</text>
   <text x="32" y="414" fill="#222">LightGBM sieht eine Tabellenzeile je (Ausgabezeit, Zielstunde) und lernt je Ziel und Quantil einen eigenen Baumwald,</text>
   <text x="32" y="432" fill="#222">zweistufig (erst Last/Wind/PV, dann Preis). Das Netz sieht das ganze Fenster auf einmal und gibt alle Ziele und Stunden</text>
-  <text x="32" y="450" fill="#222">gemeinsam aus. Dieselben freien Eingänge, dieselben Bekanntheitsregeln (Leakage-Schutz) und dieselben Backtest-Folds.</text>
+  <text x="32" y="450" fill="#222">gemeinsam aus. Dieselben freien Eingänge, dieselben Bekanntheitsregeln (Leakage-Schutz) und dieselben Backtest-Testfenster.</text>
 </svg>

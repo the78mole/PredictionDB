@@ -1,7 +1,7 @@
 """Rollierender Backtest (Expanding Window) aller Modellvarianten gegen Vergleichsverfahren.
 
-Je Faltung wird jede Variante mit allen Ausgabetagen bis ``gap_days`` vor Faltungsbeginn
-trainiert und auf den Ausgabetagen der Faltung geprüft. Vergleichsverfahren (Vortag, Vorwoche,
+Je Testfenster wird jede Variante mit allen Ausgabetagen bis ``gap_days`` vor dessen Beginn
+trainiert und auf den Ausgabetagen des Testfensters geprüft. Vergleichsverfahren (Vortag, Vorwoche,
 ENTSO-E-Prognosen) laufen auf denselben Zeilen mit. Ergebnis: Prognosen aller Verfahren in
 Langform und Kennzahlen je Verfahren, Ziel und Gruppe.
 
@@ -153,7 +153,7 @@ def train_frame(
     days = set(issue_days_between(start, train_to, cfg.backtest.train_issue_stride))
     issue_day = full.meta["issue_time"].dt.date
     mask = np.array(issue_day.isin(days), dtype=bool)
-    # Ziele, die nach ``train_to`` liegen, sind zum Faltungsbeginn noch nicht bekannt
+    # Ziele, die nach ``train_to`` liegen, sind zum Beginn des Testfensters noch nicht bekannt
     mask &= (full.meta["ts"] < pd.Timestamp(train_to + timedelta(days=1), tz="UTC")).to_numpy()
     if v.requires_weather and "wx_lead_h" in full.X:
         mask &= full.X["wx_lead_h"].notna().to_numpy()
@@ -166,7 +166,7 @@ def backtest_steps(
     variants: Sequence[str] | None = None,
     only_folds: Sequence[int] | None = None,
 ) -> int:
-    """Rückmeldungen von :func:`run_backtest`: Merkmale, dann je Faltung und Variante eine."""
+    """Rückmeldungen von :func:`run_backtest`: Merkmale, dann je Testfenster und Variante eine."""
     names = variants or [v.name for v in cfg.variants]
     folds = make_folds(cfg, data_days(fb, cfg)[1])
     if only_folds is not None:
@@ -174,16 +174,16 @@ def backtest_steps(
     return 1 + len(folds) * len(names)
 
 
-#: Name der Zwischenstände für die Vergleichsverfahren einer Faltung (keine Variante heißt so)
+#: Name der Zwischenstände für die Vergleichsverfahren eines Testfensters (keine Variante heißt so)
 BASELINES = "_vergleich"
 
 
 class Checkpoint:
-    """Zwischenstände des Backtests: eine Datei je Faltung und Verfahren.
+    """Zwischenstände des Backtests: eine Datei je Testfenster und Verfahren.
 
     Bricht ein Lauf ab, übernimmt der nächste Aufruf mit demselben Ausgabeordner alle fertigen
     Teile und rechnet nur die fehlenden. Jeder Teil trägt einen Schlüssel aus Snapshot, den für
-    ihn maßgeblichen Teilen der Konfiguration und den Grenzen seiner Faltung; ändert sich davon
+    ihn maßgeblichen Teilen der Konfiguration und den Grenzen seines Testfensters; ändert sich davon
     etwas, passt der Schlüssel nicht mehr und der Teil wird neu gerechnet. Nach dem Schreiben der
     Ergebnisse entfernt ``ml-train backtest`` den Ordner wieder.
 
@@ -247,7 +247,7 @@ def _now() -> datetime:
 
 
 def _estimate(timings: dict[str, float], name: str) -> float | None:
-    """Erwartete Dauer eines Teils: längste bekannte Faltung der Variante, sonst aller Varianten."""
+    """Erwartete Dauer eines Teils: längstes bekanntes Testfenster der Variante, sonst aller."""
     own = [s for k, s in timings.items() if k.startswith("fold") and k.endswith(f"_{name}_s")]
     if own:
         return max(own)
@@ -278,12 +278,12 @@ def run_backtest(
 ) -> BacktestResult:
     """Backtest aller oder der genannten Varianten.
 
-    ``only_folds`` rechnet nur diese Faltungen (Matrix-Job je Faltung in GitHub Actions). Liegen
-    alle Teile schon im ``checkpoint`` (Zwischenstände aller Faltungen zusammengetragen), werden
+    ``only_folds`` rechnet nur diese Testfenster (Matrix-Job je Testfenster in Actions). Liegen
+    alle Teile schon im ``checkpoint`` (Zwischenstände aller Testfenster zusammengetragen), werden
     keine Merkmale gebildet, der Lauf setzt nur die Teile zusammen.
 
-    Mit ``deadline`` beginnt der Lauf keinen Teil mehr, dessen erwartete Dauer (längste bekannte
-    Faltung) über die Frist reichen würde, und wirft :class:`Paused`. Das braucht einen
+    Mit ``deadline`` beginnt der Lauf keinen Teil mehr, dessen erwartete Dauer (längstes bekanntes
+    Testfenster) über die Frist reichen würde, und wirft :class:`Paused`. Das braucht einen
     ``checkpoint``, sonst ginge die Arbeit verloren.
 
     @relation(SWR-MLT-040, SWR-MLT-041, SWR-MLT-044, SWR-MLT-046, SWR-MLT-048, scope=function)
@@ -294,12 +294,12 @@ def run_backtest(
     _check_deadline(deadline, clock, None, "den Merkmalen")
     first, last = data_days(fb, cfg)
     folds = make_folds(cfg, last)
-    # Nenner für „Faltung 3/6“: alle Faltungen, auch wenn ein Matrix-Job nur eine davon rechnet
+    # Nenner für „Testfenster 3/6“: alle Testfenster, auch wenn ein Matrix-Job nur eines rechnet
     n_folds = len(folds)
     if only_folds is not None:
         unknown = sorted(set(only_folds) - {f.no for f in folds})
         if unknown:
-            raise ValueError(f"Faltungen {unknown} gibt es nicht (0 bis {len(folds) - 1})")
+            raise ValueError(f"Testfenster {unknown} gibt es nicht (0 bis {len(folds) - 1})")
         folds = [f for f in folds if f.no in set(only_folds)]
     if not folds:
         raise ValueError(f"Kein Testzeitraum: test_from {cfg.backtest.test_from}, Daten bis {last}")
@@ -323,7 +323,7 @@ def run_backtest(
             assert checkpoint is not None
             for method in [BASELINES, *names]:
                 if method != BASELINES:
-                    job.step(f"Faltung {fold.no + 1}/{n_folds} · {method} · zusammensetzen")
+                    job.step(f"Testfenster {fold.no + 1}/{n_folds} · {method} · zusammensetzen")
                 saved = checkpoint.load(fold, method)
                 assert saved is not None
                 parts.append(saved[0])
@@ -335,7 +335,7 @@ def run_backtest(
         test = full.subset(test_mask)
         if len(test) == 0:
             for name in names:  # Schritte trotzdem zählen, sonst endet der Fortschritt unter 100 %
-                job.step(f"Faltung {fold.no + 1}/{n_folds} · {name} · keine Testdaten")
+                job.step(f"Testfenster {fold.no + 1}/{n_folds} · {name} · keine Testdaten")
             if checkpoint:  # leere Teile, damit das Zusammensetzen ohne Merkmale auskommt
                 for method in [BASELINES, *names]:
                     checkpoint.save(fold, method, [], 0.0)
@@ -351,7 +351,7 @@ def run_backtest(
             if checkpoint:
                 checkpoint.save(fold, BASELINES, base, 0.0)
         for name in names:
-            job.step(f"Faltung {fold.no + 1}/{n_folds} · {name} · {fold.test_from:%m/%Y}")
+            job.step(f"Testfenster {fold.no + 1}/{n_folds} · {name} · {fold.test_from:%m/%Y}")
             done = checkpoint.load(fold, name) if checkpoint else None
             if done is not None:
                 parts.append(done[0])
@@ -359,7 +359,9 @@ def run_backtest(
                     timings[f"fold{fold.no}_{name}_s"] = done[1]
                 log.info("backtest.reused", fold=fold.no, variant=name)
                 continue
-            _check_deadline(deadline, clock, _estimate(timings, name), f"Faltung {fold.no} {name}")
+            _check_deadline(
+                deadline, clock, _estimate(timings, name), f"Testfenster {fold.no} {name}"
+            )
             got, dt = _fit_predict(full, test, cfg, name, fold, first)
             parts += got
             if dt:
@@ -371,7 +373,7 @@ def run_backtest(
 
 
 def fold_plan(fb: FeatureBuilder, cfg: ModelConfig) -> list[dict[str, str | int]]:
-    """Faltungen als Liste für eine Job-Matrix (``ml-train backtest --list-folds``).
+    """Testfenster als Liste für eine Job-Matrix (``ml-train backtest --list-folds``).
 
     @relation(SWR-MLT-048, scope=function)
     """
@@ -389,7 +391,7 @@ def fold_plan(fb: FeatureBuilder, cfg: ModelConfig) -> list[dict[str, str | int]
 def _fit_predict(
     full: FeatureFrame, test: FeatureFrame, cfg: ModelConfig, name: str, fold: Fold, first: date
 ) -> tuple[list[pd.DataFrame], float]:
-    """Eine Variante in einer Faltung trainieren und auf den Testzeilen prognostizieren."""
+    """Eine Variante in einem Testfenster trainieren und auf den Testzeilen prognostizieren."""
     v = cfg.variant(name)
     tr = train_frame(full, cfg, name, fold.train_to, first)
     if len(tr) < 1000:
@@ -400,7 +402,7 @@ def _fit_predict(
     total, done = model.fit_steps(tr), itertools.count(1)
 
     def progress(step: str) -> None:
-        """Zwischenstand der langen Faltungsschritte im Log, z. B. „3/31“."""
+        """Zwischenstand der langen Testfensterschritte im Log, z. B. „3/31“."""
         n = f"{next(done)}/{total}"
         log.info("backtest.fit", fold=fold.no, variant=name, step=step, progress=n)
 

@@ -42,7 +42,7 @@ liegen. Preise sind vast.ai-Angebote vom 29.10.2026 je GPU-Stunde (On-Demand, sc
 | Snapshot `snap-v2-20261029` | 140 MB: `weather.parquet` 127 MB (18,75 Mio. Zeilen, GFS 0,25°, 00/12Z, bis 216 h), `energy.parquet` 20 MB (2,74 Mio. Zeilen, 54 Reihen), `capacity.parquet` 0,15 MB |
 | Snapshot-Export (`ml-train snapshot`) | 1 h 12 min bzw. 1 h 28 min |
 | Fit `wetter_frei` / `wetter_frei_gk_skaliert` | 41 min / 49 min |
-| Backtest eine Variante (`wetter_frei`, 4 Folds) | 3 h 47 min (Merkmale 9 min, Folds 44–58 min) |
+| Backtest eine Variante (`wetter_frei`, 4 Testfenster) | 3 h 47 min (Merkmale 9 min, Testfenster 44–58 min) |
 | Backtest fünf Varianten | 13 h 58 min |
 | Feature-Frame je Variante | ca. 1,86 Mio. Zeilen (Ausgabezeit × Zielstunde) |
 | Backtest-Ausgabe (`predictions.parquet`) | 22 MB (eine Variante) bis 77 MB (fünf Varianten) |
@@ -90,7 +90,7 @@ Vorschlag, nicht umgesetzt:
 1. Die VM erzeugt wie heute den Snapshot (`ml-train snapshot`) und legt ihn als ORAS-Artefakt
    auf GHCR ab (z. B. `predictiondb-data/ml-snapshot:JJJJ-MM-TT`).
 2. Eine gemietete Instanz startet das `ml-train`-Image und zieht den Snapshot.
-3. Dort laufen `fit` und `backtest` mit denselben Folds wie heute. Das Netz wäre eine weitere
+3. Dort laufen `fit` und `backtest` mit denselben Testfenstern wie heute. Das Netz wäre eine weitere
    Modellfamilie in der Konfiguration (z. B. `model: nhits`), damit Champion/Challenger
    Netze und LightGBM direkt vergleicht.
 4. Modell und Backtest gehen als Challenger-Artefakt nach GHCR
@@ -139,7 +139,7 @@ als die 8 VM-Kerne ohne AVX2.
 ## Hyperparameter-Suche
 
 Annahme: Je Durchlauf wird nur ein Validierungsblock trainiert (ohne Kalibrierung und volle
-Folds), schwache Durchläufe bricht die Suche früh ab (Pruning, z. B. Optuna). Eingabe ist
+Testfenster), schwache Durchläufe bricht die Suche früh ab (Pruning, z. B. Optuna). Eingabe ist
 derselbe Snapshot, einmal geladen.
 
 | Modell | Durchläufe | VM-CPU | Cloud (RTX 4090) | Kosten |

@@ -17,8 +17,8 @@ des Backtests in Kap. 6.3 und 6.4, Freigabe in Kap. 7). Ausgewertete Backtests l
 
 1. [Der Ablauf im Überblick](#1-der-ablauf-im-überblick)
 2. [Eine Zeile: Ausgabezeitpunkt × Zielstunde](#2-eine-zeile-ausgabezeitpunkt--zielstunde)
-3. [Faltungen und Zeitfenster](#3-faltungen-und-zeitfenster)
-4. [Was in einer Faltung passiert](#4-was-in-einer-faltung-passiert)
+3. [Testfenster und Trainingsfenster](#3-testfenster-und-trainingsfenster)
+4. [Was in einem Testfenster passiert](#4-was-in-einem-testfenster-passiert)
 5. [Varianten und Vergleichsverfahren](#5-varianten-und-vergleichsverfahren)
 6. [Kalibrierung der Quantile im Backtest](#6-kalibrierung-der-quantile-im-backtest)
 7. [Kennzahlen](#7-kennzahlen)
@@ -33,12 +33,12 @@ des Backtests in Kap. 6.3 und 6.4, Freigabe in Kap. 7). Ausgewertete Backtests l
 ```mermaid
 flowchart TD
     S[("Snapshot<br/>ml-train snapshot")] --> F["Merkmale für alle Ausgabetage bilden<br/>FeatureBuilder.build"]
-    F --> L{{"je Faltung"}}
+    F --> L{{"je Testfenster"}}
     L --> B["Vergleichsverfahren auf den Testzeilen<br/>naive_day, naive_week, bench_*"]
     L --> V{{"je Variante"}}
     V --> T["Trainingszeilen wählen<br/>train_frame: bis train_to, Stride"]
     T --> M["TwoStageModel.fit<br/>Stufe 1, Out-of-Fold, Stufe 2, Kalibrierung"]
-    M --> P["Testzeilen der Faltung vorhersagen<br/>P10 / P50 / P90"]
+    M --> P["Testzeilen des Testfensters vorhersagen<br/>P10 / P50 / P90"]
     B --> R
     P --> R["Prognosen in Langform sammeln"]
     R --> O[/"Ausgabeordner<br/>predictions.parquet, metrics*.csv,<br/>rank_corr.csv, lauf.json"/]
@@ -77,12 +77,12 @@ Werte, die zum Ausgabezeitpunkt schon feststehen, zum Beispiel der Day-Ahead-Pre
 einer Ausgabe nach 13 Uhr, sind kein Lernziel. Sie haben im Backtest keinen Ist-Wert in der
 Spalte `actual` und zählen in keiner Kennzahl. Das Modell bekäme dort sonst geschenkte Punkte.
 
-## 3. Faltungen und Zeitfenster
+## 3. Testfenster und Trainingsfenster
 
 Der Backtest ist ein **Expanding Window**: Der Testzeitraum ab `backtest.test_from` wird in
-Faltungen von je `fold_months` Monaten geteilt (`make_folds`). Für jede Faltung wird jede
-Variante neu trainiert, mit **allen** Daten von ihrem Beginn bis kurz vor der Faltung. Das
-Trainingsfenster wächst also von Faltung zu Faltung, der Anfang bleibt fest.
+Testfenster von je `fold_months` Monaten geteilt (`make_folds`). Für jedes Testfenster wird jede
+Variante neu trainiert, mit **allen** Daten von ihrem Beginn bis kurz vor dem Testfenster. Das
+Trainingsfenster wächst also von Testfenster zu Testfenster, der Anfang bleibt fest.
 
 Mit den Werten aus [`config/ml/de_lu_v2.yaml`](../config/ml/de_lu_v2.yaml) (`test_from:
 2024-01-01`, `fold_months: 6`, `gap_days: 8`) und Daten bis Ende Oktober 2026:
@@ -92,38 +92,38 @@ gantt
     dateFormat YYYY-MM-DD
     todayMarker off
     axisFormat %Y
-    section Faltung 0
+    section Testfenster 0
     Training           :2018-10-08, 2023-12-24
     Test               :crit, 2024-01-01, 2024-06-30
-    section Faltung 1
+    section Testfenster 1
     Training           :2018-10-08, 2024-06-23
     Test               :crit, 2024-07-01, 2024-12-31
-    section Faltung 2
+    section Testfenster 2
     Training           :2018-10-08, 2024-12-24
     Test               :crit, 2025-01-01, 2025-06-30
-    section Faltung 3
+    section Testfenster 3
     Training           :2018-10-08, 2025-06-23
     Test               :crit, 2025-07-01, 2025-12-31
-    section Faltung 4
+    section Testfenster 4
     Training           :2018-10-08, 2025-12-24
     Test               :crit, 2026-01-01, 2026-06-30
-    section Faltung 5
+    section Testfenster 5
     Training           :2018-10-08, 2026-06-23
     Test               :crit, 2026-07-01, 2026-10-27
 ```
 
-Die letzte Faltung ist kürzer: Sie endet am letzten Ausgabetag, für den es Ist-Werte aller
+Das letzte Testfenster ist kürzer: Es endet am letzten Ausgabetag, für den es Ist-Werte aller
 Zielgrößen gibt (`data_days`: letzte Stunde mit Ist-Werten minus einen Tag). Mit `test_to` lässt
 sich das Ende auch früher legen.
 
-Aneinandergereiht ergeben die Testzeiträume aller Faltungen eine lückenlose Folge von Prognosen
+Aneinandergereiht ergeben die Testzeiträume aller Testfenster eine lückenlose Folge von Prognosen
 über den ganzen Testzeitraum, und jede davon stammt von einem Modell, das diese Zeit nicht
 gesehen hat.
 
-### Die Faltungsgrenze im Detail
+### Die Testfenstergrenze im Detail
 
-Drei Regeln aus `make_folds` und `train_frame` legen fest, welche Zeilen in das Training einer
-Faltung dürfen:
+Drei Regeln aus `make_folds` und `train_frame` legen fest, welche Zeilen in das Training eines
+Testfensters dürfen:
 
 1. **Ausgabetage bis `train_to`**, wobei `train_to = test_from − gap_days`.
 2. **Nur jeder `train_issue_stride`-te Ausgabetag** (Vorgabe 2). Aufeinanderfolgende Ausgaben
@@ -131,14 +131,14 @@ Faltung dürfen:
    bei kaum weniger Information. Getestet wird dagegen **jeder** Ausgabetag.
 3. **Nur Zielstunden bis einschließlich Tag `train_to`**. Eine Ausgabe vom Tag −10 hat
    Liefertage bis Tag −3. Der Backtest setzt aber `train_to` als Stichtag für alles, was das
-   Faltungsmodell als Ist-Wert kennen darf, deshalb fallen die Liefertage −7 bis −3 aus dem
+   Testfenstermodell als Ist-Wert kennen darf, deshalb fallen die Liefertage −7 bis −3 aus dem
    Training. Die Ausgabe vom Tag `train_to` selbst trägt so gar keine Zielstunde mehr bei.
 
-![Faltungsgrenze: Training, verworfene Zielstunden, Lücke und Test](grafiken/backtest-faltungsgrenze.svg)
+![Testfenstergrenze: Training, verworfene Zielstunden, Lücke und Test](grafiken/backtest-testfenstergrenze.svg)
 
 Die Lücke von `gap_days` (8 Tage) ist so gewählt, dass auch die längste Prognose (D+7) einer
 Trainingsausgabe vor dem ersten Testtag liegt und Training und Test sich in keiner Zielstunde
-berühren. Der Preis dafür: Das Modell einer Faltung kennt die letzte Woche vor dem Test nicht.
+berühren. Der Preis dafür: Das Modell eines Testfensters kennt die letzte Woche vor dem Test nicht.
 Im Betrieb ist das ähnlich, denn auch dort trainiert `ml-train fit` nur bis `gap_days` vor dem
 letzten Datentag.
 
@@ -151,7 +151,7 @@ Gebotszone DE-LU am 08.10.2018, für Wettervarianten der Beginn der GFS-Historie
 frühestens aber acht Tage nach der ersten Stunde mit Ist-Werten im Snapshot (damit die
 Wochen-Lags gefüllt sind).
 
-## 4. Was in einer Faltung passiert
+## 4. Was in einem Testfenster passiert
 
 ```mermaid
 sequenceDiagram
@@ -166,7 +166,7 @@ sequenceDiagram
     loop je Variante
         BT->>FB: train_frame(train_to, Stride, requires_weather)
         alt weniger als 1000 Zeilen
-            BT->>BT: Variante in dieser Faltung überspringen
+            BT->>BT: Variante in diesem Testfenster überspringen
         else
             BT->>TS: fit(Trainingszeilen)
             Note over TS: Kalibriermodell ohne die letzten 12 Monate,<br/>Stufe 1 mit Out-of-Fold, Stufe 2
@@ -178,11 +178,11 @@ sequenceDiagram
 ```
 
 Wichtig ist, was **nicht** passiert: Merkmale werden einmal für alle Ausgabetage gebildet und
-nicht je Faltung neu. Das ist zulässig, weil jede Merkmalsspalte nur vom Wissensstand ihres
-eigenen `issue_time` abhängt und nichts aus der Zukunft der Faltung enthält. Was die Faltung
+nicht je Testfenster neu. Das ist zulässig, weil jede Merkmalsspalte nur vom Wissensstand ihres
+eigenen `issue_time` abhängt und nichts aus der Zukunft des Testfensters enthält. Was das Testfenster
 trennt, ist allein die Auswahl der Trainingszeilen.
 
-Das Training einer Faltung ist dasselbe `TwoStageModel.fit` wie beim endgültigen Modell:
+Das Training eines Testfensters ist dasselbe `TwoStageModel.fit` wie beim endgültigen Modell:
 
 - **Stufe 1** (Last, Wind onshore/offshore, PV) wird trainiert.
 - Für das Training von **Stufe 2** (Preis) bekommt das Modell Stufe-1-Prognosen
@@ -190,7 +190,7 @@ Das Training einer Faltung ist dasselbe `TwoStageModel.fit` wie beim endgültige
   Blöcke geteilt, und jeder Block wird von einem Stufe-1-Modell der beiden anderen Blöcke
   vorhergesagt. Sonst lernte der Preis mit zu guten Last- und Erzeugungswerten.
 - **Stufe 2** lernt den Preis mit diesen Prognosen und der daraus berechneten Residuallast.
-- Im Test bekommt Stufe 2 die echten Stufe-1-Prognosen des Faltungsmodells, wie im Betrieb.
+- Im Test bekommt Stufe 2 die echten Stufe-1-Prognosen des Testfenstermodells, wie im Betrieb.
 
 Varianten mit Wetter (`requires_weather`) trainieren und testen nur auf Ausgabezeitpunkten, zu
 denen ein verarbeiteter GFS-Lauf vorlag. Ihre Kennzahlen beruhen deshalb auf weniger Zeilen als
@@ -205,11 +205,11 @@ Eine Konfiguration enthält mehrere **Varianten**, die sich in ihren Merkmalsgru
 unterscheiden (in `de_lu_v2` etwa `kalender`, `frei`, `preisniveau`, `wetter`,
 siehe [PROGNOSEMODELLE.md, Kap. 10](PROGNOSEMODELLE.md#10-modellkonfigurationen-und-varianten)).
 Ohne `--variant` prüft der Backtest alle, mit `--variant` nur die genannten. Alle Varianten
-sehen dieselben Faltungen, dieselben Testzeilen und dieselben Vergleichsverfahren. Damit ist der
+sehen dieselben Testfenster, dieselben Testzeilen und dieselben Vergleichsverfahren. Damit ist der
 Backtest zugleich ein **Ablationsversuch**: Der Unterschied zwischen `kalender` und
 `kalender + Gruppe` ist der Beitrag dieser Gruppe.
 
-Neben den Varianten laufen in jeder Faltung **Vergleichsverfahren** auf denselben Testzeilen
+Neben den Varianten laufen in jedem Testfenster **Vergleichsverfahren** auf denselben Testzeilen
 (`models.baselines`):
 
 | Methode im Ergebnis | Prognose | für |
@@ -226,18 +226,18 @@ schlägt, lohnt den Aufwand nicht.
 
 Quantil-Bäume sind auf ihren eigenen Trainingsdaten zu sicher. Ohne Korrektur enthielt das Band
 P10–P90 im Backtest nur 55 bis 70 % statt 80 % der Ist-Werte. Ist `calibration.months` gesetzt
-(`de_lu_v2`: 12), korrigiert `TwoStageModel.fit` das in **jeder Faltung** mit:
+(`de_lu_v2`: 12), korrigiert `TwoStageModel.fit` das in **jedem Testfenster** mit:
 
 ```mermaid
 gantt
     dateFormat YYYY-MM-DD
     todayMarker off
     axisFormat %Y
-    title Faltung 4 (Test ab 01.01.2026), calibration.months = 12
+    title Testfenster 4 (Test ab 01.01.2026), calibration.months = 12
     section Kalibriermodell
     Training ohne letzte 12 Monate     :2018-10-08, 2024-12-24
     Vorhersage = Kalibrierzeitraum     :active, 2024-12-25, 2025-12-24
-    section Faltungsmodell
+    section Testfenstermodell
     Training auf allem                 :2018-10-08, 2025-12-24
     section Test
     Prognose mit Verschiebung          :crit, 2026-01-01, 2026-06-30
@@ -251,7 +251,7 @@ gantt
    wie bei konformaler Vorhersage für die endliche Stichprobe leicht nach außen gesetzt. Es
    braucht mindestens `calibration.min_rows` (200) Zeilen je Vorlauftag, sonst bleibt dieser
    Vorlauftag unverschoben.
-4. Das eigentliche **Faltungsmodell** wird auf allen Trainingszeilen trainiert und bekommt diese
+4. Das eigentliche **Testfenstermodell** wird auf allen Trainingszeilen trainiert und bekommt diese
    Verschiebungen. Der Median bleibt unverändert, MAE und RMSE ändern sich durch die
    Kalibrierung also nicht.
 
@@ -291,7 +291,7 @@ flowchart LR
 ```
 
 **Gemeinsame Zeilen.** Die Verfahren decken unterschiedlich viele Zeilen ab: ÜNB-Prognosen nur
-D+1, Wettervarianten nur Zeiten mit Wetterlauf, eine Variante kann in einer frühen Faltung
+D+1, Wettervarianten nur Zeiten mit Wetterlauf, eine Variante kann in einem frühen Testfenster
 übersprungen sein. Ein MAE über verschiedene Zeilen vergleicht dann auch verschiedene Wetterlagen
 und Jahreszeiten. `metrics_common` (Datei `metrics_common_lead.csv`) und der
 Champion/Challenger-Vergleich rechnen deshalb nur auf Zeilen (Ziel, `issue_time`, `ts`), für die
@@ -338,7 +338,7 @@ gleich ist. Der Backtest wertet es wie das feste Fenster aus (`metrics_rolling*.
 `vergleich_jahreszeit_rolling.csv`, `lauf.json` → `compare_rolling`).
 
 `ml-train backtest --rolling` setzt den Testzeitraum auf genau dieses Fenster (`test_from`,
-`test_to`); die Faltungen beginnen an seinem ersten Tag. `--rolling-months 12` und
+`test_to`); die Testfenster beginnen an seinem ersten Tag. `--rolling-months 12` und
 `--rolling-until season` ändern Länge und Ende für diesen Aufruf. Wer am Monatsersten rechnet,
 hat oft den Vortag noch nicht als Ausgabetag im Snapshot; das Fenster gilt dann als nicht
 abgedeckt.
@@ -370,7 +370,7 @@ gibt sie am Ende aus, im Fenster, sonst über alle Testtage.
 | `metrics_window.csv` | Kennzahlen je Verfahren und Ziel nur im Vergleichsfenster (Kap. 7), mit Spalten `window` und `complete` |
 | `metrics_window_lead.csv` | … je Verfahren, Ziel und Vorlauftag |
 | `rank_corr.csv` | mittlere Rangkorrelation je Liefertag, je Verfahren, Ziel und Vorlauftag |
-| `lauf.json` | Snapshot-ID, Konfig-Hash, Zahl der übernommenen Zwischenstände (`reused_parts`), Vergleichsfenster (`compare`: Name, Grenzen, Verfahren mit und ohne vollständige Abdeckung), Faltungen mit `test_from`, `test_to`, `train_to`, Laufzeiten je Faltung und Variante, Zeilenzahl, Git-Commit, Ende des Laufs |
+| `lauf.json` | Snapshot-ID, Konfig-Hash, Zahl der übernommenen Zwischenstände (`reused_parts`), Vergleichsfenster (`compare`: Name, Grenzen, Verfahren mit und ohne vollständige Abdeckung), Testfenster mit `test_from`, `test_to`, `train_to`, Laufzeiten je Testfenster und Variante, Zeilenzahl, Git-Commit, Ende des Laufs |
 
 Spalten von `predictions.parquet`:
 
@@ -383,7 +383,7 @@ Spalten von `predictions.parquet`:
 | `actual` | Ist-Wert; leer, wenn der Wert zum Ausgabezeitpunkt schon bekannt war oder fehlt |
 | `method` | Variante (`kalender`, `frei`, …) oder Vergleichsverfahren (`naive_day`, `bench_load_da_forecast`, …) |
 | `target` | Zielgröße (`load_actual`, `da_price_de_lu`, `gen_wind_onshore`, …) |
-| `fold` | Nummer der Faltung |
+| `fold` | Nummer des Testfensters |
 
 Damit lässt sich jede Auswertung nachrechnen, die die CSV-Dateien nicht enthalten, etwa Fehler
 je Stunde des Tages oder an einzelnen Tagen. Die Auswertungsskripte unter `docs/analysen/*/`
@@ -417,7 +417,7 @@ eine Version ohne `--backtest` trainiert, reicht `ml-train registry attach-backt
 --backtest <ordner>` die Prognosen nach; der Backtest muss dieselbe Konfiguration und dieselbe
 Variante enthalten.
 
-Zu beachten: `backtest.parquet` enthält die Prognosen der **Faltungsmodelle** dieser Variante,
+Zu beachten: `backtest.parquet` enthält die Prognosen der **Testfenstermodelle** dieser Variante,
 nicht des registrierten Modells selbst. Das endgültige Modell hat alle Daten gesehen und lässt
 sich deshalb gar nicht ehrlich auf der Vergangenheit prüfen. Der Backtest bewertet das
 **Rezept** (Konfiguration und Variante), das registrierte Modell ist dessen jüngste Anwendung.
@@ -512,7 +512,7 @@ ihren eigenen Champion. Ein Vergleich über Linien hinweg ist nicht implementier
 uv run ml-train --config config/ml/de_lu_v2.yaml backtest \
     --snapshot .ml-data/snap --out .ml-data/bt
 
-# Nur zwei Varianten, kurzer Zeitraum mit Monatsfaltungen und ohne Stride
+# Nur zwei Varianten, kurzer Zeitraum mit Testfenstern zu je einem Monat und ohne Stride
 uv run ml-train --config config/ml/de_lu_v2.yaml backtest \
     --snapshot .ml-data/snap --out .ml-data/bt-wx \
     --variant kalender --variant wetter --test-from 2026-09-15 --fold-months 1 --stride 1
@@ -524,22 +524,22 @@ uv run ml-train --config config/ml/de_lu_v2.yaml fit \
 
 | Parameter (YAML `backtest:`) | CLI | Vorgabe | Wirkung |
 |---|---|---|---|
-| `test_from` | `--test-from` | Pflicht | erster Testtag, Beginn von Faltung 0 |
+| `test_from` | `--test-from` | Pflicht | erster Testtag, Beginn von Testfenster 0 |
 | `test_to` | `--test-to` | letzter Datentag | letzter Testtag |
-| `fold_months` | `--fold-months` | 6 | Länge einer Faltung; kürzer = häufiger neu trainiert, genauer, aber teurer |
-| `gap_days` | – | 8 | Abstand von `train_to` zum Faltungsbeginn |
+| `fold_months` | `--fold-months` | 6 | Länge eines Testfensters; kürzer = häufiger neu trainiert, genauer, aber teurer |
+| `gap_days` | – | 8 | Abstand von `train_to` zum Beginn des Testfensters |
 | `oof_folds` | – | 3 | Blöcke für die Out-of-Fold-Prognosen der Stufe 1 |
 | `train_issue_stride` | `--stride` | 2 | nur jeder n-te Ausgabetag im Training |
 | `issue.hour_utc` | `--issue-hour` | 8 | eine feste Ausgabestunde statt `hours_utc` reihum |
-| `calibration.months` | – | 0 (v2: 12) | Kalibrierung der Quantile je Faltung, kostet je Faltung ein zweites Training |
+| `calibration.months` | – | 0 (v2: 12) | Kalibrierung der Quantile je Testfenster, kostet je Testfenster ein zweites Training |
 
-**Abbruch und Fortsetzen.** Der Backtest legt die Prognosen jeder Faltung und jedes Verfahrens
-sofort unter `<out>/teile/` ab (`backtest.Checkpoint`, eine Parquet-Datei je Faltung und
-Variante bzw. für die Vergleichsverfahren einer Faltung). Bricht ein Lauf ab (Container beendet,
+**Abbruch und Fortsetzen.** Der Backtest legt die Prognosen jedes Testfensters und jedes Verfahrens
+sofort unter `<out>/teile/` ab (`backtest.Checkpoint`, eine Parquet-Datei je Testfenster und
+Variante bzw. für die Vergleichsverfahren eines Testfensters). Bricht ein Lauf ab (Container beendet,
 Speicher voll), setzt derselbe Aufruf mit demselben `--out` dort wieder an: Fertige Teile werden
 übernommen, im Fortschritt erscheinen sie als eigener Schritt ohne Rechenzeit, nur die fehlenden
 werden gerechnet. Ein Teil gilt nur, wenn Snapshot, die gemeinsamen Teile der Konfiguration,
-die Definition seiner Variante und die Grenzen seiner Faltung gleich sind; das steckt im
+die Definition seiner Variante und die Grenzen seines Testfensters gleich sind; das steckt im
 Schlüssel im Dateinamen. Wer eine Variante ändert oder einen neuen Snapshot nimmt, rechnet also
 genau die betroffenen Teile neu. Die Merkmale werden bei jedem Start neu gebildet. Nach dem
 Schreiben der Ergebnisse wird `teile/` gelöscht; `lauf.json` vermerkt unter `reused_parts`, wie
@@ -561,7 +561,7 @@ und Konfiguration entsteht unter `/data/monatlich/<JJJJMM>/` im Volume `ml-data`
 Snapshot `snap-<konfiguration>/` und der Backtest `<konfiguration>/`. Weil Snapshot und Fenster
 im ganzen Monat gleich bleiben, passen die Zwischenstände der Vornacht; ist alles fertig, tut
 das Skript bis zum Monatswechsel nichts mehr. Drei Monate bleiben liegen (`PDB_BT_KEEP`).
-Grob gerechnet braucht eine Variante mit vier Faltungen knapp 4 Stunden und ein Snapshot
+Grob gerechnet braucht eine Variante mit vier Testfenstern knapp 4 Stunden und ein Snapshot
 1,5 Stunden; bei fünf Nachtstunden schaffen vier bis fünf aktive Varianten je Konfiguration
 ihren Lauf in der ersten Woche. Alle Varianten (`PDB_BT_VARIANTS=all`, de_lu_v2 hat 17) passen
 nicht in einen Monat.
@@ -573,11 +573,11 @@ sudo systemctl enable --now predictiondb-backtest@<benutzer>.timer
 journalctl -u 'predictiondb-backtest@*'        # Protokoll der Nächte
 ```
 
-**Rechenaufwand.** Je Faltung und Variante wird ein vollständiges `TwoStageModel` trainiert,
-mit Kalibrierung zwei. Bei 6 Faltungen und 15 Varianten sind das 90 bzw. 180 Trainings. Der
+**Rechenaufwand.** Je Testfenster und Variante wird ein vollständiges `TwoStageModel` trainiert,
+mit Kalibrierung zwei. Bei 6 Testfenstern und 15 Varianten sind das 90 bzw. 180 Trainings. Der
 Fortschritt erscheint in `meta.ml_job` und im Grafana-Panel „Laufende Trainings und Backtests“,
-mit einem Schritt je Faltung und Variante (`Faltung 3/6 · frei · 07/2025`). Für erste Versuche
-helfen wenige Varianten (`--variant`), ein später `--test-from` oder längere Faltungen.
+mit einem Schritt je Testfenster und Variante (`Testfenster 3/6 · frei · 07/2025`). Für erste Versuche
+helfen wenige Varianten (`--variant`), ein später `--test-from` oder längere Testfenster.
 
 ## 12. Was der Backtest zeigt und was nicht
 
@@ -590,7 +590,7 @@ Betrieb.
 **Er zeigt nicht**
 
 - die Güte genau des registrierten Modells (siehe Kap. 9). Es hat mehr Daten gesehen als das
-  Modell der letzten Faltung; wie gut es tatsächlich ist, misst erst `fcst.prediction_error`.
+  Modell des letzten Testfensters; wie gut es tatsächlich ist, misst erst `fcst.prediction_error`.
 - Ausfälle im Betrieb: fehlende Wetterläufe, verspätete Daten, Lücken in den Quellen. Der
   Snapshot enthält die Daten so, wie sie heute in der Datenbank stehen, also auch nachträglich
   ergänzte oder korrigierte Werte.

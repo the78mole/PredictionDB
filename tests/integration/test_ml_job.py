@@ -57,8 +57,8 @@ def test_job_lifecycle_and_panel(engine: Engine) -> None:
     assert job.job_id is not None
     job.total(5)
     job.step("Merkmale bilden")
-    job.step("Faltung 1/2 · kalender · 01/2026")
-    job.step("Faltung 1/2 · frei · 01/2026")
+    job.step("Testfenster 1/2 · kalender · 01/2026")
+    job.step("Testfenster 1/2 · frei · 01/2026")
     row = _job(engine, job.job_id)
     assert (row["steps_done"], row["steps_total"], row["status"]) == (2, 5, "running")
     assert row["variants"] == ["kalender", "frei"]
@@ -70,7 +70,7 @@ def test_job_lifecycle_and_panel(engine: Engine) -> None:
 
     r = next(r for r in _panel_rows(engine) if r["Job"] == job.job_id)
     assert r["Art"] == "Backtest" and r["Status"] == "läuft"
-    assert r["Schritt / Ergebnis"] == "Faltung 1/2 · frei · 01/2026"
+    assert r["Schritt / Ergebnis"] == "Testfenster 1/2 · frei · 01/2026"
     assert r["Erledigt"] == "2/5" and float(r["Fortschritt"]) == 40.0  # type: ignore[arg-type]
     assert r["Fertig ca."] is not None
 

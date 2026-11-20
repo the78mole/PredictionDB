@@ -106,7 +106,7 @@ Mittel des letzten bekannten Liefertags gelernt (im Halbjahr 07–12/2025 MAE D+
 
 - `tabellen/haupt_*.csv`, `tabellen/wetter_*.csv`: Kennzahlen gesamt, je Vorlauf, Jahreszeit,
   Jahr, Folgetag auf gemeinsamen Stunden, Rangkorrelation Preis.
-- `tabellen/lauf_*.json`: Snapshot-ID, Konfig-Hash, Faltungen, Laufzeiten, Git-Commit.
+- `tabellen/lauf_*.json`: Snapshot-ID, Konfig-Hash, Testfenster, Laufzeiten, Git-Commit.
 - `grafiken/`: erzeugt mit [`auswertung.py`](auswertung.py) aus den Backtest-Prognosen
   (`predictions.parquet`, nicht im Repo).
 

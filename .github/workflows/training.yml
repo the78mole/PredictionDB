@@ -3,9 +3,9 @@ run-name: Backtest und Training ${{ inputs.config || 'config/ml/de_lu_v2.yaml' }
 
 # Backtest und Training ohne Datenbank (ARCHITEKTUR.md 7.7, 7.11):
 #   1. Snapshot aus GHCR bauen (training-snapshot.yml, nur freie Quellen)
-#   2. Faltungen und Varianten planen; ohne Angabe die aktiven Varianten aus dem Registry-Stand in
+#   2. Testfenster und Varianten planen; ohne Angabe die aktiven Varianten aus dem Registry-Stand in
 #      GHCR (predictiondb-models/de_lu:history, schreibt die VM)
-#   3. Backtest je Faltung als Matrix-Job, Zwischenstände als Artefakt
+#   3. Backtest je Testfenster als Matrix-Job, Zwischenstände als Artefakt
 #   4. Zusammensetzen, Kennzahlen als Bericht nach GHCR (backtest-<konfiguration>, für Pages)
 #   5. Gewünschte Varianten mit allen Daten trainieren und als Challenger nach GHCR pushen; die VM
 #      übernimmt sie mit `ml-train registry import`
@@ -53,7 +53,7 @@ jobs:
       packages: read
 
   plan:
-    name: Faltungen und Varianten
+    name: Testfenster und Varianten
     needs: snapshot
     runs-on: ubuntu-26.04
     timeout-minutes: 30
@@ -108,14 +108,14 @@ jobs:
               raise SystemExit("keine Varianten: GHCR kennt noch keine aktiven, bitte angeben")
           folds = json.loads(os.environ["FOLDS"])
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-              # Späte Faltungen haben das längste Trainingsfenster und brauchen am längsten;
+              # Späte Testfenster haben das längste Trainingsfenster und brauchen am längsten;
               # sie zuerst einplanen, falls Runner knapp sind
               order = sorted((x["fold"] for x in folds), reverse=True)
               f.write(f"folds={json.dumps(order)}\n")
               f.write(f"variants={','.join(wanted)}\n")
               f.write(f"fit={json.dumps(fit)}\n")
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
-              f.write("## Plan\n\n| Faltung | Test von | Test bis | Training bis |\n")
+              f.write("## Plan\n\n| Testfenster | Test von | Test bis | Training bis |\n")
               f.write("|---:|---|---|---|\n")
               for x in folds:
                   f.write(f"| {x['fold']} | {x['test_from']} | {x['test_to']} | {x['train_to']} |\n")
@@ -123,7 +123,7 @@ jobs:
           EOF
 
   backtest:
-    name: Backtest Faltung ${{ matrix.fold }}
+    name: Backtest Testfenster ${{ matrix.fold }}
     needs: [snapshot, plan]
     runs-on: ubuntu-26.04
     timeout-minutes: 350
@@ -142,7 +142,7 @@ jobs:
         with:
           name: ${{ needs.snapshot.outputs.artifact }}
           path: snapshot
-      - name: Faltung rechnen
+      - name: Testfenster rechnen
         env:
           FOLD: ${{ matrix.fold }}
           VARIANTS: ${{ needs.plan.outputs.variants }}

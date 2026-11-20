@@ -5,7 +5,7 @@ Revises: 0019_prediction_error_join
 Create Date: 2026-10-27
 
 Ein Eintrag je Aufruf. ``ml-train`` führt Schritt und Zähler nach, ein Lebenszeichen hält
-``updated_at`` auch in langen Schritten (Training einer Faltung) frisch. Bleibt ein Job ohne
+``updated_at`` auch in langen Schritten (Training eines Testfensters) frisch. Bleibt ein Job ohne
 Abschluss stehen (Container hart beendet), markiert ihn der nächste Start als abgebrochen.
 """
 

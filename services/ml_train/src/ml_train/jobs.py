@@ -27,7 +27,7 @@ STALE = "15 minutes"
 #: Sekunden zwischen zwei Lebenszeichen
 HEARTBEAT_S = 60.0
 
-#: Rückmeldung eines Rechenschritts: ``progress("Faltung 3/12 · frei")`` beginnt einen Schritt
+#: Rückmeldung eines Rechenschritts: ``progress("Testfenster 3/12 · frei")`` beginnt einen Schritt
 Progress = Callable[[str], None]
 
 
@@ -39,7 +39,7 @@ class JobLog:
     """Ein ``ml-train``-Aufruf als Zeile in ``meta.ml_job``.
 
     ``step(label)`` schließt den vorigen Schritt ab und beginnt den nächsten; ``total`` lässt
-    sich nachreichen, sobald die Zahl der Schritte bekannt ist (z. B. erst nach den Faltungen).
+    sich nachreichen, sobald die Zahl der Schritte bekannt ist (z. B. erst nach den Testfenstern).
 
     @relation(SWR-MLT-003, scope=class)
     """

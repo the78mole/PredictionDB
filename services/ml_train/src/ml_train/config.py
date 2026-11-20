@@ -1,7 +1,7 @@
 """Konfiguration eines Modells bzw. Backtests (``config/ml/*.yaml``), per Pydantic geprüft.
 
 Eine Datei beschreibt den Ausgabezeitpunkt, die Horizonte, die Zielgrößen beider Stufen, die
-Feature-Gruppen je Modellvariante und die Backtest-Faltungen. Der Hash der Datei geht in jede
+Feature-Gruppen je Modellvariante und die Backtest-Testfenster. Der Hash der Datei geht in jede
 Modellversion ein, damit sich ein Modell genau einer Konfiguration zuordnen lässt.
 
 @relation(SWA-MLT-CONFIG, scope=file)
@@ -307,7 +307,7 @@ class Variant(BaseModel):
 
 
 class BacktestConfig(BaseModel):
-    """Expanding Window: je Faltung Training bis vor ``test_from``, Test über ``fold_months``."""
+    """Expanding Window: je Testfenster Training bis vor ``test_from``, Test ``fold_months``."""
 
     test_from: date
     test_to: date | None = None

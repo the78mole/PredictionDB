@@ -1,4 +1,4 @@
-"""Nachtrag: Prognosen der Gegenproben für die Faltung 01-06/2024 als kleine Parquet-Datei.
+"""Nachtrag: Prognosen der Gegenproben für das Testfenster 01-06/2024 als kleine Parquet-Datei.
 
 Läuft im ml-train-Container auf der VM, nach den Backtests aus ``nachtrag-job.yaml``::
 

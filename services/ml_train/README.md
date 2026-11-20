@@ -78,7 +78,7 @@ flowchart LR
 
 ## Aufruf
 
-Was ein Backtest genau tut (Faltungen, Kennzahlen, Freigabe): [`docs/BACKTEST.md`](../../docs/BACKTEST.md).
+Was ein Backtest genau tut (Testfenster, Kennzahlen, Freigabe): [`docs/BACKTEST.md`](../../docs/BACKTEST.md).
 
 ```bash
 uv run ml-train snapshot --out .ml-data/snap                      # aus PDB_DATABASE_URL
@@ -152,8 +152,8 @@ Variante nachträglich dazu, der nächste Abgleich füllt `meta.model_metric`.
 ### Training in GitHub Actions und Modelle in GHCR
 
 Der Workflow `training.yml` („Backtest und Training“, von Hand gestartet) rechnet ohne Datenbank:
-Snapshot aus GHCR (`training-snapshot.yml`), Faltungen planen (`backtest --list-folds`), je
-Faltung ein Matrix-Job (`backtest --fold N --parts-only`, Zwischenstände als Artefakt), danach
+Snapshot aus GHCR (`training-snapshot.yml`), Testfenster planen (`backtest --list-folds`), je
+Testfenster ein Matrix-Job (`backtest --fold N --parts-only`, Zwischenstände als Artefakt), danach
 Zusammensetzen ohne neue Merkmale oder Training (`backtest` mit allen Zwischenständen unter
 `<out>/teile`). Die Kennzahlen gehen als Bericht nach GHCR (`registry push-report`), die
 Pages-Seite zeigt daraus den Modellvergleich. Varianten aus `fit` trainiert je ein Job mit allen
@@ -185,7 +185,7 @@ uv run ml-train --config config/ml/de_lu_v2.yaml registry push <version> --chall
 ### Fortschritt laufender Jobs
 
 `snapshot`, `backtest` und `fit` tragen sich beim Start in `meta.ml_job` ein und melden jeden
-Schritt (Backtest: je Faltung und Variante, Training: Merkmale, je Stufe und Ziel ein Modell,
+Schritt (Backtest: je Testfenster und Variante, Training: Merkmale, je Stufe und Ziel ein Modell,
 Registrieren) mit Zählerstand. Ein Lebenszeichen je Minute hält `updated_at` auch in langen
 Schritten frisch; das Panel „Laufende Trainings und Backtests" unter „Modellversionen" zeigt so
 laufende und in den letzten 24 Stunden beendete Jobs mit Fortschritt, Laufzeit und geschätztem
@@ -202,7 +202,7 @@ uv run pytest services/ml_train
 
 Die Tests laufen auf einem synthetischen Snapshot (`ml_train.testing`) mit bekanntem
 Zusammenhang und prüfen vor allem den Leakage-Schutz der Lags und des Wetterlaufs, die
-Ausrichtung der Wetterintervalle, Faltungen, Speichern/Laden und die Champion/Challenger-Regel.
+Ausrichtung der Wetterintervalle, Testfenster, Speichern/Laden und die Champion/Challenger-Regel.
 
 ## Offen
 

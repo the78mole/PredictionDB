@@ -605,7 +605,7 @@ def test_backtest_beats_naive_baselines(backtest) -> None:  # type: ignore[no-un
     fb, cfg, res, job = backtest
     # Fortschritt im Dashboard: angekündigte Schritte = gemeldete Schritte
     assert len(job.labels) == backtest_steps(fb, cfg)
-    assert job.labels[1].startswith("Faltung 1/")
+    assert job.labels[1].startswith("Testfenster 1/")
     m = res.metrics(("method", "target")).set_index(["method", "target"])
     assert m.loc[("kalender", "load_actual"), "mae"] < m.loc[("naive_week", "load_actual"), "mae"]
     assert (
@@ -678,7 +678,7 @@ def test_backtest_resumes_from_checkpoint(snap, tmp_path: Path, monkeypatch) -> 
     assert len(list(tmp_path.glob("*.parquet"))) == 2  # Vergleichsverfahren + Variante
 
     def boom(*_: Any, **__: Any) -> None:
-        raise AssertionError("fertige Faltung neu trainiert")
+        raise AssertionError("fertiges Testfenster neu trainiert")
 
     monkeypatch.setattr(TwoStageModel, "fit", boom)
     ck = Checkpoint(tmp_path, "s1", c)
@@ -699,12 +699,12 @@ def test_backtest_pauses_before_deadline_and_resumes(snap, tmp_path: Path) -> No
 
     from ml_train.backtest import Checkpoint, Paused
 
-    c = make_cfg()  # zwei Faltungen (Juli/August und September 2023)
+    c = make_cfg()  # zwei Testfenster (Juli/August und September 2023)
     fb = FeatureBuilder(snap, c)
     full = run_backtest(fb, c, ["kalender"], checkpoint=Checkpoint(tmp_path, "s1", c))
     late = sorted(tmp_path.glob("fold01_kalender_*.parquet"))
     assert len(late) == 1
-    late[0].unlink()  # zweite Faltung fehlt, die erste ist fertig
+    late[0].unlink()  # zweites Testfenster fehlt, das erste ist fertig
     t = datetime(2026, 11, 10, 7, 59, tzinfo=UTC)
     # Frist schon vorbei: hält vor den Merkmalen an
     with pytest.raises(Paused, match="Merkmalen"):
@@ -716,10 +716,10 @@ def test_backtest_pauses_before_deadline_and_resumes(snap, tmp_path: Path) -> No
             deadline=t,
             clock=lambda: t,
         )
-    # noch eine Mikrosekunde: die erste Faltung kommt aus dem Zwischenspeicher, die zweite
+    # noch eine Mikrosekunde: das erste Testfenster kommt aus dem Zwischenspeicher, das zweite
     # würde (nach der Dauer der ersten) über die Frist laufen
     ck = Checkpoint(tmp_path, "s1", c)
-    with pytest.raises(Paused, match="Faltung 1 kalender"):
+    with pytest.raises(Paused, match="Testfenster 1 kalender"):
         run_backtest(
             fb,
             c,
@@ -728,7 +728,7 @@ def test_backtest_pauses_before_deadline_and_resumes(snap, tmp_path: Path) -> No
             deadline=t + timedelta(microseconds=1),
             clock=lambda: t,
         )
-    assert ck.reused == 3  # beide Vergleichsteile und die erste Faltung
+    assert ck.reused == 3  # beide Vergleichsteile und das erste Testfenster
     with pytest.raises(ValueError, match="Checkpoint"):
         run_backtest(fb, c, ["kalender"], deadline=t)
     # genug Zeit: der Rest läuft durch und ergibt dasselbe wie der Lauf ohne Pause
@@ -1366,7 +1366,7 @@ def test_snapshot_source_classes() -> None:
 
 
 def test_backtest_per_fold_then_assemble(snap, tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    """Je Faltung ein Lauf (Matrix-Job), danach Zusammensetzen ohne Merkmale und Training.
+    """Je Testfenster ein Lauf (Matrix-Job), danach Zusammensetzen ohne Merkmale und Training.
 
     @relation(SWR-MLT-048, scope=function)
     """
@@ -1377,7 +1377,7 @@ def test_backtest_per_fold_then_assemble(snap, tmp_path: Path, monkeypatch) -> N
     plan = fold_plan(fb, c)
     assert [p["fold"] for p in plan] == [0, 1] and plan[0]["test_from"] == "2023-07-01"
     whole = run_backtest(fb, c, ["kalender"])
-    for p in plan:  # jede Faltung in einem eigenen Ordner, wie in getrennten Jobs
+    for p in plan:  # jedes Testfenster in einem eigenen Ordner, wie in getrennten Jobs
         job = RecordingJob()
         part = run_backtest(
             fb,
@@ -1388,8 +1388,8 @@ def test_backtest_per_fold_then_assemble(snap, tmp_path: Path, monkeypatch) -> N
             only_folds=[int(p["fold"])],
         )
         assert set(part.predictions["fold"]) == {p["fold"]}
-        # Nenner sind alle Faltungen, nicht nur die des Jobs (früher „Faltung 2/1“)
-        assert job.labels[1].startswith(f"Faltung {int(p['fold']) + 1}/{len(plan)} · ")
+        # Nenner sind alle Testfenster, nicht nur die des Jobs (früher „Testfenster 2/1“)
+        assert job.labels[1].startswith(f"Testfenster {int(p['fold']) + 1}/{len(plan)} · ")
     merged = tmp_path / "teile"
     merged.mkdir()
     for f in tmp_path.glob("job*/*"):

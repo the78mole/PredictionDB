@@ -1,4 +1,4 @@
-"""Nachtrag: Gegenproben zur Faltung 01-06/2024, Auftrag in ``nachtrag-job.yaml``.
+"""Nachtrag: Gegenproben zum Testfenster 01-06/2024, Auftrag in ``nachtrag-job.yaml``.
 
 Eingänge: ``zeilen.parquet`` (``daten.py``) und ``nachtrag.parquet`` (``nachtrag_daten.py``).
 Aufruf aus dem Repository-Wurzelverzeichnis::

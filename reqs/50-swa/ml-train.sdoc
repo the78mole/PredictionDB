@@ -202,7 +202,7 @@ ART: Komponente
 STATUS: Umgesetzt
 TITLE: Backtest
 STATEMENT: >>>
-Faltungen und rollierender Backtest aller Varianten.
+Testfenster und rollierender Backtest aller Varianten.
 <<<
 ORT: services/ml_train/src/ml_train/backtest.py
 RELATIONS:
