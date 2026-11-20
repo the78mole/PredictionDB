@@ -518,6 +518,7 @@ def cmd_fit(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: JobLog) 
     days = issue_days_between(start, train_to, cfg.backtest.train_issue_stride)
     job.step("Merkmale bilden")
     frame = fb.build(days, need_weather=v.requires_weather)
+    job.total(3 + model.fit_steps(frame))  # genau: ohne Kalibrierung, wenn die Daten nicht reichen
     t0 = time.monotonic()
     model.fit(frame, progress=job.step)
     bt, extra = backtest_for(a.backtest, v.name) if a.backtest else (None, {})

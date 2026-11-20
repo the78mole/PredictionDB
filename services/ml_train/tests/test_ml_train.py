@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -847,6 +848,19 @@ def test_snapshot_roundtrip_checks_hash(snap, tmp_path: Path) -> None:  # type: 
         load_snapshot(tmp_path)
 
 
+def _assert_ordinals(labels: list[str], m: TwoStageModel) -> None:
+    """Ziele je Stufe in Reihenfolge mit Zähler i/n, in jedem Durchgang gleich."""
+    expected = [
+        f"Stufe 1 · {i}/{len(m.cfg.stage1)} {t.code}" for i, t in enumerate(m.cfg.stage1, 1)
+    ]
+    expected += [
+        f"Stufe 2 · {i}/{len(m.cfg.stage2)} {t.code}" for i, t in enumerate(m.cfg.stage2, 1)
+    ]
+    got = [re.sub(r"^\d/2 \w+ · ", "", s) for s in labels if "Out-of-Fold" not in s]
+    passes = len(got) // len(expected)
+    assert passes >= 1 and got == expected * passes
+
+
 def test_registry_champion_challenger(backtest, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
     """@relation(SWR-MLT-050, SWR-MLT-051, scope=function)"""
     fb, cfg, res, _ = backtest
@@ -860,7 +874,8 @@ def test_registry_champion_challenger(backtest, tmp_path: Path) -> None:  # type
     )
     wx, labels = TwoStageModel(cfg, cfg.variant("wetter")), list[str]()
     wx.fit(frame, progress=labels.append)
-    assert len(labels) == wx.fit_steps() and "Stufe 1 · 1/" in labels[0]
+    assert len(labels) == wx.fit_steps(frame) and "Stufe 1 · 1/" in labels[0]
+    _assert_ordinals(labels, wx)
     v2 = reg.register(wx, man, preds[preds.method == "wetter"].drop(columns="method"))
     assert reg.state()["champion"] == v1 and reg.state()["challengers"] == [v2]
     assert set(reg.active()) == {v1, v2}
@@ -1217,10 +1232,13 @@ def test_calibration_widens_bands_per_lead_day(snap, cfg, tmp_path) -> None:  # 
     m = TwoStageModel(cfg, cfg.variant("kalender"))
     labels: list[str] = []
     m.fit(frame, progress=labels.append)
-    assert (
-        len(labels) == m.fit_steps() and labels[0] == "1/2 Kalibrierung · Stufe 1 · 1/3 load_actual"
-    )
+    assert len(labels) == m.fit_steps(frame) == m.fit_steps()
+    assert labels[0] == "1/2 Kalibrierung · Stufe 1 · 1/3 load_actual"
     assert labels[-1].startswith("2/2 Endmodell · Stufe 2 · ")
+    _assert_ordinals(labels, m)
+    # zu wenig Daten für die Kalibrierung: nur ein Durchgang, und so viele Schritte zählt fit_steps
+    small = frame.subset(np.arange(len(frame)) < 500)
+    assert m.fit_steps(small) == m.fit_steps() // 2
     sh = m.stage2["da_price_de_lu"].shifts
     assert set(sh) == set(cfg.issue.lead_days)
     assert set(sh[1]) == {"q10", "q90"}
@@ -1400,4 +1418,4 @@ def test_job_log_off_without_database(monkeypatch: pytest.MonkeyPatch) -> None:
     job.step("Snapshot laden")
     job.step("Merkmale bilden")
     # Zählerstand auch ohne Datenbank
-    assert [s["progress"] for s in seen] == ["1/4 (0 %)", "2/4 (25 %)"]
+    assert [s["progress"] for s in seen] == ["1/4, 0 % erledigt", "2/4, 25 % erledigt"]
