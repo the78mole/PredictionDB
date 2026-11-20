@@ -127,7 +127,7 @@ Preisstufe.
 | Training | Expanding Window ab 08.10.2018, jeder zweite Ausgabetag, bis 8 Tage vor dem Testzeitraum |
 | Test | vier Halbjahre 01.01.2025 bis 23.10.2026; Wetter-Kurztest vier Monate ab 01.07.2026 |
 | Vergleich | je Lauf alle Varianten auf denselben Stunden (Ziel, Ausgabe, Stunde) |
-| Rechner | Laptop mit 16 Kernen, `OMP_NUM_THREADS=8`; Laufzeit 73 min (`haupt`), 35 min (`09utc`), 15 min (`wetter`), 47 min (`niveau`). Ohne Thread-Grenze war ein Fold rund 25-mal langsamer |
+| Rechner | Laptop mit 16 Kernen, `OMP_NUM_THREADS=8`; Laufzeit 73 min (`haupt`), 35 min (`09utc`), 15 min (`wetter`), 47 min (`niveau`). Ohne Thread-Grenze war ein Testfenster rund 25-mal langsamer |
 
 ### Neue Merkmalsgruppen und wann sie als bekannt gelten
 

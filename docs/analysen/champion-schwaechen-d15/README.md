@@ -9,7 +9,7 @@ an Wetterumschwüngen, die die GFS-Prognose nicht vorhersieht?
 ## Ergebnis in Kürze
 
 **Nein, am Wetter liegt es nicht.** Die Schwächen stammen fast ganz aus **einem Zeitraum**:
-dem Frühjahr 2024, der ersten Testfaltung des Backtests. Dort lag das neue Modell beim Preis
+dem Frühjahr 2024, dem ersten Testfenster des Backtests. Dort lag das neue Modell beim Preis
 auf **jedem** Vorlauftag um 23 bis 33 €/MWh zu tief. In den Frühjahren 2025 und 2026 ist es in
 denselben Gruppen besser als beide Gegner.
 
@@ -39,12 +39,12 @@ deshalb nur die Spalte „alle“.
   auch an gewöhnlichen Tagen 59 % schlechter, an Feiertagen 53 %.
 
 ~~Wahrscheinliche Ursache: kurze Trainingshistorie~~ **Korrigiert am 12.11.2026, siehe
-[Nachtrag](#nachtrag-vom-12112026-gegenproben-zur-faltung-0106-2024):** Die Gegenproben
+[Nachtrag](#nachtrag-vom-12112026-gegenproben-zum-testfenster-0106-2024):** Die Gegenproben
 widerlegen die kurze Trainingshistorie als Ursache. Mit Training ab 10/2018 wird es deutlich
 schlechter. Die Ursache ist ein Fehler in der Kalibrierung der Quantile. Er verschiebt nicht nur
 das Band, sondern über das Umsortieren der Quantile auch den Median. Ohne Kalibrierung ist
 dasselbe Modell im Frühjahr 2024 besser als v1. Der Fehler betrifft auch den Live-Champion.
-Ein offener Punkt steht unter [Grenzen](#grenzen): Faltung 6 (07 bis 11/2026) zeigt erneut
+Ein offener Punkt steht unter [Grenzen](#grenzen): Testfenster 6 (07 bis 11/2026) zeigt erneut
 einen großen Preis-Bias.
 
 ![Mehrfehler je Vorlauftag im Frühling, je Jahr](grafiken/mehrfehler_je_vorlauf.png)
@@ -89,7 +89,7 @@ Pinball-Verlust der Quantile um 58 %.
 
 Der Bias stammt nicht aus dem langen Vorlauf: Schon für D+1 lag der Preis im Frühjahr 2024 im
 Mittel 23,5 €/MWh zu tief, für D+15 32,8 €/MWh. 2025 waren es 3 bis 7 €/MWh, 2026 4 bis
-10 €/MWh. Das ist ein Niveaufehler der ganzen Faltung, kein Wetterfehler.
+10 €/MWh. Das ist ein Niveaufehler des ganzen Testfensters, kein Wetterfehler.
 
 ![Abdeckung je Vorlauftag im Frühling](grafiken/abdeckung_je_vorlauf.png)
 
@@ -113,10 +113,10 @@ erklären es nicht; 2024 war der Mehrfehler bei kleinen und mittleren Sprüngen 
 ## Vorschläge
 
 1. **Freigaberegel je Jahr prüfen:** Eine Gruppe nur dann als Grund gegen eine Freigabe werten,
-   wenn sie in mehr als einer Testfaltung bzw. einem Jahr schlechter ist. Sonst kann eine
-   einzelne frühe Faltung mit kurzer Trainingshistorie jede Wettervariante blockieren.
-2. **Erste Faltung der Wettervarianten mit Vorsicht lesen:** Für Vergleiche mit Modellen ohne
-   Wetter die Faltung 01–06/2024 getrennt ausweisen (Trainingshistorie 2,8 statt 5,2 Jahre).
+   wenn sie in mehr als einem Testfenster bzw. einem Jahr schlechter ist. Sonst kann ein
+   einzelnes frühes Testfenster mit kurzer Trainingshistorie jede Wettervariante blockieren.
+2. **Erstes Testfenster der Wettervarianten mit Vorsicht lesen:** Für Vergleiche mit Modellen ohne
+   Wetter das Testfenster 01–06/2024 getrennt ausweisen (Trainingshistorie 2,8 statt 5,2 Jahre).
 3. **Kein stärkerer Rückfall zur Klimatologie ab D+6 nötig:** Das neue Modell schlägt v1 bei
    D+6/D+7 im Frühling 2025 und 2026 und ist dort besser kalibriert. Ein Rückfall würde die
    guten Jahre verschlechtern.
@@ -127,7 +127,7 @@ erklären es nicht; 2024 war der Mehrfehler bei kleinen und mittleren Sprüngen 
 ## Daten und Methode
 
 - **Prognosen:** Backtest-Prognosen beider Versionen aus der Registry (`backtest.parquet`). Das
-  neue Modell testet ab 01.01.2024 in Halbjahresfaltungen mit vier Ausgabestunden (02, 08, 14,
+  neue Modell testet ab 01.01.2024 in Testfenstern zu je einem Halbjahr mit vier Ausgabestunden (02, 08, 14,
   20 UTC), v1 ab 01.01.2024 mit Ausgabe 08 UTC. `daten.py` holt beide auf der VM, die Datei
   bleibt im Cache.
 - **Gemeinsame Zeilen:** Gleiche Zielgröße, Ausgabezeitpunkt und Stunde in beiden Versionen,
@@ -146,11 +146,11 @@ erklären es nicht; 2024 war der Mehrfehler bei kleinen und mittleren Sprüngen 
 
 - Für D+1 bis D+7 zählen nur die Ausgaben um 08 UTC (etwa ein Viertel des neuen Backtests). Je
   Gruppe und Jahr sind das rund 550 bis 1 100 Stunden.
-- (Überholt durch den [Nachtrag](#nachtrag-vom-12112026-gegenproben-zur-faltung-0106-2024).)
+- (Überholt durch den [Nachtrag](#nachtrag-vom-12112026-gegenproben-zum-testfenster-0106-2024).)
   Die Ursache „kurze Trainingshistorie“ ist naheliegend, aber nicht durch einen eigenen Lauf
-  belegt. Den Beleg brächte ein Backtest der Faltung 01–06/2024 mit `wetter_frei` ab 10/2018
+  belegt. Den Beleg brächte ein Backtest des Testfensters 01–06/2024 mit `wetter_frei` ab 10/2018
   ohne Wetter für die Jahre davor.
-- **Faltung 6 (07–11/2026):** Dort liegt der Preis des neuen Modells über alle Vorlauftage im
+- **Testfenster 6 (07–11/2026):** Dort liegt der Preis des neuen Modells über alle Vorlauftage im
   Mittel 41 €/MWh zu tief (v1 ähnlich, MAE im Herbst 2026 beide etwa 55 €/MWh). Das betrifft
   das hohe Preisniveau im Herbst 2026 (vgl.
   [preisabweichung-2026-10-29](../preisabweichung-2026-10-29/README.md)) und ist eine eigene
@@ -158,10 +158,10 @@ erklären es nicht; 2024 war der Mehrfehler bei kleinen und mittleren Sprüngen 
 - Die Last D+7 im Sommer ist 2024 und 2025 schlechter, ohne Zusammenhang mit dem Wetterfehler
   oder der Ausgabestunde. Der Effekt ist klein (+6 % über alle Jahre); hier fehlt eine Erklärung.
 
-## Nachtrag vom 12.11.2026: Gegenproben zur Faltung 01–06/2024
+## Nachtrag vom 12.11.2026: Gegenproben zum Testfenster 01–06/2024
 
 Auftrag in [nachtrag-job.yaml](nachtrag-job.yaml), Protokoll in
-[tabellen/lauf-nachtrag.json](tabellen/lauf-nachtrag.json). Zwei Backtests derselben Faltung auf
+[tabellen/lauf-nachtrag.json](tabellen/lauf-nachtrag.json). Zwei Backtests desselben Testfensters auf
 demselben Snapshot, gleiche Konfiguration bis auf je eine Änderung:
 
 - `ab2018`: `wetter_frei` mit Training ab 08.10.2018. Vor 03/2021 gibt es kein Wetter, die
@@ -189,12 +189,12 @@ Modell lernt dort Zusammenhänge, die 2024 nicht mehr gelten.
 
 **Die Ursache ist die Kalibrierung, genauer ein Fehler darin.** `QuantileModel.predict` addiert
 die Verschiebung je Vorlauftag auf P10 und P90 und sortiert danach die drei Quantile, damit sie
-sich nicht kreuzen. Für die Faltung 2024 wurde die Verschiebung auf 2023 bestimmt, als die
+sich nicht kreuzen. Für das Testfenster 2024 wurde die Verschiebung auf 2023 bestimmt, als die
 Preise fielen und das Modell meist zu hoch lag. Die Verschiebung von P90 war deshalb stark
 negativ. Liegt das verschobene P90 unter P50, gibt das Sortieren den verschobenen Wert als
 Median aus. Die Kalibrierung sollte den Median nie verändern (`CalibrationConfig`), tut es aber:
 
-| Ziel, Faltung 01–06/2024 | Median verschoben (Anteil Stunden) | mittlere Verschiebung |
+| Ziel, Testfenster 01–06/2024 | Median verschoben (Anteil Stunden) | mittlere Verschiebung |
 |---|---|---|
 | Preis | 78 % | −10,7 €/MWh |
 | PV | 19 % | −3,3 MW |

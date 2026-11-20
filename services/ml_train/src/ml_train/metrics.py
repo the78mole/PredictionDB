@@ -122,7 +122,7 @@ def common_rows(pred: pd.DataFrame, methods: Sequence[str]) -> pd.DataFrame:
 
 
 def issue_days(pred: pd.DataFrame) -> pd.Series:
-    """Ausgabetag (UTC-Datum) je Zeile, wie bei den Faltungen des Backtests."""
+    """Ausgabetag (UTC-Datum) je Zeile, wie bei den Testfenstern des Backtests."""
     return pd.to_datetime(pred["issue_time"], utc=True).dt.date
 
 

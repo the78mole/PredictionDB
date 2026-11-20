@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="922" height="496" viewBox="0 0 922 496" font-family="Helvetica, Arial, sans-serif" font-size="12">
 <rect width="922" height="496" fill="#ffffff"/>
-<text x="190" y="24" font-size="15" font-weight="bold" fill="#212121">An der Faltungsgrenze: Ausgabetage × Liefertage D+1 bis D+7</text>
-<text x="190" y="44" fill="#616161">Beispiel train_issue_stride: 2, gap_days: 8. Tag 0 = test_from der Faltung, train_to = Tag −8.</text>
+<text x="190" y="24" font-size="15" font-weight="bold" fill="#212121">An der Testfenstergrenze: Ausgabetage × Liefertage D+1 bis D+7</text>
+<text x="190" y="44" fill="#616161">Beispiel train_issue_stride: 2, gap_days: 8. Tag 0 = test_from des Testfensters, train_to = Tag −8.</text>
 <rect x="424" y="88" width="182" height="268" fill="#fff3e0"/>
 <line x1="190" y1="88" x2="190" y2="356" stroke="#e0e0e0"/>
 <line x1="216" y1="88" x2="216" y2="356" stroke="#e0e0e0"/>
@@ -140,7 +140,7 @@
 <rect x="190" y="410" width="18" height="14" rx="2" fill="#2e7d32"/>
 <text x="216" y="422" fill="#212121">Zielstunden im Training</text>
 <rect x="190" y="432" width="18" height="14" rx="2" fill="#bdbdbd"/>
-<text x="216" y="444" fill="#212121">verworfen: Liefertag nach train_to, zu Faltungsbeginn noch unbekannt</text>
+<text x="216" y="444" fill="#212121">verworfen: Liefertag nach train_to, zu Beginn des Testfensters noch unbekannt</text>
 <rect x="190" y="454" width="18" height="14" rx="2" fill="#1565c0"/>
-<text x="216" y="466" fill="#212121">geprüft: Prognose der Faltung gegen Ist-Wert</text>
+<text x="216" y="466" fill="#212121">geprüft: Prognose des Testfensters gegen Ist-Wert</text>
 </svg>

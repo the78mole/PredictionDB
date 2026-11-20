@@ -361,8 +361,8 @@ STATUS: Umgesetzt
 NACHWEIS: Test
 TITLE: Rollierender Backtest
 STATEMENT: >>>
-``backtest`` muss jede Variante in Faltungen mit wachsendem Trainingsfenster zurückrechnen
-(Monate je Faltung, Ausgabestunde und Schrittweite einstellbar) und gegen Vortag, Vorwoche und
+``backtest`` muss jede Variante in Testfenstern mit wachsendem Trainingsfenster zurückrechnen
+(Monate je Testfenster, Ausgabestunde und Schrittweite einstellbar) und gegen Vortag, Vorwoche und
 die Prognosen der Netzbetreiber stellen.
 <<<
 RELATIONS:
@@ -430,9 +430,9 @@ STATUS: Umgesetzt
 NACHWEIS: Test
 TITLE: Backtest fortsetzen
 STATEMENT: >>>
-Der Backtest muss die Prognosen jeder Faltung und jedes Verfahrens sofort nach ihrer Berechnung
+Der Backtest muss die Prognosen jedes Testfensters und jedes Verfahrens sofort nach ihrer Berechnung
 zwischenspeichern. Ein erneuter Aufruf mit demselben Ausgabeordner muss fertige Teile übernehmen,
-sofern Snapshot, Konfiguration der Variante und Faltungsgrenzen gleich sind, und nur die übrigen
+sofern Snapshot, Konfiguration der Variante und Testfenstergrenzen gleich sind, und nur die übrigen
 rechnen.
 <<<
 RELATIONS:
@@ -463,7 +463,7 @@ STATUS: Umgesetzt
 NACHWEIS: Test
 TITLE: Backtest im Zeitfenster
 STATEMENT: >>>
-`ml-train backtest --stop-at` muss vor jedem Teil (Faltung und Variante) prüfen, ob er nach der
+`ml-train backtest --stop-at` muss vor jedem Teil (Testfenster und Variante) prüfen, ob er nach der
 längsten bekannten Dauer eines Teils noch vor der Frist fertig wird, und sonst mit dem
 Rückgabewert 75 anhalten, ohne die fertigen Teile zu verwerfen. `--active` muss den Backtest auf
 die Varianten der aktiven Registry-Versionen beschränken. Der monatliche Lauf
@@ -496,11 +496,11 @@ UID: SWR-MLT-048
 ART: Funktional
 STATUS: Umgesetzt
 NACHWEIS: Test
-TITLE: Backtest je Faltung in getrennten Jobs
+TITLE: Backtest je Testfenster in getrennten Jobs
 STATEMENT: >>>
-``backtest --list-folds`` muss die Faltungen als JSON ausgeben, ``backtest --fold N --parts-only``
-nur die Zwischenstände dieser Faltung schreiben. Ein Aufruf ohne ``--fold`` mit den
-zusammengetragenen Zwischenständen aller Faltungen muss dasselbe Ergebnis wie ein Lauf am Stück
+``backtest --list-folds`` muss die Testfenster als JSON ausgeben, ``backtest --fold N --parts-only``
+nur die Zwischenstände dieses Testfensters schreiben. Ein Aufruf ohne ``--fold`` mit den
+zusammengetragenen Zwischenständen aller Testfenster muss dasselbe Ergebnis wie ein Lauf am Stück
 liefern, ohne Merkmale zu bilden oder zu trainieren.
 <<<
 QUELLE: ARCHITEKTUR.md 7.7

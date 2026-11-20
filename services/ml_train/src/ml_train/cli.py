@@ -59,7 +59,7 @@ log = get_logger(__name__)
 DEFAULT_CONFIG = os.environ.get("PDB_ML_CONFIG", "config/ml/de_lu_v1.yaml")
 DEFAULT_REGISTRY = os.environ.get("PDB_ML_REGISTRY", "s3://ml-artifacts/models")
 DEFAULT_CACHE = os.environ.get("PDB_ML_CACHE", "/tmp/ml-train-cache")
-#: Unterordner des Backtest-Ausgabeordners mit den Zwischenständen je Faltung und Verfahren
+#: Unterordner des Backtest-Ausgabeordners mit den Zwischenständen je Testfenster und Verfahren
 CHECKPOINT_DIR = "teile"
 #: Rückgabewert, wenn der Backtest an seiner Frist anhält (EX_TEMPFAIL: später fortsetzen)
 EXIT_PAUSED = 75
@@ -164,7 +164,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--fold",
         type=int,
         action="append",
-        help="nur diese Faltung (0, 1, …; mehrfach möglich), z. B. je Matrix-Job in Actions",
+        help="nur dieses Testfenster (0, 1, …; mehrfach möglich), z. B. je Matrix-Job in Actions",
     )
     b.add_argument(
         "--parts-only",
@@ -174,7 +174,7 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument(
         "--list-folds",
         action="store_true",
-        help="Faltungen als JSON ausgeben und beenden (Job-Matrix)",
+        help="Testfenster als JSON ausgeben und beenden (Job-Matrix)",
     )
     b.add_argument(
         "--active-ghcr",
@@ -445,7 +445,7 @@ def cmd_backtest(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: Job
         if cfg.compare_rolling is None:
             raise SystemExit("--rolling braucht compare_rolling in der Konfiguration")
         w = cfg.compare_rolling.resolve(today)
-        # Testzeitraum = mitlaufendes Fenster; Faltungen beginnen an seinem ersten Tag
+        # Testzeitraum = mitlaufendes Fenster; Testfenster beginnen an seinem ersten Tag
         cfg.backtest.test_from, cfg.backtest.test_to = w.start, w.end
         log.info("backtest.rolling", window=w.name, start=w.start, end=w.end)
     job.step("Snapshot laden")
@@ -456,7 +456,7 @@ def cmd_backtest(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: Job
         return 0
     # Schritte: Snapshot laden, Backtest, Ergebnisse schreiben (entfällt mit --parts-only)
     job.total((1 if a.parts_only else 2) + backtest_steps(fb, cfg, a.variant, a.fold))
-    # Zwischenstände je Faltung und Verfahren: ein abgebrochener Lauf setzt hier wieder an
+    # Zwischenstände je Testfenster und Verfahren: ein abgebrochener Lauf setzt hier wieder an
     ck = Checkpoint(a.out / CHECKPOINT_DIR, snap.snapshot_id, cfg)
     try:
         res = run_backtest(fb, cfg, a.variant, job, ck, deadline=a.stop_at, only_folds=a.fold)

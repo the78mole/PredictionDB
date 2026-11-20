@@ -94,7 +94,7 @@ Die Bausteine:
 | Merkmale | Variante `kalender`: rund 50 in Stufe 1, dazu 5 Stufe-1-Eingänge in Stufe 2; Variante `wetter`: rund 30 Wetterspalten mehr |
 | Zeile | ein Paar (Ausgabezeitpunkt, Zielstunde); je Ausgabetag rund 168 Zeilen (7 Liefertage × 24 h) |
 | Trainingsumfang | Variante `kalender` ab 08.10.2018, jeder zweite Ausgabetag: rund 240 000 Zeilen bis Mitte 2026 |
-| Trainingsdauer | 2 bis 3 Minuten je Variante auf einer üblichen Laptop-CPU (Backtest-Faltungen 2024–2026: 126 bis 165 s) |
+| Trainingsdauer | 2 bis 3 Minuten je Variante auf einer üblichen Laptop-CPU (Backtest-Testfenster 2024–2026: 126 bis 165 s) |
 | Inferenzdauer | Sekunden je Version und Ausgabezeitpunkt |
 | Hardware | CPU genügt; im Compose-Profil `ml` begrenzt `ML_TRAIN_CPUS` (Vorgabe 4) den Trainings-Container |
 | Ablageformat | LightGBM-Textmodelle je Ziel und Quantil, `model.json` (Merkmalslisten, Normierung), `manifest.json`, `backtest.parquet` |
@@ -246,7 +246,7 @@ Verschiebung mit Bestand und Preisniveau mitwächst. Vorlauftage mit weniger als
 Zeilen bleiben unverändert. Danach wird auf allen Daten trainiert; die Verschiebungen werden mit
 dem Modell gespeichert und vor dem Begrenzen der Quantile addiert. Für Stufe 2 nutzt die
 Kalibrierung Stufe-1-Werte des Kalibriermodells, wie im Betrieb. Kosten: etwa doppelte
-Trainingszeit. Im Backtest wird jede Faltung genauso kalibriert, die Abdeckung dort ist also
+Trainingszeit. Im Backtest wird jedes Testfenster genauso kalibriert, die Abdeckung dort ist also
 ehrlich.
 
 ### 4.6 Vergleichsverfahren
@@ -299,8 +299,8 @@ sequenceDiagram
     B->>E: Preise D+1 ab 13 Uhr Ortszeit<br/>(für die Ausgabe am Folgetag)
 ```
 
-Im Backtest gilt zusätzlich: Ziele, deren Stunde nach dem Trainingsende einer Faltung liegt, sind
-zum Faltungsbeginn noch nicht bekannt und fallen aus dem Training (siehe 6.2).
+Im Backtest gilt zusätzlich: Ziele, deren Stunde nach dem Trainingsende eines Testfensters liegt, sind
+zum Beginn des Testfensters noch nicht bekannt und fallen aus dem Training (siehe 6.2).
 
 ## 6. Training
 
@@ -344,35 +344,35 @@ Registry kann dann auch ein lokaler Ordner sein (`--registry` bzw. `PDB_ML_REGIS
 
 ### 6.3 Backtest (Expanding Window)
 
-Ausführlich mit Diagrammen zu Faltungsgrenze, Kalibrierung, Kennzahlen, `backtest.parquet`
+Ausführlich mit Diagrammen zu Testfenstergrenze, Kalibrierung, Kennzahlen, `backtest.parquet`
 und Champion/Challenger: [BACKTEST.md](BACKTEST.md).
 
 ```mermaid
 gantt
     dateFormat YYYY-MM-DD
     axisFormat %Y
-    section Faltung 0
+    section Testfenster 0
     Training           :2018-10-08, 2023-12-24
     Test               :2024-01-01, 2024-06-30
-    section Faltung 1
+    section Testfenster 1
     Training           :2018-10-08, 2024-06-23
     Test               :2024-07-01, 2024-12-31
-    section Faltung 2
+    section Testfenster 2
     Training           :2018-10-08, 2024-12-24
     Test               :2025-01-01, 2025-06-30
-    section Faltung 5
+    section Testfenster 5
     Training           :2018-10-08, 2026-06-23
     Test               :2026-07-01, 2026-10-21
 ```
 
-Ab `backtest.test_from` wird der Zeitraum in Faltungen zu `fold_months` Monaten geteilt. Je
-Faltung trainiert jede Variante neu mit allen Ausgabetagen bis 8 Tage vor Faltungsbeginn und
-wird auf allen Ausgabetagen der Faltung (jeder Tag, kein Stride) geprüft. So entsteht für den
+Ab `backtest.test_from` wird der Zeitraum in Testfenstern zu `fold_months` Monaten geteilt. Je
+Testfenster trainiert jede Variante neu mit allen Ausgabetagen bis 8 Tage vor Beginn des Testfensters und
+wird auf allen Ausgabetagen des Testfensters (jeder Tag, kein Stride) geprüft. So entsteht für den
 gesamten Testzeitraum eine Prognose, wie sie im Betrieb entstanden wäre, und das Modell wird
 in jeder Jahreszeit mit unterschiedlich viel Historie geprüft.
 
 Für einen kurzen Zeitraum, etwa solange die Wetterhistorie noch dünn ist, lassen sich
-Testbeginn, Faltungslänge und Stride überschreiben:
+Testbeginn, Testfensterlänge und Stride überschreiben:
 
 ```bash
 uv run ml-train backtest --snapshot .ml-data/snap --out .ml-data/bt-wx \
@@ -380,7 +380,7 @@ uv run ml-train backtest --snapshot .ml-data/snap --out .ml-data/bt-wx \
 ```
 
 Ergebnis im Ausgabeordner: `predictions.parquet` (alle Verfahren in Langform), `metrics.csv`
-und `lauf.json` (Snapshot-ID, Konfig-Hash, Faltungen, Laufzeiten, Git-Commit).
+und `lauf.json` (Snapshot-ID, Konfig-Hash, Testfenster, Laufzeiten, Git-Commit).
 
 ### 6.4 Kennzahlen
 
@@ -520,7 +520,7 @@ Eingerichtet wird das erst, wenn mindestens drei Jahre GFS-Trainingsdaten vorlie
   zeigt das Dashboard „Prognose und Energiedaten“ den Prognosefehler im Betrieb.
 
 - **Fortschritt laufender Jobs:** `snapshot`, `backtest` und `fit` tragen sich beim Start in
-  `meta.ml_job` ein und melden jeden Schritt (je Faltung und Variante bzw. je Stufe und Ziel)
+  `meta.ml_job` ein und melden jeden Schritt (je Testfenster und Variante bzw. je Stufe und Ziel)
   mit Zählerstand und einem Lebenszeichen je Minute. Das Panel „Laufende Trainings und
   Backtests“ zeigt laufende und in den letzten 24 Stunden beendete Jobs mit Fortschritt und
   geschätztem Ende. Ohne Datenbank (Laptop, Miet-GPU) läuft alles ohne Protokoll.
@@ -563,7 +563,7 @@ Eingerichtet wird das erst, wenn mindestens drei Jahre GFS-Trainingsdaten vorlie
 | **Lags nach Wissensstand** (letzter vollständiger Tag, jüngste bekannte Vorwoche) | Lags „gestern“ wären für Last und Preis unterschiedlich weit veröffentlicht | kein Leakage, gleiches Verhalten in Backtest und Betrieb |
 | **Feiertage als Bevölkerungsanteil, Brückentage** | Landesfeiertage senken die Last nur anteilig | genauere Last an regionalen Feiertagen |
 | **Stride 2 im Training** | stark überlappende Zeilen kosten Zeit ohne Information | etwa halbe Trainingszeit |
-| **Regularisierung** (Bagging 80 %, Feature-Fraction 80 %, L2, mindestens 50 Zeilen je Blatt) | Überanpassung an einzelne Tage | stabile Ergebnisse über Faltungen |
+| **Regularisierung** (Bagging 80 %, Feature-Fraction 80 %, L2, mindestens 50 Zeilen je Blatt) | Überanpassung an einzelne Tage | stabile Ergebnisse über Testfenster |
 | **Sortierte Quantile** | sich kreuzende Quantil-Booster | stets P10 ≤ P50 ≤ P90 |
 | **Ablation über Varianten** | Was bringt eine Merkmalsgruppe wirklich? | jede Gruppe wird als eigene Variante auf denselben Zeilen geprüft |
 | **Konformale Kalibrierung je Vorlauftag** | Band P10–P90 zu schmal (55–70 % statt 80 %) | Ergebnis nach dem ersten Backtest mit Kalibrierung, siehe 10.2 |
