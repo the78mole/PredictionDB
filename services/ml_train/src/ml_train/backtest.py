@@ -334,6 +334,8 @@ def run_backtest(
         test_mask = ((issue_day >= fold.test_from) & (issue_day <= fold.test_to)).to_numpy()
         test = full.subset(test_mask)
         if len(test) == 0:
+            for name in names:  # Schritte trotzdem zählen, sonst endet der Fortschritt unter 100 %
+                job.step(f"Faltung {fold.no + 1}/{n_folds} · {name} · keine Testdaten")
             if checkpoint:  # leere Teile, damit das Zusammensetzen ohne Merkmale auskommt
                 for method in [BASELINES, *names]:
                     checkpoint.save(fold, method, [], 0.0)
