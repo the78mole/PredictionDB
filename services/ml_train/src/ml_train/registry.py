@@ -13,9 +13,10 @@ Rollen: ``champion`` (Produktion), ``challengers`` (laufen im Schatten mit), ``b
 inferiert werden Champion, Challenger, Baseline und der letzte Vorgänger.
 
 Ein Challenger wird nur Champion, wenn er je Horizontklasse (bis D+7, ab D+8) auf denselben
-Backtest-Zeilen im Mittel besser ist und in keiner Gruppe (Ziel, Vorlauftag und Jahreszeit) mit
-genug Werten deutlich schlechter. Wo der Champion keine Werte hat, gilt die Vorwochenprognose
-als Maßstab.
+Backtest-Zeilen im Mittel über alle Ziele besser ist, jüngere Jahre stärker gewichtet
+(``PromotionRule.recent_weight``). Eine Grenze je Gruppe (Ziel, Vorlauftag und Jahreszeit) gilt
+nur, wenn ``max_group_loss`` gesetzt ist; standardmäßig ist sie aus. Wo der Champion keine
+Werte hat, gilt die Vorwochenprognose als Maßstab.
 
 @relation(SWA-MLT-REGISTRY, scope=file)
 """
@@ -30,6 +31,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from ml_train.config import ModelConfig, PromotionRule
@@ -156,6 +158,9 @@ def _weighted_by_year(ctx: pd.DataFrame, metric: str, recent: int) -> pd.DataFra
     Jede Zeile zählt mit dem Gewicht ihres Jahres (:func:`year_weights`), ein Teiljahr also nur
     mit seinen Zeilen. Ergebnis: Index ``target``, Spalten ``champion`` und ``challenger``.
     """
+    if metric == "pinball":
+        # Pinball nur, wo alle Quantile da sind; sonst zählte ``n`` mehr Zeilen als der Mittelwert
+        ctx = ctx[ctx["q10"].notna().to_numpy() & ctx["q90"].notna().to_numpy()]
     s = score(ctx, ["method", "target", "year"])
     w = year_weights(s["year"], recent) * s["n"]
     s = s.assign(wv=w * s[metric], w=w.where(s[metric].notna(), 0))
@@ -189,6 +194,9 @@ def _compare_rows(
     g["loss"] = g["challenger"] / g["champion"] - 1
     label = f"{cls}" if ref == "champion" else f"{cls} gegen {ref}"
     reasons = []
+    missing = [str(t) for t, v in overall["gain"].items() if not np.isfinite(v)]
+    if missing:
+        reasons.append(f"{label}: kein Vergleich für {', '.join(missing)}")
     mean_gain = float(overall["gain"].mean())
     if not mean_gain >= rule.min_gain:
         je_ziel = ", ".join(f"{t} {r['gain']:+.1%}" for t, r in overall.iterrows())

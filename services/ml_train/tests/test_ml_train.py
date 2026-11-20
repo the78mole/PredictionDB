@@ -966,6 +966,11 @@ def test_compare_mean_over_targets_recent_years_weigh_more() -> None:
     assert d.promote, d.reasons
     gain = d.overall.set_index("target")["gain"]
     assert gain["a"] > 0 > gain["b"]
+    # Ein Ziel ohne Vergleich (Challenger ohne Werte) gibt keine Freigabe
+    blind = _quantiles(base, np.where(base["target"] == "b", np.nan, q50))
+    d = compare(champ, blind, PromotionRule())
+    assert not d.promote
+    assert any("kein Vergleich für b" in r for r in d.reasons), d.reasons
 
     # 2022 deutlich besser, 2026 etwas schlechter: gleich gewichtet gewänne er, aber 2026 zählt
     # 5-fach und 2022 nur einfach
