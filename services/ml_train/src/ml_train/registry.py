@@ -13,9 +13,10 @@ Rollen: ``champion`` (Produktion), ``challengers`` (laufen im Schatten mit), ``b
 inferiert werden Champion, Challenger, Baseline und der letzte Vorgänger.
 
 Ein Challenger wird nur Champion, wenn er je Horizontklasse (bis D+7, ab D+8) auf denselben
-Backtest-Zeilen im Mittel besser ist und in keiner Gruppe (Ziel, Vorlauftag und Jahreszeit) mit
-genug Werten deutlich schlechter. Wo der Champion keine Werte hat, gilt die Vorwochenprognose
-als Maßstab.
+Backtest-Zeilen im Mittel über alle Ziele besser ist, jüngere Jahre stärker gewichtet
+(``PromotionRule.recent_weight``). Eine Grenze je Gruppe (Ziel, Vorlauftag und Jahreszeit) gilt
+nur, wenn ``max_group_loss`` gesetzt ist; standardmäßig ist sie aus. Wo der Champion keine
+Werte hat, gilt die Vorwochenprognose als Maßstab.
 
 @relation(SWA-MLT-REGISTRY, scope=file)
 """
@@ -30,6 +31,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from ml_train.config import ModelConfig, PromotionRule
@@ -145,6 +147,27 @@ def week_reference(pred: pd.DataFrame, max_weeks: int = 4) -> pd.DataFrame:
     return ref
 
 
+def year_weights(years: pd.Series, recent: int) -> pd.Series:
+    """Gewicht je Jahr: das jüngste ``recent``, jedes davor eins weniger, mindestens 1."""
+    return (recent - (years.max() - years)).clip(lower=1)
+
+
+def _weighted_by_year(ctx: pd.DataFrame, metric: str, recent: int) -> pd.DataFrame:
+    """Verlust je Ziel und Verfahren, Zeilen nach Jahr (Ortszeit) gewichtet.
+
+    Jede Zeile zählt mit dem Gewicht ihres Jahres (:func:`year_weights`), ein Teiljahr also nur
+    mit seinen Zeilen. Ergebnis: Index ``target``, Spalten ``champion`` und ``challenger``.
+    """
+    if metric == "pinball":
+        # Pinball nur, wo alle Quantile da sind; sonst zählte ``n`` mehr Zeilen als der Mittelwert
+        ctx = ctx[ctx["q10"].notna().to_numpy() & ctx["q90"].notna().to_numpy()]
+    s = score(ctx, ["method", "target", "year"])
+    w = year_weights(s["year"], recent) * s["n"]
+    s = s.assign(wv=w * s[metric], w=w.where(s[metric].notna(), 0))
+    agg = s.groupby(["target", "method"])[["wv", "w"]].sum()
+    return (agg["wv"] / agg["w"]).unstack("method")
+
+
 def _compare_rows(
     champion: pd.DataFrame, challenger: pd.DataFrame, rule: PromotionRule, cls: str, ref: str
 ) -> tuple[list[str], pd.DataFrame, pd.DataFrame] | None:
@@ -155,9 +178,7 @@ def _compare_rows(
         return None
     ctx = add_context(both)
     metric = "pinball" if ctx["q10"].notna().all() else "pinball50"
-    overall = score(ctx, ["method", "target"]).pivot(
-        index="target", columns="method", values=metric
-    )
+    overall = _weighted_by_year(ctx, metric, rule.recent_weight)
     overall["gain"] = 1 - overall["challenger"] / overall["champion"]
     groups = score(ctx, ["method", "target", "lead_day", "season"])
     gp = groups.pivot_table(
@@ -173,12 +194,17 @@ def _compare_rows(
     g["loss"] = g["challenger"] / g["champion"] - 1
     label = f"{cls}" if ref == "champion" else f"{cls} gegen {ref}"
     reasons = []
-    for target, row in overall.iterrows():
-        if row["gain"] < rule.min_gain:
-            reasons.append(f"{target} {label}: im Mittel nicht besser ({row['gain']:+.1%})")
-    bad = g[(g["n"] >= rule.min_group_n) & (g["loss"] > rule.max_group_loss)]
-    for (target, lead, season), row in bad.iterrows():
-        reasons.append(f"{target} Tag {lead} {season}: {row['loss']:+.1%} schlechter ({label})")
+    missing = [str(t) for t, v in overall["gain"].items() if not np.isfinite(v)]
+    if missing:
+        reasons.append(f"{label}: kein Vergleich für {', '.join(missing)}")
+    mean_gain = float(overall["gain"].mean())
+    if not mean_gain >= rule.min_gain:
+        je_ziel = ", ".join(f"{t} {r['gain']:+.1%}" for t, r in overall.iterrows())
+        reasons.append(f"{label}: im gewichteten Mittel nicht besser ({mean_gain:+.1%}; {je_ziel})")
+    if rule.max_group_loss is not None:
+        bad = g[(g["n"] >= rule.min_group_n) & (g["loss"] > rule.max_group_loss)]
+        for (target, lead, season), row in bad.iterrows():
+            reasons.append(f"{target} Tag {lead} {season}: {row['loss']:+.1%} schlechter ({label})")
     info = {"class": cls, "reference": ref, "metric": metric}
     return reasons, overall.reset_index().assign(**info), g.reset_index().assign(**info)
 

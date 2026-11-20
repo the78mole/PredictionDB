@@ -929,9 +929,69 @@ def test_compare_blocks_group_regression() -> None:
     chal = chal.assign(q10=chal["q50"] - 1.0, q90=chal["q50"] + 1.0)
     from ml_train.config import PromotionRule
 
-    d = compare(champ, chal, PromotionRule(min_group_n=50))
+    d = compare(champ, chal, PromotionRule(max_group_loss=0.05, min_group_n=50))
     assert not d.promote
     assert any("Winter" in r for r in d.reasons)
+
+
+def test_compare_mean_over_targets_recent_years_weigh_more() -> None:
+    """@relation(SWR-MLT-051, scope=function)"""
+    from ml_train.config import PromotionRule
+    from ml_train.registry import year_weights
+
+    years = pd.Series([2020, 2021, 2022, 2023, 2024, 2025, 2026])
+    assert year_weights(years, 5).tolist() == [1, 1, 1, 2, 3, 4, 5]
+
+    rng = np.random.default_rng(3)
+    ts = pd.date_range("2025-01-01", "2026-12-31 23:00", freq="h", tz="UTC")
+    rows = []
+    for target in ("a", "b"):
+        rows.append(
+            pd.DataFrame(
+                {
+                    "target": target,
+                    "issue_time": ts.floor("D") - pd.Timedelta(days=1),
+                    "ts": ts,
+                    "lead_day": 1,
+                    "actual": rng.normal(0, 1, len(ts)),
+                }
+            )
+        )
+    base = pd.concat(rows, ignore_index=True)
+    champ = _quantiles(base, np.zeros(len(base)))
+    noise = rng.normal(0, 1, len(base))
+    # Ziel a deutlich besser, Ziel b etwas schlechter: im Mittel gewinnt der Challenger
+    q50 = np.where(base["target"] == "a", base["actual"] * 0.5, 0.3 * noise)
+    d = compare(champ, _quantiles(base, q50), PromotionRule())
+    assert d.promote, d.reasons
+    gain = d.overall.set_index("target")["gain"]
+    assert gain["a"] > 0 > gain["b"]
+    # Ein Ziel ohne Vergleich (Challenger ohne Werte) gibt keine Freigabe
+    blind = _quantiles(base, np.where(base["target"] == "b", np.nan, q50))
+    d = compare(champ, blind, PromotionRule())
+    assert not d.promote
+    assert any("kein Vergleich für b" in r for r in d.reasons), d.reasons
+
+    # 2022 deutlich besser, 2026 etwas schlechter: gleich gewichtet gewänne er, aber 2026 zählt
+    # 5-fach und 2022 nur einfach
+    ts = pd.date_range("2022-01-01", "2022-06-30", freq="h", tz="UTC").append(
+        pd.date_range("2026-01-01", "2026-06-30", freq="h", tz="UTC")
+    )
+    base = pd.DataFrame(
+        {
+            "target": "a",
+            "issue_time": ts.floor("D") - pd.Timedelta(days=1),
+            "ts": ts,
+            "lead_day": 1,
+            "actual": rng.normal(0, 1, len(ts)),
+        }
+    )
+    champ = _quantiles(base, np.zeros(len(base)))
+    q50 = np.where(ts.year == 2026, 0.5 * rng.normal(0, 1, len(ts)), base["actual"] * 0.5)
+    assert compare(champ, _quantiles(base, q50), PromotionRule(recent_weight=1)).promote
+    d = compare(champ, _quantiles(base, q50), PromotionRule())
+    assert not d.promote
+    assert any("gewichteten Mittel" in r for r in d.reasons)
 
 
 def _horizon_rows(leads: list[int], rng: np.random.Generator) -> pd.DataFrame:

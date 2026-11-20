@@ -85,7 +85,8 @@ compare_rolling:
   months: 24
   until: month
 
+# Challenger gewinnt je Horizontklasse, wenn er im Mittel über alle Ziele besser ist; das jüngste
+# Jahr zählt 5-fach, jedes davor eins weniger, mindestens 1 (docs/BACKTEST.md Kap. 10)
 promotion:
   min_gain: 0.0
-  max_group_loss: 0.05
-  min_group_n: 200
+  recent_weight: 5

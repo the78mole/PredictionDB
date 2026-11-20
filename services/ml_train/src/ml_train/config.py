@@ -413,10 +413,14 @@ class PromotionRule(BaseModel):
     @relation(SWR-MLT-051, scope=class)
     """
 
-    #: Challenger muss im Mittel über alle Horizonte mindestens so viel besser sein (relativ)
+    #: Challenger muss je Horizontklasse im Mittel über alle Ziele mindestens so viel besser sein
+    #: (relativer Gewinn im Pinball-Verlust, Jahre gewichtet nach ``recent_weight``)
     min_gain: float = 0.0
-    #: und darf in keiner Gruppe (Vorlauftag, Jahreszeit) mehr als so viel schlechter sein
-    max_group_loss: float = 0.05
+    #: Gewicht des jüngsten Jahres im Vergleich; jedes Jahr davor zählt eins weniger, mindestens 1
+    recent_weight: int = Field(default=5, ge=1)
+    #: optional: in keiner Gruppe (Ziel, Vorlauftag, Jahreszeit) mit mindestens ``min_group_n``
+    #: Werten mehr als so viel schlechter (``None`` = keine Grenze je Gruppe)
+    max_group_loss: float | None = None
     min_group_n: int = 200
 
 
