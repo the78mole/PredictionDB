@@ -860,7 +860,7 @@ def test_registry_champion_challenger(backtest, tmp_path: Path) -> None:  # type
     )
     wx, labels = TwoStageModel(cfg, cfg.variant("wetter")), list[str]()
     wx.fit(frame, progress=labels.append)
-    assert len(labels) == wx.fit_steps() and labels[0].startswith("Stufe 1")
+    assert len(labels) == wx.fit_steps() and "Stufe 1 · 1/" in labels[0]
     v2 = reg.register(wx, man, preds[preds.method == "wetter"].drop(columns="method"))
     assert reg.state()["champion"] == v1 and reg.state()["challengers"] == [v2]
     assert set(reg.active()) == {v1, v2}
@@ -1217,7 +1217,10 @@ def test_calibration_widens_bands_per_lead_day(snap, cfg, tmp_path) -> None:  # 
     m = TwoStageModel(cfg, cfg.variant("kalender"))
     labels: list[str] = []
     m.fit(frame, progress=labels.append)
-    assert len(labels) == m.fit_steps() and labels[0].startswith("Kalibrierung")
+    assert (
+        len(labels) == m.fit_steps() and labels[0] == "1/2 Kalibrierung · Stufe 1 · 1/3 load_actual"
+    )
+    assert labels[-1].startswith("2/2 Endmodell · Stufe 2 · ")
     sh = m.stage2["da_price_de_lu"].shifts
     assert set(sh) == set(cfg.issue.lead_days)
     assert set(sh[1]) == {"q10", "q90"}
@@ -1391,5 +1394,10 @@ def test_job_log_off_without_database(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(jobs.log, "warning", lambda *a, **k: pytest.fail("warnt"))
     job = jobs.open_job_log()
     assert job.engine is None
-    job.start("backtest", "de_lu_v2")
+    seen: list[dict[str, Any]] = []
+    monkeypatch.setattr(jobs.log, "info", lambda event, **kw: seen.append(kw))
+    job.start("backtest", "de_lu_v2", total=4)
     job.step("Snapshot laden")
+    job.step("Merkmale bilden")
+    # Zählerstand auch ohne Datenbank
+    assert [s["progress"] for s in seen] == ["1/4 (0 %)", "2/4 (25 %)"]
