@@ -78,8 +78,25 @@
   .intro p { color: var(--text); }
   table.modelle { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
   .modelle-wrap { overflow-x: auto; }
+  @media (min-width: 900px) { .modelle-wrap { overflow: visible; } }
   table.modelle th, table.modelle td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: right; }
   table.modelle th[scope="row"], table.modelle thead th:first-child { text-align: left; }
+  table.modelle td.kurven { padding: 2px 8px; text-align: center; }
+  .kurve { position: relative; display: inline-block; line-height: 0; border-radius: 4px; }
+  .kurve:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .kurve svg polyline { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linejoin: round; }
+  .kurve .gross {
+    display: none; position: absolute; right: 0; top: 100%; z-index: 10; margin-top: 4px;
+    padding: 8px; background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18); line-height: 1.3; text-align: left;
+  }
+  .kurve:hover .gross, .kurve:focus .gross { display: block; }
+  .kurve .gross-titel { display: block; color: var(--muted); font-size: 0.8rem; margin-bottom: 4px; }
+  .kurve .gross svg { display: block; max-width: 80vw; height: auto; }
+  .kurve .gross text { fill: var(--muted); font-size: 11px; }
+  .kurve .gross .raster { stroke: var(--line); stroke-width: 1; }
+  .kurve .gross polyline.ref { stroke: var(--muted); stroke-dasharray: 4 3; stroke-width: 1.2; }
+  .kurve .gross circle { fill: var(--accent); }
   table.modelle .rolle { display: block; color: var(--muted); font-weight: 400; font-size: 0.85rem; }
   .card .stat { color: var(--text); font-size: 1.6rem; font-weight: 700; font-variant-numeric: tabular-nums; }
   .card .ok { color: var(--ok); } .card .warn { color: var(--warn); } .card .bad { color: var(--bad); }

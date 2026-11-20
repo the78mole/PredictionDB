@@ -643,7 +643,9 @@ STATEMENT: >>>
 ``registry push-report`` muss die Kennzahlen eines Backtests (CSV und ``lauf.json``, keine
 Prognosen) mit den Rollen der Registry als ``backtest-<konfiguration>`` und
 ``backtest-<konfiguration>-JJJJ-MM-TT`` nach GHCR legen. Die Pages-Seite muss daraus MAE je Ziel
-und Vorlauftag für Champion, Challenger, Vorgänger, Baseline und die naiven Verfahren zeigen.
+und Vorlauftag für Champion, Challenger, Vorgänger, Baseline und die naiven Verfahren zeigen,
+je Zeile mit einer Fehlerkurve D+1 bis D+15 für Preis und Last, die beim Darüberfahren groß
+erscheint.
 <<<
 QUELLE: ARCHITEKTUR.md 7.11
 RELATIONS:
