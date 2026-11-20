@@ -158,8 +158,12 @@ class JobLog:
 def open_job_log() -> JobLog:
     """``JobLog`` mit der Datenbank aus den Einstellungen, ohne sie, wenn keine konfiguriert ist.
 
+    ``PDB_ML_JOB_LOG=false`` schaltet das Protokoll ab, etwa in GitHub Actions ohne Datenbank.
+
     @relation(SWR-MLT-003, scope=function)
     """
+    if os.environ.get("PDB_ML_JOB_LOG", "true").strip().lower() in {"0", "false", "no", "off"}:
+        return JobLog(None)
     try:
         from predictiondb_core.db import create_db_engine
 

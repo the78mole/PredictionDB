@@ -1381,3 +1381,15 @@ def test_backtest_per_fold_then_assemble(snap, tmp_path: Path, monkeypatch) -> N
     pd.testing.assert_frame_equal(a, b, check_dtype=False)
     with pytest.raises(ValueError, match="gibt es nicht"):
         run_backtest(fb, c, ["kalender"], only_folds=[7])
+
+
+def test_job_log_off_without_database(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``PDB_ML_JOB_LOG=false`` (Actions) öffnet keine Datenbank und warnt nicht."""
+    from ml_train import jobs
+
+    monkeypatch.setenv("PDB_ML_JOB_LOG", "false")
+    monkeypatch.setattr(jobs.log, "warning", lambda *a, **k: pytest.fail("warnt"))
+    job = jobs.open_job_log()
+    assert job.engine is None
+    job.start("backtest", "de_lu_v2")
+    job.step("Snapshot laden")
