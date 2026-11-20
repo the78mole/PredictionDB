@@ -454,8 +454,8 @@ def cmd_backtest(cfg: ModelConfig, cfg_sha: str, a: argparse.Namespace, job: Job
     if a.list_folds:
         print(json.dumps(fold_plan(fb, cfg)))
         return 0
-    # Schritte: Snapshot laden, Backtest, Ergebnisse schreiben
-    job.total(2 + backtest_steps(fb, cfg, a.variant, a.fold))
+    # Schritte: Snapshot laden, Backtest, Ergebnisse schreiben (entfällt mit --parts-only)
+    job.total((1 if a.parts_only else 2) + backtest_steps(fb, cfg, a.variant, a.fold))
     # Zwischenstände je Faltung und Verfahren: ein abgebrochener Lauf setzt hier wieder an
     ck = Checkpoint(a.out / CHECKPOINT_DIR, snap.snapshot_id, cfg)
     try:

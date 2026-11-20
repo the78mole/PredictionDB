@@ -1378,14 +1378,18 @@ def test_backtest_per_fold_then_assemble(snap, tmp_path: Path, monkeypatch) -> N
     assert [p["fold"] for p in plan] == [0, 1] and plan[0]["test_from"] == "2023-07-01"
     whole = run_backtest(fb, c, ["kalender"])
     for p in plan:  # jede Faltung in einem eigenen Ordner, wie in getrennten Jobs
+        job = RecordingJob()
         part = run_backtest(
             fb,
             c,
             ["kalender"],
+            job=job,
             checkpoint=Checkpoint(tmp_path / f"job{p['fold']}", "s1", c),
             only_folds=[int(p["fold"])],
         )
         assert set(part.predictions["fold"]) == {p["fold"]}
+        # Nenner sind alle Faltungen, nicht nur die des Jobs (früher „Faltung 2/1“)
+        assert job.labels[1].startswith(f"Faltung {int(p['fold']) + 1}/{len(plan)} · ")
     merged = tmp_path / "teile"
     merged.mkdir()
     for f in tmp_path.glob("job*/*"):
