@@ -52,6 +52,7 @@ class JobLog:
         #: Grund, wenn ein Backtest an seiner Frist angehalten hat (Status ``aborted``)
         self.paused: str | None = None
         self._steps = 0
+        self._total: int | None = None
         self._stop = threading.Event()
         self._beat: threading.Thread | None = None
         self._heartbeat_s = heartbeat_s
@@ -77,6 +78,7 @@ class JobLog:
         args: dict[str, Any] | None = None,
         total: int | None = None,
     ) -> None:
+        self._total = total
         self._run(
             f"""UPDATE meta.ml_job SET status = 'aborted', finished_at = updated_at,
                        error = 'ohne Abschluss beendet'
@@ -109,6 +111,7 @@ class JobLog:
             )
 
     def total(self, n: int) -> None:
+        self._total = n
         if self.job_id is None:
             return
         self._run(
@@ -118,10 +121,16 @@ class JobLog:
 
     def step(self, label: str) -> None:
         """Vorigen Schritt als erledigt zählen und ``label`` als laufenden Schritt eintragen."""
-        log.info("ml_job.step", step=label)
+        done, self._steps = self._steps, self._steps + 1
+        # Zählerstand auch ohne Datenbank im Log, z. B. „5/31 (13 %)“ in GitHub Actions
+        if self._total:
+            pct = 100 * done // self._total
+            fortschritt = f"{self._steps}/{self._total} ({pct} %)"
+        else:
+            fortschritt = str(self._steps)
+        log.info("ml_job.step", step=label, progress=fortschritt)
         if self.job_id is None:
             return
-        done, self._steps = self._steps, self._steps + 1
         self._run(
             """UPDATE meta.ml_job SET step = :step, steps_done = :done, step_started_at = now(),
                       updated_at = now()

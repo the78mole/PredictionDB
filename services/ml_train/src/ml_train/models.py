@@ -283,8 +283,13 @@ class TwoStageModel:
         return once * (2 if self.cfg.calibration.months else 1)
 
     def fit(self, frame: FeatureFrame, progress: Progress = no_progress) -> TwoStageModel:
-        shifts = self._calibrate(frame, progress) if self.cfg.calibration.months else {}
-        self._fit(frame, progress)
+        if self.cfg.calibration.months:
+            # zwei Durchgänge: Kalibriermodell ohne die letzten Monate, dann das Endmodell
+            shifts = self._calibrate(frame, lambda s: progress(f"1/2 Kalibrierung · {s}"))
+            self._fit(frame, lambda s: progress(f"2/2 Endmodell · {s}"))
+        else:
+            shifts = {}
+            self._fit(frame, progress)
         for code, sh in shifts.items():
             (self.stage1.get(code) or self.stage2[code]).shifts = sh
         return self
@@ -305,9 +310,7 @@ class TwoStageModel:
         if hold.sum() < cal.min_rows or early.sum() < 1000:
             return {}
         cfg0 = self.cfg.model_copy(update={"calibration": CalibrationConfig()})
-        m0 = TwoStageModel(cfg0, self.variant)._fit(
-            frame.subset(early), lambda s: progress(f"Kalibrierung · {s}")
-        )
+        m0 = TwoStageModel(cfg0, self.variant)._fit(frame.subset(early), progress)
         test = frame.subset(hold)
         out: dict[str, dict[int, dict[str, float]]] = {}
         s1: dict[str, np.ndarray] = {}
@@ -322,16 +325,17 @@ class TwoStageModel:
     def _fit(self, frame: FeatureFrame, progress: Progress = no_progress) -> TwoStageModel:
         base = self._base_features(frame)
         oof: dict[str, np.ndarray] = {}
-        for t in self.cfg.stage1:
-            progress(f"Stufe 1 · {t.code}")
+        n1, n2 = len(self.cfg.stage1), len(self.cfg.stage2)
+        for i, t in enumerate(self.cfg.stage1, 1):
+            progress(f"Stufe 1 · {i}/{n1} {t.code}")
             self.stage1[t.code] = self._model(t, base, frame).fit(frame.X, frame.y[t.code])
             if self.uses_stage1 and self.cfg.stage2:
-                progress(f"Stufe 1 · {t.code} · Out-of-Fold")
+                progress(f"Stufe 1 · {i}/{n1} {t.code} · Out-of-Fold")
                 oof[t.code] = self._oof(t, base, frame)
         X2 = self._with_stage1(frame.X, oof) if self.uses_stage1 else frame.X
         feats2 = base + (self.stage1_columns() if self.uses_stage1 else [])
-        for t in self.cfg.stage2:
-            progress(f"Stufe 2 · {t.code}")
+        for i, t in enumerate(self.cfg.stage2, 1):
+            progress(f"Stufe 2 · {i}/{n2} {t.code}")
             self.stage2[t.code] = self._model(t, feats2, frame).fit(X2, frame.y[t.code])
         return self
 
