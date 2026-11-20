@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -849,16 +848,20 @@ def test_snapshot_roundtrip_checks_hash(snap, tmp_path: Path) -> None:  # type: 
 
 
 def _assert_ordinals(labels: list[str], m: TwoStageModel) -> None:
-    """Ziele je Stufe in Reihenfolge mit Zähler i/n, in jedem Durchgang gleich."""
-    expected = [
-        f"Stufe 1 · {i}/{len(m.cfg.stage1)} {t.code}" for i, t in enumerate(m.cfg.stage1, 1)
-    ]
-    expected += [
-        f"Stufe 2 · {i}/{len(m.cfg.stage2)} {t.code}" for i, t in enumerate(m.cfg.stage2, 1)
-    ]
-    got = [re.sub(r"^\d/2 \w+ · ", "", s) for s in labels if "Out-of-Fold" not in s]
-    passes = len(got) // len(expected)
-    assert passes >= 1 and got == expected * passes
+    """Vollständige Beschriftung: Durchgang, Stufe, Ziel i/n und Out-of-Fold in Reihenfolge."""
+    oof = m.uses_stage1 and bool(m.cfg.stage2)
+    once: list[str] = []
+    for i, t in enumerate(m.cfg.stage1, 1):
+        once.append(f"Stufe 1 · {i}/{len(m.cfg.stage1)} {t.code}")
+        if oof:
+            once.append(f"Stufe 1 · {i}/{len(m.cfg.stage1)} {t.code} · Out-of-Fold")
+    once += [f"Stufe 2 · {i}/{len(m.cfg.stage2)} {t.code}" for i, t in enumerate(m.cfg.stage2, 1)]
+    if len(labels) == 2 * len(once):
+        expected = [f"1/2 Kalibrierung · {x}" for x in once]
+        expected += [f"2/2 Endmodell · {x}" for x in once]
+    else:
+        expected = once
+    assert labels == expected
 
 
 def test_registry_champion_challenger(backtest, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
