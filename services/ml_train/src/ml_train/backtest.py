@@ -397,7 +397,7 @@ def _fit_predict(
         return [], 0.0
     t1 = time.monotonic()
     model = TwoStageModel(cfg, v)
-    total, done = model.fit_steps(), itertools.count(1)
+    total, done = model.fit_steps(tr), itertools.count(1)
 
     def progress(step: str) -> None:
         """Zwischenstand der langen Faltungsschritte im Log, z. B. „3/31“."""
