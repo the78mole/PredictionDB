@@ -653,6 +653,45 @@ RELATIONS:
 - TYPE: Parent
   VALUE: SYSR-PUB-003
 
+[REQUIREMENT]
+UID: SWR-MLT-084
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test, Demonstration
+TITLE: Tägliche Prognose ohne Datenbank
+STATEMENT: >>>
+``forecast run`` muss ohne Datenbank die Version hinter einem Modell-Tag in GHCR (Vorgabe
+``champion``) holen, dabei nur Modelldateien laden und nur Versionen mit ``publishable`` und
+passender Konfiguration annehmen, die Eingänge als Snapshot aus den Datenpaketen in GHCR bilden
+und daraus Last und Day-Ahead-Preis für alle Vorlauftage des Modells rechnen. Enthält der
+Snapshot eine nicht freie Quelle, muss der Lauf abbrechen. Fehlt dem Gold der jüngste GFS-Lauf,
+der zum Ausgabezeitpunkt verarbeitet vorliegen darf, muss der Lauf ihn selbst aus dem Archiv
+laden und mit denselben Gewichten wie das Gold verdichten.
+<<<
+QUELLE: ARCHITEKTUR.md 7.11
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-006
+
+[REQUIREMENT]
+UID: SWR-MLT-085
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Test
+TITLE: Tagesprognose in GHCR und auf Pages
+STATEMENT: >>>
+Die Prognose muss im Format des Prognose-Stacks (``predictiondb.forecast.v1``, P10/P50/P90 je
+Stunde, Modell, Wetterläufe, fehlende Eingänge, Quellen, Lizenz und Namensnennung) als
+``latest.json``, ``latest.csv`` und ``<JJJJ-MM-TT>.json`` vorliegen. ``forecast push`` muss sie
+nach ``ghcr.io/the78mole/predictiondb-forecasts/<markt>`` mit den Tags ``JJJJ-MM-TT`` und
+``latest`` legen; ``forecast pull`` muss die jüngsten Tage mit ``index.json`` in einen Ordner
+holen, den die Pages-Seite unter ``prognose/<markt>/`` veröffentlicht.
+<<<
+QUELLE: ARCHITEKTUR.md 7.11
+RELATIONS:
+- TYPE: Parent
+  VALUE: SYSR-PUB-006
+
 [[/SECTION]]
 
 [[SECTION]]

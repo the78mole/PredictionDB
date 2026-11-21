@@ -115,6 +115,22 @@ RELATIONS:
   VALUE: SWR-MLT-083
 
 [ELEMENT]
+UID: SWA-MLT-FORECAST-GHCR
+ART: Komponente
+STATUS: Umgesetzt
+TITLE: Tägliche Prognose aus GHCR
+STATEMENT: >>>
+Champion und Eingänge aus GHCR, jüngster GFS-Lauf aus dem Archiv, Tagesprognose nach
+``predictiondb-forecasts/<markt>`` und zurück für die Pages-Seite (Workflow forecast.yml).
+<<<
+ORT: services/ml_train/src/ml_train/forecast_ghcr.py
+RELATIONS:
+- TYPE: Parent
+  VALUE: SWR-MLT-084
+- TYPE: Parent
+  VALUE: SWR-MLT-085
+
+[ELEMENT]
 UID: SWA-MLT-CALENDAR
 ART: Komponente
 STATUS: Umgesetzt

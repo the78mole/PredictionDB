@@ -1661,6 +1661,39 @@ Die Datums-Tags sind in UTC und nennen den Tag, an dem die Registry den Wechsel 
 
 **Umsetzung (2026-11, `ml_train/model_ghcr.py`, Workflow `training.yml`):** Backtest und Training laufen in GitHub Actions ohne Datenbank (Snapshot aus GHCR, ein Matrix-Job je Testfenster) und legen neue Versionen als Challenger nach `…/de_lu` (Tag = Versionsname der Registry statt `JJJJ.MM.TT`-Schema, dazu `challenger-JJJJ-MM-TT-<konfiguration>-<variante>`, immer mit Zusatz). Die VM übernimmt sie mit `ml-train registry import` und entscheidet über Krönungen wie bisher mit `registry promote`; ihren Stand legt sie mit `registry publish-state` als `registry-<konfiguration>.json` in `:history` ab und setzt `champion`, `baseline`, `champion-JJJJ-MM-TT` und `honor-JJJJ-MM-TT` an Versionen, die in GHCR liegen. Die Backtest-Kennzahlen jedes Laufs liegen als `backtest-<konfiguration>` daneben (keine Prognosen); die Pages-Seite zeigt daraus den Vergleich von Champion, Challenger, Vorgänger und Baseline. Noch offen: cosign-Signatur, Modellkarte (`MODEL_CARD.md`, `CHAMPIONS.md`), `retired-…` und `pdb-model pull`. Die Version enthält `backtest.parquet` mit Ist-Werten, weil `promote` auf der VM die gemeinsamen Zeilen vergleicht; der Snapshot besteht nur aus freien Quellen (`publishable`), deren Reihen ohnehin unter `predictiondb-data/energy` veröffentlicht sind.
 
+#### 7.11.6 Tägliche Prognose in Actions
+
+Der Workflow `forecast.yml` rechnet einmal am Tag die Prognose des Champions, ohne Datenbank und
+ohne die VM (`ml-train forecast`, `ml_train/forecast_ghcr.py`):
+
+1. Start nach dem Energiedaten-Workflow (`energy-history.yml`, 12:37 UTC, fertig gegen 13:15
+   UTC); dann steht das Ergebnis der Day-Ahead-Auktion für morgen in `energy:JJJJ`, GFS 00Z im
+   Gold bzw. im Archiv und GEFS 00Z im Silber. Ersatzlauf 15:07 UTC, falls es für heute noch
+   keine Prognose gibt. Ausgabezeitpunkt ist die volle Stunde beim Start (meist 13 UTC).
+2. `champion` aus `predictiondb-models/de_lu` auflösen, nur Modelldateien laden (kein
+   `backtest.parquet`). Version, Tag und SHA-256 des Manifests stehen in jeder Prognose; einen
+   anderen Tag (Notbremse) nimmt der Start von Hand (`tag`).
+3. Snapshot um den Ausgabezeitpunkt mit `ghcr_snapshot`, also mit denselben Paketen wie der
+   Trainings-Snapshot in Actions. Das Gold DE hinkt etwa 30 Stunden hinterher, weil
+   `gfs-history.yml` das Live-Fenster der VM auslässt; den jüngsten Lauf lädt der Job deshalb
+   selbst aus dem AWS-Archiv, mit derselben Kette (`archive_only`, Silber im Arbeitsordner) und
+   denselben Gewichten wie das Gold. Probe 21.11.2026 für den Lauf 20.11. 00Z: alle 6 260 Werte
+   gleich dem Gold. Gruppen aus GFS Europa (`nachbarwetter`, `kuehlwasser`) nutzen weiter das
+   Gold Europa und damit einen älteren Lauf; der heutige Champion braucht sie nicht.
+4. Ergebnis im Format des Prognose-Stacks (`predictiondb.forecast.v1`: Last und Preis,
+   P10/P50/P90 je Stunde, D+0 bis D+15, Modell, Wetterläufe, fehlende Eingänge, Quellen,
+   Lizenz CC BY 4.0) nach `ghcr.io/the78mole/predictiondb-forecasts/de_lu`, Tags `JJJJ-MM-TT`
+   und `latest`.
+5. Danach baut `pages.yml` die Seite neu und holt die jüngsten 15 Tage nach `prognose/de_lu/`:
+   `latest.json`, `latest.csv`, `JJJJ-MM-TT.json` und `index.json`. Adresse für Clients:
+   `https://the78mole.github.io/PredictionDB/prognose/de_lu/latest.json` (CORS frei). Mittelwerte
+   (arithmetisch, H0) rechnet der Client selbst.
+
+Warum GHCR und nicht direkt Pages: Pages wird bei jedem CI-Lauf als Ganzes neu veröffentlicht;
+läge die Prognose nur im Pages-Artefakt, verschwände sie mit dem nächsten Bau oder müsste dort
+jedes Mal neu gerechnet werden. In GHCR bleibt jeder Tag erhalten, und der Prognoseverlauf
+(14 Vortage) braucht keine eigene Ablage.
+
 **Lizenz der Modelle:** CC BY 4.0 wie die Daten (12.10, entschieden). Namensnennung: „PredictionDB (the78mole)“ plus die Quellenvermerke aus der Modellkarte.
 
 **Zeitpunkt der Umsetzung (Entscheidung 2026-10-24):** Veröffentlichung auf GHCR und automatisches wöchentliches Neutraining mit Challenger/Champion-Wechsel werden erst eingerichtet, wenn eine belastbare GFS-Basis von mindestens drei Jahren Trainingsdaten vorliegt. Bis dahin beschreibt 7.11 nur das vereinbarte Schema; die Tags werden erst ab der ersten Veröffentlichung vergeben, frühere Wechsel in der lokalen Registry werden nicht nachgetragen. **Stand 2026-11-18:** Die GFS-Basis reicht ab 2021-03 über mehr als fünf Jahre; auf Wunsch des Nutzers werden Modelle jetzt in GHCR registriert und auf der VM importiert (Umsetzung oben). Das wöchentliche Neutraining ist noch nicht eingerichtet, `training.yml` startet nur von Hand.

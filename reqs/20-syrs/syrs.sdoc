@@ -523,7 +523,8 @@ wo veröffentlicht wird, ist austauschbar und nicht Teil dieser Anforderung.
 <<<
 RATIONALE: >>>
 Heute als Grafana-Snapshot auf snapshots.raintank.io mit Kurzlink go.the78mole.de/predb
-(SWR-WXX-050, SWR-WXX-051). Die Art der Veröffentlichung kann sich noch ändern.
+(SWR-WXX-050, SWR-WXX-051) und als Tagesprognose des Champions auf GitHub Pages unter
+prognose/de_lu/ (SWR-MLT-084, SWR-MLT-085). Die Art der Veröffentlichung kann sich noch ändern.
 <<<
 RELATIONS:
 - TYPE: Parent

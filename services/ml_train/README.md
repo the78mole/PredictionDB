@@ -182,6 +182,24 @@ uv run ml-train --config config/ml/de_lu_v2.yaml registry publish-state   # VM: 
 uv run ml-train --config config/ml/de_lu_v2.yaml registry push <version> --challenger
 ```
 
+### Tägliche Prognose in GitHub Actions
+
+`forecast run` rechnet ohne Datenbank die Prognose der Version hinter `champion` (oder `--tag`)
+aus `predictiondb-models/de_lu`: nur Modelldateien laden, Snapshot um den Ausgabezeitpunkt aus
+GHCR wie `snapshot --ghcr` (nur freie Quellen, sonst Abbruch), den jüngsten GFS-Lauf, der dem
+Gold noch fehlt, selbst aus dem AWS-Archiv holen und mit den Gewichten des Golds verdichten.
+Ausgabe im Format des Prognose-Stacks (`predictiondb.forecast.v1`, nur Last und Preis) als
+`latest.json`, `latest.csv` und `<JJJJ-MM-TT>.json`. `forecast push` legt sie nach
+`ghcr.io/the78mole/predictiondb-forecasts/de_lu` (Tags `JJJJ-MM-TT`, `latest`), `forecast pull`
+holt die jüngsten Tage samt `index.json` für die Pages-Seite (`prognose/de_lu/`). Workflow
+`forecast.yml`, Ablauf in [ARCHITEKTUR.md 7.11.6](../../docs/ARCHITEKTUR.md#7116-tägliche-prognose-in-actions).
+
+```bash
+uv run ml-train --config config/ml/de_lu_v2.yaml forecast run --out .ml-data/prognose
+uv run ml-train --config config/ml/de_lu_v2.yaml forecast run --out x --issue 2026-11-21T13
+uv run ml-train --config config/ml/de_lu_v2.yaml forecast pull --out build/pages/prognose/de_lu
+```
+
 ### Fortschritt laufender Jobs
 
 `snapshot`, `backtest` und `fit` tragen sich beim Start in `meta.ml_job` ein und melden jeden
