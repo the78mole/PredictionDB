@@ -13,6 +13,9 @@ Beispiele::
     ml-train predict                                           # aktive Versionen, jetzt
     ml-train predict --watch 3600 --catch-up 24                # stündlich, Lücken nachholen
     ml-train bundle de_lu_v2-frei-202610241200-ab12cd --out /data/pakete/de_lu_v2-frei
+    ml-train forecast run --out prognose                       # Champion aus GHCR, ohne DB
+    ml-train forecast push --dir prognose                      # Tagesprognose nach GHCR
+    ml-train forecast pull --out build/pages/prognose/de_lu    # jüngste Tage für Pages
 
 @relation(SWA-MLT-CLI, scope=file)
 """
@@ -258,6 +261,21 @@ def build_parser() -> argparse.ArgumentParser:
     bu.add_argument("--registry", default=DEFAULT_REGISTRY)
     bu.add_argument("--snapshot", type=Path, help="Bestand aus dem Snapshot statt der Datenbank")
     bu.add_argument("--wx-config", type=Path, default=Path("config/process/gfs_0p25.yaml"))
+
+    fc = cmd.add_parser("forecast", help="Prognose ohne Datenbank: Champion und Eingänge aus GHCR")
+    fcc = fc.add_subparsers(dest="action", required=True)
+    fr = fcc.add_parser("run", help="Prognose rechnen und als Dateien ablegen")
+    fr.add_argument("--out", required=True, type=Path)
+    fr.add_argument("--issue", help="Ausgabezeitpunkt UTC, z. B. 2026-11-21T13 (Vorgabe: jetzt)")
+    fr.add_argument("--tag", default="champion", help="Modell-Tag in GHCR")
+    fr.add_argument("--weights", default="latest", help="Tag der Cluster-Gewichte")
+    fp = fcc.add_parser("push", help="Tagesprognose aus --dir nach GHCR")
+    fp.add_argument("--dir", required=True, type=Path)
+    fl = fcc.add_parser("pull", help="jüngste Tagesprognosen aus GHCR holen")
+    fl.add_argument("--out", required=True, type=Path)
+    fl.add_argument("--days", type=int, default=15)
+    fe = fcc.add_parser("exists", help="Rückgabe 0, wenn es die Tagesprognose schon gibt")
+    fe.add_argument("--day", type=parse_date, help="Ausgabetag (Vorgabe: heute, UTC)")
 
     im = cmd.add_parser("importance", help="Wichtigkeit der Merkmale einer Version (Gain)")
     im.add_argument("version")
@@ -883,6 +901,47 @@ def cmd_importance(cfg: ModelConfig, a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_forecast(cfg: ModelConfig, a: argparse.Namespace) -> int:
+    """@relation(SWR-MLT-084, SWR-MLT-085, scope=function)"""
+    import httpx
+
+    from ml_train import forecast_ghcr as fg
+
+    with httpx.Client(timeout=httpx.Timeout(120.0, connect=30.0)) as client:
+        oci = fg.connect(client, read_only=a.action in ("pull", "exists"))
+        if a.action == "exists":
+            return 0 if fg.exists(oci, a.day or datetime.now(UTC).date()) else 1
+        if a.action == "pull":
+            days = fg.pull_recent(oci, a.out, a.days)
+            print(json.dumps(days))
+            return 0
+        if a.action == "push":
+            doc = json.loads((a.dir / "latest.json").read_text())
+            if not doc.get("targets"):
+                raise SystemExit("Prognose ohne Werte, nicht veröffentlicht")
+            print(json.dumps(fg.push(oci, doc)))
+            return 0
+        from ml_train import model_ghcr
+        from ml_train.snapshot_ghcr import Packages
+
+        issue = (
+            datetime.strptime(a.issue, "%Y-%m-%dT%H").replace(tzinfo=UTC)
+            if a.issue
+            else datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+        )
+        packages = Packages.connect(
+            client,
+            host=os.environ.get("WX_EXCHANGE_REGISTRY", "ghcr.io"),
+            username=os.environ.get("WX_EXCHANGE_USERNAME"),
+            password=os.environ.get("WX_EXCHANGE_TOKEN") or None,
+        )
+        models = model_ghcr.connect(client, read_only=True)
+        doc = fg.run(cfg, models, packages, issue, tag=a.tag, weights=a.weights)
+        fg.write_files(fg.files_of(doc), a.out)
+        print(json.dumps({k: doc[k] for k in ("issue_time", "model", "inputs_missing")}, indent=1))
+        return 0 if all(t in doc["targets"] for t in fg.TARGETS) else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     """@relation(SWR-MLT-001, scope=function)"""
     a = build_parser().parse_args(argv)
@@ -899,6 +958,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_bundle(cfg, a)
     if a.cmd == "importance":
         return cmd_importance(cfg, a)
+    if a.cmd == "forecast":
+        return cmd_forecast(cfg, a)
     return 2
 
 

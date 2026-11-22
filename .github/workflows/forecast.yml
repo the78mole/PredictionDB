@@ -1,0 +1,156 @@
+name: Prognose
+
+# Tägliche Prognose (Last DE und Day-Ahead-Preis DE-LU, D+0 bis D+15) mit dem Champion aus
+# ghcr.io/the78mole/predictiondb-models/de_lu, ohne Datenbank und ohne die VM
+# (ml_train/forecast_ghcr.py). Eingänge kommen aus denselben öffentlichen Paketen wie der
+# Trainings-Snapshot in Actions; den jüngsten GFS-Lauf, der dem Gold noch fehlt, lädt der Job
+# selbst aus dem AWS-Archiv.
+#
+# Start nach dem Energiedaten-Workflow (12:37 UTC, fertig gegen 13:15 UTC), dann stehen die
+# Ergebnisse der Day-Ahead-Auktion für morgen im Paket energy:JJJJ; 00Z-Wetter, Gold und GEFS
+# sind schon da. Fällt der Energiedaten-Lauf aus, rechnet ein Ersatzlauf um 15:07 UTC mit dem
+# Stand von GHCR, sofern es für heute noch keine Prognose gibt.
+#
+# Ergebnis: ghcr.io/the78mole/predictiondb-forecasts/de_lu mit den Tags JJJJ-MM-TT und latest.
+# Danach baut pages.yml die Seite neu und legt die jüngsten 15 Tage unter prognose/de_lu/ ab.
+# Nur freie Quellen; der Job bricht ab, wenn der Snapshot etwas anderes enthält.
+on:
+  workflow_run:
+    workflows: [Energie-Historie]
+    types: [completed]
+    branches: [main]
+  schedule:
+    - cron: "7 15 * * *"
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: Ausgabezeitpunkt UTC, z. B. 2026-11-21T13 (leer = jetzt)
+        default: ""
+      tag:
+        description: Modell-Tag in GHCR
+        default: champion
+      publish:
+        description: Nach GHCR und Pages veröffentlichen
+        type: boolean
+        default: true
+  # Probelauf ohne Veröffentlichung, wenn sich der Workflow oder die Prognose ändert
+  pull_request:
+    paths:
+      - .github/workflows/forecast.yml
+      - services/ml_train/src/ml_train/forecast_ghcr.py
+
+concurrency:
+  group: forecast-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  PDB_LOG_JSON: "false"
+  PDB_ML_JOB_LOG: "false"
+  PYTHONUNBUFFERED: "1"
+  CONFIG: config/ml/de_lu_v2.yaml
+
+jobs:
+  prognose:
+    name: Prognose rechnen
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion != 'cancelled' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: read  # Modell (nicht öffentlich) und Datenpakete
+    env:
+      WX_EXCHANGE_USERNAME: ${{ github.actor }}
+      WX_EXCHANGE_TOKEN: ${{ github.token }}
+    outputs:
+      done: ${{ steps.run.outputs.done }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          enable-cache: true
+          save-cache: false
+      - run: uv sync --locked --no-dev --package ml-train --extra ghcr
+      - name: Ersatzlauf nötig?
+        id: check
+        if: github.event_name == 'schedule'
+        run: |
+          if uv run --no-sync ml-train --config "$CONFIG" forecast exists; then
+            echo "Prognose für heute liegt schon vor" >> "$GITHUB_STEP_SUMMARY"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Prognose rechnen
+        id: run
+        if: steps.check.outputs.skip != 'true'
+        env:
+          ISSUE: ${{ inputs.issue }}
+          TAG: ${{ inputs.tag || 'champion' }}
+        run: |
+          case "$ISSUE" in ''|[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]) ;;
+            *) echo "issue muss JJJJ-MM-TTThh sein" >&2; exit 2 ;; esac
+          args=(--config "$CONFIG" forecast run --out prognose --tag "$TAG")
+          [ -n "$ISSUE" ] && args+=(--issue "$ISSUE")
+          uv run --no-sync ml-train "${args[@]}"
+          echo "done=true" >> "$GITHUB_OUTPUT"
+      - name: Zusammenfassung
+        if: steps.run.outputs.done == 'true'
+        run: |
+          python3 - <<'EOF'
+          import json, os
+          d = json.load(open("prognose/latest.json"))
+          m = d["model"]
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write(f"## Prognose {d['issue_time']}\n\n")
+              f.write(f"Modell `{m['version']}` ({m['variant']}), Tag `{m['tag']}`\n\n")
+              f.write(f"GFS-Lauf {d['weather_run']}, GEFS-Lauf {d['ensemble_run']}\n\n")
+              f.write("| Ziel | Stunden | von | bis | Mittel P50 |\n|---|---:|---|---|---:|\n")
+              for t, rows in d["targets"].items():
+                  mean = sum(r["p50"] for r in rows) / len(rows)
+                  f.write(f"| {t} | {len(rows)} | {rows[0]['valid_time']} |"
+                          f" {rows[-1]['valid_time']} | {mean:,.1f} |\n")
+              if d["inputs_missing"]:
+                  f.write("\nFehlende Eingänge:\n")
+                  for k, v in d["inputs_missing"].items():
+                      f.write(f"- `{k}`: {v}\n")
+          EOF
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.run.outputs.done == 'true'
+        with:
+          name: prognose
+          path: prognose/
+          retention-days: 7
+          if-no-files-found: error
+
+  veroeffentlichen:
+    name: Nach GHCR
+    needs: prognose
+    if: >-
+      needs.prognose.outputs.done == 'true' &&
+      github.event_name != 'pull_request' &&
+      (github.event_name != 'workflow_dispatch' || inputs.publish)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    env:
+      WX_EXCHANGE_USERNAME: ${{ github.actor }}
+      WX_EXCHANGE_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          enable-cache: true
+          save-cache: false
+      - run: uv sync --locked --no-dev --package ml-train --extra ghcr
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: prognose
+          path: prognose
+      - name: Tagesprognose nach GHCR
+        run: uv run --no-sync ml-train --config "$CONFIG" forecast push --dir prognose

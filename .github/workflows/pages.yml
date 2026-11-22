@@ -4,11 +4,13 @@ name: Pages
 # StrictDoc-Export des kompletten Anforderungssets mit Traceability (reqs/) und
 # die Testberichte (tests/) des letzten CI-Laufs auf main. Läuft nach jedem
 # abgeschlossenen CI-Lauf auf main, auch wenn Tests rot sind (der Bericht zeigt
-# dann die Fehler). Abgebrochene Läufe werden übersprungen.
+# dann die Fehler). Abgebrochene Läufe werden übersprungen. Nach jeder neuen Tagesprognose
+# (forecast.yml) baut er die Seite ebenfalls neu; die jüngsten 15 Tagesprognosen kommen dabei
+# aus GHCR nach prognose/de_lu/ (latest.json, latest.csv, JJJJ-MM-TT.json, index.json).
 
 on:
   workflow_run:
-    workflows: [CI]
+    workflows: [CI, Prognose]
     types: [completed]
     branches: [main]
   workflow_dispatch:
@@ -25,14 +27,18 @@ jobs:
     name: Seite bauen
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.event == 'push' &&
-       github.event.workflow_run.head_repository.full_name == github.repository &&
-       github.event.workflow_run.conclusion != 'cancelled')
+      (github.event.workflow_run.head_repository.full_name == github.repository &&
+       ((github.event.workflow_run.name == 'CI' &&
+         github.event.workflow_run.event == 'push' &&
+         github.event.workflow_run.conclusion != 'cancelled') ||
+        (github.event.workflow_run.name == 'Prognose' &&
+         github.event.workflow_run.event != 'pull_request' &&
+         github.event.workflow_run.conclusion == 'success')))
     runs-on: ubuntu-26.04
     permissions:
       contents: read
       actions: read  # Testberichte aus dem CI-Lauf holen
-      packages: read  # Backtest-Bericht für den Modellvergleich
+      packages: read  # Backtest-Bericht für den Modellvergleich, Tagesprognosen
     env:
       SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
@@ -57,7 +63,7 @@ jobs:
         id: lauf
         env:
           GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_ID: ${{ github.event.workflow_run.name == 'CI' && github.event.workflow_run.id || '' }}
         run: |
           if [ -z "$RUN_ID" ]; then
             RUN_ID=$(gh run list -R "$GITHUB_REPOSITORY" --workflow ci.yml \
@@ -73,6 +79,17 @@ jobs:
           path: build/pages/tests
           run-id: ${{ steps.lauf.outputs.id }}
           github-token: ${{ github.token }}
+      # Tagesprognosen für den späteren Prognoseverlauf und das Predict-Paket; fehlen sie,
+      # bleibt die Seite trotzdem vollständig
+      - name: Tagesprognosen aus GHCR
+        continue-on-error: true
+        env:
+          WX_EXCHANGE_USERNAME: ${{ github.actor }}
+          WX_EXCHANGE_TOKEN: ${{ github.token }}
+          PDB_LOG_JSON: "false"
+        run: >-
+          uv run ml-train --config config/ml/de_lu_v2.yaml forecast pull
+          --out build/pages/prognose/de_lu --days 15
       - name: Landing Page
         env:
           GH_TOKEN: ${{ github.token }}  # Stars/Issues/PRs für die GitHub-Ecke
