@@ -56,7 +56,14 @@
   function leeren(e) { while (e.firstChild) e.removeChild(e.firstChild); return e; }
 
   // ---------- Prognosen ----------
-  function json(url) { return fetch(url, { cache: "no-cache" }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }); }
+  // Jede Abfrage endet nach spätestens 20 s, damit ein hängender Abruf die übrigen Reihen nicht blockiert.
+  function json(url) {
+    var ctl = typeof AbortController === "function" ? new AbortController() : null;
+    var uhrwerk = ctl ? setTimeout(function () { ctl.abort(); }, 20000) : 0;
+    return fetch(url, { cache: "no-cache", signal: ctl ? ctl.signal : undefined })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .finally(function () { clearTimeout(uhrwerk); });
+  }
 
   function reihe(rows, faktor) {
     return (rows || []).map(function (r) {
