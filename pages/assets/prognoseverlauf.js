@@ -2,7 +2,8 @@
 // aufklappbar die Vortage mit den Ist-Werten bis jetzt. Prognosen kommen von Pages
 // (prognose/de_lu/, gebaut von pages.yml aus GHCR). Ist-Last, ÜNB-Lastprognose und
 // Day-Ahead-Preis lädt die Seite EINMAL je Aufruf von SMARD (CORS erlaubt, CC BY 4.0) und
-// verteilt sie auf alle Diagramme. Den Day-Ahead-Preis veröffentlicht SMARD erst mit bis zu zwei
+// verteilt sie auf alle Diagramme. Dazu Wind + PV (Ist und Day-Ahead-Prognose der ÜNB), per
+// Schalter ausblendbar. Den Day-Ahead-Preis veröffentlicht SMARD erst mit bis zu zwei
 // Tagen Verzug; die fehlenden Stunden ergänzt die Seite aus den Prognosen selbst, die die
 // Auktionsergebnisse bis morgen als feste Werte (P10 = P50 = P90) enthalten.
 (function () {
@@ -78,7 +79,9 @@
   }
 
   // ---------- Ist-Werte: ein Abruf je Seitenaufruf ----------
-  var Ist = { last: new Map(), uenb: new Map(), preis: new Map(), stand: null };
+  var Ist = { last: new Map(), uenb: new Map(), preis: new Map(), ee: new Map(), eeProg: new Map(), stand: null };
+  var zeigeEE = true;
+  try { zeigeEE = localStorage.getItem("pv-ee") !== "0"; } catch (e) { /* ohne Speicher sichtbar */ }
 
   function smardReihe(filter, region, von, bis, faktor) {
     var pfad = SMARD + filter + "/" + region + "/";
@@ -111,11 +114,20 @@
     return Promise.allSettled([
       smardReihe(410, "DE", von, bis, 4 / 1000),        // MWh je Viertelstunde → GW
       smardReihe(411, "DE", von, bis, 4 / 1000),
-      smardReihe(4169, "DE-LU", von, bis, 1)            // €/MWh
+      smardReihe(4169, "DE-LU", von, bis, 1),           // €/MWh
+      smardReihe(4067, "DE", von, bis, 4 / 1000),       // Wind an Land
+      smardReihe(1225, "DE", von, bis, 4 / 1000),       // Wind auf See
+      smardReihe(4068, "DE", von, bis, 4 / 1000),       // Photovoltaik
+      smardReihe(5097, "DE", von, bis, 4 / 1000)        // Prognose Wind + PV (ÜNB, Vortag)
     ]).then(function (r) {
       Ist.last = r[0].status === "fulfilled" ? r[0].value : new Map();
       Ist.uenb = r[1].status === "fulfilled" ? r[1].value : new Map();
       Ist.preis = r[2].status === "fulfilled" ? r[2].value : new Map();
+      // Wind + PV nur für Stunden, in denen alle drei Reihen vorliegen
+      var teil = [3, 4, 5].map(function (i) { return r[i].status === "fulfilled" ? r[i].value : new Map(); });
+      Ist.ee = new Map();
+      teil[0].forEach(function (v, h) { if (teil[1].has(h) && teil[2].has(h)) Ist.ee.set(h, v + teil[1].get(h) + teil[2].get(h)); });
+      Ist.eeProg = r[6].status === "fulfilled" ? r[6].value : new Map();
       laeufe.forEach(function (x) {
         x.P.forEach(function (p) { if (p.fest && !Ist.preis.has(p.t)) Ist.preis.set(p.t, p.p50); });
       });
@@ -188,12 +200,14 @@
     var svg = s("svg", { viewBox: "0 0 " + W + " " + Hg, width: W, height: Hg, role: "img",
       "aria-label": "Prognose vom " + datum(x0.t0) + " mit Ist-Werten" });
 
-    function panel(top, prog, istMap, kl, bkl, titel, einheit, extra) {
+    function panel(top, prog, istMap, kl, bkl, titel, einheit, extras) {
       var lo = Infinity, hi = -Infinity;
       function mit(v) { if (v != null) { lo = Math.min(lo, v); hi = Math.max(hi, v); } }
       prog.forEach(function (p) { mit(p.p10); mit(p.p90); });
-      var ist = stunden(x0.t0, x0.t1, istMap), ex = extra ? stunden(x0.t0, x0.t1, extra) : [];
-      ist.forEach(function (p) { mit(p[1]); }); ex.forEach(function (p) { mit(p[1]); });
+      var ist = stunden(x0.t0, x0.t1, istMap);
+      var ex = (extras || []).map(function (e) { return { cls: e.cls, pkt: stunden(x0.t0, x0.t1, e.map) }; });
+      ist.forEach(function (p) { mit(p[1]); });
+      ex.forEach(function (e) { e.pkt.forEach(function (p) { mit(p[1]); }); });
       if (!isFinite(lo)) { lo = 0; hi = 1; }
       var pad = (hi - lo) * 0.06 || 1; lo -= pad; hi += pad;
       var y = function (v) { return top + hP - ((v - lo) / (hi - lo)) * hP; };
@@ -214,12 +228,14 @@
         svg.appendChild(s("path", { "class": bkl, d: o + u + "Z" }));
         svg.appendChild(s("path", { "class": kl, d: pfad(prog.map(function (p) { return [p.t, p.p50]; }), x, y) }));
       }
-      if (extra) svg.appendChild(s("path", { "class": "uenb", d: pfad(ex, x, y) }));
+      ex.forEach(function (e) { svg.appendChild(s("path", { "class": e.cls, d: pfad(e.pkt, x, y) })); });
       svg.appendChild(s("path", { "class": "ist", d: pfad(ist, x, y) }));
       if (jetzt > x0.t0 && jetzt < x0.t1) svg.appendChild(s("line", { "class": "jetzt", x1: x(jetzt), x2: x(jetzt), y1: top, y2: top + hP }));
       return y;
     }
-    var yL = panel(topL, x0.L, Ist.last, "pl", "bl", "Last", "GW", Ist.uenb);
+    var extrasL = [{ map: Ist.uenb, cls: "uenb" }];
+    if (zeigeEE) extrasL.unshift({ map: Ist.eeProg, cls: "eeprog" }, { map: Ist.ee, cls: "ee" });
+    var yL = panel(topL, x0.L, Ist.last, "pl", "bl", "Last", "GW", extrasL);
     var yP = panel(topP, x0.P, Ist.preis, "pp", "bp", "Preis", "€/MWh", null);
     var jedes = W < 420 ? 4 : schmal ? 2 : 1;
     for (var k = 0; k < TAGE; k++) {
@@ -232,7 +248,7 @@
 
     var cross = s("line", { "class": "cross", y1: topL, y2: topP + hP }), pts = {};
     var g = s("g", { "class": "hover", visibility: "hidden" }, [cross]);
-    [["pl", "pl-f"], ["il", "ist-f"], ["ul", "uenb-f"], ["pp", "pp-f"], ["ip", "ist-f"]].forEach(function (k) {
+    [["pl", "pl-f"], ["il", "ist-f"], ["ul", "uenb-f"], ["ei", "ee-f"], ["ep", "ee-f"], ["pp", "pp-f"], ["ip", "ist-f"]].forEach(function (k) {
       pts[k[0]] = g.appendChild(s("circle", { r: 3.5, "class": "ptk " + k[1] }));
     });
     var fang = s("rect", { "class": "fang", x: ml, y: topL, width: iw, height: topP + hP - topL, fill: "transparent" });
@@ -253,9 +269,11 @@
       t = Math.max(x0.t0, Math.min(x0.t1 - H, t));
       var xv = x(t), l = mapL.get(t), p = mapP.get(t);
       var il = Ist.last.get(t), ul = Ist.uenb.get(t), ip = Ist.preis.get(t);
+      var ei = zeigeEE ? Ist.ee.get(t) : null, ep = zeigeEE ? Ist.eeProg.get(t) : null;
       g.setAttribute("visibility", "visible"); cross.setAttribute("x1", xv); cross.setAttribute("x2", xv);
       setze(pts.pl, xv, l ? yL(l.p50) : null); setze(pts.il, xv, il == null ? null : yL(il));
       setze(pts.ul, xv, ul == null ? null : yL(ul));
+      setze(pts.ei, xv, ei == null ? null : yL(ei)); setze(pts.ep, xv, ep == null ? null : yL(ep));
       setze(pts.pp, xv, p ? yP(p.p50) : null); setze(pts.ip, xv, ip == null ? null : yP(ip));
       var tagNr = 0; while (tagNr < TAGE && t >= tage[tagNr + 1]) tagNr++;
       leeren(tip);
@@ -266,6 +284,8 @@
         zeile("Abweichung", l && il != null ? abw(l.p50, il) + " GW" : "–"),
         zeile("ÜNB-Prognose", ul == null ? "–" : f1(ul) + " GW"),
         zeile("Abweichung ÜNB", ul != null && il != null ? abw(ul, il) + " GW" : "–"),
+        zeigeEE ? zeile("Wind + PV Ist", ei == null ? "–" : f1(ei) + " GW") : null,
+        zeigeEE ? zeile("Wind + PV ÜNB-Prognose", ep == null ? "–" : f1(ep) + " GW") : null,
         zeile(p && p.fest ? "Preis (Auktion)" : "Preisprognose", p ? f1(p.p50) + " €/MWh" : "–"),
         zeile("Day-Ahead", ip == null ? "–" : f1(ip) + " €/MWh"),
         zeile("Abweichung", p && !p.fest && ip != null ? abw(p.p50, ip) + " €/MWh" : "–")
@@ -416,16 +436,26 @@
     $("pv-hm-last").addEventListener("click", function () { setHm("L"); });
     $("pv-alle-auf").addEventListener("click", function () { $("pv-laeufe").querySelectorAll("details").forEach(function (d) { d.open = true; }); });
     $("pv-alle-zu").addEventListener("click", function () { $("pv-laeufe").querySelectorAll("details").forEach(function (d) { d.open = false; }); });
+    function neuZeichnen() {
+      zeichne($("pv-chart-heute"), heute, false);
+      $("pv-laeufe").querySelectorAll("details[open]").forEach(function (d) {
+        var x = LAEUFE.find(function (y) { return "pv-lauf-" + y.t0 === d.id; });
+        if (x) zeichne(d.querySelector(".pv-chart"), x, true);
+      });
+    }
+    var ee = $("pv-ee");
+    ee.checked = zeigeEE;
+    $("pv-legende-ee").hidden = !zeigeEE;
+    ee.addEventListener("change", function () {
+      zeigeEE = ee.checked;
+      $("pv-legende-ee").hidden = !zeigeEE;
+      try { localStorage.setItem("pv-ee", zeigeEE ? "1" : "0"); } catch (e) { /* nur für diesen Aufruf */ }
+      neuZeichnen();
+    });
     var rz;
     window.addEventListener("resize", function () {
       clearTimeout(rz);
-      rz = setTimeout(function () {
-        zeichne($("pv-chart-heute"), heute, false);
-        $("pv-laeufe").querySelectorAll("details[open]").forEach(function (d) {
-          var x = LAEUFE.find(function (y) { return "pv-lauf-" + y.t0 === d.id; });
-          if (x) zeichne(d.querySelector(".pv-chart"), x, true);
-        });
-      }, 150);
+      rz = setTimeout(neuZeichnen, 150);
     });
   }
 
