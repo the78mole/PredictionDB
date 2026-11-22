@@ -43,6 +43,17 @@
   function uhr(ms) { return String(lokal(ms).h).padStart(2, "0") + ":00"; }
   var f1 = function (n) { return n.toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 }); };
   var f0 = function (n) { return n.toLocaleString("de-DE", { maximumFractionDigits: 0 }); };
+  var f2 = function (n) { return n.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+  // Achsenbeschriftung: ganze Zahlen ohne, Zwischenwerte (z. B. 2,5 ct/kWh) mit Nachkommastelle
+  var fAchse = function (n) { return Number.isInteger(n) ? f0(n) : f1(n); };
+
+  // Preiseinheit: Daten bleiben in €/MWh, umgerechnet wird nur für die Anzeige (1 ct/kWh = 10 €/MWh)
+  var preisCt = true;
+  try { preisCt = localStorage.getItem("pv-preis") !== "eur"; } catch (e) { /* ohne Speicher ct/kWh */ }
+  function pw(v) { return v == null ? v : preisCt ? v / 10 : v; }
+  function pEinh() { return preisCt ? "ct/kWh" : "€/MWh"; }
+  function pWert(v) { return preisCt ? f2(v / 10) : f1(v); }   // einzelne Preise
+  function pMae(v) { return preisCt ? f1(v / 10) : f0(v); }    // Fehler (MAE)
 
   // ---------- DOM ohne innerHTML: alle Texte als Textknoten ----------
   var SVGNS = "http://www.w3.org/2000/svg";
@@ -239,7 +250,7 @@
       svg.appendChild(s("text", { "class": "ptitel", x: ml, y: top - 6 }, [titel + " ", s("tspan", { "class": "einheit" }, ["in " + einheit])]));
       ticks(lo, hi, kompakt ? 3 : 4).forEach(function (t) {
         svg.appendChild(s("line", { "class": "raster", x1: ml, x2: W - mr, y1: y(t), y2: y(t) }));
-        svg.appendChild(s("text", { x: ml - 6, y: y(t) + 3.5, "text-anchor": "end" }, [f0(t)]));
+        svg.appendChild(s("text", { x: ml - 6, y: y(t) + 3.5, "text-anchor": "end" }, [fAchse(t)]));
       });
       if (jetzt < x0.t1) {
         var xa = x(Math.max(x0.t0, jetzt));
@@ -261,7 +272,9 @@
     var extrasL = [{ map: Ist.uenb, cls: "uenb" }];
     if (zeigeEE) extrasL.unshift({ map: x0.E, cls: "eemod" }, { map: Ist.eeProg, cls: "eeprog" }, { map: Ist.ee, cls: "ee" });
     var yL = panel(topL, x0.L, Ist.last, "pl", "bl", "Last", "GW", extrasL);
-    var yP = panel(topP, x0.P, Ist.preis, "pp", "bp", "Preis", "€/MWh", null);
+    var Pz = x0.P.map(function (p) { return { t: p.t, p10: pw(p.p10), p50: pw(p.p50), p90: pw(p.p90), fest: p.fest }; });
+    var istPreis = new Map(); Ist.preis.forEach(function (v, t) { istPreis.set(t, pw(v)); });
+    var yP = panel(topP, Pz, istPreis, "pp", "bp", "Preis", pEinh(), null);
     var jedes = W < 420 ? 4 : schmal ? 2 : 1;
     for (var k = 0; k < TAGE; k++) {
       if (k % jedes) continue;
@@ -281,19 +294,21 @@
     var tip = h("div", { "class": "pv-tip", hidden: "" });
     leeren(el); el.appendChild(svg); el.appendChild(tip);
 
-    var mapL = new Map(x0.L.map(function (p) { return [p.t, p]; })), mapP = new Map(x0.P.map(function (p) { return [p.t, p]; }));
+    var mapL = new Map(x0.L.map(function (p) { return [p.t, p]; })), mapP = new Map(Pz.map(function (p) { return [p.t, p]; }));
     function setze(c, xv, yv) {
       if (yv == null) c.setAttribute("visibility", "hidden");
       else { c.setAttribute("visibility", "visible"); c.setAttribute("cx", xv); c.setAttribute("cy", yv); }
     }
-    function abw(a, b) { return a == null || b == null ? "–" : (a - b >= 0 ? "+" : "−") + f1(Math.abs(a - b)); }
+    // Preise sind hier schon umgerechnet, nur die Nachkommastellen hängen an der Einheit
+    var pZahl = preisCt ? f2 : f1;
+    function abw(a, b, fmt) { return a == null || b == null ? "–" : (a - b >= 0 ? "+" : "−") + (fmt || f1)(Math.abs(a - b)); }
     function zeile(a, b) { return h("div", { "class": "r" }, [h("span", null, [a]), h("span", null, [b])]); }
     function zeige(ev) {
       var r = svg.getBoundingClientRect(), sx = (ev.clientX - r.left) * (W / r.width);
       var t = x0.t0 + Math.round((((sx - ml) / iw) * span) / H) * H;
       t = Math.max(x0.t0, Math.min(x0.t1 - H, t));
       var xv = x(t), l = mapL.get(t), p = mapP.get(t);
-      var il = Ist.last.get(t), ul = Ist.uenb.get(t), ip = Ist.preis.get(t);
+      var il = Ist.last.get(t), ul = Ist.uenb.get(t), ip = istPreis.get(t);
       var ei = zeigeEE ? Ist.ee.get(t) : null, ep = zeigeEE ? Ist.eeProg.get(t) : null;
       var em = zeigeEE ? x0.E.get(t) : null;
       g.setAttribute("visibility", "visible"); cross.setAttribute("x1", xv); cross.setAttribute("x2", xv);
@@ -314,9 +329,9 @@
         zeigeEE ? zeile("Wind + PV Prognose", em == null ? "–" : f1(em) + " GW") : null,
         zeigeEE ? zeile("Wind + PV Ist", ei == null ? "–" : f1(ei) + " GW") : null,
         zeigeEE ? zeile("Wind + PV ÜNB-Prognose", ep == null ? "–" : f1(ep) + " GW") : null,
-        zeile(p && p.fest ? "Preis (Auktion)" : "Preisprognose", p ? f1(p.p50) + " €/MWh" : "–"),
-        zeile("Day-Ahead", ip == null ? "–" : f1(ip) + " €/MWh"),
-        zeile("Abweichung", p && !p.fest && ip != null ? abw(p.p50, ip) + " €/MWh" : "–")
+        zeile(p && p.fest ? "Preis (Auktion)" : "Preisprognose", p ? pZahl(p.p50) + " " + pEinh() : "–"),
+        zeile("Day-Ahead", ip == null ? "–" : pZahl(ip) + " " + pEinh()),
+        zeile("Abweichung", p && !p.fest && ip != null ? abw(p.p50, ip, pZahl) + " " + pEinh() : "–")
       ]);
       tip.hidden = false;
       var px = (xv / W) * r.width, tw = tip.offsetWidth;
@@ -388,7 +403,7 @@
           ]),
           h("span", { "class": "spark" }, [spark(x)]),
           h("span", { "class": "m" }, [
-            "Last ", wert(l, f1), " GW · Preis ", wert(p, f0), " €/MWh",
+            "Last ", wert(l, f1), " GW · Preis ", wert(p, pMae), " " + pEinh(),
             a && b && a.n >= 12 ? h("br") : null,
             a && b && a.n >= 12 ? "Last D+1: Modell " : null, a && b && a.n >= 12 ? wert(a, f1) : null,
             a && b && a.n >= 12 ? " · ÜNB " : null, a && b && a.n >= 12 ? wert(b, f1) : null,
@@ -421,7 +436,7 @@
     if (!alle.length) return;
     var lo = Math.min.apply(null, alle), hi = Math.max.apply(null, alle), sp = hi - lo || 1;
     var farbe = function (v) { return "color-mix(in oklab, var(--heat1) " + Math.round(8 + (92 * (v - lo)) / sp) + "%, var(--heat0))"; };
-    var fmt = hmZiel === "P" ? f0 : f1, e = hmZiel === "P" ? " €/MWh" : " GW";
+    var fmt = hmZiel === "P" ? pMae : f1, e = hmZiel === "P" ? " " + pEinh() : " GW";
     var kopfzeile = h("tr", null, [h("th")]);
     for (var d = 0; d < TAGE; d++) kopfzeile.appendChild(h("th", { scope: "col" }, ["D+" + d]));
     var body = h("tbody");
@@ -471,6 +486,21 @@
         if (x) zeichne(d.querySelector(".pv-chart"), x, true);
       });
     }
+    function setPreis(ct) {
+      preisCt = ct;
+      $("pv-preis-ct").setAttribute("aria-pressed", String(ct));
+      $("pv-preis-eur").setAttribute("aria-pressed", String(!ct));
+    }
+    setPreis(preisCt);
+    [["pv-preis-ct", true], ["pv-preis-eur", false]].forEach(function (k) {
+      $(k[0]).addEventListener("click", function () {
+        if (preisCt === k[1]) return;
+        setPreis(k[1]);
+        try { localStorage.setItem("pv-preis", k[1] ? "ct" : "eur"); } catch (e) { /* nur für diesen Aufruf */ }
+        neuZeichnen();
+        liste();
+      });
+    });
     var ee = $("pv-ee");
     ee.checked = zeigeEE;
     $("pv-legende-ee").hidden = !zeigeEE;
