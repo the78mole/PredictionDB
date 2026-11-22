@@ -23,8 +23,11 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    name: Seite bauen
+  # Der Ersatzlauf von forecast.yml (15:07 UTC) endet erfolgreich, auch wenn er nichts rechnet,
+  # weil die Prognose des Tages schon vorliegt. Neu gebaut wird nur, wenn der Prognose-Lauf
+  # wirklich nach GHCR veröffentlicht hat (Job „Nach GHCR“ erfolgreich).
+  pruefen:
+    name: Neu bauen?
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.head_repository.full_name == github.repository &&
@@ -34,6 +37,34 @@ jobs:
         (github.event.workflow_run.name == 'Prognose' &&
          github.event.workflow_run.event != 'pull_request' &&
          github.event.workflow_run.conclusion == 'success')))
+    runs-on: ubuntu-26.04
+    permissions:
+      actions: read  # Jobs des Prognose-Laufs lesen
+    outputs:
+      bauen: ${{ steps.p.outputs.bauen }}
+    steps:
+      - id: p
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NAME: ${{ github.event.workflow_run.name }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          bauen=true
+          if [ "$NAME" = "Prognose" ]; then
+            ergebnis=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/jobs" \
+              --jq '.jobs[] | select(.name == "Nach GHCR") | .conclusion')
+            if [ "$ergebnis" != "success" ]; then
+              bauen=false
+              echo "Prognose-Lauf hat nichts veröffentlicht (Nach GHCR: ${ergebnis:-übersprungen})" \
+                >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+          echo "bauen=$bauen" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Seite bauen
+    needs: pruefen
+    if: needs.pruefen.outputs.bauen == 'true'
     runs-on: ubuntu-26.04
     permissions:
       contents: read
@@ -79,8 +110,8 @@ jobs:
           path: build/pages/tests
           run-id: ${{ steps.lauf.outputs.id }}
           github-token: ${{ github.token }}
-      # Tagesprognosen für den späteren Prognoseverlauf und das Predict-Paket; fehlen sie,
-      # bleibt die Seite trotzdem vollständig
+      # Tagesprognosen für den Prognoseverlauf (assets/prognoseverlauf.js) und das
+      # Predict-Paket; fehlen sie, blendet die Seite den Block aus
       - name: Tagesprognosen aus GHCR
         continue-on-error: true
         env:
