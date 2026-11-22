@@ -2,7 +2,7 @@
 // aufklappbar die Vortage mit den Ist-Werten bis jetzt. Prognosen kommen von Pages
 // (prognose/de_lu/, gebaut von pages.yml aus GHCR). Ist-Last, ÜNB-Lastprognose und
 // Day-Ahead-Preis lädt die Seite EINMAL je Aufruf von SMARD (CORS erlaubt, CC BY 4.0) und
-// verteilt sie auf alle Diagramme. Dazu Wind + PV (Ist und Day-Ahead-Prognose der ÜNB), per
+// verteilt sie auf alle Diagramme. Dazu Wind + PV (Modell, Ist und Day-Ahead-Prognose der ÜNB), per
 // Schalter ausblendbar. Den Day-Ahead-Preis veröffentlicht SMARD erst mit bis zu zwei
 // Tagen Verzug; die fehlenden Stunden ergänzt die Seite aus den Prognosen selbst, die die
 // Auktionsergebnisse bis morgen als feste Werte (P10 = P50 = P90) enthalten.
@@ -71,6 +71,23 @@
         fest: r.p10 === r.p90 && r.p50 === r.p10 };
     }).sort(function (a, b) { return a.t - b.t; });
   }
+  // Wind + PV des Modells (Stufe 1, P50) in GW, nur Stunden, in denen alle drei Ziele vorliegen.
+  // Ältere Prognosen ohne Erzeugungsziele liefern eine leere Map.
+  var EE_ZIELE = ["gen_wind_onshore", "gen_wind_offshore", "gen_solar"];
+  function eeModell(doc) {
+    var out = new Map(), einh = doc.units || {}, teile = [];
+    for (var i = 0; i < EE_ZIELE.length; i++) {
+      var rows = doc.targets[EE_ZIELE[i]];
+      if (!rows || !rows.length) return out;
+      var m = new Map(), f = einh[EE_ZIELE[i]] === "GW" ? 1 : 0.001;
+      rows.forEach(function (r) { m.set(Date.parse(r.valid_time), r.p50 * f); });
+      teile.push(m);
+    }
+    teile[0].forEach(function (v, t) {
+      if (teile[1].has(t) && teile[2].has(t)) out.set(t, v + teile[1].get(t) + teile[2].get(t));
+    });
+    return out;
+  }
   function lauf(doc) {
     var issue = Date.parse(doc.issue_time), l = lokal(issue);
     var t0 = mitternacht(l.y, l.m, l.d);
@@ -81,7 +98,8 @@
       namensnennung: typeof doc.attribution === "string" ? doc.attribution : "",
       lizenz: typeof doc.license === "string" ? doc.license : "",
       L: reihe(doc.targets.load_actual, lastFaktor),
-      P: reihe(doc.targets.da_price_de_lu, 1)
+      P: reihe(doc.targets.da_price_de_lu, 1),
+      E: eeModell(doc)
     };
   }
 
@@ -241,7 +259,7 @@
       return y;
     }
     var extrasL = [{ map: Ist.uenb, cls: "uenb" }];
-    if (zeigeEE) extrasL.unshift({ map: Ist.eeProg, cls: "eeprog" }, { map: Ist.ee, cls: "ee" });
+    if (zeigeEE) extrasL.unshift({ map: x0.E, cls: "eemod" }, { map: Ist.eeProg, cls: "eeprog" }, { map: Ist.ee, cls: "ee" });
     var yL = panel(topL, x0.L, Ist.last, "pl", "bl", "Last", "GW", extrasL);
     var yP = panel(topP, x0.P, Ist.preis, "pp", "bp", "Preis", "€/MWh", null);
     var jedes = W < 420 ? 4 : schmal ? 2 : 1;
@@ -255,7 +273,7 @@
 
     var cross = s("line", { "class": "cross", y1: topL, y2: topP + hP }), pts = {};
     var g = s("g", { "class": "hover", visibility: "hidden" }, [cross]);
-    [["pl", "pl-f"], ["il", "ist-f"], ["ul", "uenb-f"], ["ei", "ee-f"], ["ep", "ee-f"], ["pp", "pp-f"], ["ip", "ist-f"]].forEach(function (k) {
+    [["pl", "pl-f"], ["il", "ist-f"], ["ul", "uenb-f"], ["ei", "ee-f"], ["ep", "ee-f"], ["em", "ee-f"], ["pp", "pp-f"], ["ip", "ist-f"]].forEach(function (k) {
       pts[k[0]] = g.appendChild(s("circle", { r: 3.5, "class": "ptk " + k[1] }));
     });
     var fang = s("rect", { "class": "fang", x: ml, y: topL, width: iw, height: topP + hP - topL, fill: "transparent" });
@@ -277,10 +295,12 @@
       var xv = x(t), l = mapL.get(t), p = mapP.get(t);
       var il = Ist.last.get(t), ul = Ist.uenb.get(t), ip = Ist.preis.get(t);
       var ei = zeigeEE ? Ist.ee.get(t) : null, ep = zeigeEE ? Ist.eeProg.get(t) : null;
+      var em = zeigeEE ? x0.E.get(t) : null;
       g.setAttribute("visibility", "visible"); cross.setAttribute("x1", xv); cross.setAttribute("x2", xv);
       setze(pts.pl, xv, l ? yL(l.p50) : null); setze(pts.il, xv, il == null ? null : yL(il));
       setze(pts.ul, xv, ul == null ? null : yL(ul));
       setze(pts.ei, xv, ei == null ? null : yL(ei)); setze(pts.ep, xv, ep == null ? null : yL(ep));
+      setze(pts.em, xv, em == null ? null : yL(em));
       setze(pts.pp, xv, p ? yP(p.p50) : null); setze(pts.ip, xv, ip == null ? null : yP(ip));
       var tagNr = 0; while (tagNr < TAGE && t >= tage[tagNr + 1]) tagNr++;
       leeren(tip);
@@ -291,6 +311,7 @@
         zeile("Abweichung", l && il != null ? abw(l.p50, il) + " GW" : "–"),
         zeile("ÜNB-Prognose", ul == null ? "–" : f1(ul) + " GW"),
         zeile("Abweichung ÜNB", ul != null && il != null ? abw(ul, il) + " GW" : "–"),
+        zeigeEE ? zeile("Wind + PV Prognose", em == null ? "–" : f1(em) + " GW") : null,
         zeigeEE ? zeile("Wind + PV Ist", ei == null ? "–" : f1(ei) + " GW") : null,
         zeigeEE ? zeile("Wind + PV ÜNB-Prognose", ep == null ? "–" : f1(ep) + " GW") : null,
         zeile(p && p.fest ? "Preis (Auktion)" : "Preisprognose", p ? f1(p.p50) + " €/MWh" : "–"),

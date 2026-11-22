@@ -939,7 +939,7 @@ def cmd_forecast(cfg: ModelConfig, a: argparse.Namespace) -> int:
         doc = fg.run(cfg, models, packages, issue, tag=a.tag, weights=a.weights)
         fg.write_files(fg.files_of(doc), a.out)
         print(json.dumps({k: doc[k] for k in ("issue_time", "model", "inputs_missing")}, indent=1))
-        return 0 if all(t in doc["targets"] for t in fg.TARGETS) else 1
+        return 0 if all(t in doc["targets"] for t in fg.REQUIRED) else 1
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -188,7 +188,8 @@ uv run ml-train --config config/ml/de_lu_v2.yaml registry push <version> --chall
 aus `predictiondb-models/de_lu`: nur Modelldateien laden, Snapshot um den Ausgabezeitpunkt aus
 GHCR wie `snapshot --ghcr` (nur freie Quellen, sonst Abbruch), den jüngsten GFS-Lauf, der dem
 Gold noch fehlt, selbst aus dem AWS-Archiv holen und mit den Gewichten des Golds verdichten.
-Ausgabe im Format des Prognose-Stacks (`predictiondb.forecast.v1`, nur Last und Preis) als
+Ausgabe im Format des Prognose-Stacks (`predictiondb.forecast.v1`: Preis und Last, dazu die Erzeugung aus Stufe 1, also Wind an
+Land, Wind auf See und PV, soweit das Modell sie kennt; nur Preis und Last sind Pflicht) als
 `latest.json`, `latest.csv` und `<JJJJ-MM-TT>.json`. `forecast push` legt sie nach
 `ghcr.io/the78mole/predictiondb-forecasts/de_lu` (Tags `JJJJ-MM-TT`, `latest`), `forecast pull`
 holt die jüngsten Tage samt `index.json` für die Pages-Seite (`prognose/de_lu/`). Workflow
