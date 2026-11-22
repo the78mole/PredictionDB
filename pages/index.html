@@ -136,6 +136,8 @@
   .pv-legende i.jetzt { width: 0; height: 12px; border-top: 0; border-left: 1.5px dashed var(--bad); }
   .pv-schalter { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; color: var(--text); cursor: pointer; }
   .pv-schalter input { accent-color: var(--ee); margin: 0; }
+  .pv-optionen { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; }
+  .pv-einheit { display: inline-flex; align-items: center; gap: 8px; font-size: .8rem; color: var(--muted); }
   .pv-kz { display: flex; flex-wrap: wrap; gap: 4px 20px; font-size: .875rem; color: var(--muted); font-variant-numeric: tabular-nums; }
   .pv-kz b { color: var(--text); font-weight: 600; }
   .pv-chart { position: relative; width: 100%; touch-action: pan-y; }
@@ -297,7 +299,15 @@
         </div>
         <span class="pv-status" id="pv-status" role="status"><span class="dot"></span><span id="pv-status-text">Ist-Werte werden geladen …</span></span>
       </div>
-      <label class="pv-schalter"><input type="checkbox" id="pv-ee" checked> Wind + PV in der Lastkurve zeigen</label>
+      <div class="pv-optionen">
+        <label class="pv-schalter"><input type="checkbox" id="pv-ee" checked> Wind + PV in der Lastkurve zeigen</label>
+        <span class="pv-einheit"><span id="pv-preis-label">Preise in</span>
+          <span class="pv-seg" role="group" aria-labelledby="pv-preis-label">
+            <button type="button" id="pv-preis-ct" aria-pressed="true">ct/kWh</button>
+            <button type="button" id="pv-preis-eur" aria-pressed="false">€/MWh</button>
+          </span>
+        </span>
+      </div>
       <div class="pv-legende" aria-hidden="true">
         <span><i class="l"></i>Lastprognose</span>
         <span><i class="p"></i>Preisprognose</span>
