@@ -63,6 +63,8 @@ INDEX_SCHEMA = "predictiondb.forecast-index.v1"
 #: Ziele auf der Pages-Seite: Preis, Last und die Erzeugung aus Stufe 1 (Wind an Land, Wind auf
 #: See, PV), die in die Residuallast der Preisprognose eingeht
 TARGETS = ("da_price_de_lu", "load_actual", "gen_wind_onshore", "gen_wind_offshore", "gen_solar")
+#: ohne diese Ziele gilt der Lauf als gescheitert; fehlende Erzeugung steht nur in inputs_missing
+REQUIRED = ("da_price_de_lu", "load_actual")
 #: so viele Ausgabetage holt der Bau der Seite
 KEEP_DAYS = 15
 LICENSE = "CC BY 4.0 (Modell und Prognose)"

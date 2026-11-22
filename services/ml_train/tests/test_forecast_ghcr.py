@@ -197,7 +197,14 @@ def test_forecast_reports_missing_targets(cfg) -> None:  # type: ignore[no-untyp
         ensemble_run=None,
     )
     assert doc["targets"] == {}
-    assert set(doc["inputs_missing"]) == {*fg.TARGETS, "ghcr:energy:2023"}
+    assert set(doc["inputs_missing"]) == {
+        "da_price_de_lu",
+        "load_actual",
+        "gen_wind_onshore",
+        "gen_wind_offshore",
+        "gen_solar",
+        "ghcr:energy:2023",
+    }
 
 
 def test_day_tags() -> None:
