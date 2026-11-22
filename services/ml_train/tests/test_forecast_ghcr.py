@@ -112,7 +112,7 @@ def _champion(frame_lead_days: list[int]) -> fg.Champion:
         n = len(f.X)
         base = np.arange(n, dtype=float)
         q = pd.DataFrame({"q10": base, "q50": base + 1, "q90": base + 2})
-        return {"load_actual": q * 1000, "da_price_de_lu": q, "gen_solar": q}
+        return {"load_actual": q * 1000, "da_price_de_lu": q, "gen_solar": q, "gen_wind_onshore": q}
 
     model = SimpleNamespace(
         lead_days=frame_lead_days,
@@ -139,8 +139,13 @@ def test_forecast_push_and_pull_recent(cfg, tmp_path: Path) -> None:  # type: ig
     doc = fg.forecast(cfg, ch, snap, ISSUE)
     assert doc["schema"] == fg.SCHEMA
     assert doc["issue_time"] == "2023-05-11T13:00:00Z"
-    # nur Last und Preis, je Stunde P10/P50/P90
-    assert list(doc["targets"]) == ["da_price_de_lu", "load_actual"]
+    # Preis, Last und die Erzeugung, die das Modell kennt (ohne Wind auf See), je Stunde P10/P50/P90
+    assert list(doc["targets"]) == [
+        "da_price_de_lu",
+        "load_actual",
+        "gen_wind_onshore",
+        "gen_solar",
+    ]
     row = doc["targets"]["load_actual"][0]
     assert set(row) == {"valid_time", "p10", "p50", "p90"}
     assert row["valid_time"] >= "2023-05-11T13:00:00Z"
@@ -192,7 +197,7 @@ def test_forecast_reports_missing_targets(cfg) -> None:  # type: ignore[no-untyp
         ensemble_run=None,
     )
     assert doc["targets"] == {}
-    assert set(doc["inputs_missing"]) == {"da_price_de_lu", "load_actual", "ghcr:energy:2023"}
+    assert set(doc["inputs_missing"]) == {*fg.TARGETS, "ghcr:energy:2023"}
 
 
 def test_day_tags() -> None:

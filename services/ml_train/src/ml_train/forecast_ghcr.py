@@ -60,8 +60,9 @@ TITLE = "org.opencontainers.image.title"
 SCHEMA = "predictiondb.forecast.v1"
 LATEST = "latest"
 INDEX_SCHEMA = "predictiondb.forecast-index.v1"
-#: Ziele auf der Pages-Seite: Last und Preis (Wind und PV bleiben im Prognose-Stack)
-TARGETS = ("da_price_de_lu", "load_actual")
+#: Ziele auf der Pages-Seite: Preis, Last und die Erzeugung aus Stufe 1 (Wind an Land, Wind auf
+#: See, PV), die in die Residuallast der Preisprognose eingeht
+TARGETS = ("da_price_de_lu", "load_actual", "gen_wind_onshore", "gen_wind_offshore", "gen_solar")
 #: so viele Ausgabetage holt der Bau der Seite
 KEEP_DAYS = 15
 LICENSE = "CC BY 4.0 (Modell und Prognose)"
@@ -452,6 +453,8 @@ def forecast(
         issue,
         weather_run=run_time(frame, "wx_lead_h"),
         ensemble_run=run_time(frame, f"wx_{ENSEMBLE_PREFIX}lead_h"),
+        # nur Ziele, die das Modell kennt; sonst stünde ein nie trainiertes Ziel als fehlend da
+        targets=[t for t in TARGETS if t in cfg.targets],
     )
     log.info(
         "forecast.done",
