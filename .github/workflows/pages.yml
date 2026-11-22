@@ -15,16 +15,15 @@ on:
     branches: [main]
   workflow_dispatch:
 
-concurrency:
-  group: pages
-  cancel-in-progress: true
-
 permissions:
   contents: read
 
 jobs:
-  build:
-    name: Seite bauen
+  # Der Ersatzlauf von forecast.yml (15:07 UTC) endet erfolgreich, auch wenn er nichts rechnet,
+  # weil die Prognose des Tages schon vorliegt. Neu gebaut wird nur, wenn der Prognose-Lauf
+  # wirklich nach GHCR veröffentlicht hat (Job „Nach GHCR“ erfolgreich).
+  pruefen:
+    name: Neu bauen?
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.head_repository.full_name == github.repository &&
@@ -34,6 +33,45 @@ jobs:
         (github.event.workflow_run.name == 'Prognose' &&
          github.event.workflow_run.event != 'pull_request' &&
          github.event.workflow_run.conclusion == 'success')))
+    runs-on: ubuntu-26.04
+    permissions:
+      actions: read  # Jobs des Prognose-Laufs lesen
+    outputs:
+      bauen: ${{ steps.p.outputs.bauen }}
+    steps:
+      - id: p
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NAME: ${{ github.event.workflow_run.name }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          bauen=true
+          if [ "$NAME" = "Prognose" ]; then
+            # Drei Versuche; antwortet die API gar nicht, lieber einmal zu viel bauen
+            for versuch in 1 2 3; do
+              if ergebnis=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/jobs" \
+                --jq '.jobs[] | select(.name == "Nach GHCR") | .conclusion'); then
+                break
+              fi
+              ergebnis=unbekannt
+              sleep $((versuch * 10))
+            done
+            if [ "$ergebnis" != "success" ] && [ "$ergebnis" != "unbekannt" ]; then
+              bauen=false
+              echo "Prognose-Lauf hat nichts veröffentlicht (Nach GHCR: ${ergebnis:-übersprungen})" \
+                >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+          echo "bauen=$bauen" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Seite bauen
+    needs: pruefen
+    if: needs.pruefen.outputs.bauen == 'true'
+    # Erst hier, damit ein Lauf ohne Neubau keinen laufenden Bau abbricht
+    concurrency:
+      group: pages
+      cancel-in-progress: true
     runs-on: ubuntu-26.04
     permissions:
       contents: read
@@ -79,17 +117,22 @@ jobs:
           path: build/pages/tests
           run-id: ${{ steps.lauf.outputs.id }}
           github-token: ${{ github.token }}
-      # Tagesprognosen für den späteren Prognoseverlauf und das Predict-Paket; fehlen sie,
-      # bleibt die Seite trotzdem vollständig
+      # Tagesprognosen für den Prognoseverlauf (assets/prognoseverlauf.js) und das
+      # Predict-Paket; fehlen sie, blendet die Seite den Block aus
       - name: Tagesprognosen aus GHCR
         continue-on-error: true
         env:
           WX_EXCHANGE_USERNAME: ${{ github.actor }}
           WX_EXCHANGE_TOKEN: ${{ github.token }}
           PDB_LOG_JSON: "false"
-        run: >-
-          uv run ml-train --config config/ml/de_lu_v2.yaml forecast pull
-          --out build/pages/prognose/de_lu --days 15
+        # Drei Versuche, damit ein kurzer Aussetzer von GHCR den Verlauf nicht von der Seite nimmt
+        run: |
+          for versuch in 1 2 3; do
+            uv run ml-train --config config/ml/de_lu_v2.yaml forecast pull \
+              --out build/pages/prognose/de_lu --days 15 && exit 0
+            sleep $((versuch * 20))
+          done
+          exit 1
       - name: Landing Page
         env:
           GH_TOKEN: ${{ github.token }}  # Stars/Issues/PRs für die GitHub-Ecke
@@ -104,6 +147,9 @@ jobs:
   deploy:
     name: Auf Pages veröffentlichen
     needs: build
+    concurrency:
+      group: pages-deploy
+      cancel-in-progress: false
     runs-on: ubuntu-26.04
     permissions:
       pages: write

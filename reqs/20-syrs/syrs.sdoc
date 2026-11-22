@@ -532,6 +532,30 @@ RELATIONS:
 - TYPE: Parent
   VALUE: STK-014
 
+[REQUIREMENT]
+UID: SYSR-PUB-007
+ART: Funktional
+STATUS: Umgesetzt
+NACHWEIS: Demonstration
+TITLE: Prognoseverlauf mit Ist-Werten
+STATEMENT: >>>
+Die Projektseite muss die jüngste Tagesprognose (Last und Day-Ahead-Preis, D+0 bis D+15) mit
+Ist-Last, Lastprognose der Übertragungsnetzbetreiber und Day-Ahead-Preis zeigen, soweit diese
+vorliegen, und darunter aufklappbar die Prognosen der 14 Vortage mit denselben Kurven und dem
+Fehler je Vorlauftag. Die Ist-Werte muss die Seite je Aufruf nur einmal aus einer freien Quelle
+laden und auf alle Diagramme verteilen; ein zusätzlicher regelmäßiger Job dafür entfällt.
+<<<
+RATIONALE: >>>
+Die Güte der Prognose lässt sich so an echten Läufen und nach Vorlauf beurteilen, als Ergänzung
+zum Backtest. Umsetzung in pages/assets/prognoseverlauf.js mit SMARD (CORS erlaubt, CC BY 4.0);
+Day-Ahead-Stunden, die SMARD noch nicht zeigt, kommen aus den Auktionswerten der Tagesprognosen.
+<<<
+RELATIONS:
+- TYPE: Parent
+  VALUE: STK-003
+- TYPE: Parent
+  VALUE: STK-014
+
 [[/SECTION]]
 
 [[SECTION]]
