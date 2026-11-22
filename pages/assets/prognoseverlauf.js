@@ -486,19 +486,22 @@
         if (x) zeichne(d.querySelector(".pv-chart"), x, true);
       });
     }
+    // Fehlen die Knöpfe (z. B. alte HTML-Seite aus dem Cache mit neuem Skript), bleibt es bei ct/kWh
+    var knopfCt = $("pv-preis-ct"), knopfEur = $("pv-preis-eur");
     function setPreis(ct) {
       preisCt = ct;
-      $("pv-preis-ct").setAttribute("aria-pressed", String(ct));
-      $("pv-preis-eur").setAttribute("aria-pressed", String(!ct));
+      if (knopfCt) knopfCt.setAttribute("aria-pressed", String(ct));
+      if (knopfEur) knopfEur.setAttribute("aria-pressed", String(!ct));
     }
     setPreis(preisCt);
-    [["pv-preis-ct", true], ["pv-preis-eur", false]].forEach(function (k) {
-      $(k[0]).addEventListener("click", function () {
-        if (preisCt === k[1]) return;
+    [[knopfCt, true], [knopfEur, false]].forEach(function (k) {
+      if (!k[0]) return;
+      k[0].addEventListener("click", function () {
+        var neu = preisCt !== k[1];
         setPreis(k[1]);
+        // immer speichern, auch wenn die Einheit hier schon gilt (anderer Tab kann anders gespeichert haben)
         try { localStorage.setItem("pv-preis", k[1] ? "ct" : "eur"); } catch (e) { /* nur für diesen Aufruf */ }
-        neuZeichnen();
-        liste();
+        if (neu) { neuZeichnen(); liste(); }
       });
     });
     var ee = $("pv-ee");
