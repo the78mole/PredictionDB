@@ -29,6 +29,7 @@
     }
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body {
     margin: 0; background: var(--bg); color: var(--text);
     font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -207,6 +208,8 @@
   }
   .pv-quelle { font-size: .78rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 8px; }
   .pv-quelle a { color: inherit; }
+  .pv-quelle summary { cursor: pointer; margin-top: 4px; }
+  .pv-quelle p { margin: 4px 0 0; color: var(--muted); }
   @media (prefers-reduced-motion: reduce) { .verlauf summary .chev { transition: none; } }
   footer { margin-top: 32px; color: var(--muted); font-size: 0.875rem; }
   footer a { color: inherit; }
@@ -322,6 +325,10 @@
         die SMARD noch nicht zeigt, aus den Auktionswerten der Tagesprognosen. Prognosen: PredictionDB, CC BY 4.0,
         täglich nach den 00Z-Wetterläufen, als <a href="prognose/de_lu/index.json">JSON</a> und
         <a href="prognose/de_lu/latest.csv">CSV</a>. Zeiten in deutscher Ortszeit, MAE = mittlerer absoluter Fehler.
+        <details id="pv-quellen" hidden>
+          <summary>Quellenvermerke der Prognose</summary>
+          <p id="pv-namensnennung"></p>
+        </details>
       </div>
     </section>
 

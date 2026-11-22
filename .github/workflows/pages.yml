@@ -15,10 +15,6 @@ on:
     branches: [main]
   workflow_dispatch:
 
-concurrency:
-  group: pages
-  cancel-in-progress: true
-
 permissions:
   contents: read
 
@@ -51,9 +47,16 @@ jobs:
         run: |
           bauen=true
           if [ "$NAME" = "Prognose" ]; then
-            ergebnis=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/jobs" \
-              --jq '.jobs[] | select(.name == "Nach GHCR") | .conclusion')
-            if [ "$ergebnis" != "success" ]; then
+            # Drei Versuche; antwortet die API gar nicht, lieber einmal zu viel bauen
+            for versuch in 1 2 3; do
+              if ergebnis=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/jobs" \
+                --jq '.jobs[] | select(.name == "Nach GHCR") | .conclusion'); then
+                break
+              fi
+              ergebnis=unbekannt
+              sleep $((versuch * 10))
+            done
+            if [ "$ergebnis" != "success" ] && [ "$ergebnis" != "unbekannt" ]; then
               bauen=false
               echo "Prognose-Lauf hat nichts veröffentlicht (Nach GHCR: ${ergebnis:-übersprungen})" \
                 >> "$GITHUB_STEP_SUMMARY"
@@ -65,6 +68,10 @@ jobs:
     name: Seite bauen
     needs: pruefen
     if: needs.pruefen.outputs.bauen == 'true'
+    # Erst hier, damit ein Lauf ohne Neubau keinen laufenden Bau abbricht
+    concurrency:
+      group: pages
+      cancel-in-progress: true
     runs-on: ubuntu-26.04
     permissions:
       contents: read
@@ -118,9 +125,14 @@ jobs:
           WX_EXCHANGE_USERNAME: ${{ github.actor }}
           WX_EXCHANGE_TOKEN: ${{ github.token }}
           PDB_LOG_JSON: "false"
-        run: >-
-          uv run ml-train --config config/ml/de_lu_v2.yaml forecast pull
-          --out build/pages/prognose/de_lu --days 15
+        # Drei Versuche, damit ein kurzer Aussetzer von GHCR den Verlauf nicht von der Seite nimmt
+        run: |
+          for versuch in 1 2 3; do
+            uv run ml-train --config config/ml/de_lu_v2.yaml forecast pull \
+              --out build/pages/prognose/de_lu --days 15 && exit 0
+            sleep $((versuch * 20))
+          done
+          exit 1
       - name: Landing Page
         env:
           GH_TOKEN: ${{ github.token }}  # Stars/Issues/PRs für die GitHub-Ecke
@@ -135,6 +147,9 @@ jobs:
   deploy:
     name: Auf Pages veröffentlichen
     needs: build
+    concurrency:
+      group: pages-deploy
+      cancel-in-progress: false
     runs-on: ubuntu-26.04
     permissions:
       pages: write

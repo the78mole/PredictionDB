@@ -42,7 +42,17 @@
   function uhr(ms) { return String(lokal(ms).h).padStart(2, "0") + ":00"; }
   var f1 = function (n) { return n.toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 }); };
   var f0 = function (n) { return n.toLocaleString("de-DE", { maximumFractionDigits: 0 }); };
-  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  // ---------- DOM ohne innerHTML: alle Texte als Textknoten ----------
+  var SVGNS = "http://www.w3.org/2000/svg";
+  function setzeAttr(e, a) { Object.keys(a || {}).forEach(function (k) { if (a[k] != null) e.setAttribute(k, a[k]); }); return e; }
+  function kinder(e, k) {
+    (k || []).forEach(function (c) { if (c != null) e.appendChild(typeof c === "string" ? document.createTextNode(c) : c); });
+    return e;
+  }
+  function h(tag, a, k) { return kinder(setzeAttr(document.createElement(tag), a), k); }
+  function s(tag, a, k) { return kinder(setzeAttr(document.createElementNS(SVGNS, tag), a), k); }
+  function leeren(e) { while (e.firstChild) e.removeChild(e.firstChild); return e; }
 
   // ---------- Prognosen ----------
   function json(url) { return fetch(url, { cache: "no-cache" }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }); }
@@ -60,6 +70,8 @@
     return {
       issue: issue, t0: t0, t1: tagPlus(t0, TAGE),
       modell: (doc.model || {}).version || "unbekannt",
+      namensnennung: typeof doc.attribution === "string" ? doc.attribution : "",
+      lizenz: typeof doc.license === "string" ? doc.license : "",
       L: reihe(doc.targets.load_actual, lastFaktor),
       P: reihe(doc.targets.da_price_de_lu, 1)
     };
@@ -74,10 +86,12 @@
       var wochen = idx.timestamps.filter(function (ts) { return ts <= bis && ts + 7 * TAG + H > von; });
       return Promise.all(wochen.map(function (ts) {
         return json(pfad + filter + "_" + region + "_quarterhour_" + ts + ".json")
-          .then(function (d) { return d.series; }, function () { return []; });
+          .then(function (d) { return d.series; }, function () { return null; });
       }));
     }).then(function (teile) {
       var summe = new Map(), n = new Map(), out = new Map();
+      out.fehlend = teile.filter(function (x) { return x === null; }).length;
+      teile = teile.filter(function (x) { return x !== null; });
       teile.forEach(function (serie) {
         serie.forEach(function (p) {
           if (p[1] == null) return;
@@ -107,7 +121,7 @@
       });
       var letzte = 0; Ist.last.forEach(function (_, h) { if (h > letzte) letzte = h; });
       Ist.stand = letzte ? letzte + H : null;
-      var ok = r.every(function (x) { return x.status === "fulfilled"; });
+      var ok = r.every(function (x) { return x.status === "fulfilled" && !x.value.fehlend; });
       if (Ist.stand) {
         status(true, "Ist-Werte: SMARD, Stand " + datum(Ist.stand - H) + " " + uhr(Ist.stand) +
           (ok ? "" : " (teilweise)"));
@@ -145,7 +159,7 @@
   // ---------- Diagramm ----------
   function ticks(lo, hi, n) {
     var step0 = (hi - lo) / n, mag = Math.pow(10, Math.floor(Math.log10(step0)));
-    var step = [1, 2, 2.5, 5, 10].map(function (m) { return m * mag; }).find(function (s) { return s >= step0; });
+    var step = [1, 2, 2.5, 5, 10].map(function (m) { return m * mag; }).find(function (x) { return x >= step0; });
     var out = []; for (var v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(6));
     return out;
   }
@@ -170,6 +184,9 @@
     var x = function (t) { return ml + ((t - x0.t0) / span) * iw; };
     var jetzt = Date.now(), tage = [];
     for (var d = 0; d <= TAGE; d++) tage.push(tagPlus(x0.t0, d));
+    var topL = mt, topP = mt + hP + gap, Hg = topP + hP + 38;
+    var svg = s("svg", { viewBox: "0 0 " + W + " " + Hg, width: W, height: Hg, role: "img",
+      "aria-label": "Prognose vom " + datum(x0.t0) + " mit Ist-Werten" });
 
     function panel(top, prog, istMap, kl, bkl, titel, einheit, extra) {
       var lo = Infinity, hi = -Infinity;
@@ -180,58 +197,56 @@
       if (!isFinite(lo)) { lo = 0; hi = 1; }
       var pad = (hi - lo) * 0.06 || 1; lo -= pad; hi += pad;
       var y = function (v) { return top + hP - ((v - lo) / (hi - lo)) * hP; };
-      var s = '<text class="ptitel" x="' + ml + '" y="' + (top - 6) + '">' + titel + ' <tspan class="einheit">in ' + einheit + "</tspan></text>";
+      svg.appendChild(s("text", { "class": "ptitel", x: ml, y: top - 6 }, [titel + " ", s("tspan", { "class": "einheit" }, ["in " + einheit])]));
       ticks(lo, hi, kompakt ? 3 : 4).forEach(function (t) {
-        s += '<line class="raster" x1="' + ml + '" x2="' + (W - mr) + '" y1="' + y(t) + '" y2="' + y(t) + '"/>' +
-          '<text x="' + (ml - 6) + '" y="' + (y(t) + 3.5) + '" text-anchor="end">' + f0(t) + "</text>";
+        svg.appendChild(s("line", { "class": "raster", x1: ml, x2: W - mr, y1: y(t), y2: y(t) }));
+        svg.appendChild(s("text", { x: ml - 6, y: y(t) + 3.5, "text-anchor": "end" }, [f0(t)]));
       });
       if (jetzt < x0.t1) {
         var xa = x(Math.max(x0.t0, jetzt));
-        s += '<rect class="zukunft" x="' + xa + '" y="' + top + '" width="' + (x(x0.t1) - xa) + '" height="' + hP + '"/>';
+        svg.appendChild(s("rect", { "class": "zukunft", x: xa, y: top, width: x(x0.t1) - xa, height: hP }));
       }
-      tage.slice(1, -1).forEach(function (t) { s += '<line class="tag" x1="' + x(t) + '" x2="' + x(t) + '" y1="' + top + '" y2="' + (top + hP) + '"/>'; });
+      tage.slice(1, -1).forEach(function (t) { svg.appendChild(s("line", { "class": "tag", x1: x(t), x2: x(t), y1: top, y2: top + hP })); });
       if (prog.length) {
         var o = "", u = "";
         prog.forEach(function (p, i) { o += (i ? "L" : "M") + x(p.t).toFixed(1) + "," + y(p.p90).toFixed(1); });
         for (var i = prog.length - 1; i >= 0; i--) u += "L" + x(prog[i].t).toFixed(1) + "," + y(prog[i].p10).toFixed(1);
-        s += '<path class="' + bkl + '" d="' + o + u + 'Z"/>';
-        s += '<path class="' + kl + '" d="' + pfad(prog.map(function (p) { return [p.t, p.p50]; }), x, y) + '"/>';
+        svg.appendChild(s("path", { "class": bkl, d: o + u + "Z" }));
+        svg.appendChild(s("path", { "class": kl, d: pfad(prog.map(function (p) { return [p.t, p.p50]; }), x, y) }));
       }
-      if (extra) s += '<path class="uenb" d="' + pfad(ex, x, y) + '"/>';
-      s += '<path class="ist" d="' + pfad(ist, x, y) + '"/>';
-      if (jetzt > x0.t0 && jetzt < x0.t1) s += '<line class="jetzt" x1="' + x(jetzt) + '" x2="' + x(jetzt) + '" y1="' + top + '" y2="' + (top + hP) + '"/>';
-      return { s: s, y: y };
+      if (extra) svg.appendChild(s("path", { "class": "uenb", d: pfad(ex, x, y) }));
+      svg.appendChild(s("path", { "class": "ist", d: pfad(ist, x, y) }));
+      if (jetzt > x0.t0 && jetzt < x0.t1) svg.appendChild(s("line", { "class": "jetzt", x1: x(jetzt), x2: x(jetzt), y1: top, y2: top + hP }));
+      return y;
     }
-    var topL = mt, topP = mt + hP + gap;
-    var pL = panel(topL, x0.L, Ist.last, "pl", "bl", "Last", "GW", Ist.uenb);
-    var pP = panel(topP, x0.P, Ist.preis, "pp", "bp", "Preis", "€/MWh", null);
-    var ax = "", jedes = W < 420 ? 4 : schmal ? 2 : 1;
+    var yL = panel(topL, x0.L, Ist.last, "pl", "bl", "Last", "GW", Ist.uenb);
+    var yP = panel(topP, x0.P, Ist.preis, "pp", "bp", "Preis", "€/MWh", null);
+    var jedes = W < 420 ? 4 : schmal ? 2 : 1;
     for (var k = 0; k < TAGE; k++) {
       if (k % jedes) continue;
       var xm = (x(tage[k]) + x(tage[k + 1])) / 2, yb = topP + hP + 14;
-      ax += '<text x="' + xm + '" y="' + yb + '" text-anchor="middle">D+' + k + "</text>";
-      if (!schmal || k % 4 === 0) ax += '<text x="' + xm + '" y="' + (yb + 12) + '" text-anchor="middle">' + datum(tage[k], !schmal) + "</text>";
+      svg.appendChild(s("text", { x: xm, y: yb, "text-anchor": "middle" }, ["D+" + k]));
+      if (!schmal || k % 4 === 0) svg.appendChild(s("text", { x: xm, y: yb + 12, "text-anchor": "middle" }, [datum(tage[k], !schmal)]));
     }
-    if (jetzt > x0.t0 && jetzt < x0.t1) ax += '<text class="jetztt" x="' + (x(jetzt) + 4) + '" y="' + (topL + 11) + '">jetzt</text>';
-    var Hg = topP + hP + 38;
-    el.innerHTML = '<svg viewBox="0 0 ' + W + " " + Hg + '" width="' + W + '" height="' + Hg + '" role="img" aria-label="Prognose vom ' +
-      datum(x0.t0) + ' mit Ist-Werten">' + pL.s + pP.s + ax +
-      '<g class="hover" visibility="hidden"><line class="cross" y1="' + topL + '" y2="' + (topP + hP) + '"/>' +
-      '<circle r="3.5" class="ptk pl-f" data-k="pl"/><circle r="3.5" class="ptk ist-f" data-k="il"/>' +
-      '<circle r="3.5" class="ptk uenb-f" data-k="ul"/><circle r="3.5" class="ptk pp-f" data-k="pp"/>' +
-      '<circle r="3.5" class="ptk ist-f" data-k="ip"/></g>' +
-      '<rect class="fang" x="' + ml + '" y="' + topL + '" width="' + iw + '" height="' + (topP + hP - topL) + '" fill="transparent"/></svg>' +
-      '<div class="pv-tip" hidden></div>';
+    if (jetzt > x0.t0 && jetzt < x0.t1) svg.appendChild(s("text", { "class": "jetztt", x: x(jetzt) + 4, y: topL + 11 }, ["jetzt"]));
 
-    var svg = el.querySelector("svg"), g = svg.querySelector(".hover"), tip = el.querySelector(".pv-tip");
-    var cross = g.querySelector("line"), pts = {};
-    g.querySelectorAll("circle").forEach(function (c) { pts[c.dataset.k] = c; });
+    var cross = s("line", { "class": "cross", y1: topL, y2: topP + hP }), pts = {};
+    var g = s("g", { "class": "hover", visibility: "hidden" }, [cross]);
+    [["pl", "pl-f"], ["il", "ist-f"], ["ul", "uenb-f"], ["pp", "pp-f"], ["ip", "ist-f"]].forEach(function (k) {
+      pts[k[0]] = g.appendChild(s("circle", { r: 3.5, "class": "ptk " + k[1] }));
+    });
+    var fang = s("rect", { "class": "fang", x: ml, y: topL, width: iw, height: topP + hP - topL, fill: "transparent" });
+    svg.appendChild(g); svg.appendChild(fang);
+    var tip = h("div", { "class": "pv-tip", hidden: "" });
+    leeren(el); el.appendChild(svg); el.appendChild(tip);
+
     var mapL = new Map(x0.L.map(function (p) { return [p.t, p]; })), mapP = new Map(x0.P.map(function (p) { return [p.t, p]; }));
     function setze(c, xv, yv) {
       if (yv == null) c.setAttribute("visibility", "hidden");
       else { c.setAttribute("visibility", "visible"); c.setAttribute("cx", xv); c.setAttribute("cy", yv); }
     }
     function abw(a, b) { return a == null || b == null ? "–" : (a - b >= 0 ? "+" : "−") + f1(Math.abs(a - b)); }
+    function zeile(a, b) { return h("div", { "class": "r" }, [h("span", null, [a]), h("span", null, [b])]); }
     function zeige(ev) {
       var r = svg.getBoundingClientRect(), sx = (ev.clientX - r.left) * (W / r.width);
       var t = x0.t0 + Math.round((((sx - ml) / iw) * span) / H) * H;
@@ -239,26 +254,27 @@
       var xv = x(t), l = mapL.get(t), p = mapP.get(t);
       var il = Ist.last.get(t), ul = Ist.uenb.get(t), ip = Ist.preis.get(t);
       g.setAttribute("visibility", "visible"); cross.setAttribute("x1", xv); cross.setAttribute("x2", xv);
-      setze(pts.pl, xv, l ? pL.y(l.p50) : null); setze(pts.il, xv, il == null ? null : pL.y(il));
-      setze(pts.ul, xv, ul == null ? null : pL.y(ul));
-      setze(pts.pp, xv, p ? pP.y(p.p50) : null); setze(pts.ip, xv, ip == null ? null : pP.y(ip));
+      setze(pts.pl, xv, l ? yL(l.p50) : null); setze(pts.il, xv, il == null ? null : yL(il));
+      setze(pts.ul, xv, ul == null ? null : yL(ul));
+      setze(pts.pp, xv, p ? yP(p.p50) : null); setze(pts.ip, xv, ip == null ? null : yP(ip));
       var tagNr = 0; while (tagNr < TAGE && t >= tage[tagNr + 1]) tagNr++;
-      var zeile = function (a, b) { return '<div class="r"><span>' + a + "</span><span>" + b + "</span></div>"; };
-      tip.innerHTML = '<div class="t">' + datum(t, true) + " " + uhr(t) + " · D+" + tagNr + "</div>" +
-        zeile("Lastprognose", l ? f1(l.p50) + " GW" : "–") +
-        zeile("Ist-Last", il == null ? "–" : f1(il) + " GW") +
-        zeile("Abweichung", l && il != null ? abw(l.p50, il) + " GW" : "–") +
-        zeile("ÜNB-Prognose", ul == null ? "–" : f1(ul) + " GW") +
-        zeile("Abweichung ÜNB", abw(ul, il) + (ul != null && il != null ? " GW" : "")) +
-        zeile(p && p.fest ? "Preis (Auktion)" : "Preisprognose", p ? f1(p.p50) + " €/MWh" : "–") +
-        zeile("Day-Ahead", ip == null ? "–" : f1(ip) + " €/MWh") +
-        zeile("Abweichung", p && !p.fest && ip != null ? abw(p.p50, ip) + " €/MWh" : "–");
+      leeren(tip);
+      kinder(tip, [
+        h("div", { "class": "t" }, [datum(t, true) + " " + uhr(t) + " · D+" + tagNr]),
+        zeile("Lastprognose", l ? f1(l.p50) + " GW" : "–"),
+        zeile("Ist-Last", il == null ? "–" : f1(il) + " GW"),
+        zeile("Abweichung", l && il != null ? abw(l.p50, il) + " GW" : "–"),
+        zeile("ÜNB-Prognose", ul == null ? "–" : f1(ul) + " GW"),
+        zeile("Abweichung ÜNB", ul != null && il != null ? abw(ul, il) + " GW" : "–"),
+        zeile(p && p.fest ? "Preis (Auktion)" : "Preisprognose", p ? f1(p.p50) + " €/MWh" : "–"),
+        zeile("Day-Ahead", ip == null ? "–" : f1(ip) + " €/MWh"),
+        zeile("Abweichung", p && !p.fest && ip != null ? abw(p.p50, ip) + " €/MWh" : "–")
+      ]);
       tip.hidden = false;
       var px = (xv / W) * r.width, tw = tip.offsetWidth;
       tip.style.left = (px + 14 + tw > r.width ? px - tw - 14 : px + 14) + "px";
       tip.style.top = Math.max(0, ev.clientY - r.top - 60) + "px";
     }
-    var fang = svg.querySelector(".fang");
     fang.addEventListener("pointermove", zeige);
     fang.addEventListener("pointerdown", zeige);
     fang.addEventListener("pointerleave", function () { g.setAttribute("visibility", "hidden"); tip.hidden = true; });
@@ -271,30 +287,35 @@
     $("pv-datum").textContent = datum(heute.t0, true) + lokal(heute.t0).y;
     $("pv-sub").textContent = "D+0 bis D+15 · gerechnet " + datum(heute.issue) + " " + uhr(heute.issue) +
       " Uhr nach den 00Z-Wetterläufen · Modell " + heute.modell;
+    // Quellenvermerke der Prognose (Lizenz und Namensnennung aller Eingänge) aus dem Dokument
+    $("pv-namensnennung").textContent = (heute.lizenz ? heute.lizenz + ". " : "") + heute.namensnennung;
+    $("pv-quellen").hidden = !heute.namensnennung;
   }
+  function wert(v, fmt) { return h("b", null, [v ? fmt(v.mae) : "–"]); }
   function kzHeute() {
     var l = mae(heute, "L", heute.issue, heute.t1), u = maeUenb(heute, heute.issue, heute.t1);
     var fest = heute.P.filter(function (p) { return p.fest; });
     var bis = fest.length ? fest[fest.length - 1].t : null;
-    $("pv-kz").innerHTML =
-      "<span>Last seit Prognose (" + (l ? l.n : 0) + " h): MAE Modell <b>" + (l ? f1(l.mae) : "–") +
-      " GW</b>, ÜNB <b>" + (u ? f1(u.mae) : "–") + " GW</b></span>" +
-      (bis ? "<span>Preis bis " + datum(bis, true) + " aus der Auktion bekannt, Prognose danach</span>" : "");
+    kinder(leeren($("pv-kz")), [
+      h("span", null, ["Last seit Prognose (" + (l ? l.n : 0) + " h): MAE Modell ", wert(l, f1), " GW, ÜNB ", wert(u, f1), " GW"]),
+      bis ? h("span", null, ["Preis bis " + datum(bis, true) + " aus der Auktion bekannt, Prognose danach"]) : null
+    ]);
   }
   function relTag(x) {
     var t = Math.round((heute.t0 - x.t0) / TAG);
     return t === 1 ? "Vortag" : "vor " + t + " Tagen";
   }
   function spark(x) {
-    var w = 200, h = 26, lo = Infinity, hi = -Infinity, span = x.t1 - x.t0;
+    var w = 200, hh = 26, lo = Infinity, hi = -Infinity, span = x.t1 - x.t0;
     var ist = stunden(x.t0, x.t1, Ist.preis);
     x.P.forEach(function (p) { lo = Math.min(lo, p.p50); hi = Math.max(hi, p.p50); });
     ist.forEach(function (p) { if (p[1] != null) { lo = Math.min(lo, p[1]); hi = Math.max(hi, p[1]); } });
-    if (!isFinite(lo) || hi === lo) return "";
-    var fx = function (t) { return ((t - x.t0) / span) * w; }, fy = function (v) { return h - 2 - ((v - lo) / (hi - lo)) * (h - 4); };
-    return '<svg viewBox="0 0 ' + w + " " + h + '" preserveAspectRatio="none" aria-hidden="true">' +
-      '<path class="pp" d="' + pfad(x.P.map(function (p) { return [p.t, p.p50]; }), fx, fy) + '" vector-effect="non-scaling-stroke"/>' +
-      '<path class="ist" d="' + pfad(ist, fx, fy) + '" vector-effect="non-scaling-stroke"/></svg>';
+    if (!isFinite(lo) || hi === lo) return null;
+    var fx = function (t) { return ((t - x.t0) / span) * w; }, fy = function (v) { return hh - 2 - ((v - lo) / (hi - lo)) * (hh - 4); };
+    return s("svg", { viewBox: "0 0 " + w + " " + hh, preserveAspectRatio: "none", "aria-hidden": "true" }, [
+      s("path", { "class": "pp", d: pfad(x.P.map(function (p) { return [p.t, p.p50]; }), fx, fy), "vector-effect": "non-scaling-stroke" }),
+      s("path", { "class": "ist", d: pfad(ist, fx, fy), "vector-effect": "non-scaling-stroke" })
+    ]);
   }
   function liste() {
     var frueher = LAEUFE.slice(1), box = $("pv-laeufe");
@@ -304,21 +325,31 @@
     $("pv-frueher-titel").textContent = "Frühere Prognosen (" + frueher.length + ") · " +
       datum(frueher[0].t0) + (frueher.length > 1 ? " bis " + datum(frueher[frueher.length - 1].t0) : "");
     var offen = new Set(Array.prototype.map.call(box.querySelectorAll("details[open]"), function (d) { return d.id; }));
-    box.innerHTML = "";
+    leeren(box);
     frueher.forEach(function (x) {
       var l = mae(x, "L", x.issue, x.t1), p = mae(x, "P", x.issue, x.t1);
       var d1 = [tagPlus(x.t0, 1), tagPlus(x.t0, 2)], a = mae(x, "L", d1[0], d1[1]), b = maeUenb(x, d1[0], d1[1]);
-      var det = document.createElement("details");
-      det.className = "pv-lauf"; det.id = "pv-lauf-" + x.t0;
-      det.innerHTML = '<summary><span class="chev" aria-hidden="true">▸</span>' +
-        '<span class="datum"><b>' + datum(x.t0, true) + "</b> <span>" + relTag(x) + "</span>" +
-        (x.modell !== heute.modell ? ' <span class="pv-chip" title="' + esc(x.modell) + '">anderes Modell</span>' : "") + "</span>" +
-        '<span class="spark">' + spark(x) + "</span>" +
-        '<span class="m">Last <b>' + (l ? f1(l.mae) : "–") + "</b> GW · Preis <b>" + (p ? f0(p.mae) : "–") + "</b> €/MWh" +
-        (a && b && a.n >= 12 ? "<br>Last D+1: Modell <b>" + f1(a.mae) + "</b> · ÜNB <b>" + f1(b.mae) + "</b> GW" : "") +
-        "</span></summary>" +
-        '<div class="innen"><div class="pv-chart"></div><div class="pv-modell">Modell ' + esc(x.modell) + "</div></div>";
-      det.addEventListener("toggle", function () { if (det.open) zeichne(det.querySelector(".pv-chart"), x, true); });
+      var chart = h("div", { "class": "pv-chart" });
+      var det = h("details", { "class": "pv-lauf", id: "pv-lauf-" + x.t0 }, [
+        h("summary", null, [
+          h("span", { "class": "chev", "aria-hidden": "true" }, ["▸"]),
+          h("span", { "class": "datum" }, [
+            h("b", null, [datum(x.t0, true)]), " ", h("span", null, [relTag(x)]),
+            x.modell !== heute.modell ? " " : null,
+            x.modell !== heute.modell ? h("span", { "class": "pv-chip", title: x.modell }, ["anderes Modell"]) : null
+          ]),
+          h("span", { "class": "spark" }, [spark(x)]),
+          h("span", { "class": "m" }, [
+            "Last ", wert(l, f1), " GW · Preis ", wert(p, f0), " €/MWh",
+            a && b && a.n >= 12 ? h("br") : null,
+            a && b && a.n >= 12 ? "Last D+1: Modell " : null, a && b && a.n >= 12 ? wert(a, f1) : null,
+            a && b && a.n >= 12 ? " · ÜNB " : null, a && b && a.n >= 12 ? wert(b, f1) : null,
+            a && b && a.n >= 12 ? " GW" : null
+          ])
+        ]),
+        h("div", { "class": "innen" }, [chart, h("div", { "class": "pv-modell" }, ["Modell " + x.modell])])
+      ]);
+      det.addEventListener("toggle", function () { if (det.open) zeichne(chart, x, true); });
       box.appendChild(det);
       if (offen.has(det.id)) det.open = true;
     });
@@ -338,24 +369,26 @@
     });
     var alle = [].concat.apply([], werte).filter(function (v) { return v != null; });
     $("pv-heat-box").hidden = alle.length === 0;
+    leeren(tab);
     if (!alle.length) return;
     var lo = Math.min.apply(null, alle), hi = Math.max.apply(null, alle), sp = hi - lo || 1;
     var farbe = function (v) { return "color-mix(in oklab, var(--heat1) " + Math.round(8 + (92 * (v - lo)) / sp) + "%, var(--heat0))"; };
     var fmt = hmZiel === "P" ? f0 : f1, e = hmZiel === "P" ? " €/MWh" : " GW";
-    var s = "<thead><tr><th></th>";
-    for (var d = 0; d < TAGE; d++) s += '<th scope="col">D+' + d + "</th>";
-    s += "</tr></thead><tbody>";
+    var kopfzeile = h("tr", null, [h("th")]);
+    for (var d = 0; d < TAGE; d++) kopfzeile.appendChild(h("th", { scope: "col" }, ["D+" + d]));
+    var body = h("tbody");
     frueher.forEach(function (x, r) {
-      s += '<tr><th scope="row" data-t="' + x.t0 + '">' + datum(x.t0) + "</th>";
-      werte[r].forEach(function (v, d) {
-        if (v == null) { s += '<td class="leer"></td>'; return; }
-        var dunkel = (v - lo) / sp > 0.55;
-        s += '<td data-t="' + x.t0 + '" style="background:' + farbe(v) + ";color:" + (dunkel ? "var(--card)" : "var(--text)") +
-          '" title="' + datum(x.t0) + " D+" + d + ": MAE " + fmt(v) + e + '">' + fmt(v) + "</td>";
+      var tr = h("tr", null, [h("th", { scope: "row", "data-t": x.t0 }, [datum(x.t0)])]);
+      werte[r].forEach(function (v, k) {
+        if (v == null) { tr.appendChild(h("td", { "class": "leer" })); return; }
+        var td = h("td", { "data-t": x.t0, title: datum(x.t0) + " D+" + k + ": MAE " + fmt(v) + e }, [fmt(v)]);
+        td.style.background = farbe(v);
+        td.style.color = (v - lo) / sp > 0.55 ? "var(--card)" : "var(--text)";
+        tr.appendChild(td);
       });
-      s += "</tr>";
+      body.appendChild(tr);
     });
-    tab.innerHTML = s + "</tbody>";
+    kinder(tab, [h("thead", null, [kopfzeile]), body]);
     $("pv-hm-min").textContent = fmt(lo) + e;
     $("pv-hm-max").textContent = fmt(hi) + e;
     $("pv-hm-skala").style.background = "linear-gradient(90deg, " + farbe(lo) + ", " + farbe(hi) + ")";
