@@ -17,14 +17,14 @@
   :root {
     --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #5b6475;
     --line: #dde1e8; --accent: #1f6feb; --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e;
-    --preis: #bc4c00; --ist: #1d2330; --uenb: #8250df; --band-last: rgba(31,111,235,.13);
+    --preis: #bc4c00; --ist: #1d2330; --uenb: #8250df; --ee: #2b8a3e; --band-last: rgba(31,111,235,.13);
     --band-preis: rgba(188,76,0,.12); --zukunft: rgba(91,100,117,.06); --heat0: #e7eefb; --heat1: #1f4fa8;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #0f1218; --card: #171b23; --text: #e6e9ef; --muted: #9aa3b2;
       --line: #2a303b; --accent: #58a6ff; --ok: #3fb950; --warn: #d29922; --bad: #f85149;
-      --preis: #f0883e; --ist: #e6e9ef; --uenb: #bc8cff; --band-last: rgba(88,166,255,.16);
+      --preis: #f0883e; --ist: #e6e9ef; --uenb: #bc8cff; --ee: #57c26a; --band-last: rgba(88,166,255,.16);
       --band-preis: rgba(240,136,62,.15); --zukunft: rgba(154,163,178,.06); --heat0: #1a2333; --heat1: #6aa9ff;
     }
   }
@@ -123,13 +123,18 @@
   .pv-status.ok .dot { background: var(--ok); }
   .pv-legende { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: .8rem; color: var(--muted); }
   .pv-legende span { display: inline-flex; align-items: center; gap: 6px; }
+  .pv-legende .pv-gruppe { display: contents; }
   .pv-legende i { display: inline-block; width: 18px; height: 0; border-top: 2px solid; }
   .pv-legende i.l { border-color: var(--accent); }
   .pv-legende i.p { border-color: var(--preis); }
   .pv-legende i.ist { border-color: var(--ist); border-top-width: 2.5px; }
   .pv-legende i.uenb { border-color: var(--uenb); border-top-style: dashed; }
+  .pv-legende i.ee { border-color: var(--ee); }
+  .pv-legende i.eeprog { border-color: var(--ee); border-top-style: dashed; }
   .pv-legende i.band { height: 8px; border: 0; background: var(--band-last); }
   .pv-legende i.jetzt { width: 0; height: 12px; border-top: 0; border-left: 1.5px dashed var(--bad); }
+  .pv-schalter { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; color: var(--text); cursor: pointer; }
+  .pv-schalter input { accent-color: var(--ee); margin: 0; }
   .pv-kz { display: flex; flex-wrap: wrap; gap: 4px 20px; font-size: .875rem; color: var(--muted); font-variant-numeric: tabular-nums; }
   .pv-kz b { color: var(--text); font-weight: 600; }
   .pv-chart { position: relative; width: 100%; touch-action: pan-y; }
@@ -146,11 +151,14 @@
   .verlauf .pp { stroke: var(--preis); stroke-width: 1.6; }
   .verlauf .ist { stroke: var(--ist); stroke-width: 2; }
   .verlauf .uenb { stroke: var(--uenb); stroke-width: 1.6; stroke-dasharray: 5 3; }
+  .verlauf .ee { stroke: var(--ee); stroke-width: 1.6; }
+  .verlauf .eeprog { stroke: var(--ee); stroke-width: 1.4; stroke-dasharray: 5 3; opacity: .85; }
   .verlauf .bl { fill: var(--band-last); stroke: none; }
   .verlauf .bp { fill: var(--band-preis); stroke: none; }
   .pv-chart .cross { stroke: var(--muted); stroke-width: 1; }
   .pv-chart .ptk { stroke: var(--card); stroke-width: 1.5; }
   .pv-chart .pl-f { fill: var(--accent); } .pv-chart .pp-f { fill: var(--preis); }
+  .pv-chart .ee-f { fill: var(--ee); }
   .pv-chart .ist-f { fill: var(--ist); } .pv-chart .uenb-f { fill: var(--uenb); }
   .pv-tip {
     position: absolute; z-index: 5; pointer-events: none; min-width: 190px;
@@ -287,11 +295,13 @@
         </div>
         <span class="pv-status" id="pv-status" role="status"><span class="dot"></span><span id="pv-status-text">Ist-Werte werden geladen …</span></span>
       </div>
+      <label class="pv-schalter"><input type="checkbox" id="pv-ee" checked> Wind + PV in der Lastkurve zeigen</label>
       <div class="pv-legende" aria-hidden="true">
         <span><i class="l"></i>Lastprognose</span>
         <span><i class="p"></i>Preisprognose</span>
         <span><i class="ist"></i>Ist-Last / Day-Ahead</span>
         <span><i class="uenb"></i>ÜNB-Lastprognose</span>
+        <span id="pv-legende-ee" class="pv-gruppe"><span><i class="ee"></i>Wind + PV Ist</span><span><i class="eeprog"></i>Wind + PV ÜNB-Prognose</span></span>
         <span><i class="band"></i>Band P10–P90</span>
         <span><i class="jetzt"></i>jetzt</span>
       </div>
@@ -320,7 +330,7 @@
       </details>
 
       <div class="pv-quelle">
-        Ist-Last, ÜNB-Lastprognose und Day-Ahead-Preis: Bundesnetzagentur | <a href="https://www.smard.de">SMARD.de</a>,
+        Ist-Last, ÜNB-Lastprognose, Wind und PV (Ist und ÜNB-Prognose) und Day-Ahead-Preis: Bundesnetzagentur | <a href="https://www.smard.de">SMARD.de</a>,
         <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>, beim Aufruf live geladen; Day-Ahead-Stunden,
         die SMARD noch nicht zeigt, aus den Auktionswerten der Tagesprognosen. Prognosen: PredictionDB, CC BY 4.0,
         täglich nach den 00Z-Wetterläufen, als <a href="prognose/de_lu/index.json">JSON</a> und
