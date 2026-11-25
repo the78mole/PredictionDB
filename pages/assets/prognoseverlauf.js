@@ -420,21 +420,30 @@
   }
 
   var hmZiel = "P";
-  function heatmap() {
-    var frueher = LAEUFE.slice(1), tab = $("pv-heat");
-    var werte = frueher.map(function (x) {
+  function hmWerte(frueher, ziel) {
+    return frueher.map(function (x) {
       var out = [];
       for (var d = 0; d < TAGE; d++) {
-        var f = mae(x, hmZiel, Math.max(x.issue, tagPlus(x.t0, d)), tagPlus(x.t0, d + 1));
+        var f = mae(x, ziel, Math.max(x.issue, tagPlus(x.t0, d)), tagPlus(x.t0, d + 1));
         out.push(f && f.n >= 12 ? f.mae : null);
       }
       return out;
     });
-    var alle = [].concat.apply([], werte).filter(function (v) { return v != null; });
-    $("pv-heat-box").hidden = alle.length === 0;
+  }
+
+  function heatmap() {
+    var frueher = LAEUFE.slice(1), tab = $("pv-heat");
+    var werte = hmWerte(frueher, hmZiel);
+    var flach = function (w) { return [].concat.apply([], w).filter(function (v) { return v != null; }); };
+    var alle = flach(werte);
+    // Box nur ausblenden, wenn keins der beiden Ziele Werte hat; sonst bliebe der Schalter
+    // weg, sobald ein Ziel (z. B. Last bei Verzug von SMARD) noch keine Ist-Werte hat
+    var anderes = alle.length ? alle : flach(hmWerte(frueher, hmZiel === "P" ? "L" : "P"));
+    $("pv-heat-box").hidden = anderes.length === 0;
     leeren(tab);
-    if (!alle.length) return;
-    var lo = Math.min.apply(null, alle), hi = Math.max.apply(null, alle), sp = hi - lo || 1;
+    if (!anderes.length) return;
+    var lo = alle.length ? Math.min.apply(null, alle) : 0;
+    var hi = alle.length ? Math.max.apply(null, alle) : 0, sp = hi - lo || 1;
     var farbe = function (v) { return "color-mix(in oklab, var(--heat1) " + Math.round(8 + (92 * (v - lo)) / sp) + "%, var(--heat0))"; };
     var fmt = hmZiel === "P" ? pMae : f1, e = hmZiel === "P" ? " " + pEinh() : " GW";
     var kopfzeile = h("tr", null, [h("th")]);
@@ -452,6 +461,12 @@
       body.appendChild(tr);
     });
     kinder(tab, [h("thead", null, [kopfzeile]), body]);
+    $("pv-hm-skala").hidden = !alle.length;
+    $("pv-hm-max").hidden = !alle.length;
+    if (!alle.length) {
+      $("pv-hm-min").textContent = "noch keine Ist-Werte für " + (hmZiel === "P" ? "den Preis" : "die Last");
+      return;
+    }
     $("pv-hm-min").textContent = fmt(lo) + e;
     $("pv-hm-max").textContent = fmt(hi) + e;
     $("pv-hm-skala").style.background = "linear-gradient(90deg, " + farbe(lo) + ", " + farbe(hi) + ")";
