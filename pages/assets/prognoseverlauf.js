@@ -463,10 +463,8 @@
     $("pv-hm-skala").hidden = !alle.length;
     $("pv-hm-max").hidden = !alle.length;
     if (!alle.length) {
-      // Ist-Werte überhaupt vorhanden, aber an keinem Tag genug für einen MAE?
-      var roh = frueher.some(function (x) { return mae(x, hmZiel, x.issue, Infinity) != null; });
-      $("pv-hm-min").textContent = (roh ? "noch zu wenige Ist-Werte für " : "noch keine Ist-Werte für ") +
-        (hmZiel === "P" ? "den Preis" : "die Last");
+      // Kein Tag mit 12 vergleichbaren Stunden (Ist-Werte fehlen ganz oder teilweise)
+      $("pv-hm-min").textContent = "noch zu wenige Ist-Werte für " + (hmZiel === "P" ? "den Preis" : "die Last");
       return;
     }
     $("pv-hm-min").textContent = fmt(lo) + e;
