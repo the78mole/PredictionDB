@@ -436,12 +436,11 @@
     var werte = hmWerte(frueher, hmZiel);
     var flach = function (w) { return [].concat.apply([], w).filter(function (v) { return v != null; }); };
     var alle = flach(werte);
-    // Box nur ausblenden, wenn keins der beiden Ziele Werte hat; sonst bliebe der Schalter
-    // weg, sobald ein Ziel (z. B. Last bei Verzug von SMARD) noch keine Ist-Werte hat
-    var anderes = alle.length ? alle : flach(hmWerte(frueher, hmZiel === "P" ? "L" : "P"));
-    $("pv-heat-box").hidden = anderes.length === 0;
+    // Box bleibt sichtbar, sobald es frühere Läufe gibt: sonst verschwände der Schalter, wenn
+    // ein Ziel (z. B. Last bei Verzug von SMARD) noch keinen Tag mit 12 Ist-Stunden hat
+    $("pv-heat-box").hidden = frueher.length === 0;
     leeren(tab);
-    if (!anderes.length) return;
+    if (!frueher.length) return;
     var lo = alle.length ? Math.min.apply(null, alle) : 0;
     var hi = alle.length ? Math.max.apply(null, alle) : 0, sp = hi - lo || 1;
     var farbe = function (v) { return "color-mix(in oklab, var(--heat1) " + Math.round(8 + (92 * (v - lo)) / sp) + "%, var(--heat0))"; };
@@ -464,7 +463,8 @@
     $("pv-hm-skala").hidden = !alle.length;
     $("pv-hm-max").hidden = !alle.length;
     if (!alle.length) {
-      $("pv-hm-min").textContent = "noch keine Ist-Werte für " + (hmZiel === "P" ? "den Preis" : "die Last");
+      // Kein Tag mit 12 vergleichbaren Stunden (Ist-Werte fehlen ganz oder teilweise)
+      $("pv-hm-min").textContent = "noch zu wenige Ist-Werte für " + (hmZiel === "P" ? "den Preis" : "die Last");
       return;
     }
     $("pv-hm-min").textContent = fmt(lo) + e;
